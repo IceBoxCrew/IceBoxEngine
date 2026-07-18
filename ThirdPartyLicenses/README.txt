@@ -1,0 +1,215 @@
+THIRD-PARTY LICENSES
+========================================================================
+
+This directory contains the full license text of every third-party open
+source component that is redistributed in IceBoxEngine and in games built
+with it. It accompanies the summary in ../THIRD_PARTY_NOTICES.txt and
+satisfies the attribution requirements of the licenses below.
+
+Each file holds the verbatim license (and copyright notice) of one component.
+The license texts for components obtained through vcpkg are taken from the
+exact installed package revision (vcpkg "copyright" files), so they match the
+versions actually shipped.
+
+This whole directory is bundled into every platform build (Windows, Linux,
+macOS, iOS, Android, Web) alongside THIRD_PARTY_NOTICES.txt.
+
+------------------------------------------------------------------------
+INVENTORY  (file  ->  component  ->  license  ->  source)
+------------------------------------------------------------------------
+
+-- Obtained via vcpkg (license text from the installed package revision) --
+
+SDL3.txt                  SDL3                         Zlib                 vcpkg: sdl3
+stb.txt                   stb                          MIT OR Unlicense     vcpkg: stb
+zlib.txt                  zlib                         Zlib                 vcpkg: zlib
+Box2D.txt                 Box2D                        MIT                  vcpkg: box2d
+enkiTS.txt                enkiTS                       Zlib                 vcpkg: enkits       (Box2D multithreading; not on Web)
+EnTT.txt                  EnTT                         MIT                  vcpkg: entt
+GLM.txt                   GLM                          MIT                  vcpkg: glm
+DearImGui.txt             Dear ImGui                   MIT                  vcpkg: imgui
+ImGuizmo.txt              ImGuizmo                     MIT                  vcpkg: imguizmo
+imgui-node-editor.txt     imgui-node-editor            MIT                  vcpkg: imgui-node-editor
+spdlog.txt                spdlog                       MIT                  vcpkg: spdlog
+nlohmann-json.txt         nlohmann/json                MIT                  vcpkg: nlohmann-json
+ENet.txt                  ENet                         MIT                  vcpkg: enet
+fmt.txt                   fmt                          MIT                  vcpkg: fmt
+Lua.txt                   Lua                          MIT                  vcpkg: lua
+sol2.txt                  sol2                         MIT                  vcpkg: sol2
+glad.txt                  glad                         MIT                  vcpkg: glad
+curl.txt                  curl                         curl (MIT/X11)       vcpkg: curl
+HarfBuzz.txt              HarfBuzz                     MIT (Old MIT)        vcpkg: harfbuzz
+md4c.txt                  md4c                         MIT                  vcpkg: md4c
+volk.txt                  volk                         MIT                  vcpkg: volk
+VulkanMemoryAllocator.txt Vulkan Memory Allocator      MIT                  vcpkg: vulkan-memory-allocator
+Brotli.txt                Brotli                       MIT                  vcpkg: brotli
+Tracy.txt                 Tracy                        BSD-3-Clause         vcpkg: tracy
+pybind11.txt              pybind11                     BSD-3-Clause         vcpkg: pybind11
+Zstandard.txt             Zstd                         BSD-3-Clause         vcpkg: zstd
+Opus.txt                  Opus                         BSD-3-Clause         vcpkg: opus
+libogg.txt                libogg                       BSD-3-Clause         vcpkg: libogg
+libvorbis.txt             libvorbis                    BSD-3-Clause         vcpkg: libvorbis
+libwebp.txt               libwebp                      BSD-3-Clause         vcpkg: libwebp
+glslang.txt               glslang                      BSD-3-Clause (+MIT)  vcpkg: glslang
+IXWebSocket.txt           IXWebSocket                  BSD-3-Clause         vcpkg: ixwebsocket
+FreeType.txt              FreeType                     FTL (FreeType)       vcpkg: freetype
+Python.txt                Python (embedded)            PSF License 2.0      vcpkg: python3
+SheenBidi.txt             SheenBidi                    Apache-2.0           vcpkg: sheenbidi
+shaderc.txt               shaderc                      Apache-2.0           vcpkg: shaderc
+SPIRV-Tools.txt           SPIRV-Tools                  Apache-2.0           vcpkg: spirv-tools
+Vulkan-Headers.txt        Vulkan-Headers               Apache-2.0 OR MIT    vcpkg: vulkan-headers
+SPIRV-Cross.txt           SPIRV-Cross                  Apache-2.0           vcpkg: spirv-cross
+basis_universal.txt       basis_universal              Apache-2.0           vcpkg: basisu
+OpenSSL.txt               OpenSSL                      Apache-2.0           vcpkg: openssl
+FFmpeg.txt                FFmpeg                       LGPL-2.1-or-later    vcpkg: ffmpeg
+libsodium.txt             libsodium                    ISC                  vcpkg: libsodium
+libpng.txt                libpng                       libpng (PNG Ref Lib) vcpkg: libpng
+bzip2.txt                 bzip2                        bzip2 (BSD-like)     vcpkg: bzip2
+libvpx.txt                libvpx (VP8/VP9)             BSD-3-Clause (+pat.) vcpkg: libvpx       (VP9 encoder via FFmpeg)
+expat.txt                 Expat (XML)                  MIT                  vcpkg: expat        (inside embedded Python)
+libffi.txt                libffi                       libffi (MIT-style)   vcpkg: libffi       (inside embedded Python)
+liblzma-xz.txt            liblzma / xz                 0BSD / Public Domain vcpkg: liblzma      (inside embedded Python)
+SQLite.txt                SQLite                       Public Domain        vcpkg: sqlite3      (inside embedded Python)
+SPIRV-Headers.txt         SPIRV-Headers                MIT (Khronos)        vcpkg: spirv-headers (inside shaderc/SPIRV-*)
+EGL-Registry.txt          EGL-Registry                 Apache-2.0 / SGI-B   vcpkg: egl-registry  (GL/EGL loader generation)
+OpenGL-Registry.txt       OpenGL-Registry              Apache-2.0 / SGI-B   vcpkg: opengl-registry (GL loader generation)
+ANGLE.txt                 ANGLE                        BSD-3-Clause         vcpkg: angle        (macOS GLES backend)
+
+-- Vendored in-tree or bundled as assets (not from vcpkg) --
+
+ethers-js.txt             ethers.js v6.17.0            MIT                  vendored: Tools/BuildSystem/BuildGame/Templates/Web/ethers.umd.min.js (embedded into the page of Web builds with Web3)
+miniaudio.txt             miniaudio                    Unlicense OR MIT-0   vendored: Source/Engine/ThirdLibrary/miniaudio.h
+ImGuiColorTextEdit.txt    ImGuiColorTextEdit           MIT                  vendored: Source/Engine/ThirdLibrary/ImGuiColorTextEdit
+MoltenVK.txt              MoltenVK                     Apache-2.0           vendored: fetched by Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh (macOS/iOS)
+NotoFonts-OFL.txt         Noto Sans font family        OFL-1.1              bundled: Config/Fonts/NotoSans*.ttf
+Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bundled: Content/Examples/Platformer/Widgets/F_Tiny5-Regular.ttf
+
+-- Compiler runtimes redistributed inside a built game (not from vcpkg) --
+
+libcxx-LLVM.txt           LLVM libc++                  Apache-2.0 + LLVM-exception   Android NDK libc++_shared.so, copied into jniLibs/ by build_android.bat / build_android.sh
+Emscripten.txt            Emscripten (+ musl libc)     MIT OR NCSA          Emscripten runtime glue and system libraries linked into the .wasm / .js of a Web build
+
+-- Windows SDK redistributables shipped on Windows only (not from vcpkg) --
+
+DirectXShaderCompiler.txt DirectX Shader Compiler      NCSA (dxcompiler.dll) + Microsoft proprietary (dxil.dll)   Windows SDK Redist\D3D\<arch>, copied next to the engine binaries and next to a Windows game by CMakeLists.txt where the Direct3D 12 backend is available
+
+Windows additionally carries the Microsoft Visual C++ runtime (msvcp140*.dll,
+vcruntime140*.dll, concrt140.dll) next to the engine binaries and next to every
+Windows game built with it, so neither needs the Visual C++ Redistributable to be
+installed on the machine. Those files are Microsoft "Distributable Code": they are
+redistributed unmodified, exactly as the Visual Studio licence terms permit, and
+they carry no open-source attribution obligation, which is why no licence file for
+them appears in this directory. The debug variants (msvcp140d.dll and friends) are
+not redistributable and are never shipped - the build stages release runtimes only.
+See https://visualstudio.microsoft.com/license-terms/
+
+dxcompiler.dll and dxil.dll come out of the same family of Microsoft terms - they
+are taken unmodified from the Windows SDK's own Redist\D3D folder - but
+dxcompiler.dll differs from the C++ runtime in one way that matters: it is
+Microsoft's build of the open source DirectX Shader Compiler, so the University of
+Illinois/NCSA licence applies to it in addition, and that licence does require a
+notice in a binary redistribution. DirectXShaderCompiler.txt is that notice.
+dxil.dll is proprietary Microsoft code with no open source obligation, and is
+covered in the same file so the pair is documented in one place.
+
+Linux and Apple platforms redistribute no C/C++ runtime of their own: the Debian
+package declares libstdc++6 and libgcc-s1 as dependencies and links the system
+copies, and macOS and iOS link the system libc++ that ships with the OS.
+
+------------------------------------------------------------------------
+vcpkg CROSS-CHECK
+------------------------------------------------------------------------
+
+Every redistributed vcpkg dependency declared in ../vcpkg.json (and every
+transitive dependency that ends up in a shipped binary) has a license file
+above. This includes transitive components that are not direct dependencies
+but are linked/embedded into the product:
+
+  - expat, libffi, liblzma, sqlite3   -> pulled in by the embedded Python 3
+  - spirv-headers                     -> embedded in shaderc / SPIRV-Tools / SPIRV-Cross
+  - egl-registry, opengl-registry     -> used to generate the GL/EGL loaders (glad)
+  - brotli, bzip2, libpng, zlib       -> pulled in by FreeType / HarfBuzz / cURL / FFmpeg
+  - libvpx, opus, libvorbis, libogg   -> pulled in by FFmpeg (royalty-free VP9 + Opus + Vorbis)
+
+The following vcpkg packages are intentionally NOT included here because they
+are build-time tooling only. They are never compiled or linked into the
+shipped runtime, so they carry no redistribution/attribution obligation in
+distributed binaries:
+
+  detect_compiler, pkgconf, vcpkg-cmake, vcpkg-cmake-config,
+  vcpkg-cmake-get-vars, vcpkg-get-python, vcpkg-make, vcpkg-msbuild,
+  vcpkg-pkgconfig-get-modules, vcpkg-tool-meson
+
+------------------------------------------------------------------------
+MOBILE PLATFORM SDKs (NOT REDISTRIBUTED HERE)
+------------------------------------------------------------------------
+
+The Android game template resolves AndroidX, the Kotlin standard library and
+- when the developer enables the matching feature - Google Play services
+packages (Ads/AdMob, Billing, Play Games, the UMP consent SDK, In-App Review,
+Firebase) from Google's Maven repository through the developer's own Gradle
+build. On iOS the Google Mobile Ads SDK is added to the generated Xcode
+project by the developer. None of these are shipped inside IceBoxEngine, so
+they carry no license file in this directory; they are licensed directly to
+the developer under Google's own terms. The resulting attribution and privacy
+duties fall on the developer of the game. See THIRD_PARTY_NOTICES.txt
+section 14 for the full list and the specific obligations.
+
+------------------------------------------------------------------------
+LINUX PACKAGING COMPONENTS (NOT REDISTRIBUTED HERE)
+------------------------------------------------------------------------
+
+Packaging a Linux game as an .AppImage instead of a .deb is optional, and when
+a developer chooses it the packer fetches appimagetool and the AppImage type-2
+runtime from the AppImage project on their own machine. Neither is shipped
+inside IceBoxEngine and neither has a license file in this directory. The
+runtime binary does become part of every .AppImage produced, so the developer
+who ships one is redistributing it and inherits its notice obligations. See
+THIRD_PARTY_NOTICES.txt section 15.
+
+------------------------------------------------------------------------
+NOTES
+------------------------------------------------------------------------
+
+- FFmpeg is built under LGPL-2.1 with no GPL or non-free components and no
+  external patent-encumbered encoder (no x264/x265/fdk-aac). The engine only ever
+  PRODUCES royalty-free output (VP9 via libvpx, Opus, Vorbis). The editor's media
+  importer additionally uses FFmpeg's standard built-in decoders to read the
+  source video/audio that a developer chooses to import. The shipped libraries are not
+  an unmodified upstream build: they carry the patch set of the vcpkg "ffmpeg" port,
+  three patches of which touch FFmpeg's own sources. Those patches and the build recipe
+  ship inside the engine under Tools/BuildSystem/Utilities/vcpkg-overlay-ports/ffmpeg/,
+  and THIRD_PARTY_NOTICES.txt section 7 states where anyone holding only a game can
+  obtain the complete corresponding source.
+- Cooked video uses the royalty-free VP9 video codec (libvpx, which carries the
+  WebM patent grant) with Opus audio in a WebM container; see libvpx.txt. No
+  patent-encumbered codec is produced by the engine.
+- FFmpeg (LGPL-2.1) is the only copyleft component IceBoxCrew Studio redistributes.
+  It is dynamically
+  linked and shipped as separate replaceable shared libraries on every platform where
+  it is included (Windows, Linux, macOS and Android), so it can be replaced/relinked
+  freely without any further action. It is not included on iOS or Web, the two
+  platforms that link every library statically, so a game shipped for iOS or Web
+  carries no copyleft component at all. See THIRD_PARTY_NOTICES.txt section 7.
+  The one thing that can add a copyleft component to a game without passing through
+  us is the optional .AppImage packaging format, whose runtime the developer's own
+  machine fetches from the AppImage project; THIRD_PARTY_NOTICES.txt section 15
+  explains what that means and what it leaves for the developer to do.
+- SheenBidi (Apache-2.0) provides the Unicode Bidirectional Algorithm on every
+  platform and is statically linked everywhere. It replaced GNU FriBidi (LGPL-2.1),
+  which earlier versions of the engine used: static LGPL linkage on iOS and Web would
+  have obliged every developer shipping a game to also hand their players the object
+  code of that game so the library could be relinked, which the Apache-2.0 licence of
+  SheenBidi does not require. See THIRD_PARTY_NOTICES.txt section 6.
+- ANGLE ships only in macOS builds and MoltenVK only in macOS and iOS builds
+  (iOS renders solely through MoltenVK); they are listed here so this attribution
+  set is complete across all six target platforms. MoltenVK is the only entry in
+  Tools/BuildSystem/Vendor/ that an installer carries. The Google Mobile Ads iOS
+  SDK, which fetch_googlemobileads.sh places in that same directory on a developer's
+  machine, is licensed to that developer by Google and is never packaged: the
+  install rules exclude it by name, and audit_package.py refuses a package that
+  contains it.
+- enkiTS is statically linked into Windows, Linux, macOS, iOS and Android builds,
+  where it runs the multithreaded Box2D solver. Web builds do not link it, because
+  Emscripten defaults to a single-threaded runtime; there Box2D falls back to its
+  built-in serial task path.

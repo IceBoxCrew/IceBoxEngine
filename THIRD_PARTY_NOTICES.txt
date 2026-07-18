@@ -1,0 +1,688 @@
+THIRD-PARTY SOFTWARE NOTICES
+========================================================================
+
+This software includes third-party open source software components.
+The main license of IceBoxEngine (proprietary) does NOT apply to these
+components. They are distributed under their respective licenses listed below.
+
+========================================================================
+1. ZLIB LICENSE
+========================================================================
+Used by:
+- SDL3 (Simple DirectMedia Layer) - https://github.com/libsdl-org/SDL/blob/main/LICENSE.txt
+- enkiTS (Task scheduler; drives the multithreaded Box2D physics solver; not included on Web) - https://github.com/dougbinks/enkiTS/blob/master/License.txt
+- zlib (General-purpose compression library; used transitively by libpng, FreeType, cURL, FFmpeg and others) - https://github.com/madler/zlib/blob/master/LICENSE
+
+Copyright (C) The respective authors of these libraries.
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+========================================================================
+2. MIT LICENSE
+========================================================================
+Used by:
+- Box2D - https://github.com/erincatto/box2d/blob/main/LICENSE
+- EnTT - https://github.com/skypjack/entt/blob/master/LICENSE
+- GLM (OpenGL Mathematics) - https://github.com/g-truc/glm/blob/master/copying.txt
+- Dear ImGui - https://github.com/ocornut/imgui/blob/master/LICENSE.txt
+- ImGuizmo - https://github.com/CedricGuillemet/ImGuizmo/blob/master/LICENSE
+- imgui-node-editor - https://github.com/thedmd/imgui-node-editor/blob/master/LICENSE
+- ImGuiColorTextEdit - https://github.com/BalazsJako/ImGuiColorTextEdit/blob/master/LICENSE
+- spdlog - https://github.com/gabime/spdlog/blob/v1.x/LICENSE
+- nlohmann/json - https://github.com/nlohmann/json/blob/develop/LICENSE.MIT
+- ENet (Reliable UDP networking) - https://github.com/lsalzman/enet/blob/master/LICENSE
+- fmt - https://github.com/fmtlib/fmt/blob/master/LICENSE
+- Lua (Scripting Language) - https://www.lua.org/license.html
+- sol2 (C++ Lua Binding) - https://github.com/ThePhD/sol2/blob/develop/LICENSE.txt
+- glad (OpenGL Loader) - https://github.com/Dav1dde/glad/blob/glad2/LICENSE
+- stb (Image loading utilities; dual-licensed MIT OR Public Domain/Unlicense, used here under MIT) - https://github.com/nothings/stb/blob/master/LICENSE
+- miniaudio (Audio playback and capture; dual-licensed Public Domain/Unlicense OR MIT-0, used here under MIT-0, which waives even the attribution requirement) - https://github.com/mackron/miniaudio/blob/master/LICENSE
+- curl (Command-line tool and library for transferring data with URLs) - https://github.com/curl/curl/blob/master/COPYING
+- HarfBuzz (Text shaping engine) - https://github.com/harfbuzz/harfbuzz/blob/main/COPYING
+- md4c (Markdown parser for C, editor-only; used by the Documentation panel) - https://github.com/mity/md4c/blob/master/LICENSE.md
+- volk (Vulkan meta-loader) - https://github.com/zeux/volk/blob/master/LICENSE.md
+- Vulkan Memory Allocator (VMA; GPU memory allocator for Vulkan) - https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt
+- Brotli (General-purpose compression; used transitively by FreeType, HarfBuzz and cURL) - https://github.com/google/brotli/blob/master/LICENSE
+- Expat (XML parser; bundled inside the embedded Python runtime via the pyexpat module) - https://github.com/libexpat/libexpat/blob/master/expat/COPYING
+- libffi (Foreign function interface; bundled inside the embedded Python runtime, used by ctypes) - https://github.com/libffi/libffi/blob/master/LICENSE
+- SPIRV-Headers (Khronos SPIR-V header files; bundled inside shaderc, SPIRV-Tools and SPIRV-Cross) - https://github.com/KhronosGroup/SPIRV-Headers/blob/main/LICENSE
+- ethers.js v6.17.0 (Ethereum/EVM JavaScript library; embedded verbatim into the page of Web builds made with the Web3 option, so those builds fetch no script at runtime) - https://github.com/ethers-io/ethers.js/blob/main/LICENSE.md
+- Emscripten (LLVM-to-WebAssembly toolchain; dual-licensed MIT OR University of Illinois/NCSA, used here under MIT. Web builds link its JavaScript glue and its system libraries, including the musl-derived C library and the C++ runtime, into the .wasm and .js of the packaged game. It bundles musl libc and portions of Node.js, both MIT. Full text in ThirdPartyLicenses/Emscripten.txt) - https://github.com/emscripten-core/emscripten/blob/main/LICENSE
+
+Copyright (c) The respective authors of these libraries.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following restrictions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+========================================================================
+3. BSD 3-CLAUSE LICENSE
+========================================================================
+Used by:
+- Tracy (Profiler) - https://github.com/wolfpld/tracy/blob/master/LICENSE
+- pybind11 - https://github.com/pybind/pybind11/blob/master/LICENSE
+- Zstd (Fast real-time compression algorithm) - https://github.com/facebook/zstd/blob/dev/LICENSE
+- Opus (Audio codec by the Xiph.Org Foundation / IETF; used by the engine audio system and, via the FFmpeg "opus" feature, as the royalty-free audio track of cooked video) - https://github.com/xiph/opus/blob/main/COPYING
+- libogg (Ogg container/bitstream library; Xiph.Org Foundation) - https://github.com/xiph/ogg/blob/master/COPYING
+- libvorbis (Vorbis audio codec; Xiph.Org Foundation; enabled via the FFmpeg "vorbis" feature) - https://github.com/xiph/vorbis/blob/master/COPYING
+- libvpx (VP8/VP9 video codec by Google / the WebM Project; enabled via the FFmpeg "vpx" feature as the royalty-free VP9 video encoder used when cooking video) - https://github.com/webmproject/libvpx/blob/main/LICENSE
+- libwebp (WebP image codec by Google; bundles the libsharpyuv helper) - https://github.com/webmproject/libwebp/blob/main/COPYING
+- glslang (Khronos GLSL/HLSL to SPIR-V reference compiler; bundled inside shaderc. Core is BSD-3-Clause; its preprocessor additionally carries NVIDIA and Khronos MIT-style notices) - https://github.com/KhronosGroup/glslang/blob/main/LICENSE.txt
+- ANGLE (Almost Native Graphics Layer Engine; OpenGL ES → Metal/D3D/Vulkan translator, used as the GLES backend on macOS) - https://chromium.googlesource.com/angle/angle/+/refs/heads/main/LICENSE
+- IXWebSocket (WebSocket client/server library; browser↔server transport for networking) - https://github.com/machinezone/IXWebSocket/blob/master/LICENSE.txt
+
+Copyright (c) The respective authors of these libraries.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+========================================================================
+4. FREETYPE PROJECT LICENSE (FTL)
+========================================================================
+Used by:
+- FreeType 2 - https://gitlab.freedesktop.org/freetype/freetype/-/blob/master/docs/FTL.TXT
+
+Portions of this software are copyright (C) The FreeType Project (www.freetype.org).
+All rights reserved.
+
+This software is used under the terms of the FreeType Project License (FTL).
+The full text of the license can be found at:
+https://gitlab.freedesktop.org/freetype/freetype/-/blob/master/docs/FTL.TXT
+
+========================================================================
+5. PYTHON SOFTWARE FOUNDATION LICENSE (PSF)
+========================================================================
+Used by:
+- Python 3.12 (Embedded)
+
+Copyright (c) Python Software Foundation. All rights reserved.
+
+This software is used under the terms of the Python Software Foundation License
+Version 2.
+The full text of the license can be found at:
+https://docs.python.org/3/license.html
+The verbatim text, including the copyright notice that PSF License section 2
+requires be retained, is in ThirdPartyLicenses/Python.txt.
+
+Summary of the changes made to Python, as PSF License section 3 requires
+-----------------------------------------------------------------------
+The embedded interpreter is NOT an unmodified upstream build. It is compiled
+from the official CPython 3.12.13 release - available from the Python Software
+Foundation at https://www.python.org/downloads/ and
+https://github.com/python/cpython - with the patch set of the vcpkg "python3"
+port applied on top of it. That patch set originates from the Microsoft vcpkg
+registry (https://github.com/microsoft/vcpkg); IceBoxCrew Studio adds nothing
+to it.
+
+Nine of those patches change CPython's own sources rather than only its build
+system:
+
+  - PC/pyconfig.h and Python/sysmodule.c, to allow CPython to be built and
+    linked as a static library;
+  - PC/pyconfig.h, to stop the headers from emitting an automatic link
+    directive for the Python import library;
+  - PC/python_ver_rc.h, to work around a Windows 11 SDK resource-compiler
+    error;
+  - PC/launcher.c, to stop the launcher from relying on a WINDOWS definition
+    supplied by the build system;
+  - Modules/_ctypes/malloc_closure.c, to remove libffi symbols that would
+    otherwise be defined twice when ctypes links the devendored libffi;
+  - Lib/sysconfig.py, to report the correct include directory;
+  - Misc/python.pc.in and Misc/python-embed.pc.in, to emit correct pkg-config
+    metadata; and
+  - configure.ac, twice: to keep the runtime library search path, and to fix
+    how OpenSSL is linked.
+
+The remaining patches adjust only CPython's MSBuild project files, so that the
+interpreter builds against the same zlib, bzip2, liblzma, SQLite, Expat, libffi
+and OpenSSL that the rest of the engine uses instead of vendored copies of them.
+
+The patches and the complete build recipe travel verbatim inside every
+IceBoxEngine installation, in
+Tools/BuildSystem/Utilities/vcpkg-overlay-ports/python3/; the vcpkg.json and
+portfile.cmake in that same directory record the exact upstream version and the
+full list of patches actually applied, and govern in case this summary is ever
+out of date.
+
+========================================================================
+6. APACHE LICENSE 2.0
+========================================================================
+Used by:
+- SheenBidi (Unicode Bidirectional Algorithm implementation) - https://github.com/Tehreer/SheenBidi/blob/master/LICENSE
+- shaderc (GLSL to SPIR-V compiler) - https://github.com/google/shaderc/blob/main/LICENSE
+- SPIRV-Tools (SPIR-V assembler, validator and optimizer; bundled inside shaderc) - https://github.com/KhronosGroup/SPIRV-Tools/blob/main/LICENSE
+- Vulkan-Headers (Vulkan API header files; dual-licensed Apache-2.0 OR MIT) - https://github.com/KhronosGroup/Vulkan-Headers/blob/main/LICENSE.md
+- SPIRV-Cross (SPIR-V to GLSL/HLSL/MSL cross-compiler and reflection library) - https://github.com/KhronosGroup/SPIRV-Cross/blob/main/LICENSE
+- basis_universal (Encoder and Decoder for cooking) - https://github.com/BinomialLLC/basis_universal/blob/master/LICENSE
+- OpenSSL (TLS and cryptography library; used by cURL and IXWebSocket for HTTPS / secure WebSockets) - https://github.com/openssl/openssl/blob/master/LICENSE.txt
+- MoltenVK (Vulkan to Metal translation layer, used as the Vulkan backend on macOS and iOS) - https://github.com/KhronosGroup/MoltenVK/blob/main/LICENSE
+- OpenGL-Registry and EGL-Registry (Khronos OpenGL/EGL API registries; used to generate the GL/EGL loaders. The registries are Apache-2.0; some legacy OpenGL header files they contain are additionally covered by the SGI Free Software License B) - https://github.com/KhronosGroup/OpenGL-Registry
+- LLVM libc++ (C++ standard library; redistributed only inside Android builds, as the libc++_shared.so that the Android NDK supplies and a packaged Android game loads. Apache-2.0 WITH LLVM-exception, and its pre-2019 contributions remain additionally available under the legacy dual University of Illinois/NCSA and MIT licensing. Both the exception and the legacy texts are reproduced in full in ThirdPartyLicenses/libcxx-LLVM.txt. No other platform redistributes it: Windows links the Microsoft C++ runtime, Linux the system libstdc++, macOS and iOS the system libc++, and Web the Emscripten C++ runtime listed in the MIT section above) - https://github.com/llvm/llvm-project
+
+Copyright (C) Muhammad Tayyab Akram (SheenBidi).
+Copyright (C) Google Inc.
+Copyright (C) The Khronos Group Inc.
+Copyright (C) The OpenSSL Project Authors.
+Copyright (C) The LLVM Project contributors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+LLVM libc++ carries, in addition, the LLVM Exception to the Apache 2.0 License,
+which relaxes Sections 4(a), 4(b) and 4(d) for portions of the library embedded
+into compiled object code, and allows Sections 3 and 9 to be waived where a
+court finds them in conflict with the GPLv2 in a combined work. Its verbatim
+text is in ThirdPartyLicenses/libcxx-LLVM.txt and applies only to that
+component.
+
+SheenBidi is statically linked into IceBoxEngine and into every Product built
+with it, on every platform. The Apache License 2.0 permits that without any
+relinking or source-disclosure obligation; the notice above, together with the
+verbatim licence text in ThirdPartyLicenses/SheenBidi.txt, is the whole of what
+it requires. SheenBidi replaced GNU FriBidi so that no component of a shipped
+Product carries a copyleft obligation on platforms that link everything
+statically, namely iOS and Web (WebAssembly).
+
+========================================================================
+7. GNU LESSER GENERAL PUBLIC LICENSE v2.1
+========================================================================
+Used by:
+- FFmpeg (libavcodec, libavdevice, libavfilter, libavformat, libavutil, libswresample, libswscale) - https://ffmpeg.org/legal.html
+
+The FFmpeg libraries are used under the LGPL-2.1. IceBoxEngine does NOT enable
+any GPL or non-free FFmpeg component, and does NOT enable any external patent-
+encumbered codec library such as an H.264/AVC (x264), H.265/HEVC (x265) or AAC
+(fdk-aac) encoder. The engine only ever PRODUCES royalty-free output: the VP9
+video encoder (libvpx), the Opus audio encoder (libopus) and the Vorbis audio
+feature (libvorbis / libogg) — all listed in the BSD 3-Clause section above. The
+editor's media importer additionally relies on FFmpeg's standard built-in
+decoders to read the source video and audio that a developer chooses to import.
+FFmpeg is used purely under the terms of the LGPL-2.1.
+
+Copyright (C) Free Software Foundation, Inc.
+Copyright (C) The FFmpeg developers.
+
+FFmpeg is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the
+Free Software Foundation; either version 2.1 of the License, or (at your
+option) any later version.
+
+FFmpeg is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with FFmpeg; if not, see <https://www.gnu.org/licenses/>.
+
+In accordance with the LGPL-2.1, the complete corresponding source code of the
+FFmpeg build shipped here is available as set out below. FFmpeg is dynamically
+linked and shipped as separate shared libraries (avcodec / avdevice / avfilter /
+avformat / avutil / swresample / swscale, as *.dll / libav*.so* / libsw*.so* /
+libav*.dylib / libsw*.dylib) alongside IceBoxEngine and any Product built with
+it, so the end user can replace them with modified versions without relinking.
+Depending on the target platform and toolchain, a build ships either the complete
+set or the subset its binaries link against; either way every FFmpeg library that
+is present is a separate replaceable shared library. FFmpeg is included only on
+Windows, Linux, macOS and Android; it is not included in iOS or Web (WebAssembly)
+builds.
+
+The shipped libraries are NOT an unmodified upstream build. They are compiled from
+the official FFmpeg 9.0.1 release - available from the FFmpeg project at
+https://ffmpeg.org/download.html and https://github.com/FFmpeg/FFmpeg - with the
+patch set of the vcpkg "ffmpeg" port applied on top of it. Three of those patches
+modify FFmpeg's own C and assembly sources: x86 assembly under libavcodec and
+libavfilter, an added av_stream_get_first_dts accessor in libavformat, and a
+libswscale linkage fix. The remaining patches adjust only FFmpeg's configure
+script, its build system and its command-line tools. That patch set originates
+from the Microsoft vcpkg registry (https://github.com/microsoft/vcpkg); IceBoxCrew
+Studio adds to it a single build-configuration change, which selects the correct
+target when compiling for ARM64 MinGW-w64. The patches and the complete build
+recipe travel verbatim inside every IceBoxEngine installation, in
+Tools/BuildSystem/Utilities/vcpkg-overlay-ports/ffmpeg/; the vcpkg.json and
+portfile.cmake in that same directory record the exact upstream version and the
+full list of patches actually applied, and govern in case this notice is ever out
+of date.
+
+If you received a Product built with IceBoxEngine rather than the engine itself,
+and therefore do not have that directory, IceBoxCrew Studio will provide the
+complete corresponding source code of the FFmpeg build contained in that Product -
+the upstream release together with the applied patches and the build recipe - to
+any third party who asks, for no more than the cost of performing the
+distribution, for three years after that Product was distributed. Requests go to
+iceboxcrew057@gmail.com.
+
+The full text of the license can be found at:
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+========================================================================
+8. ISC LICENSE
+========================================================================
+Used by:
+- libsodium (Modern cryptography library; transport AEAD encryption and password hashing) - https://github.com/jedisct1/libsodium/blob/master/LICENSE
+
+Copyright (c) 2013-2024 Frank Denis <j at pureftpd dot org>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+========================================================================
+9. PNG REFERENCE LIBRARY LICENSE (libpng)
+========================================================================
+Used by:
+- libpng (PNG image reference library; used by FreeType and basis_universal) - https://github.com/pnggroup/libpng/blob/master/LICENSE
+
+Copyright (c) 1995-2025 The PNG Reference Library Authors.
+Copyright (c) 2018-2025 Cosmin Truta.
+Copyright (c) 2000-2002, 2004, 2006-2018 Glenn Randers-Pehrson.
+Copyright (c) 1996-1997 Andreas Dilger.
+Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.
+
+The software is supplied "as is", without warranty of any kind, express or
+implied, including, without limitation, the warranties of merchantability,
+fitness for a particular purpose, title, and non-infringement. In no event
+shall the Copyright owners, or anyone distributing the software, be liable for
+any damages or other liability, whether in contract, tort or otherwise, arising
+from, out of, or in connection with the software, or the use or other dealings
+in the software, even if advised of the possibility of such damage.
+
+Permission is hereby granted to use, copy, modify, and distribute this
+software, or portions hereof, for any purpose, without fee, subject to the
+following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim
+   that you wrote the original software. If you use this software in a product,
+   an acknowledgment in the product documentation would be appreciated, but is
+   not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This Copyright notice may not be removed or altered from any source or
+   altered source distribution.
+
+========================================================================
+10. BZIP2 LICENSE
+========================================================================
+Used by:
+- bzip2 / libbzip2 (Compression library; used by FreeType) - https://gitlab.com/bzip2/bzip2/-/blob/master/LICENSE
+
+Copyright (C) 1996-2019 Julian R Seward. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. The origin of this software must not be misrepresented; you must not claim
+   that you wrote the original software. If you use this software in a product,
+   an acknowledgment in the product documentation would be appreciated but is
+   not required.
+3. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+4. The name of the author may not be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+OF SUCH DAMAGE.
+
+========================================================================
+11. SIL OPEN FONT LICENSE, VERSION 1.1
+========================================================================
+Used by:
+- Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew, Noto Sans JP, and Noto Sans SC (bundled fonts used to render Latin, Cyrillic, Arabic, Hebrew, Devanagari, Japanese and Simplified Chinese text in the editor and in games) - https://github.com/notofonts
+- Tiny5 (bundled pixel font used by the Platformer example UI) - https://github.com/Gissio/font_tiny5
+
+Copyright The Noto Project Authors, with Reserved Font Name "Noto".
+Copyright The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5).
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://openfontlicense.org
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The fonts,
+including any derivative works, can be bundled, embedded, redistributed
+and/or sold with any software provided that any reserved names are not used
+by derivative works. The fonts and derivatives, however, cannot be released
+under any other type of license. The requirement for fonts to remain under
+this license does not apply to any document created using the fonts or their
+derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may include
+source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting, or
+substituting -- in part or in whole -- any of the components of the Original
+Version, by changing formats or by porting the Font Software to a new
+environment.
+
+"Author" refers to any designer, engineer, programmer, technical writer or
+other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font Software,
+subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components, in
+Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be included
+either as stand-alone text files, human-readable headers or in the
+appropriate machine-readable metadata fields within text or binary files as
+long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font Name(s)
+unless explicit written permission is granted by the corresponding Copyright
+Holder. This restriction only applies to the primary font name as presented
+to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any Modified
+Version, except to acknowledge the contribution(s) of the Copyright Holder(s)
+and the Author(s) or with their explicit written permission.
+
+5) The Font Software, modified or unmodified, in part or in whole, must be
+distributed entirely under this license, and must not be distributed under
+any other license. The requirement for fonts to remain under this license
+does not apply to any document created using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are not
+met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT,
+TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL,
+INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE
+THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+
+========================================================================
+12. PUBLIC DOMAIN / BSD ZERO CLAUSE LICENSE (0BSD)
+========================================================================
+Used by:
+- SQLite (SQL database engine; bundled inside the embedded Python runtime via the sqlite3 module) - https://www.sqlite.org/copyright.html
+- liblzma / xz (LZMA compression; bundled inside the embedded Python runtime via the lzma module) - https://github.com/tukaani-project/xz/blob/master/COPYING.0BSD
+
+SQLite is in the Public Domain. The authors have dedicated all copyright to the
+public domain; anyone is free to copy, modify, publish, use, compile, sell, or
+distribute the original SQLite code, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any means.
+
+The core of liblzma (xz) is in the public domain. Some of its files are licensed
+under the BSD Zero Clause License (0BSD), the full text of which follows:
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+========================================================================
+13. UNIVERSITY OF ILLINOIS/NCSA OPEN SOURCE LICENSE
+========================================================================
+Used by:
+- DirectX Shader Compiler (dxcompiler.dll; Microsoft's redistributable build of the open source https://github.com/microsoft/DirectXShaderCompiler, which is derived from LLVM and Clang)
+
+Copyright (c) 2003-2015 University of Illinois at Urbana-Champaign.
+Copyright (c) Microsoft Corporation.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+dxcompiler.dll ships on Windows only - next to the engine binaries and next to a
+Windows game built with it - and only where the Direct3D 12 backend is
+available; Direct3D 12 exists on no other target platform. It is taken
+unmodified from the Redist\D3D\<arch> folder of the installed Windows SDK, which
+is where Microsoft places it for redistribution, and it is therefore also
+Microsoft "Distributable Code" under the Visual Studio and Windows SDK licence
+terms (https://visualstudio.microsoft.com/license-terms/).
+
+The file shipped beside it, dxil.dll, is the DXIL signing library. It is
+proprietary Microsoft software rather than open source, is likewise
+redistributed unmodified out of the same Redist\D3D folder under those same
+Microsoft terms, and carries no open source attribution obligation, which is why
+no open source licence text for it appears here.
+
+Full text and the complete explanation are in
+ThirdPartyLicenses/DirectXShaderCompiler.txt.
+
+========================================================================
+14. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+========================================================================
+
+The components listed in sections 1-13 above are the ones that IceBoxCrew
+Studio redistributes as part of IceBoxEngine. The Android game template
+additionally resolves the following packages from Google's Maven repository
+through the game developer's own Gradle build. They are not shipped inside
+IceBoxEngine, they are downloaded by and licensed directly to the developer,
+and they are governed by their own terms rather than by this file.
+
+Added to every Android build:
+
+- androidx.appcompat:appcompat, androidx.core:core (Apache-2.0) - https://developer.android.com/jetpack/androidx
+- org.jetbrains.kotlin:kotlin-stdlib (Apache-2.0) - https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt
+
+Added only when the developer enables the matching feature in the Build panel:
+
+- com.google.android.gms:play-services-ads (Google Mobile Ads / AdMob)
+- com.android.billingclient:billing (Google Play Billing)
+- com.google.android.gms:play-services-games-v2 (Play Games Services)
+- com.google.android.ump:user-messaging-platform (Google consent SDK)
+- com.google.android.play:review (In-App Review)
+- com.google.firebase:firebase-analytics, firebase-messaging (Firebase)
+- androidx.work:work-runtime (Apache-2.0)
+
+The Google packages above are distributed under the Android Software
+Development Kit License Agreement and the Google APIs Terms of Service, not
+under an open-source licence:
+
+- https://developer.android.com/studio/terms
+- https://developers.google.com/terms
+- https://firebase.google.com/terms
+
+On iOS the equivalent Google Mobile Ads SDK is fetched by the developer with
+Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh, which downloads it
+straight from Google and places it in Tools/BuildSystem/Vendor/GoogleMobileAds/
+- or, when the engine tree is not writable, in
+~/.cache/IceBoxEngine/Vendor/GoogleMobileAds/ - for the build to link.
+IceBoxEngine ships that fetcher but no part of the SDK, and never redistributes
+it; that copy is licensed to the developer by Google under the terms below.
+
+Obligations that follow the developer, not IceBoxCrew Studio, when any of
+these are enabled:
+
+(a) Google Play services components require the app to surface their
+    open-source notices, for example via the OSS Licenses Gradle plugin or
+    GoogleApiAvailability.getOpenSourceSoftwareLicenseInfo().
+(b) Ads, Analytics and Play Games process end-user personal data (including
+    advertising identifiers). The developer is the data controller and is
+    responsible for consent, for the Google Play Data safety declaration, for
+    App Tracking Transparency on iOS, and for their own privacy policy.
+(c) The AndroidX and Kotlin components are Apache-2.0 and require the licence
+    and any NOTICE file to be reproduced in the shipped application.
+
+========================================================================
+15. LINUX PACKAGING COMPONENTS RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+========================================================================
+
+One more component is resolved on the developer's machine rather than shipped
+by us, and it is listed here for the same reason as section 14: because it ends
+up inside something a developer distributes.
+
+Packaging a Linux game as an .AppImage is optional. Tools/BuildSystem/BuildGame/
+create_game_installer_linux.sh produces a Debian .deb by default; an .AppImage is
+built only when the developer passes --format appimage or --format both. When
+they do, the packer needs two files from the AppImage project:
+
+- appimagetool - https://github.com/AppImage/appimagetool
+- the AppImage type-2 runtime - https://github.com/AppImage/type2-runtime
+  (falling back to https://github.com/AppImage/AppImageKit release 13)
+
+Neither is shipped inside IceBoxEngine, and no IceBoxEngine installer contains
+either of them. The packer looks for them in
+Tools/BuildSystem/BuildGame/Templates/Linux/, then in
+~/.cache/IceBoxEngine/appimage/, and only then downloads them straight from the
+AppImage project's own release pages. Setting ICE_APPIMAGE_NO_DOWNLOAD=1 stops
+the download; --format deb avoids the whole matter.
+
+The distinction between the two matters:
+
+  (a) appimagetool is a build tool. It runs on the developer's machine and no
+      part of it ends up in the packaged game, so it carries no redistribution
+      obligation.
+
+  (b) The runtime DOES end up in the packaged game. Every .AppImage is that
+      runtime binary with a SquashFS image of the game appended to it, so a
+      developer who ships an .AppImage is redistributing it.
+
+AppImageKit and the type-2 runtime are published under the MIT licence, but the
+runtime is a static build that embeds further components of its own - squashfuse
+and its compression and FUSE dependencies among them - each under its own
+licence, and some of those have historically been copyleft. IceBoxCrew Studio
+neither builds nor redistributes that binary and cannot state which licence set
+applies to the particular build a developer's machine fetches.
+
+Obligations that follow the developer, not IceBoxCrew Studio, when the .AppImage
+format is chosen:
+
+  (a) Read the licence and notice files published with the runtime release you
+      actually shipped, and reproduce whatever they require alongside your game.
+  (b) If any embedded component turns out to be copyleft, satisfy that licence
+      as well - which for LGPL-style terms normally means a written offer of the
+      corresponding source, in the manner section 7 describes for FFmpeg.
+  (c) Nothing in this section applies to the .deb format, which embeds no
+      AppImage code at all.
+
+========================================================================
