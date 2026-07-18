@@ -1,0 +1,130 @@
+IceBox Engine License Agreement
+
+Copyright (c) 2026 IceBoxCrew Studio. All rights reserved.
+
+This License Agreement ("License") is a legal agreement between you, either an
+individual or a single entity ("You"), and IceBoxCrew Studio ("Licensor")
+governing your use of IceBox Engine, including its editor, runtime, source code,
+tools, sample content, and documentation (collectively, the "Software").
+
+By installing, copying, or otherwise using the Software, you agree to be bound by
+the terms of this License. If you do not agree to these terms, do not install or
+use the Software.
+
+1. Ownership
+============
+
+The Software is licensed, not sold. IceBoxCrew Studio retains all right, title,
+and interest in and to the Software, including all intellectual property rights
+in it. Except for the rights expressly granted to you in Section 2, no rights are
+granted, by implication or otherwise.
+
+2. License Grant
+================
+
+Subject to your continued compliance with this License, IceBoxCrew Studio grants
+you a worldwide, non-exclusive, non-transferable license to:
+
+(a) install and use the Software to design, develop, and test games and other
+    interactive applications (each, a "Product"); and
+
+(b) build, publish, distribute, and sell the Products you create with the
+    Software, including for commercial purposes, with no royalties, revenue
+    share, or per-title fees owed to IceBoxCrew Studio.
+
+You own the Products you create with the Software, including your own source
+code, assets, and content. IceBoxCrew Studio claims no ownership of, and asserts
+no rights in, your Products.
+
+3. Restrictions
+===============
+
+You may NOT:
+
+(a) sell, resell, rent, lease, lend, sublicense, publish, distribute, share, or
+    otherwise make the Software itself, in whole or in part and in original or
+    modified form, available to any third party, whether for a fee or free of
+    charge;
+
+(b) modify, adapt, translate, reverse engineer, decompile, disassemble, or
+    create derivative works of the Software, except to the extent this
+    restriction is prohibited by applicable law or is expressly permitted by the
+    license of a third-party component included in the Software (see Section 5);
+
+(c) remove, alter, or obscure any copyright, trademark, license, or other
+    proprietary notice in or on the Software, including the contents of the
+    accompanying THIRD_PARTY_NOTICES.txt file;
+
+(d) claim authorship or ownership of the Software, or represent the Software, or
+    any modified version of it, as your own engine, framework, library, or
+    development tool; or
+
+(e) use the name, logo, or trademarks of IceBoxCrew Studio to endorse or promote
+    your Products without prior written permission.
+
+For the avoidance of doubt, the restrictions in this Section apply to the
+Software (the engine) itself and NOT to the Products you make with it. Creating,
+publishing, and selling Products is expressly permitted under Section 2.
+
+4. Distribution of the Runtime
+==============================
+
+The runtime components of the Software that are linked into or packaged with your
+Products may be distributed only as an integral part of a Product. They may not
+be distributed on their own or repackaged or offered as a development tool,
+engine, software development kit, or library.
+
+5. Third-Party Components
+=========================
+
+The Software includes third-party open-source components that are licensed to you
+under their own respective licenses, as listed in the accompanying
+THIRD_PARTY_NOTICES.txt file. Those components remain governed by their own terms.
+Nothing in this License limits, supersedes, restricts, or removes any right
+granted to you, or any obligation imposed on IceBoxCrew Studio, under the license
+of any such third-party component. To the extent of any conflict between this
+License and the license of a third-party component, the third-party license
+governs with respect to that component.
+
+6. No Warranty
+==============
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+7. Limitation of Liability
+==========================
+
+IN NO EVENT SHALL ICEBOXCREW STUDIO BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+8. Termination
+==============
+
+This License terminates automatically and immediately if you breach any of its
+terms. Upon termination, you must cease all use of the Software and destroy all
+copies of it in your possession or control. Termination of this License does not
+affect the rights of end users who obtained Products you distributed while this
+License was in effect, and does not require you to recall, disable, or stop
+selling Products you had already distributed.
+
+9. Governing Law
+================
+
+This License shall be governed by and interpreted in accordance with the laws
+applicable in the jurisdiction of IceBoxCrew Studio, without regard to its
+conflict of law principles.
+
+10. Contact
+===========
+
+For permissions, redistribution rights, or other licensing inquiries, contact:
+
+IceBoxCrew Studio
+Email:   iceboxcrew057@gmail.com
+Website: https://www.ice-box-crew.com/
+
+Copyright (c) 2026 IceBoxCrew Studio. All rights reserved.
