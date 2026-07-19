@@ -162,7 +162,8 @@ sudo apt update && sudo apt install -y \
     libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
     libasound2-dev libpulse-dev \
     libdbus-1-dev \
-    libssl-dev zenity libespeak-ng-dev
+    libssl-dev zenity libespeak-ng-dev \
+    mingw-w64 g++-mingw-w64
 
 # 2. Установить vcpkg
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
@@ -210,14 +211,14 @@ export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64
 # 2. Установить Android SDK command-line tools
 mkdir -p ~/Android/Sdk/cmdline-tools
 cd ~/Android/Sdk/cmdline-tools
-curl -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-latest.zip
-unzip tools.zip && mv cmdline-tools latest && rm tools.zip
+curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip
+unzip -q tools.zip && rm -rf latest && mv cmdline-tools latest && rm tools.zip
 
 # 3. Установить компоненты SDK и NDK 29
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-36" "ndk;29.0.14206865"
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865
 
 # Gradle 9.4.0 скачивается автоматически скриптом сборки, если не установлен.
