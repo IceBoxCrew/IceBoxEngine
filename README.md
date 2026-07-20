@@ -93,7 +93,7 @@ IceBox Engine consists of several components:
 
 | | |
 |-|-|
-| **OS** | Windows (x64/x86), Linux (x64/x86), or macOS 11.0+ (Apple Silicon or Intel) |
+| **OS** | Windows 7+ (x64/x86), Linux Debian/Ubuntu (x64/x86), or macOS 11.0+ (Apple Silicon or Intel) |
 | **CPU** | Dual-core processor |
 | **RAM** | 4 GB |
 | **GPU** | OpenGL 3.3/4.6 or Vulkan 1.1-1.4 compatible (Windows / Linux) or Metal-capable GPU (macOS, via ANGLE or MoltenVK), 512 MB VRAM |
@@ -103,7 +103,7 @@ IceBox Engine consists of several components:
 
 | | |
 |-|-|
-| **OS** | iOS 13.0+ (iPhone & iPad, arm64) |
+| **OS** | iOS 14.0+ (iPhone & iPad, arm64) |
 | **GPU** | Metal (rendered via MoltenVK) |
 
 ### Runtime — Android
