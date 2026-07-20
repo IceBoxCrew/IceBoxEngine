@@ -93,7 +93,7 @@ IceBox Engine состоит из нескольких компонентов:
 
 | | |
 |-|-|
-| **ОС** | Windows (x64/x86), Linux (x64/x86) или macOS 11.0+ (Apple Silicon или Intel) |
+| **ОС** | Windows 7+ (x64/x86), Linux Debian/Ubuntu (x64/x86), или macOS 11.0+ (Apple Silicon или Intel) |
 | **CPU** | Двухъядерный процессор |
 | **RAM** | 4 ГБ |
 | **GPU** | Совместимая с OpenGL 3.3/4.6 или Vulkan 1.1-1.4 (Windows / Linux) или GPU с поддержкой Metal (macOS, через ANGLE или MoltenVK), 512 МБ видеопамяти |
@@ -103,7 +103,7 @@ IceBox Engine состоит из нескольких компонентов:
 
 | | |
 |-|-|
-| **ОС** | iOS 13.0+ (iPhone и iPad, arm64) |
+| **ОС** | iOS 14.0+ (iPhone и iPad, arm64) |
 | **GPU** | Metal (рендеринг через MoltenVK) |
 
 ### Runtime — Android
