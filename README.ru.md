@@ -31,14 +31,14 @@
 IceBox Engine — это кроссплатформенный 2D игровой движок, предназначенный для создания игр в любом визуальном стиле — от простых проектов в пиксель-арте до 2D-игр с разрешением 4K HD и богатыми визуальными эффектами. Движок включает полнофункциональный визуальный редактор, лаунчер проектов, автоматический апдейтер и легковесный рантайм для поставки готовых игр игрокам.
 
 **Скриптинг:**
-- **Lua** — игровой скриптовый язык для игровой логики, UI, ИИ и многого другого
+- **Lua** — игровой скриптовый язык для игровых классов, UI, уровней и многого другого
 - **Python** — скриптинг на стороне движка для инструментов редактора и автоматизации
 
 ---
 
 ## ✨ Возможности
 
-- **Рендеринг** — Data-driven 2D-рендерер с нодовым **редактором материалов** (инстансы и функции), пост-обработкой / **FX** и мультибэкендовым RHI: OpenGL 4.6, OpenGL ES, Vulkan, Metal (через ANGLE и MoltenVK), WebGL 2 и WebGPU.
+- **Рендеринг** — Data-driven 2D-рендерер с нодовым **редактором материалов** (инстансы и функции), пост-обработкой / **FX** и мультибэкендовым RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Metal (via ANGLE & MoltenVK), WebGL 2.0 и WebGPU.
 - **Сцены и ECS** — Ядро на основе Entity-Component-System (EnTT), аутлайнер уровней, переиспользуемые классы сущностей и редактор свойств/мира.
 - **2D-физика** — Твёрдые тела, коллайдеры и сочленения на базе Box2D.
 - **Спрайты и тайлмапы** — Редактор спрайтов, слайсер спрайт-листов, флипбук-анимация и отдельные редакторы тайлмапов / тайлсетов.
@@ -49,7 +49,7 @@ IceBox Engine — это кроссплатформенный 2D игровой 
 - **ИИ** — Поиск пути, деревья поведения и навигация.
 - **Сеть** — Надёжный UDP (ENet) плюс WebSocket-транспорт (IXWebSocket) для игры в браузере/через сервер, с криптографией через libsodium.
 - **Видео** — Воспроизведение видео и редактор кат-сцен / кинематографики (FFmpeg).
-- **Локализация** — 14 встроенных языков с поддержкой письма справа налево, редактируемых из панели локализации.
+- **Локализация** — 14 встроенных языков редактора с поддержкой письма справа налево и игровая локализация редактируемая из панели локализации.
 - **Расширяемость** — Drop-in система **плагинов** и поддержка **модов**.
 - **Инструментарий** — Встроенный профилировщик Tracy, оверлеи статистики, редактор горячих клавиш и пайплайн сборки игры **Build Game** в один клик для всех поддерживаемых платформ.
 
@@ -93,7 +93,7 @@ IceBox Engine состоит из нескольких компонентов:
 
 | | |
 |-|-|
-| **ОС** | Windows 7+ (x64/x86), Linux Debian/Ubuntu (x64/x86), или macOS 11.0+ (Apple Silicon или Intel) |
+| **ОС** | Windows 10+ (x64/x86), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86) или macOS 11.0+ (Apple Silicon или Intel) |
 | **CPU** | Двухъядерный процессор |
 | **RAM** | 4 ГБ |
 | **GPU** | Совместимая с OpenGL 3.3/4.6 или Vulkan 1.1-1.4 (Windows / Linux) или GPU с поддержкой Metal (macOS, через ANGLE или MoltenVK), 512 МБ видеопамяти |
@@ -129,8 +129,8 @@ IceBox Engine состоит из нескольких компонентов:
 |-----------------|----------------------|
 | 🪟 **Windows** | *(ничего дополнительно — те же инструменты, что и выше)* |
 | 🐧 **Linux** | WSL2 (если собирается из Windows) или нативный GCC/Clang + Ninja |
-| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, vcpkg с триплетами `arm64-osx` / `x64-osx` |
-| 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, аккаунт Apple Developer для деплоя на устройство |
+| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`, MoltenVK через `fetch_moltenvk.sh macos` |
+| 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, MoltenVK через `fetch_moltenvk.sh ios` *(обязательно — без него configure падает)*, аккаунт Apple Developer нужен **только** для деплоя на устройство (для компиляции не нужен) |
 | 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(скачивается автоматически)* |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) |
 
@@ -171,21 +171,65 @@ git clone https://github.com/microsoft/vcpkg ~/vcpkg
 echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
 ```
 
+#### 32-битные (x86) сборки
+
+Шаги выше собирают движок по умолчанию в 64-битном варианте. Пресеты `Linux-x86-*`
+собирают 32-битные бинарники с `-m32`, для чего дополнительно нужны включённая
+**мультиархитектура i386**, multilib-тулчейн и i386-копии библиотек разработки.
+Инструменты, установленные выше (CMake, Ninja, git, NSIS и т. д.), не зависят от
+архитектуры и **не** переустанавливаются — нужны только компилятор и линкуемые
+`:i386`-библиотеки:
+
+```bash
+# 1. Включить архитектуру i386 и обновить списки пакетов
+sudo dpkg --add-architecture i386
+sudo apt update
+
+# 2. Установить 32-битный тулчейн и i386-библиотеки разработки
+sudo apt install -y \
+    gcc-multilib g++-multilib \
+    python3-dev:i386 \
+    libx11-dev:i386 libxft-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxfixes-dev:i386 libxss-dev:i386 libxtst-dev:i386 \
+    libxkbcommon-dev:i386 libwayland-dev:i386 libdecor-0-dev:i386 \
+    libibus-1.0-dev:i386 \
+    libgl1-mesa-dev:i386 libegl1-mesa-dev:i386 libgles2-mesa-dev:i386 \
+    libasound2-dev:i386 libpulse-dev:i386 \
+    libdbus-1-dev:i386 \
+    libssl-dev:i386 libespeak-ng-dev:i386
+
+```
+
 ### Инструменты сборки macOS / iOS (требуется Apple-хост)
 
 > **Примечание:** Цели macOS и iOS должны собираться **на macOS-хосте**. Машины с Windows / Linux не могут кросс-компилировать для платформ Apple, потому что SDK от Apple (Metal, UIKit, Cocoa) и `xcodebuild` доступны только в macOS.
 
 ```bash
-# 1. Установить Xcode (полная IDE из Mac App Store) и принять лицензию
+# 1. Установить Xcode (полная IDE из Mac App Store), принять лицензию и
+#    выполнить его первичную настройку.
+#    Проверить можно так: xcodebuild -checkFirstLaunchStatus
 sudo xcodebuild -license accept
+sudo xcodebuild -runFirstLaunch
 
-# 2. Установить зависимости командной строки (рекомендуется Homebrew)
-brew install cmake ninja git
+#    Свежий Xcode содержит iOS SDK, но НЕ полную поддержку платформы iOS.
+#    Без неё `ibtool` не компилирует LaunchScreen.storyboard и падает с
+#    "iOS <версия> Platform Not Installed". Эта же команда ставит runtime
+#    Симулятора iOS, что позволяет тестировать игры без устройства.
+#    (~9 ГБ загрузки, sudo не требуется.)
+xcodebuild -downloadPlatform iOS
 
-# 3. Установить vcpkg
+# 2. Установить зависимости командной строки
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install cmake ninja pkg-config autoconf automake libtool autoconf-archive nasm python@3.13 imagemagick
+
+# 3. Установить vcpkg. Нужен ПОЛНЫЙ клон - поверхностный (--depth 1) не сможет
+#    разрешить коммит builtin-baseline, закреплённый в vcpkg.json.
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
-echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.zshrc && source ~/.zshrc
+echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.zprofile && source ~/.zprofile
+
+# 4. Подтянуть MoltenVK (Vulkan поверх Metal)
+Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh all
+
 ```
 
 ### Инструменты сборки Android (Windows)
@@ -230,6 +274,40 @@ echo 'export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+### Инструменты сборки Android (macOS)
+
+Игры под Android собираются с macOS-хоста так же, как с Linux — Android SDK, NDK
+и Gradle кроссплатформенны. Используйте JDK из Homebrew (формула, не cask),
+чтобы не требовался `sudo` / пароль администратора.
+
+```bash
+# 1. Установить JDK 25 (формула Homebrew ставится в /opt/homebrew, без sudo).
+#    Нужна именно openjdk@25 - Android build.gradle нацелен на Java 25, а более
+#    новая формула по умолчанию `openjdk` (26) ломает шаг jlink в Android Gradle Plugin.
+brew install openjdk@25
+export JAVA_HOME="$(brew --prefix openjdk@25)/libexec/openjdk.jdk/Contents/Home"
+
+# 2. Установить Android command-line tools
+brew install --cask android-commandlinetools    # даёт `sdkmanager`
+
+# 3. Установить компоненты SDK и NDK 29 в стандартный для macOS путь SDK
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+sdkmanager --sdk_root="$ANDROID_HOME" \
+    "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
+
+# Gradle 9.4.0 скачивается скриптом сборки автоматически, если не установлен.
+
+# 4. (Опционально) Сохранить переменные окружения
+{
+  echo "export JAVA_HOME=\"$(brew --prefix openjdk@25)/libexec/openjdk.jdk/Contents/Home\""
+  echo 'export ANDROID_HOME="$HOME/Library/Android/sdk"'
+  echo 'export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"'
+} >> ~/.zprofile && source ~/.zprofile
+
+```
+
 ### Инструменты сборки Web (Windows)
 
 ```bash
@@ -252,6 +330,23 @@ source ./emsdk_env.sh
 
 # 2. (Опционально) Сохранить окружение
 echo 'source ~/emsdk/emsdk_env.sh' >> ~/.bashrc
+```
+
+### Инструменты сборки Web (macOS)
+
+```bash
+# 1. Установить Emscripten SDK. emsdk требует Python >= 3.10; системный Python —
+#    3.9, поэтому укажите emsdk на Python из Homebrew (см. раздел сборки macOS).
+brew install python@3.13
+git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+cd ~/emsdk
+export EMSDK_PYTHON="$(brew --prefix python@3.13)/bin/python3.13"
+"$EMSDK_PYTHON" emsdk.py install latest
+"$EMSDK_PYTHON" emsdk.py activate latest
+
+# 2. (Опционально) Сохранить окружение
+echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
+
 ```
 
 ---
