@@ -5,7 +5,7 @@
 <h1 align="center">🧊 IceBox Engine™</h1>
 
 <p align="center">
-  <a href="README.md">🇬🇧 English</a> &nbsp;•&nbsp; <strong>🇷🇺 Русский</strong>
+  <a href="README.md">EN English</a> &nbsp;•&nbsp; <strong>🇷🇺 Русский</strong>
 </p>
 
 <p align="center">
