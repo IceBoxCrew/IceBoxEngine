@@ -270,6 +270,7 @@ echo 'export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64' >> ~/.bashrc
 echo 'export ANDROID_HOME=~/Android/Sdk' >> ~/.bashrc
 echo 'export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865' >> ~/.bashrc
 source ~/.bashrc
+```
 
 ### Android build tools (macOS)
 
