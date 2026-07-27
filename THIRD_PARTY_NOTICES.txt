@@ -10,7 +10,6 @@ components. They are distributed under their respective licenses listed below.
 ========================================================================
 Used by:
 - SDL3 (Simple DirectMedia Layer) - https://github.com/libsdl-org/SDL/blob/main/LICENSE.txt
-- stb (Image loading utilities) - https://github.com/nothings/stb/blob/master/LICENSE
 - zlib (General-purpose compression library; used transitively by libpng, FreeType, cURL, FFmpeg and others) - https://github.com/madler/zlib/blob/master/LICENSE
 
 Copyright (C) The respective authors of these libraries.
@@ -49,7 +48,8 @@ Used by:
 - Lua (Scripting Language) - https://www.lua.org/license.html
 - sol2 (C++ Lua Binding) - https://github.com/ThePhD/sol2/blob/develop/LICENSE.txt
 - glad (OpenGL Loader) - https://github.com/Dav1dde/glad/blob/glad2/LICENSE
-- miniaudio - https://github.com/mackron/miniaudio/blob/master/LICENSE
+- stb (Image loading utilities; dual-licensed MIT OR Public Domain/Unlicense, used here under MIT) - https://github.com/nothings/stb/blob/master/LICENSE
+- miniaudio (Audio playback and capture; dual-licensed Public Domain/Unlicense OR MIT-0, used here under MIT-0, which waives even the attribution requirement) - https://github.com/mackron/miniaudio/blob/master/LICENSE
 - curl (Command-line tool and library for transferring data with URLs) - https://github.com/curl/curl/blob/master/COPYING
 - HarfBuzz (Text shaping engine) - https://github.com/harfbuzz/harfbuzz/blob/main/COPYING
 - md4c (Markdown parser for C, editor-only; used by the Documentation panel) - https://github.com/mity/md4c/blob/master/LICENSE.md
@@ -464,5 +464,59 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
 OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
 TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
+
+========================================================================
+14. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+========================================================================
+
+The components listed in sections 1-13 above are the ones that IceBoxCrew
+Studio redistributes as part of IceBox Engine. The Android game template
+additionally resolves the following packages from Google's Maven repository
+through the game developer's own Gradle build. They are not shipped inside
+IceBox Engine, they are downloaded by and licensed directly to the developer,
+and they are governed by their own terms rather than by this file.
+
+Added to every Android build:
+
+- androidx.appcompat:appcompat, androidx.core:core (Apache-2.0) - https://developer.android.com/jetpack/androidx
+- org.jetbrains.kotlin:kotlin-stdlib (Apache-2.0) - https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt
+
+Added only when the developer enables the matching feature in the Build panel:
+
+- com.google.android.gms:play-services-ads (Google Mobile Ads / AdMob)
+- com.android.billingclient:billing (Google Play Billing)
+- com.google.android.gms:play-services-games-v2 (Play Games Services)
+- com.google.android.ump:user-messaging-platform (Google consent SDK)
+- com.google.android.play:review (In-App Review)
+- com.google.firebase:firebase-analytics, firebase-messaging (Firebase)
+- androidx.work:work-runtime (Apache-2.0)
+
+The Google packages above are distributed under the Android Software
+Development Kit License Agreement and the Google APIs Terms of Service, not
+under an open-source licence:
+
+- https://developer.android.com/studio/terms
+- https://developers.google.com/terms
+- https://firebase.google.com/terms
+
+On iOS the equivalent Google Mobile Ads SDK is fetched by the developer with
+Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh, which downloads it
+straight from Google and places it in Tools/BuildSystem/Vendor/GoogleMobileAds/
+for the build to link. IceBox Engine ships no part of it and never
+redistributes it; that copy is licensed to the developer by Google under the
+terms below.
+
+Obligations that follow the developer, not IceBoxCrew Studio, when any of
+these are enabled:
+
+(a) Google Play services components require the app to surface their
+    open-source notices, for example via the OSS Licenses Gradle plugin or
+    GoogleApiAvailability.getOpenSourceSoftwareLicenseInfo().
+(b) Ads, Analytics and Play Games process end-user personal data (including
+    advertising identifiers). The developer is the data controller and is
+    responsible for consent, for the Google Play Data safety declaration, for
+    App Tracking Transparency on iOS, and for their own privacy policy.
+(c) The AndroidX and Kotlin components are Apache-2.0 and require the licence
+    and any NOTICE file to be reproduced in the shipped application.
 
 ========================================================================

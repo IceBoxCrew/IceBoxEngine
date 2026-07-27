@@ -1,0 +1,218 @@
+================================================================================
+                     ICEBOX ENGINE - CRASH REPORT PRIVACY NOTICE
+================================================================================
+
+Version:        1.0
+Effective date: 2026-07-27
+Applies to:     IceBox Engine Editor, IceBox Launcher, IceBox Updater
+Does NOT apply: to games built with IceBox Engine (see section 8)
+
+--------------------------------------------------------------------------------
+1. WHO IS RESPONSIBLE
+--------------------------------------------------------------------------------
+
+IceBox Crew is the controller for the crash reports described in this notice.
+
+    Contact: iceboxcrew057@gmail.com
+    Website: https://www.ice-box-crew.com/
+
+If you are in the EEA or the UK, this notice is provided under Articles 13 and
+14 of the General Data Protection Regulation (GDPR).
+
+--------------------------------------------------------------------------------
+2. WHEN ANYTHING IS SENT AT ALL
+--------------------------------------------------------------------------------
+
+Nothing is transmitted automatically.
+
+When the editor, launcher or updater crashes, a report file is written to
+    <application data folder>/Saved/CrashReports/
+on your own machine, and a dialog appears asking whether you want to send it.
+
+  * Nothing leaves your machine unless you press "Yes" / "Send Report".
+  * The button is never pre-selected, pre-checked, or triggered on a timer.
+  * Pressing "No" closes the application and leaves the file on your disk only.
+  * If sending fails (no network, endpoint down), the report is queued and one
+    retry is attempted on the next launch. Declining is not retried - a declined
+    report is never queued.
+
+There is no other telemetry, analytics, usage tracking, advertising identifier,
+or background reporting in the editor, launcher or updater. Crash reports are
+the only data these tools ever transmit.
+
+--------------------------------------------------------------------------------
+3. WHAT A CRASH REPORT CONTAINS
+--------------------------------------------------------------------------------
+
+The full report file is plain text. You can open and read it before deciding to
+send it - the dialog shows you its exact location. It contains:
+
+  Crash identification
+    - Engine version and build configuration (Release/Debug)
+    - Platform and CPU architecture
+    - Local timestamp of the crash
+    - Signal / exception type, fault address, crashing thread id
+    - Process uptime
+
+  Process context
+    - Path to the executable
+    - Working directory
+    - Full command line the process was started with
+
+  Device and system information
+    - Operating system name, version and build
+    - CPU model, core counts, clock speed
+    - GPU model, driver version, video memory; active renderer backend
+    - Total / available / used RAM
+    - Motherboard, disk model, free disk space on the application's volume
+    - Display resolution, refresh rate, colour depth
+    - On mobile: device model, SoC, ABI, battery level, screen density,
+      locale of the device
+    - On Web: browser name and version, user agent string, screen size,
+      WebGL renderer, page origin and path (query strings are stripped)
+
+  Diagnostics
+    - Stack trace of the crashing thread with module and, where available,
+      source file and line
+    - The application's own log for that session (up to 100 000 lines)
+    - On Windows, a separate .dmp minidump is written NEXT TO the report but
+      is NEVER uploaded. It stays on your disk.
+
+--------------------------------------------------------------------------------
+4. PERSONAL DATA, AND WHAT IS REMOVED BEFORE SENDING
+--------------------------------------------------------------------------------
+
+Most of the content above is technical information about a machine, not about a
+person. The parts that can relate to an identifiable person are file system
+paths, because on most systems a home directory embeds the operating system
+account name.
+
+Before a report is written to disk - and therefore before it can be sent,
+attached to an email, or read by anyone - the engine rewrites account names in
+paths to the literal placeholder <user>:
+
+    C:\Users\Michael\Games\X\game.exe   ->  C:\Users\<user>\Games\X\game.exe
+    /home/michael/games/x/game          ->  /home/<user>/games/x/game
+    /Users/michael/Library/...          ->  /Users/<user>/Library/...
+
+This is applied to the entire report, including the command line, the stack
+trace and the session log. Shared, non-personal account folders (Public,
+Default, All Users, Shared, root) are preserved because they identify nobody.
+
+The redaction is best effort, not a guarantee. If you have typed personal data
+into a project path, a file name, a command-line argument, or if your own code
+logs personal data during the session, that content can still end up in the
+report. Please read the file before sending it if this matters to you.
+
+No account name, email address, licence key, IP-based identifier or advertising
+identifier is deliberately collected. Your IP address is visible to the
+receiving endpoint as it is for any HTTPS request; it is not stored in the
+report body.
+
+--------------------------------------------------------------------------------
+5. WHY (LEGAL BASIS) AND FOR HOW LONG
+--------------------------------------------------------------------------------
+
+Purpose
+    To diagnose and fix defects in IceBox Engine. Reports are read by the
+    engine's maintainers only, and are used for no other purpose. They are not
+    used for profiling, advertising, or automated decision-making.
+
+Legal basis
+    Your consent, GDPR Art. 6(1)(a), given by pressing "Send" in the crash
+    dialog. You may withdraw consent at any time; withdrawal does not affect
+    processing that already took place.
+
+Retention
+    Crash reports are deleted no later than 90 DAYS after receipt. Reports
+    linked to an open defect may be retained until that defect is fixed and
+    released, and are then deleted.
+
+    Copies stored locally on your own machine are under your control. The engine
+    keeps only the 15 most recent reports in Saved/CrashReports/ and prunes
+    older ones automatically; you may delete the folder at any time.
+
+--------------------------------------------------------------------------------
+6. WHO ELSE SEES THE DATA (PROCESSORS AND TRANSFERS)
+--------------------------------------------------------------------------------
+
+The default receiving endpoint is a Google Apps Script web app that forwards
+each report to a Gmail mailbox. Consequently:
+
+    Processor:  Google LLC and Google Ireland Limited
+                (Google Apps Script and Gmail)
+    Location:   United States and other countries where Google operates
+    Safeguard:  Google LLC is certified under the EU-U.S. Data Privacy
+                Framework, and the UK Extension and Swiss-U.S. Framework.
+                Google's Cloud Data Processing Addendum additionally provides
+                Standard Contractual Clauses.
+    Google's privacy policy: https://policies.google.com/privacy
+
+No crash report is sold, rented, or shared with advertisers, data brokers or any
+other third party. Access is limited to the engine maintainers.
+
+If you build IceBox Engine yourself and point
+Source/Engine/Core/CrashReportConfig.h at your own endpoint, the recipient is
+whoever operates that endpoint, and this section no longer describes your setup.
+
+--------------------------------------------------------------------------------
+7. YOUR RIGHTS
+--------------------------------------------------------------------------------
+
+Where the GDPR applies you have the right to:
+
+    - request access to the crash reports you have sent;
+    - request rectification or erasure;
+    - request restriction of processing, or object to it;
+    - receive your data in a portable form;
+    - withdraw consent at any time (simply stop pressing "Send");
+    - lodge a complaint with your national data protection supervisory
+      authority.
+
+To exercise any of these, write to iceboxcrew057@gmail.com. Because reports
+contain no account identifier, please include the approximate date and time of
+the crash and the engine version so the report can be located.
+
+--------------------------------------------------------------------------------
+8. GAMES BUILT WITH ICEBOX ENGINE - READ THIS IF YOU SHIP A GAME
+--------------------------------------------------------------------------------
+
+A packaged game NEVER sends crash reports to IceBox Crew.
+
+The engine's built-in endpoint and contact address are compiled into the editor,
+launcher and updater only. They are compiled out of IceBoxRuntime and
+IceBoxCore, which are what a packaged game is built from. A game with no
+endpoint configured writes the report to the player's device and sends nothing,
+anywhere.
+
+If you enter an address in the Build panel's "Crash Report URL" field (stored as
+"CrashReportUrl" in game.json), or add an optional "CrashReportEmail", then:
+
+  * YOU become the data controller for your players' crash reports, not
+    IceBox Crew. IceBox Crew never receives them and is not a recipient,
+    a processor, or a joint controller.
+  * You must disclose that collection in your own game's privacy policy, name
+    your own processors (for example Google, if you use the Apps Script
+    endpoint), state a retention period, and provide a contact for data subject
+    requests. Sections 3 to 7 of this document are a usable starting point.
+  * On iOS you must additionally declare crash data collection in your app's
+    PrivacyInfo.xcprivacy. The template shipped with the engine declares
+    NSPrivacyCollectedDataTypes as empty, which is correct only while no
+    endpoint is configured. Once you configure one, add
+    NSPrivacyCollectedDataTypeCrashData, or App Store review will reject the
+    build.
+  * On Android and Google Play you must reflect crash data collection in the
+    Data safety form.
+  * The <user> redaction described in section 4 applies to your players'
+    reports as well, but it is best effort and does not by itself relieve you
+    of the obligations above.
+
+--------------------------------------------------------------------------------
+9. CHANGES
+--------------------------------------------------------------------------------
+
+If this notice changes materially, the version number and effective date at the
+top of this file are updated and the change is noted in the release notes of the
+version that carries it.
+
+================================================================================
