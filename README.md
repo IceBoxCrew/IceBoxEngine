@@ -40,7 +40,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 
 - **Rendering** — Data-driven 2D renderer with a node-based **material editor** (instances & functions), post-processing / **FX**, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Metal (via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
 - **Scenes & ECS** — Entity-Component-System core (EnTT), level outliner, reusable entity classes, and a property/world editor.
-- **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D.
+- **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D, with a multithreaded solver (enkiTS) on desktop and mobile.
 - **Sprites & Tilemaps** — Sprite editor, spritesheet slicer, flipbook animation, and dedicated tilemap / tileset editors.
 - **Animation** — Skeletal animation, flipbooks, and timeline-driven clips.
 - **Text & UI** — In-engine UI widgets and high-quality text via FreeType, HarfBuzz, and FriBidi (full Unicode shaping with right-to-left support).
