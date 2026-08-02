@@ -10,6 +10,7 @@ components. They are distributed under their respective licenses listed below.
 ========================================================================
 Used by:
 - SDL3 (Simple DirectMedia Layer) - https://github.com/libsdl-org/SDL/blob/main/LICENSE.txt
+- enkiTS (Task scheduler; drives the multithreaded Box2D physics solver; not included on Web) - https://github.com/dougbinks/enkiTS/blob/master/License.txt
 - zlib (General-purpose compression library; used transitively by libpng, FreeType, cURL, FFmpeg and others) - https://github.com/madler/zlib/blob/master/LICENSE
 
 Copyright (C) The respective authors of these libraries.
