@@ -348,6 +348,28 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 
 ---
 
+## 📖 Documentation
+
+The full technical documentation ships with the engine in **[`Documentation/`](Documentation)**, in English (`EN/`) and Russian (`RU/`). It is also readable inside the editor through **Help → Documentation**, with full-text search and a table-of-contents sidebar.
+
+Start here: **[Documentation/README.md](Documentation/README.md)** — an index of every document with a short description of what is inside.
+
+| Document | What's inside |
+|----------|---------------|
+| [Getting Started](Documentation/EN/Getting-Started-EN-DOC.md) | Installing the engine, the Launcher & Updater, creating and managing projects. |
+| [Editor & Interface](Documentation/EN/Editor-EN-DOC.md) | Every panel, menu, dialog, preference and shortcut. |
+| [Graphics, Rendering & Physics](Documentation/EN/Graphics-EN-DOC.md) | RHI & backends, render graph, batching, lighting, 2D shadows, GI, post-processing, physics. |
+| [Engine, Multiplayer & Physics](Documentation/EN/Engine-EN-DOC.md) | Runtime architecture, split-screen & online multiplayer, advanced physics, audio and input. |
+| [Assets & Content Browser](Documentation/EN/Assets-EN-DOC.md) | Every asset type, its editor, sidecars, importers and cooking. |
+| [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all six platforms, installers, DLC, headless servers. |
+| [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
+| [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference. |
+| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling. |
+
+Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.
+
+---
+
 ## 📚 Third-Party Libraries
 
 IceBox Engine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg and GNU FriBidi, which are dynamically linked so they can be replaced freely).
