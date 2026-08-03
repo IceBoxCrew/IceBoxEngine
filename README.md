@@ -51,7 +51,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 - **Video** — Video playback and a cinematic / cutscene editor (FFmpeg).
 - **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
 - **Extensibility** — Drop-in **plugin** system and **mod** support.
-- **Tooling** — Built-in Tracy profiler, stats overlays, a hot-key editor, and a one-click **Build Game** pipeline targeting every supported platform.
+- **Tooling** — Built-in Tracy profiler, stats overlays, a hot-key reference, and a one-click **Build Game** pipeline targeting every supported platform.
 
 ---
 
@@ -76,7 +76,7 @@ IceBox Engine consists of several components:
 |-----------|--------|-------------|
 | **Launcher** | `IceBoxLauncher` | Entry point for users. Manages projects (create, open, delete), checks for engine updates, and launches the editor for the selected project. |
 | **Editor** | `IceBoxEngine` | The main visual editor. Scene editing, asset management, tilemap editor, animation tools, scripting workspace, and game build pipeline (Tools → Build Game). |
-| **Updater** | `IceBoxUpdater` | Background update service. Downloads and applies engine patches automatically. |
+| **Updater** | `IceBoxUpdater` | Standalone update app. Checks GitHub releases for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently. |
 | **Runtime** | `IceBoxRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
 
 ---
