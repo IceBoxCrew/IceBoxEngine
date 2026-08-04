@@ -185,9 +185,8 @@ sudo dpkg --add-architecture i386
 sudo apt update
 
 # 2. Install the 32-bit toolchain and the i386 development libraries
-sudo apt install -y \
+sudo apt install --no-remove \
     gcc-multilib g++-multilib \
-    python3-dev:i386 \
     libx11-dev:i386 libxft-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxfixes-dev:i386 libxss-dev:i386 libxtst-dev:i386 \
     libxkbcommon-dev:i386 libwayland-dev:i386 libdecor-0-dev:i386 \
     libibus-1.0-dev:i386 \
