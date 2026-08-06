@@ -173,7 +173,8 @@ In accordance with the LGPL, the complete corresponding source code of GNU
 FriBidi is available from the official project at
 https://github.com/fribidi/fribidi. On Windows, Linux, macOS and Android,
 FriBidi is dynamically linked and shipped as a separate shared library
-(fribidi-*.dll / libfribidi.so / libfribidi.*.dylib) alongside IceBox Engine and
+(fribidi-*.dll or libfribidi-*.dll on Windows, depending on whether the build used
+MSVC or MinGW-w64; libfribidi.so; libfribidi.*.dylib) alongside IceBox Engine and
 any Product built with it, so the end user can replace it with a modified version
 without relinking. On iOS and Web (WebAssembly) — platforms that link all
 libraries statically — IceBox Engine ships FriBidi unmodified, and that upstream
@@ -216,7 +217,7 @@ limitations under the License.
 8. GNU LESSER GENERAL PUBLIC LICENSE v2.1
 ========================================================================
 Used by:
-- FFmpeg (libavformat, libavcodec, libavutil, libswscale, libswresample) - https://ffmpeg.org/legal.html
+- FFmpeg (libavcodec, libavdevice, libavfilter, libavformat, libavutil, libswresample, libswscale) - https://ffmpeg.org/legal.html
 
 The FFmpeg libraries are used under the LGPL-2.1. IceBox Engine does NOT enable
 any GPL or non-free FFmpeg component, and does NOT enable any external patent-
@@ -247,11 +248,15 @@ along with FFmpeg; if not, see <https://www.gnu.org/licenses/>.
 In accordance with the LGPL-2.1, the complete corresponding source code of the
 FFmpeg version used by IceBox Engine is available from the official FFmpeg
 project at https://ffmpeg.org/download.html. FFmpeg is dynamically linked and
-shipped as separate shared libraries (avcodec / avformat / avutil / swscale /
-swresample, as *.dll / libav*.so* / libav*.dylib) alongside IceBox Engine and any
-Product built with it, so the end user can replace them with modified versions
-without relinking. FFmpeg is included only on Windows, Linux, macOS and Android;
-it is not included in iOS or Web (WebAssembly) builds.
+shipped as separate shared libraries (avcodec / avdevice / avfilter / avformat /
+avutil / swresample / swscale, as *.dll / libav*.so* / libsw*.so* /
+libav*.dylib / libsw*.dylib) alongside IceBox Engine and any Product built with
+it, so the end user can replace them with modified versions without relinking.
+Depending on the target platform and toolchain, a build ships either the complete
+set or the subset its binaries link against; either way every FFmpeg library that
+is present is a separate replaceable shared library. FFmpeg is included only on
+Windows, Linux, macOS and Android; it is not included in iOS or Web (WebAssembly)
+builds.
 
 The full text of the license can be found at:
 https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
