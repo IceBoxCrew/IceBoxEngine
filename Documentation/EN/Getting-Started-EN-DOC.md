@@ -126,9 +126,10 @@ folder, both shortcut sets, the file association and all of that state.
 `iceboxlauncher.desktop` / `iceboxengine.desktop` into `/usr/share/applications`
 and registers the `application/x-iceproject` MIME type for `*.iceproject`.
 It depends on `libgl1`, `libx11-6` and `zenity`, and recommends
-`libasound2`/`libasound2t64`, `libpulse0`, `libwayland-client0`, `libxkbcommon0`
-and `libdecor-0-0`. Removing the package deletes `/opt/iceboxengine` and refreshes
-the desktop and MIME databases.
+`libasound2`/`libasound2t64`, `libpulse0`, `libwayland-client0`, `libxkbcommon0`,
+`libdecor-0-0` and `libvulkan1` (the Vulkan backend loads `libvulkan.so.1` at
+runtime). Removing the package deletes `/opt/iceboxengine` and refreshes the
+desktop and MIME databases.
 
 **macOS.** The `.pkg` is a `productbuild` package that installs system-wide into
 `/Applications/IceBoxEngine`, where the three programs live as `.app` bundles
@@ -237,10 +238,8 @@ version, and far more than the updater reads it:
 
 * the launcher shows it under the logo (e.g. **Beta 0.7.1**) and on its **About**
   page, and the editor displays it too;
-* the build system parses it at configure time into `ICE_VERSION_MAJOR/MINOR/PATCH`
-  and the `ICE_VERSION_STRING` / `ICE_VERSION_DISPLAY` macros the binaries fall back
-  to when the file cannot be read, and warns if `vcpkg.json` has drifted out of
-  sync;
+* every IceBox program also carries it as a compiled-in fallback, so the version
+  still displays correctly if the file is missing or unreadable;
 * the Windows installer takes its file name and version resources from it;
 * the updater uses it as the baseline for every comparison
   ([4.5](#45-the-updaterjson-config-file)).
@@ -268,19 +267,32 @@ hub:
 | **Clear** | Empties the box. |
 | Drag & drop | Dropping a key file (for example `mykey.icekey`) anywhere on the window loads its contents into the box. |
 | **Device ID** | The identifier of *this* computer, shown as `XXXX-XXXX-XXXX-XXXX`. |
-| **Copy** | Copies a short support block — Device ID, key id, status and key-set id — to the clipboard. |
+| **Copy** | Copies a short support block — Device ID, key id, status, key-set id, and the activation request when one is on screen — to the clipboard. |
 | **Activate** | Validates and stores the key. `Ctrl+Enter` does the same. |
 | **Quit** | Closes the launcher without activating. |
 
-**Two kinds of key.** Both are verified completely offline; neither the launcher
-nor the editor ever contacts a server for licensing.
+**Three kinds of key.** All of them are verified completely offline; neither the
+launcher nor the editor ever contacts a server for licensing.
 
 * A **machine-locked key** is issued for one specific **Device ID** and activates
   only on that computer. If you bought the engine before installing it, install
   first, read the Device ID off the activation screen, send it to support and you
   will receive a key that fits your machine.
-* A **portable key** activates on the first computer that uses it and binds itself
-  to that machine from then on.
+* A **single-machine key** is handed out immediately at purchase and is spent on
+  the first computer it is redeemed for. Pasting it does not activate anything by
+  itself: the screen answers with an **activation request** — a short
+  `ICEQ-…` code that names the key and this computer. Send that code to support
+  (the **Copy activation request** button puts it on the clipboard together with
+  the rest of the details) and you get back a machine-locked key for this
+  computer. Support records which machine the key was spent on, so the same key
+  cannot be redeemed for a second one.
+* A **shared key** activates straight away on any computer. Some stores hand
+  these out so that a purchase needs no message to support at all. An offline
+  check cannot tell one buyer's computer from another's, so a shared key is
+  limited by trust and by revocation, not by the engine.
+
+The activation screen tells you which kind you hold: a single-machine key is the
+only one that answers with an activation request instead of activating.
 
 **Where the activation is stored.** Once a key is accepted, a signed activation
 record is written to several independent places at once, so removing any one of
@@ -306,7 +318,7 @@ drive.
 machine that is not activated they show a short notice, open the launcher for you
 and exit — so activation always happens in one place. Games you build and ship
 never carry any of this: the licence check exists only in the launcher, the editor
-and the updater, never in the runtime or in `IceBoxCore`.
+and the updater, never in the runtime or the engine core your game links against.
 
 **Checking your licence later.** The launcher's **About** tab
 ([3.6](#36-about)) shows the status, edition, key id, activation date, expiry and
@@ -319,6 +331,8 @@ Device ID, with a **Copy activation details** button for support requests.
 | *That does not look like an IceBox license key* | Part of the key is missing — copy the whole block again. |
 | *This key is not genuine* | The signature does not verify. The key was altered or did not come from IceBoxCrew. |
 | *This key was issued for a different computer* | A machine-locked key on the wrong machine. Send your Device ID to support. |
+| *This key unlocks one computer…* | Not an error. A single-machine key was recognised; send the `ICEQ-` activation request shown underneath to support and paste the key that comes back. |
+| *This key requires a newer version of IceBox Engine* | A single-machine key on a build that predates them. Update the engine, then activate. |
 | *This key has expired* / *has been revoked* | Contact support with the key id. |
 | *The activation could not be saved* | No storage location was writable. Start the launcher once as administrator (Windows) or check the home-directory permissions. |
 | *This activation belongs to a different computer* | A record copied from another machine was found. Enter your own key to activate this one. |
@@ -733,6 +747,11 @@ When a project's manifest has no `Plugins` / `Mods` key at all (an older project
 the ticks are seeded from whatever folders already exist inside the project, so
 applying does not silently wipe packages the manifest never knew about.
 
+> Attaching a package here is about the **editor**. What actually ships with a
+> built game is decided later, in the Build Game dialog's **Include Plugins** /
+> **Include Mods** options — and a plugin whose manifest says
+> `"EditorOnly": true` never ships at all.
+
 > Authoring your own plugins and mods — their structure, manifests, lifecycle and
 > shipping — is a topic of its own:
 > [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
@@ -820,11 +839,8 @@ A **Settings** button (bottom-left) toggles the settings screen, and **Exit**
 A check runs automatically on startup if **Check for updates on startup** is
 enabled, and any time you press **Check for Updates**. Under the hood the updater:
 
-1. Calls the GitHub Releases API for the IceBox Engine repository
-   (`https://api.github.com/repos/IceBoxMice/IceBoxEngine/releases?per_page=100`),
-   sending `Accept: application/vnd.github+json`, `X-GitHub-Api-Version:
-   2022-11-28`, an `IceBox-Updater` user agent, and `Authorization: Bearer …` when a
-   token is set.
+1. Asks the GitHub Releases API for the published releases of the IceBox Engine
+   repository, authenticating with your token when one is set.
 2. Ignores **draft** releases, then sorts the rest by the version rules from
    [2.4](#24-the-engine-version-scheme) and takes the newest.
 3. Compares that newest release against your **current version**:

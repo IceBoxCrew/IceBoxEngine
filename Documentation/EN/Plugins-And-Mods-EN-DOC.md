@@ -43,6 +43,7 @@
    - 3.10 [Building a plugin (CMake)](#310-building-a-plugin-cmake)
    - 3.11 [Worked example: a minimal editor plugin](#311-worked-example-a-minimal-editor-plugin)
    - 3.12 [Shipping data & Visual Script nodes with a plugin](#312-shipping-data--visual-script-nodes-with-a-plugin)
+   - 3.13 [Building a plugin without the engine — the Plugin Builder](#313-building-a-plugin-without-the-engine--the-plugin-builder)
 
 **Part II — Mods (Lua + content)**
 
@@ -66,6 +67,8 @@
    - 5.5 [Player-installed plugins & mods](#55-player-installed-plugins--mods)
 6. [How plugins & mods are loaded](#6-how-plugins--mods-are-loaded)
 7. [Shipping plugins & mods in a build](#7-shipping-plugins--mods-in-a-build)
+   - 7.1 [The two build switches](#71-the-two-build-switches)
+   - 7.2 [What the build does](#72-what-the-build-does)
 
 **Reference**
 
@@ -196,6 +199,7 @@ A small JSON file describing the plugin:
     "Author": "You",
     "Version": "1.0.0",
     "Icon": "Icon.png",
+    "EditorOnly": true,
     "Dependencies": []
 }
 ```
@@ -207,7 +211,15 @@ A small JSON file describing the plugin:
 | `Author` | Shown in the Plugins panel. | `""` |
 | `Version` | Display version string. | `"1.0.0"` |
 | `Icon` | Path (relative to the plugin folder) to a `.png` / `.jpg` / `.jpeg` icon. | auto-detected |
+| `EditorOnly` | `true` marks the plugin as **editor tooling**: it is never compiled into, packaged with, or loaded by a game on any platform. | `false` |
 | `Dependencies` | Names of other plugins that must load first. | `[]` |
+
+> **`EditorOnly` is the hard barrier between tooling and shipping.** A plugin that
+> declares it is skipped by CMake in every runtime configuration (desktop, Android, Web,
+> iOS), never copied or overlaid into a build output, and refused by the Plugin Manager
+> if it somehow reaches a game anyway. Set it on anything that draws editor ImGui, talks
+> to the `EditorHostAPI`, or has no meaning at runtime — the bundled `AIHelper` does.
+> Plugins whose editor side is optional should leave it at `false`.
 
 > **Icon resolution.** If `Icon` is missing, empty, points at a non-image or a
 > non-existent file, the engine falls back to auto-detection and looks for
@@ -433,6 +445,12 @@ at configure time and adds them to the build, so you don't edit the engine's bui
   with `true` are configured — everything else is skipped with
   `Skipping disabled plugin '<name>' (not enabled in Plugins.json)`. **Enable a new
   plugin in `Plugins.json` before you build it.**
+* A plugin whose `plugin.json` declares `"EditorOnly": true` is configured **only** for
+  editor builds. Every runtime configuration skips it with
+  `Skipping editor-only plugin '<name>' (never built into a game)`.
+* Game builds can drop plugins entirely with `-DICE_INCLUDE_PLUGINS=OFF` (and mods with
+  `-DICE_INCLUDE_MODS=OFF`) — this is what the editor's **Include Plugins** /
+  **Include Mods** build options set (see [Section 7](#7-shipping-plugins--mods-in-a-build)).
 
 A minimal `CMakeLists.txt`:
 
@@ -471,11 +489,14 @@ Notes:
 * Guard editor-only plugins (those that include `imgui.h`) so they **skip** on platforms
   where they don't apply — e.g. `if(ANDROID OR EMSCRIPTEN OR IOS) return() endif()` and
   `if(NOT TARGET imgui::imgui) return() endif()`, as the bundled AIHelper does.
-* The engine sets `ICE_PLUGIN_OUTPUT_DIR` per platform — `bin/<platform>/Plugins/<Name>/`
-  on desktop, `lib/Android/<ABI>/` on Android, `static_plugins/<Name>/` for static
+* The engine sets `ICE_PLUGIN_OUTPUT_DIR` to wherever the binary has to land for that
+  build to find it: `Plugins/<Name>/` next to the editor in an **editor** build,
+  `bin/<platform>/Plugins/<Name>/` next to the game executable in a **runtime/game**
+  build, `lib/Android/<ABI>/` on Android, and `static_plugins/<Name>/` for static
   builds. Respect it if you customize output paths (the AIHelper `CMakeLists.txt` shows
   the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for multi-config
-  generators).
+  generators). That is also the directory the installer packages from, so a plugin that
+  ignores it will not ship.
 * Add `add_dependencies(IceBoxEngine <plugin>)` / `add_dependencies(IceBoxRuntime <plugin>)`
   (guarded by `if(TARGET …)`) so your plugin rebuilds whenever the editor or runtime is
   built. The user builds the engine; you don't need to build the plugin manually.
@@ -588,6 +609,53 @@ same shape as the engine catalog:
 
 Duplicate names are ignored, and entries that collide with a curated engine node are
 skipped, so you cannot accidentally overwrite the built-in palette.
+
+### 3.13 Building a plugin without the engine — the Plugin Builder
+
+Everything in [3.10](#310-building-a-plugin-cmake) describes what happens when **the
+engine** is built. You do not have to go that way: because a plugin never links against
+the engine — it only includes `PluginInterface.h` and talks through the host function
+tables — a plugin can be compiled entirely on its own.
+
+`Tools/PluginBuilder/` does exactly that, and ships with every engine installation:
+
+| Platform | Script |
+| -------- | ------ |
+| Windows | `Tools\PluginBuilder\build_plugins_windows.bat` |
+| Linux | `Tools/PluginBuilder/build_plugins_linux.sh` |
+| macOS | `Tools/PluginBuilder/build_plugins_macos.sh` |
+
+Run one and it scans `Plugins/`, lists every plugin with its state — `NOT BUILT`,
+`OUTDATED`, `BUILT` or `NO BUILD` (no `CMakeLists.txt`, nothing to compile) — and lets
+you pick what to build. Pressing Enter builds everything that needs it.
+
+For each selected plugin it configures the small CMake project in
+`Tools/PluginBuilder/Harness/`, which recreates the `IceBoxPluginSDK` interface target
+against the engine's own `Source/Engine/Core` headers, `add_subdirectory()`s the plugin
+into it, and compiles **only the plugin** into a scratch tree under `out/pluginbuild/`.
+The finished library is then copied into the plugin folder, so the folder ends up as:
+
+```
+Plugins/AIHelper/
+    plugin.json
+    AIHelper.dll        (.so on Linux, .dylib on macOS)
+```
+
+That folder is the shareable plugin: zip it, hand it to somebody, and they drop it into
+their own `Plugins/` and tick it in *Tools → Plugins & Mods*. Nothing is compiled inside
+the plugin folder, so no object files or CMake caches are left behind.
+
+The dependencies (`nlohmann-json`, `fmt`, and the docking build of `imgui`) are resolved
+in this order: an explicit `--vcpkg-installed <dir>`, then any `vcpkg_installed/<triplet>`
+tree an earlier engine or game build already produced on this machine, then vcpkg with
+`Harness/vcpkg.json` — which pins the engine's own baseline, ImGui feature set and
+overlay ports. The harness refuses to build against a non-docking ImGui, because such a
+plugin would corrupt the editor's ImGui state on its first draw call.
+
+Three things must match the engine you load the plugin into: the **configuration**
+(`Release` ↔ `Release`), the **architecture**, and the **ABI version**
+([3.9](#39-api--abi-versioning)). Full option list, examples and troubleshooting are in
+`Tools/PluginBuilder/README.md` (Russian: `README.ru.md`).
 
 ---
 
@@ -805,7 +873,8 @@ engine Lua functions; see the Lua API doc.)
 Open it from `Tools → Plugins & Mods`. It has up to three tabs:
 
 * **Plugins (C++)** — every discovered plugin with its icon, an **enable checkbox**, name
-  (green when **loaded**, gray otherwise), version, a `[Loaded]` badge, description,
+  (green when **loaded**, gray otherwise), version, a `[Loaded]` badge, an
+  `[Editor Only]` badge for plugins that declare `"EditorOnly": true`, description,
   author, and a **Show in File Browser** button.
 * **Mods (Lua)** — the same layout for mods, plus each mod's **Load Order**. A mod that is
   enabled but not yet running shows a yellow `[Pending]` badge; a running one turns green
@@ -816,7 +885,7 @@ Open it from `Tools → Plugins & Mods`. It has up to three tabs:
 Both list tabs have a **Refresh** button and a **search box** that filters the list by
 name (case-insensitive substring). Toggling a checkbox immediately writes the
 corresponding config file. The panel's own visibility is remembered in
-`Config/Engine.json` under `PanelVisibility.PluginsPanel`.
+`Config/Editor.json` under `PanelVisibility.PluginsPanel`.
 
 **What the buttons actually do:**
 
@@ -942,7 +1011,9 @@ runtime. Its flow:
    dependencies), then for each plugin: load the library (or use the static
    registration), resolve `CreatePlugin`, instantiate, check the **API version**, call
    `OnLoad`, replay `OnRegisterLua` for the Lua states that already exist, then
-   `OnEngineInit`, and — in the editor — `OnEditorInit`.
+   `OnEngineInit`, and — in the editor — `OnEditorInit`. Outside the editor, plugins
+   marked `"EditorOnly": true` are skipped before any of this happens (and are ignored
+   when resolving other plugins' dependencies).
 4. **Load enabled mods** — this happens at **play/runtime start**, not at editor startup.
    Resolve order from `LoadOrder` + dependencies (skipping cycles), run each mod's entry
    script in its sandboxed environment, and call `OnModLoad`.
@@ -960,12 +1031,38 @@ gets `OnUnregisterLua`, `OnEditorShutdown` (if its editor side is still live) an
 
 ## 7. Shipping plugins & mods in a build
 
+### 7.1 The two build switches
+
+The **Build Game** dialog has a **Packages** section with two checkboxes, both **on** by
+default and remembered in `Config/Editor.json` (`BuildSettings.IncludePlugins` /
+`BuildSettings.IncludeMods`):
+
+| Option | Effect |
+| ------ | ------ |
+| **Include Plugins** | On: the plugins ticked in the Plugins & Mods panel are compiled (or statically linked) and packaged for the target platform. Off: no plugin is configured, built, linked, copied or embedded, and `Config/Plugins.json` is not shipped. |
+| **Include Mods** | On: the mods ticked in the panel are packaged for the target platform. Off: no mod folder is copied or embedded, and `Config/Mods.json` is not shipped. |
+
+Under each checkbox the dialog shows how many enabled packages will actually be shipped,
+plus how many enabled plugins are being skipped because they are **editor-only**.
+
+Both options apply to **all six platforms**. They are passed to the build scripts as
+`--no-plugins` / `--no-mods`, which forward `-DICE_INCLUDE_PLUGINS=OFF` /
+`-DICE_INCLUDE_MODS=OFF` to CMake, so the Web/iOS static link, the Android native
+libraries and the APK assets, and the desktop copy step all agree on one decision.
+
+Turning an option off is a *shipping* decision only — it never touches
+`Config/Plugins.json` / `Config/Mods.json` in your project or what runs in the editor.
+
+### 7.2 What the build does
+
 When you build a game (see
 [Profiling & Building Games](Profiling-And-Building-EN-DOC.md)), the build:
 
 * Copies **only the enabled** plugins and mods (per `Plugins.json` / `Mods.json`, read
   from the project first and the engine second) into the output, logging each skipped
   package, and copies the two config files alongside.
+* **Never** copies, overlays, links or embeds a plugin whose `plugin.json` declares
+  `"EditorOnly": true` — on any platform, whatever `Plugins.json` says.
 * Filters out build noise while copying — the `Source/`, `src/`, `build/`, `out/`,
   `CMakeFiles/`, `.cache/`, `.vs/`, `.vscode/`, `.idea/`, `.git/`, `node_modules/` and
   `__pycache__/` folders, the `.obj/.o/.lib/.a/.exp/.ilk/.pdb/.pyc/.pyo/.cmake` files and
@@ -986,7 +1083,8 @@ Per-platform placement:
 | Web | statically linked into the runtime | embedded into the Emscripten `.data` via `--preload-file` |
 
 Cooked builds additionally stage `Config/`, `Plugins/` and `Mods/` next to the cooked
-content so the packaged game sees the same layout.
+content so the packaged game sees the same layout — and skip the `Plugins/` or `Mods/`
+staging when the matching **Include** option is off.
 
 The result is that a shipped game loads exactly the plugins and mods you enabled, through
 the same Plugin Manager flow as the editor.
@@ -1006,6 +1104,7 @@ the same Plugin Manager flow as the editor.
 | Folder / config | `Plugins/` · `Config/Plugins.json` | `Mods/` · `Config/Mods.json` |
 | Alive in | Editor + runtime | Play mode / game only |
 | Live toggle | Yes, once built | Yes |
+| Ships when | **Include Plugins** is on, the package is enabled, and it is not `EditorOnly` | **Include Mods** is on and the package is enabled |
 
 ### 8.2 IPlugin hooks
 
@@ -1030,11 +1129,12 @@ Lua module: `Mods.GetAll` · `GetInfo` · `GetCount` · `GetEnabledCount` · `Is
 
 | Path | What it is |
 | ---- | ---------- |
-| `Plugins/<Name>/plugin.json` | Plugin manifest (source folder). |
+| `Plugins/<Name>/plugin.json` | Plugin manifest (source folder); `"EditorOnly": true` keeps it out of every game build. |
 | `Plugins/<Name>/VisualScriptAPI.json` | Optional extra Visual Script nodes. |
 | `Mods/<Name>/mod.json` | Mod manifest. |
 | `Config/Plugins.json` · `Config/Mods.json` | Which packages are enabled. |
-| `Config/Engine.json` → `PanelVisibility.PluginsPanel` | Whether the panel is open. |
+| `Config/Editor.json` → `PanelVisibility.PluginsPanel` | Whether the panel is open. |
+| `Config/Editor.json` → `BuildSettings.IncludePlugins` / `.IncludeMods` | The Build Game **Packages** switches. |
 | `bin/<platform>/Plugins/<Name>/` | Built plugin library + `plugin.json`. |
 | `<Project>.iceproject` → `"Plugins"`, `"Mods"` | Per-project package selection (launcher). |
 | `<user data>/Mods/`, `<user data>/Plugins/` | Player drop-in packages (macOS/iOS builds). |
@@ -1051,8 +1151,10 @@ Lua. See [Section 2](#2-plugins-vs-mods--which-should-i-use).
 If its library was already built, enabling loads it immediately. If it is a new plugin,
 CMake never configured it — plugin folders are only added to the build when they are
 enabled in `Config/Plugins.json`. Enable it there, rebuild the engine, then press
-**Refresh**. Also check the log: a plugin whose `APIVersion` is newer than the engine's is
-refused, as is one whose folder has no `.dll`/`.so`/`.dylib`.
+**Refresh** — or build just that plugin with the Plugin Builder
+([3.13](#313-building-a-plugin-without-the-engine--the-plugin-builder)), which needs no
+engine build at all. Also check the log: a plugin whose `APIVersion` is newer than the
+engine's is refused, as is one whose folder has no `.dll`/`.so`/`.dylib`.
 
 **My plugin's ImGui windows don't show.**
 You must adopt the host's ImGui context and allocator in `OnEditorInit` (Section
@@ -1087,13 +1189,29 @@ Check the log for: a missing/broken/not-enabled **dependency**, a dependency **c
 (in `Mods.json`) won't load — and no mod loads until you press **Play**.
 
 **Do plugins/mods ship with my game?**
-Only the ones **enabled** in `Plugins.json` / `Mods.json`. Plugins ship as compiled
+Only the ones **enabled** in `Plugins.json` / `Mods.json`, and only while the Build Game
+dialog's **Include Plugins** / **Include Mods** options are on. Plugins ship as compiled
 artifacts (source is excluded); mods ship their whole folder. See
 [Section 7](#7-shipping-plugins--mods-in-a-build).
 
+**How do I keep an editor tool out of my game?**
+Add `"EditorOnly": true` to its `plugin.json`. It then shows an `[Editor Only]` badge in
+the Plugins panel, is skipped by CMake in every runtime configuration, is never copied or
+embedded by any of the six platform builds, and is refused by the Plugin Manager outside
+the editor. It keeps working normally in the editor.
+
+**I turned Include Plugins off but the game still finds a plugin.**
+On macOS and iOS a shipped game also scans the player's writable `Plugins/` folder
+([5.5](#55-player-installed-plugins--mods)); packages the player dropped there are still
+discovered. The build option only controls what *your* build ships.
+
 **How do I distribute a plugin to others?**
-Share the plugin **folder** (with `plugin.json` and `CMakeLists.txt`) so it builds against
-their engine, or share a prebuilt library matching their platform and engine ABI version.
+Build it with the Plugin Builder
+([3.13](#313-building-a-plugin-without-the-engine--the-plugin-builder)) and share the
+plugin **folder** — after a build it holds `plugin.json` next to the compiled library,
+which is everything the engine needs. Keep `CMakeLists.txt` and `Source/` in it if you
+also want the recipient to be able to rebuild it for their platform, configuration or
+engine ABI version.
 
 **How do I attach a plugin or mod to a specific project?**
 Use the launcher's **Plugins & Mods** tab — it copies the package into the project and

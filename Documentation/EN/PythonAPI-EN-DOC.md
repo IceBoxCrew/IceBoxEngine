@@ -112,7 +112,7 @@
 │                    │                         │
 │                    ▼                         │
 │  ┌──────────────────────────────────────┐   │
-│  │       PythonAPIManager (C++)         │   │
+│  │            Python Runtime            │   │
 │  │  • Python initialization (pybind11)  │   │
 │  │  • stdout/stderr capture             │   │
 │  │  • Module management                 │   │
@@ -138,7 +138,6 @@
 | Technology | Description |
 |-----------|-------------|
 | **pybind11** | C++ ↔ Python bindings that allow calling C++ functions from Python |
-| **Singleton** | `PythonAPIManager::Get()` — single entry point, Singleton pattern |
 | **Modular system** | API split into modules: `editor`, `scene`, `engine`, `browser` |
 | **ECS (EnTT)** | Entity Component System — entity data stored in components |
 
@@ -4677,7 +4676,7 @@ icebox.log.error('Critical error!')
 | `SpotLight` | ✅ | Spotlight. Color, direction, cone angles, shadows. |
 | `PointMarker` | ✅ | Point marker (editor). Color, shape, size. |
 | `Script` | ❌ | Lua script. File name and class path. |
-| `AI` | ❌ | AI. AI asset path (writable) plus read-only perception parameters. Patrol points are not exposed to Python. |
+| `AI` | ❌ | AI behaviour. AI asset path, move speed, movement mode, detection/attack radius, perception settings, patrol route. |
 | `Joint` | ✅ | Physics joints. Type, anchors, springs, motors, limits, break forces. |
 | `Destructible` | ❌ | Destruction. Health, fragment count/pattern, explosion force, fragment physics, debris cap. |
 | `ClassComponent` | ✅ | Nested class component instances. Each instance has a `class_path` and local transform. |
@@ -5140,7 +5139,7 @@ import re
 A: Timers are processed in the editor main loop. Make sure the editor is not blocked and the console is running.
 
 **Q: How do I reset the console environment?**
-A: The console environment is isolated. If something breaks, restart the editor or use the internal reset.
+A: Open **Show Console → Reset Environment**. That clears every variable, import and registered callback without restarting the editor.
 
 ### Tips
 
@@ -5178,4 +5177,4 @@ editor.has_component(uuid, 'SpriteRenderer')
 
 ---
 
-> 📌 **Available only in the editor** (build with `ICE_WITH_EDITOR` flag)
+> 📌 **Available only in the editor**

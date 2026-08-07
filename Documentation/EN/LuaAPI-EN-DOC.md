@@ -463,11 +463,11 @@ local count = tm.GetParticipantCount()
 tm.Stop()
 ```
 
-> **Note:** `AchievementSystem` is fully documented in [Section 27 — Gameplay](#27-gameplay--gameplay-systems).
+> **Note:** achievements are fully documented in [Section 27 — Gameplay](#27-gameplay--gameplay-systems).
 
 ### Str — string utilities
 
-> **Lightweight string helpers** (from `GameplayLua`). For extended string operations (`TrimLeft`, `TrimRight`, `IsEmpty`, `IsBlank`, `ReplaceFirst`, `Reverse`, `Find`, `Count`, `CharAt`, `ToNumber`, `Byte`, `Char`, `Join`), see [`String.*` in Section 37](#string-utilities).
+> **Lightweight string helpers.** For extended string operations (`TrimLeft`, `TrimRight`, `IsEmpty`, `IsBlank`, `ReplaceFirst`, `Reverse`, `Find`, `Count`, `CharAt`, `ToNumber`, `Byte`, `Char`, `Join`), see [`String.*` in Section 37](#string-utilities).
 
 ```lua
 local parts = Str.Split("a,b,c", ",")
@@ -3809,7 +3809,7 @@ SetDeviceSensorEnabled("gyro", false)
 
 ### Compass and Barometer (Android / iOS)
 
-SDL3 only exposes accelerometer and gyroscope cross-platform; for **magnetometer** (compass) and **barometer** (atmospheric pressure / altitude) the engine uses a native bridge — an Android `SensorManager` JNI bridge, and CoreMotion (`CMMotionManager` / `CMAltimeter`) on iOS. On desktop and Web these calls return `0` / `false`.
+Accelerometer and gyroscope work everywhere, but **magnetometer** (compass) and **barometer** (atmospheric pressure / altitude) exist only on Android and iOS, where the engine reaches them through a native bridge. On desktop and Web these calls return `0` / `false`.
 
 ```lua
 -- Compass (heading in degrees, 0 = magnetic north, 90 = east)
@@ -3843,7 +3843,7 @@ local nearCm = GetDeviceSensorData("proximity").x
 | `GetCompassHeading()` | Magnetic heading in degrees (0..360, 0 = north). Requires `"compass"` enabled. **Android / iOS**. Returns `0` elsewhere |
 | `GetBarometricAltitude()` | Altitude in meters derived from current pressure against the standard atmosphere (1013.25 hPa). Requires `"barometer"` enabled. **Android / iOS**. Returns `0` elsewhere |
 
-> **Implementation note:** on Android the bridge lives in `IceBoxSensors.java` and uses `SensorManager.SENSOR_DELAY_GAME`; on iOS it uses `CMMotionManager` with the `XMagneticNorthZVertical` reference frame plus `CMAltimeter`. Always disable sensors you no longer need — they drain battery.
+> Always disable sensors you no longer need — they drain battery.
 > **Desktop / Web:** SDL3 does not expose magnetometer or barometer there; these calls return `0` and `false` so it is safe to call them everywhere without `#ifdef`.
 
 ### Text input
@@ -6683,12 +6683,11 @@ sleep only skips the simulation, never the results.
 `GetFluidDensityAt` are the only parts of FX that can influence gameplay state. Everything
 else is purely visual.
 
-Particle randomness is deterministic: each emitter owns a seeded `mt19937` stream, seeded from
-its creation index within the scene, and every random draw uses a portable helper rather than
-`std::uniform_*_distribution` (whose results differ between standard libraries). Two runs of the
+Particle randomness is deterministic: each emitter owns its own random stream, seeded from its
+creation index within the scene, and every draw is portable across platforms. Two runs of the
 same scene, and two machines running the same build, produce identical particles.
 
-FX is nevertheless **not part of rollback state** — `RollbackManager` does not save, restore or
+FX is nevertheless **not part of rollback state** — `Rollback.*` does not save, restore or
 re-simulate particles, by design (rolling back thousands of particles would cost more than it is
 worth). So if you use deterministic rollback multiplayer, keep the four gameplay-affecting
 features above out of anything that feeds the rollback checksum, or drive that logic from a
@@ -6697,9 +6696,8 @@ regular Box2D sensor instead. Server-authoritative `NetworkReplication` is unaff
 ### Simulation Mode and fluids
 
 An emitter's **Simulation Mode** (CPU / GPU) applies to the general per-particle update. The
-**Fluid** module always solves on the CPU regardless of this setting: the fluid GPU path was a
-brute-force O(n²) neighbour search that also stalled the pipeline reading results back once per
-sub-step, which made it consistently slower than the CPU spatial grid. It has been removed.
+**Fluid** module always solves on the CPU regardless of this setting — its spatial-grid solver
+is faster than a GPU pass would be for the particle counts fluids run at.
 
 ### Fluid sleep
 
@@ -7365,7 +7363,7 @@ local c = GetClearColor()              -- → {r, g, b}
 
 > **Type:** Global functions. Operate on the active scene's **World Override** — a per-level snapshot stored inside the `.icemap` and applied automatically on level load (both editor and runtime builds).
 >
-> Use this when you want a Lua script to permanently change physics or rendering parameters for the current level. Changes apply live (Box2D world is reconfigured, `LightingManager` is updated, near/far/clear-color take effect on the next frame).
+> Use this when you want a Lua script to permanently change physics or rendering parameters for the current level. Changes apply live (the Box2D world is reconfigured, lighting is updated, near/far/clear-color take effect on the next frame).
 
 ### Reset and read
 
@@ -7422,7 +7420,7 @@ ApplyWorldOverride({
 })
 ```
 
-> Both `physics` and `rendering` tables are optional and any field inside is optional too. Only listed fields are written; the rest keep their current values. Calling `ApplyWorldOverride` automatically enables override mode for whichever section is provided. Physics changes are pushed into the live Box2D world; rendering changes are pushed into `LightingManager` and used for the next frame's projection and clear color.
+> Both `physics` and `rendering` tables are optional and any field inside is optional too. Only listed fields are written; the rest keep their current values. Calling `ApplyWorldOverride` automatically enables override mode for whichever section is provided. Physics changes are pushed into the live Box2D world; rendering changes are pushed into the lighting system and used for the next frame's projection and clear color.
 
 ---
 
@@ -9330,7 +9328,7 @@ SetSubWidgetElementText("HealthBar", "Label", "0/100", 1)
 PlaySubWidgetAnimation("HealthBar", "Pulse", 1)
 ```
 
-> **Note.** The extended API works recursively — it resolves the inner element through any depth of nested SubWidgets. Calls that target a widget/instance that is not yet loaded trigger an on-demand `LoadWidget`, after which animations and flipbooks of the nested widget tick automatically each frame (they are included in `WidgetRuntime::Update`).
+> **Note.** The extended API works recursively — it resolves the inner element through any depth of nested SubWidgets. Calls that target a widget/instance that is not yet loaded trigger an on-demand `LoadWidget`, after which animations and flipbooks of the nested widget tick automatically each frame along with the rest of the UI.
 
 #### SubWidget — full inner-element properties
 
@@ -11347,13 +11345,11 @@ end
 ```
 
 **Notes**
-- All `Prewarm.*` paths are normalized (`\` → `/`) and resolved via
-  `ContentUtils::FindFile`. You can pass `Content/...` paths or just filenames.
-- Every asset is warmed through the same manager the game uses at runtime
-  (`SpriteManager`, `FlipbookManager`, `SkeletonManager`, `MaterialManager`,
-  `FontManager`, `FXManager`, …), so the warmed cache entry is the exact one a
-  later first-use will hit — including atlas packing and `.ice_texture` settings
-  for sprite textures.
+- All `Prewarm.*` paths are normalized (`\` → `/`) and resolved the same way the
+  engine resolves any content path. You can pass `Content/...` paths or just filenames.
+- Every asset is warmed through the same loader the game uses at runtime, so the
+  warmed cache entry is the exact one a later first-use will hit — including atlas
+  packing and `.ice_texture` settings for sprite textures.
 - Dependencies are chased automatically and deduplicated:
   - a flipbook queues every frame sprite (and its override material);
   - a sprite queues its referenced material / material instance;
@@ -12608,10 +12604,9 @@ The visual debugger works across all three graph surfaces — **Class**, **Widge
 
 ### Debug Build Mode (runtime)
 
-When the game is built in **Debug** configuration (`CMAKE_BUILD_TYPE=Debug`), the runtime
-includes a full debug overlay system to development builds.
-The `ICE_DEBUG_BUILD` define is automatically set for `IceBoxRuntime` in Debug mode on all
-platforms (Windows, Linux, Android, Web).
+When you package your game in the **Debug** configuration, the runtime includes a full debug
+overlay system. This happens automatically on every platform (Windows, Linux, Android, Web);
+**Release** builds ship without it.
 
 #### Driven entirely from Lua
 
@@ -12637,7 +12632,7 @@ end
 ```
 
 > The Lua API itself works in **both Debug and Release** builds and on every platform.
-> The actual overlay rendering is only compiled in for `ICE_DEBUG_BUILD`, so in Release
+> The actual overlay rendering is only compiled into Debug builds, so in Release
 > builds the toggle still flips the underlying flag but no debug visuals are drawn —
 > perfect for development menus you ship in internal packages.
 
@@ -12742,7 +12737,7 @@ SaveChromeTrace("boss_fight.json")       -- explicit file name / path
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `StartProfilerTrace` | `StartProfilerTrace([name])` → `bool` | Begins a new trace. `name` is optional (defaults to an empty string — `ProfilerManager` will assign one). Returns `true` if recording actually started. |
+| `StartProfilerTrace` | `StartProfilerTrace([name])` → `bool` | Begins a new trace. `name` is optional — leave it out and the profiler assigns one. Returns `true` if recording actually started. |
 | `StopProfilerTrace` | `StopProfilerTrace()` | Stops the active trace and stores it in the trace history (visible in the editor Profiler panel). No-op if nothing is being recorded. |
 | `IsProfilerTracing` | `IsProfilerTracing()` → `bool` | Returns `true` while a trace is being recorded. |
 | `SaveChromeTrace` | `SaveChromeTrace([filename])` → `bool` | Writes the latest finished trace (or the live one, or a single-frame snapshot if no trace exists) as Chrome Trace Event JSON. On Emscripten (Web) additionally triggers a browser download. Returns `true` on success. |
@@ -12751,7 +12746,7 @@ SaveChromeTrace("boss_fight.json")       -- explicit file name / path
 > example `IsKeyJustPressed("f7")` for start/stop and `IsKeyJustPressed("f8")` for export,
 > a gamepad chord, a developer console command, or a debug UI button. The Lua API works
 > on every platform and in every configuration; the JSON export is available everywhere
-> while the in-engine recording requires `ICE_DEBUG_BUILD` for the live overlay.
+> while the live in-engine overlay requires a Debug build.
 
 ```lua
 -- Example: record a trace of a specific gameplay window and auto-export it.
@@ -12819,7 +12814,7 @@ ToggleDebugProfiler()
 | `GetDebugProfilerVisible` | `GetDebugProfilerVisible()` → `bool` | Returns `true` while the runtime profiler overlay is visible. |
 | `ToggleDebugProfiler` | `ToggleDebugProfiler()` | Inverts the current overlay visibility. Bind to any hotkey via `IsKeyJustPressed`. |
 
-> The overlay is rendered by `EngineRender` whenever `DebugFlags::ShowProfilerOverlay` is set, so any code path or user-bound hotkey calling `ToggleDebugProfiler` will toggle it consistently.
+> The overlay's visibility is a single engine-wide flag, so any script or user-bound hotkey calling `ToggleDebugProfiler` toggles it consistently.
 
 ---
 
@@ -14565,6 +14560,7 @@ callback once per unacknowledged input frame in order, with that frame's real de
 inputs with `Network.SendInput` so they enter the pending queue. Without a registered callback the
 engine keeps using smoothing, so enabling this is opt-in and safe.
 
+```lua
 -- Time sync
 local serverTime = Network.GetServerTimeSync()
 local clientTime = Network.GetClientTimeSync()
@@ -14862,7 +14858,7 @@ Network.StopMasterServer()
 
 `NetworkProfiler` is a global Lua table registered by the engine for inspecting real network traffic. The engine instruments every send/receive path (ENet on desktop, WebSocket on Web) and aggregates traffic statistics per message type with EWMA-smoothed rates and a 120-second rolling history.
 
-- **Active only in Debug builds** of the engine (`ICE_DEBUG_BUILD`). In Release the toggle is a no-op and every getter returns `0` / empty tables. Use `NetworkProfiler.IsDebug()` to check at runtime.
+- **Active only in Debug builds** of the engine. In Release the toggle is a no-op and every getter returns `0` / empty tables. Use `NetworkProfiler.IsDebug()` to check at runtime.
 - The overlay is rendered only in the standalone Debug runtime (no editor). Toggle it programmatically via `NetworkProfiler.Toggle()` and bind it to any key, gamepad button, console command or UI widget with `IsKeyJustPressed`.
 - All functions are thread-safe and cheap to call from game scripts every frame.
 
@@ -17219,7 +17215,7 @@ Mods/
 
 ### 41.3 Sandbox
 
-Each mod runs in an **isolated environment** (`sol::environment`). This means:
+Each mod runs in an **isolated environment**. This means:
 
 - The mod **can see** the entire engine Lua API (all functions from this documentation).
 - The mod **cannot** overwrite global functions or variables of another mod.
@@ -17262,7 +17258,7 @@ return M
 1. **Discover** — the engine scans `Mods/` and reads `mod.json` at startup.
 2. **Enable** — `Config/Mods.json` marks which mods are enabled.
 3. **Load** — when the game starts (OnRuntimeStart), enabled mods are topologically sorted by their `Dependencies` (falling back to `LoadOrder`) and loaded. Each mod's `APIVersion` must be ≤ the engine API version.
-4. **Execute** — `main.lua` runs in a sandboxed `sol::environment`. The mod may declare any of the lifecycle callbacks below.
+4. **Execute** — `main.lua` runs in its sandboxed environment. The mod may declare any of the lifecycle callbacks below.
 5. **Unload** — when the game stops (OnRuntimeStop), `OnLevelEnd` and `OnModUnload` are invoked, then the sandbox is destroyed and Lua GC frees its resources.
 
 #### Lifecycle callbacks (all optional)
@@ -21292,7 +21288,7 @@ end
 ## 57. Voice — Microphone, Opus, Voice Analysis
 
 > **Type:** Global. Single-player friendly — does **not** require networking. Works for any game that wants to scream, shout, sing or detect spoken words via the microphone.
-> **Build flag:** Opus encode/decode requires ICE_WITH_OPUS. Capture, playback, recording, and volume analysis still work without Opus.
+> **Opus:** encode/decode needs the Opus codec — check for it at runtime with `Voice.HasOpus()`. Capture, playback, recording and volume analysis work either way.
 
 The Voice API gives Lua direct access to:
 
@@ -21310,18 +21306,18 @@ Internally a frame queue is filled by `Voice.Update()` (call it once per frame, 
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| Voice.StartCapture(sampleRate?, channels?) | ool | Open the default mic. Defaults: 48000 Hz, 1 channel |
+| Voice.StartCapture(sampleRate?, channels?) | bool | Open the default mic. Defaults: 48000 Hz, 1 channel |
 | Voice.StopCapture() | — | Stop the mic |
-| Voice.IsCapturing() | ool | Is the mic running? |
-| Voice.StartPlayback(sampleRate?, channels?) | ool | Open the default playback device |
+| Voice.IsCapturing() | bool | Is the mic running? |
+| Voice.StartPlayback(sampleRate?, channels?) | bool | Open the default playback device |
 | Voice.StopPlayback() | — | Close playback |
-| Voice.IsPlaybackActive() | ool | Is playback initialized? |
+| Voice.IsPlaybackActive() | bool | Is playback initialized? |
 | Voice.SetPlaybackVolume(volume) | — | 0.0–2.0, applied to all decoded/written PCM |
-| Voice.GetPlaybackVolume() | loat | Current playback volume |
-| Voice.InitCodec(sampleRate?, channels?, bitrate?) | ool | Create Opus encoder+decoder. Defaults: 48000 Hz, 1 ch, 32000 bps |
+| Voice.GetPlaybackVolume() | float | Current playback volume |
+| Voice.InitCodec(sampleRate?, channels?, bitrate?) | bool | Create Opus encoder+decoder. Defaults: 48000 Hz, 1 ch, 32000 bps |
 | Voice.ShutdownCodec() | — | Destroy the codec |
-| Voice.IsCodecReady() | ool | 	rue if Opus is initialized and valid |
-| Voice.HasOpus() | ool | 	rue if the engine was built with `ICE_WITH_OPUS` |
+| Voice.IsCodecReady() | bool | true if Opus is initialized and valid |
+| Voice.HasOpus() | bool | true if Opus encode/decode is available in this build |
 | Voice.Shutdown() | — | Stop everything (capture, playback, recording, codec) |
 
 ### Frame stream (microphone → Lua)
@@ -21329,13 +21325,11 @@ Internally a frame queue is filled by `Voice.Update()` (call it once per frame, 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | Voice.Update() | — | Pump captured frames; updates RMS/peak/smoothed; writes WAV/loopback. Call every frame |
-| Voice.HasFrame() | ool | True if at least one captured frame is queued |
+| Voice.HasFrame() | bool | True if at least one captured frame is queued |
 | Voice.QueuedFrameCount() | int | Number of queued frames |
 | Voice.SetMaxQueuedFrames(n) | — | Drop oldest frames beyond this limit (default 32) |
-| Voice.ReadFrame() | string \| 
-il | Pop oldest frame as binary PCM string (int16 LE) — fast path |
-| Voice.ReadFrameTable() | 	able \| 
-il | Pop oldest frame as a Lua array of integers |
+| Voice.ReadFrame() | string \| nil | Pop oldest frame as binary PCM string (int16 LE) — fast path |
+| Voice.ReadFrameTable() | table \| nil | Pop oldest frame as a Lua array of integers |
 | Voice.ClearFrames() | — | Discard all queued frames |
 | Voice.GetSampleRate() | int | Current capture/codec sample rate |
 | Voice.GetChannels() | int | Current channel count |
@@ -21346,14 +21340,10 @@ il | Pop oldest frame as a Lua array of integers |
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| Voice.Encode(pcmString) | string \| 
-il | Encode one PCM frame (binary string from `ReadFrame`) |
-| Voice.EncodeTable(samples) | string \| 
-il | Encode from a Lua array of int16 samples |
-| Voice.Decode(opusString) | string \| 
-il | Decode an Opus packet to a PCM binary string |
-| Voice.DecodeTable(opusString) | 	able \| 
-il | Decode an Opus packet to a Lua array |
+| Voice.Encode(pcmString) | string \| nil | Encode one PCM frame (binary string from `ReadFrame`) |
+| Voice.EncodeTable(samples) | string \| nil | Encode from a Lua array of int16 samples |
+| Voice.Decode(opusString) | string \| nil | Decode an Opus packet to a PCM binary string |
+| Voice.DecodeTable(opusString) | table \| nil | Decode an Opus packet to a Lua array |
 
 ### Direct playback
 
@@ -21361,31 +21351,31 @@ il | Decode an Opus packet to a Lua array |
 |----------|---------|-------------|
 | Voice.PlayPCM(pcmString) | — | Push raw PCM (binary string) to the speakers |
 | Voice.PlayPCMTable(samples) | — | Push raw PCM (Lua array) |
-| Voice.PlayEncoded(opusString) | ool | Decode Opus and push to speakers in one step |
+| Voice.PlayEncoded(opusString) | bool | Decode Opus and push to speakers in one step |
 
 ### Volume analysis & voice detection
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| Voice.GetVolume() | loat | RMS of the last frame, normalized 0..1 |
-| Voice.GetVolumePeak() | loat | Absolute peak of the last frame, 0..1 |
-| Voice.GetVolumeDB() | loat | RMS in decibels (clamped to `-120 dB` floor) |
-| Voice.GetSmoothedVolume() | loat | Exponentially smoothed RMS — best for UI meters |
+| Voice.GetVolume() | float | RMS of the last frame, normalized 0..1 |
+| Voice.GetVolumePeak() | float | Absolute peak of the last frame, 0..1 |
+| Voice.GetVolumeDB() | float | RMS in decibels (clamped to `-120 dB` floor) |
+| Voice.GetSmoothedVolume() | float | Exponentially smoothed RMS — best for UI meters |
 | Voice.SetSmoothing(factor) | — | 0..0.9999 (default 0.85). Higher = smoother / slower |
-| Voice.GetSmoothing() | loat | Current smoothing factor |
+| Voice.GetSmoothing() | float | Current smoothing factor |
 | Voice.SetInputGain(g) | — | Multiply mic samples (0..32). Default 1.0 |
-| Voice.GetInputGain() | loat | Current input gain |
+| Voice.GetInputGain() | float | Current input gain |
 | Voice.SetVoiceThreshold(t) | — | Default threshold for `IsSpeaking` (0..1) |
-| Voice.GetVoiceThreshold() | loat | Current voice threshold |
-| Voice.IsSpeaking(threshold?) | ool | `smoothed >= threshold` (default uses `VoiceThreshold`) |
-| Voice.IsScreaming(threshold?) | ool | `peak >= threshold` (default 0.45) |
+| Voice.GetVoiceThreshold() | float | Current voice threshold |
+| Voice.IsSpeaking(threshold?) | bool | `smoothed >= threshold` (default uses `VoiceThreshold`) |
+| Voice.IsScreaming(threshold?) | bool | `peak >= threshold` (default 0.45) |
 
 ### Loopback (mic → speakers)
 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | Voice.SetLoopback(enabled) | — | While `true` and capture is running, every captured frame is auto-played |
-| Voice.IsLoopback() | ool | Loopback state |
+| Voice.IsLoopback() | bool | Loopback state |
 
 ### WAV recording
 
@@ -21393,10 +21383,10 @@ Writes a 16-bit PCM `.wav` using the current capture rate/channels. The file's R
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| Voice.StartRecording(filePath) | ool | Begin writing the live mic to a WAV file. Creates parent dirs |
-| Voice.StopRecording() | ool | Finalize and close the WAV file |
-| Voice.IsRecording() | ool | Is recording active? |
-| Voice.GetRecordedDuration() | loat | Duration recorded so far, in seconds |
+| Voice.StartRecording(filePath) | bool | Begin writing the live mic to a WAV file. Creates parent dirs |
+| Voice.StopRecording() | bool | Finalize and close the WAV file |
+| Voice.IsRecording() | bool | Is recording active? |
+| Voice.GetRecordedDuration() | float | Duration recorded so far, in seconds |
 
 ### Constants
 
@@ -21595,7 +21585,7 @@ By default the system records **every** entity that has an `IDComponent` and a `
 
 | Function | Description |
 |---|---|
-| `Replay.TrackAll(true|false)` | `true` (default) — record every entity. `false` — record only those passed to `TrackEntity`. |
+| `Replay.TrackAll(true\|false)` | `true` (default) — record every entity. `false` — record only those passed to `TrackEntity`. |
 | `Replay.TrackEntity(entityOrUUID)` | Add an entity to the whitelist. Accepts an entity handle (number) or a UUID string. |
 | `Replay.UntrackEntity(entityOrUUID)` | Remove from the whitelist. |
 | `Replay.ClearTracked()` | Clear the whitelist. |

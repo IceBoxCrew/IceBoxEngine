@@ -99,7 +99,7 @@ Two things stand between a working project and a polished, shippable game: knowi
 you target*. IceBox provides first-class tooling for both, built into the editor and
 the engine itself.
 
-* **Profiling** runs in the same engine you ship — the `ProfilerManager` lives in the
+* **Profiling** runs in the same engine you ship — the profiler lives in the engine
   core, not the editor — so editor measurements reflect real engine behavior, and the
   same instrumentation feeds the external **Tracy** profiler in instrumented builds.
 * **Building** is driven by a single **Build Game** dialog that writes a per-project
@@ -113,7 +113,7 @@ the engine itself.
 
 ## 2. Profiling architecture
 
-At the heart of profiling is the **`ProfilerManager`** (a global singleton). It runs in
+At the heart of profiling is the **engine profiler**. It runs in
 both the editor and runtime, collects per-frame metrics, manages **scopes** and
 **traces**, and is the data source for the editor's profiling panels.
 
@@ -168,15 +168,10 @@ Tracy is compiled in for:
 * **Editor** builds (always), and
 * **Debug** game builds.
 
-Release game builds ship with Tracy **off** for zero overhead — the CMake option refuses
-to stay on for a non-Debug runtime build. Tracy is also **unavailable on Web, Android and
-iOS** regardless of configuration; use it on Windows, Linux or macOS. Tracy is compiled in
-`TRACY_ON_DEMAND` mode, so an instrumented build collects nothing until the Tracy
-application actually connects.
-
-> Under the hood the build scripts pass `-DICE_ENABLE_TRACY=ON` together with
-> `-DVCPKG_MANIFEST_FEATURES=profiling` for Debug builds, and `-DICE_ENABLE_TRACY=OFF`
-> for Release. See [Section 12](#12-build-scripts-reference).
+Release game builds ship with Tracy **off** for zero overhead. Tracy is also **unavailable
+on Web, Android and iOS** regardless of configuration; use it on Windows, Linux or macOS.
+An instrumented build collects nothing until the Tracy application actually connects, so
+leaving it compiled in costs you nothing while nothing is attached.
 
 ### 2.4 Temperature sensors
 
@@ -340,7 +335,7 @@ and the value shows as `N/A` — CPU scopes, memory and counters keep working.
 
 ### 4.6 Engine tab
 
-Engine-level counts surfaced from the `ProfilerManager` scene metrics (entities, sprites,
+Engine-level counts surfaced from the profiler's scene metrics (entities, sprites,
 draw calls, quads, physics bodies, active scripts, and the per-component breakdown), plus
 a **Resource Manager** block: loaded **texture** and **shader** counts, tracked VRAM,
 peak VRAM and GPU allocation count. It complements the Statistics panel with a single
@@ -579,7 +574,7 @@ Invoke platform build script  (Tools/BuildSystem/BuildGame/build_<platform>.bat|
 Collect output → your chosen output folder
         │
         ├─ copy runtime/bundle, game.json, LICENSE, THIRD_PARTY_NOTICES, ThirdPartyLicenses/
-        ├─ copy Content/ (cooked on desktop), enabled Plugins/ and Mods/
+        ├─ copy Content/ (cooked on desktop), enabled Plugins/ and Mods/ (per Packages)
         ├─ copy + patch Config/Engine.json, Plugins.json, Mods.json, CollisionGroups.json
         ├─ [optional] Pack Content → Content.icepak (zstd, optionally split)
         ├─ [macOS] re-codesign, then .dmg / .pkg / notarize
@@ -609,6 +604,8 @@ every setting is remembered in the editor config between sessions (passwords exc
 | **Output Path** | Folder to place the finished build — a `<Output>/<GameName>` subfolder is created and **wiped** at the start of each build. A **…** button opens a native folder picker. |
 | **Version Name / Version Code** | Human version string (e.g. `1.2.0`) and integer build number (minimum 1). |
 | **Publisher** | Studio/publisher name, used in installers and metadata. |
+| **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all six platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
+| **Include Mods** | *(Packages)* Ship the mods ticked in `Tools → Plugins & Mods`. On by default; applies to all six platforms. |
 
 The dialog refuses to start with an empty **Game Name** or **Output Path**. While a build
 runs every setting is locked, the **Build** button becomes **Stop**, and cancelling wipes
@@ -625,6 +622,21 @@ the half-written output folder. **Esc** closes the dialog when nothing is runnin
   [network profiler](#54-the-network-profiler) overlays. Best for diagnosing crashes and
   performance on the target.
 * **Release** — optimized, Tracy and the debug overlays off. Ship this.
+
+> **Debug from an installed engine.** The two bullets above describe a **Debug** build made
+> from a full engine source tree. An engine installed from a distribution installer has no
+> engine sources — it links a pre-built engine core instead, and Build Game picks the right
+> one for you:
+>
+> | You choose | What the game gets |
+> |---|---|
+> | **Release** | Optimised, no debug tooling. Ship this. |
+> | **Debug** | Optimised **and** fully instrumented: **Tracy**, the [runtime profiler overlay](#53-the-runtime-profiler-overlay), the [network profiler overlay](#54-the-network-profiler), `IsDebugBuild()` returning `true`, plus full debug symbols and an unstripped binary. |
+>
+> So a **Debug** build from an installed engine keeps the engine's own code optimised, which
+> is invisible to you: a distribution ships no engine sources to step through, and your game
+> logic lives in Lua/Python either way. You still get every debug facility and full symbols
+> for your own build.
 
 ### 7.3 Crash Reporter
 
@@ -661,7 +673,8 @@ runtime (with fallbacks).
 * **Graphics API:** **OpenGL 4.6** (default), **OpenGL 3.3** (compatible with GPUs from
   ~2010+), or **Vulkan** (falls back to OpenGL 4.6/3.3 if unavailable).
 * **Architecture:** **x64** (default) or **x86** (32-bit, for maximum compatibility with
-  older systems).
+  older systems). A 64-bit editor builds both; a 32-bit editor is locked to **x86** and
+  the selector is disabled, because a 32-bit toolchain cannot emit 64-bit binaries.
 * Supports the **Distribution** options (manifest, pack content, installer) — see
   [Section 10](#10-distribution-manifest-packing--installers).
 
@@ -669,13 +682,16 @@ runtime (with fallbacks).
 
 * **Output:** Linux ELF executable.
 * **Graphics API:** OpenGL 4.6 / OpenGL 3.3 / Vulkan (same as Windows).
-* **Architecture:** x64 / x86.
+* **Architecture:** x64 / x86 — same host rule as Windows: 64-bit editor builds both,
+  32-bit editor builds x86 only. The x86 build needs the 32-bit multilib toolchain
+  (`gcc-multilib` / `g++-multilib`) and the `x86-linux` vcpkg triplet.
 * Supports **Distribution** options, including a **.deb** installer.
 
 ### 8.3 Android
 
 * **Output:** `.apk` package, or `.aab` **App Bundle** for Google Play.
-* **ABI:** `arm64-v8a` (default), `armeabi-v7a`, or `x86_64`.
+* **ABI:** `arm64-v8a` (default, 64-bit ARM), `armeabi-v7a` (32-bit ARM, older devices),
+  `x86_64` (64-bit emulators), or `x86` (32-bit legacy emulators).
 * **Graphics API:** **OpenGL ES 3.2** or **Vulkan** (falls back to GLES 3.2/3.0).
 * **Orientation:** Landscape / Portrait / Auto.
 * **Package Name** (e.g. `com.studio.game`), **Min SDK** / **Target SDK** (24–36; Min is
@@ -880,12 +896,38 @@ found in the output folder (`.ico` > `.png` > `.bmp` > `.jpg`) and the project's
 * **Windows** — an **NSIS** `.exe` installer (requires NSIS installed). Invokes
   `create_game_installer_windows.bat` (`.sh` on non-Windows hosts).
 * **Linux** — a **`.deb`** package (requires `dpkg-deb`; on Windows hosts this runs via
-  WSL). Invokes `create_game_installer_linux.*`.
+  WSL). Invokes `create_game_installer_linux.*`. The game lands in `/opt/<Game Name>`,
+  with a launcher on `PATH` as `/usr/bin/<package-name>`, a menu entry in
+  `/usr/share/applications`, a 256×256 icon in the hicolor theme and the license as
+  `/usr/share/doc/<package-name>/copyright`. The package name is the game name reduced
+  to a Debian-legal form (lowercase, `a-z0-9+.-`), and the control version is the build
+  version with any leading `v` stripped. Removing the package also clears `/opt/<Game Name>`,
+  so save files written next to the game do not survive an uninstall.
 
 The installer is written **next to** the output folder — `<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.exe`
 or `…-Linux-<arch>-Setup.deb` — and, once it exists, the staged `<Output>/<GameName>/`
 folder is **deleted**, because the installer now contains everything. If the installer step
 fails, the loose build is left in place and the log says so.
+
+**Size limits are checked before packing.** A **Windows** installer cannot exceed **2 GB**,
+and no single file inside it may reach 2 GB either. The script measures your game folder
+first, picks the compression mode that fits, and — if no mode could work — refuses up front
+and names the file that is too large, instead of failing deep inside the packing step.
+
+**`.deb` packages** have no such ceiling, but they are staged through a temporary copy, so
+the script checks that the staging filesystem has room: `/tmp` is a RAM-backed `tmpfs` on
+many distributions and is easy to fill with a large game. Set **`ICE_STAGING_ROOT`** to point
+staging somewhere else. When you build a `.deb` **from a Windows host** (through WSL),
+staging deliberately lands on the WSL filesystem rather than on `C:`, because a mounted
+Windows drive cannot carry the POSIX permission bits a package needs — so `ICE_STAGING_ROOT`
+must name a Linux-native directory in that case, not a path under `/mnt/`:
+
+```bash
+export ICE_STAGING_ROOT=$HOME/.cache/icebox-stage
+```
+
+Either way the staged tree is given package-correct ownership and permissions, so a `.deb`
+built from Windows is as correct as one built on Linux.
 
 **macOS** has its own two options in the macOS section, applied after the bundle is
 re-signed:
@@ -929,13 +971,16 @@ re-signed:
     icon file name and the crash-report URL. Skipped on iOS, where CMake writes it inside
     the signed bundle.
 11. **Copy sidecar config** — `Config/Engine.json` plus `Plugins.json` / `Mods.json` /
-    `CollisionGroups.json` (skipped where they are embedded instead: Web, Android, iOS).
+    `CollisionGroups.json` (skipped where they are embedded instead: Web, Android, iOS;
+    `Plugins.json` / `Mods.json` are also skipped when the matching **Include** option is
+    off).
 12. **Stage plugins & mods** — only the entries marked enabled in `Plugins.json` /
     `Mods.json` are copied, build junk (`Source/`, `build/`, `out/`, `.git/`, `*.obj`,
     `*.pdb`, `CMakeLists.txt`, …) is filtered out, and the freshly built plugin binaries
-    (`.dll`/`.so`/`.dylib` + `plugin.json`) are overlaid on top. Skipped where plugins are
-    linked in statically (Web, iOS) or bundled by Gradle (Android); mods are not supported
-    on Web.
+    (`.dll`/`.so`/`.dylib` + `plugin.json`) are overlaid on top. Skipped entirely when
+    **Include Plugins** / **Include Mods** is off, and for any plugin whose `plugin.json`
+    declares `"EditorOnly": true`. Also skipped where plugins are linked in statically
+    (Web, iOS) or bundled by Gradle (Android); mods are not supported on Web.
 13. **Patch `Config/Engine.json`** — set `Rendering.RenderBackend` for the chosen API and
     strip the `Editor` and `Network` sections, which are editor-only.
 14. **Copy runtime dependencies** — Windows `.dll`s / Linux `.so`s from the build output
@@ -977,8 +1022,10 @@ The scripts accept a consistent flag set assembled by the dialog. Common flags:
 | `--content-dir "<path>"` | Content to embed (raw or cooked). |
 | `--start-scene "<path>"` | Initial scene (Web/Android/iOS). |
 | `--clean` | Wipe the intermediate build directory first. |
-| `--jobs <n>` | Parallel compile jobs — handy for CI. |
+| `--jobs <n>` | Parallel compile jobs. Defaults to an automatic value — see below. |
 | `--target <name>` / `--with-editor` | Build a different CMake target / include the editor (desktop and Apple scripts). |
+| `--no-plugins` / `--include-plugins` | Exclude / include `Plugins/` in the build. Forwarded to CMake as `-DICE_INCLUDE_PLUGINS=OFF\|ON`. Accepted by all six platform scripts. |
+| `--no-mods` / `--include-mods` | Exclude / include `Mods/` in the build. Forwarded to CMake as `-DICE_INCLUDE_MODS=OFF\|ON`. Accepted by all six platform scripts. |
 
 Plus platform-specific flags:
 
@@ -999,6 +1046,28 @@ Plus platform-specific flags:
   `--enable-multicast`, `--enable-ads`/`--admob-app-id`, `--uses-non-exempt-encryption`,
   `--deep-link-scheme`, `--local-network-usage`, `--usage-descriptions`,
   `--crash-report-url`.
+
+### Parallel compile jobs
+
+Every build script picks its own job count at startup, so a 24-core workstation is not
+throttled and a small laptop is not driven into swap. The value is resolved in this order:
+
+1. An explicit `--jobs <n>` on the command line.
+2. The standard `CMAKE_BUILD_PARALLEL_LEVEL` environment variable, if it holds a positive
+   integer. Useful for CI, where the runner already knows its own budget.
+3. Automatic: `min(logical cores, total RAM in MB / 1536)`, never below `1`.
+
+The RAM term is what protects small machines: compiling the engine is memory-hungry, so a
+machine with many cores but little memory would otherwise thrash. Detection works on
+Windows, Linux and macOS and honours container CPU/memory limits; if nothing can be
+detected, the scripts fall back to `4` jobs.
+
+Set `ICE_BUILD_MB_PER_JOB` to change the memory budget per job (default `1536`, minimum
+`256`) — lower it to use more cores, raise it if a build ever runs out of memory.
+
+Building through **CMake presets** rather than the scripts (`cmake --build --preset ...`,
+Visual Studio, VS Code CMake Tools) uses the generator's own default instead; export
+`CMAKE_BUILD_PARALLEL_LEVEL` to pin it.
 
 **What a build script does** (Windows example): initializes the MSVC environment
 (`vcvarsall`), locates **vcpkg**, requires **CMake** + **Ninja**, configures the engine
@@ -1057,8 +1126,8 @@ You build with the native toolchain for each target. Install these on the build 
 
 | Platform | Required tools |
 | -------- | -------------- |
-| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. |
-| **Linux** | GCC/Clang, vcpkg, CMake, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) |
+| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. |
+| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3; see the Linux / WSL2 section of `README.md`. |
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |
 | **macOS / iOS** | A **macOS** host with **Xcode** (and command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization) and vcpkg. iOS additionally needs a development team / signing assets for device builds & IPAs. |
@@ -1113,7 +1182,7 @@ an incompatible build. The Lua side of this is
 | -------- | ------ | ---------------- | ------------- |
 | **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan | x64, x86 |
 | **Linux** | ELF binary | OpenGL 4.6 / 3.3 / Vulkan | x64, x86 |
-| **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64 |
+| **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64, x86 |
 | **Web** | `.html`+`.wasm`+data | WebGPU / WebGL 2.0 (Auto) | wasm |
 | **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
 | **iOS** | `.ipa` / `.app` | Metal (MoltenVK) | arm64 |
@@ -1135,6 +1204,7 @@ an incompatible build. The Lua side of this is
 | Generate Manifest | `game_manifest.json` (SHA-256 per file) |
 | Pack Content | `Content.icepak` (zstd 1–22, optional split) |
 | Create Installer | NSIS `.exe` (Win) / `.deb` (Linux) |
+| Include Plugins / Include Mods | *(all platforms)* Whether enabled `Plugins/` and `Mods/` are packaged at all |
 | macOS distribution | `.dmg` (drag-install) and/or `.pkg` installer, optionally notarized |
 
 ### Profiler surfaces

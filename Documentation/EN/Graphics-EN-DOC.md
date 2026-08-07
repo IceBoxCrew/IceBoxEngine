@@ -129,28 +129,20 @@ particles, fog of war, foreground UI and debug overlays after it — described i
 Every GPU operation in the engine goes through the **RHI** — a small abstraction
 with two halves:
 
-* **`RHIDevice`** — creates and destroys GPU resources (textures, buffers, vertex
+* **Device** — creates and destroys GPU resources (textures, buffers, vertex
   arrays, framebuffers, shader programs, queries).
-* **`RHIContext`** — issues commands (bind, draw, clear, blit, dispatch compute, set
+* **Context** — issues commands (bind, draw, clear, blit, dispatch compute, set
   state, read pixels, …).
 
 Game and engine code never call OpenGL/Vulkan/etc. directly; they call the RHI,
-which dispatches to the active backend. Resources are referenced by opaque handles
-(`RHITextureHandle`, `RHIBufferHandle`, `RHIFramebufferHandle`,
-`RHIShaderProgramHandle`, `RHIQueryHandle`, `RHIRenderbufferHandle`,
-`RHIVertexArrayHandle`, `RHISyncObject`), with `0` reserved as the invalid handle.
-The backend is chosen at startup (`RHI::Initialize(backend)`) and queried with
-`RHI::GetActiveBackend()`. On initialization the device's driver string is recorded
-into the **crash reporter**, so a crash report always names the renderer, GPU and
-driver that produced it.
+which dispatches to the active backend. The backend is chosen at startup, and on
+initialization the device's driver string is recorded into the **crash reporter**,
+so a crash report always names the renderer, GPU and driver that produced it.
 
-Devices also answer capability questions directly — `IsComputeAvailable()`,
-`IsDSAAvailable()`, `IsPersistentMappingAvailable()`, `IsBindlessTextureAvailable()`,
-`IsMultiDrawIndirectAvailable()`, `IsGPUTimerAvailable()`, `IsSPIRVAvailable()`,
-`IsProgramBinaryCacheAvailable()`, `IsTexStorageAvailable()`,
-`IsCompressedFormatSupported()`, `HasExtension()`, plus limits like
-`GetMaxTextureUnits()`, `GetMaxTextureSize()` and `GetTotalVRAM_MB()`. Every
-optional renderer path is gated on one of these.
+The RHI also reports what the current device can do — compute shaders, persistent
+mapping, bindless textures, multi-draw indirect, GPU timers, SPIR-V, program-binary
+caching, compressed texture formats — plus limits such as maximum texture size and
+total VRAM. Every optional renderer path is gated on one of these capabilities.
 
 ### 2.2 Backends & platforms
 
@@ -426,7 +418,7 @@ rectangle is projected to window coordinates and installed as a scissor around t
 whole world-drawing chain (intersected with any scissor already in force, and skipped
 when it would not clip anything). It is restored exactly as it was afterwards.
 
-**Particles.** `FXManager` simulates emitters and draws them through the same batch
+**Particles.** The particle system simulates emitters and draws them through the same batch
 renderer, so particles batch alongside sprites. Emitters can be **Alpha**, **Additive**
 or **Multiply** blended, Lit or Unlit, use a custom material, and emit light into the
 lighting pass. Where compute shaders are available the per-particle update runs on the
@@ -434,7 +426,7 @@ GPU (with an automatic CPU fallback), and ribbon/trail emitters get their own st
 renderer. Emitters also feed the fluid (SPH) solver, sub-emitters and collision against
 scene colliders — all authored in the [FX asset](Assets-EN-DOC.md#412-fx--particle-system-ice_fx).
 
-**Fog of war.** `FogOfWarSystem` maintains a grid of cells in three states — *Unseen*,
+**Fog of war.** The fog-of-war stage maintains a grid of cells in three states — *Unseen*,
 *Explored*, *Visible* — computed with recursive shadow-casting field-of-view from each
 revealing point against per-cell opacity. It renders as a batched quad overlay at a
 configurable Z with per-state alphas, an optional smooth per-cell fade, and a
@@ -1298,7 +1290,7 @@ at a screen point or cursor) and screen-rectangle entity selection. All of them 
 collision groups and accept a layer-mask override.
 
 **Destruction.** The **Destructible** component fractures geometry into physical debris
-on impact via `DestructionSystem`. Sprites, flipbooks and tilemap tiles can all be
+on impact. Sprites, flipbooks and tilemap tiles can all be
 fractured, with a **Grid**, **Radial** or **Random** fragment pattern and a configurable
 fragment count. Every fragment is a real physics body and inherits a full set of
 overridable properties: lifetime and fade time, gravity scale, density, friction,

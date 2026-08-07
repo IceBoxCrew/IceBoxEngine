@@ -141,11 +141,11 @@ One iteration of the main loop, in order:
 7. **`Render()`** — the render graphs execute ([Graphics → 3.2](Graphics-EN-DOC.md#32-the-frame-step-by-step)).
    In headless mode this step is replaced by an FX-only update so particle lifetimes still
    expire.
-8. **`Input::Update()`** — per-frame edge state (*just pressed* / *just released*), scroll
+8. **Input roll-over** — per-frame edge state (*just pressed* / *just released*), scroll
    and touch deltas are rolled over for the next frame.
-9. **Counters** — entity/component statistics and the profiler manager are updated.
-10. **Networking** — `NetworkManager`, `RollbackManager` and `NetworkDiscovery` are
-    ticked, in that order, followed by the network profiler in Debug builds.
+9. **Counters** — entity/component statistics and the profiler are updated.
+10. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
+    order, followed by the network profiler in Debug builds.
 11. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
     planes, backend, lighting) into the engine; a level's rendering override is re-applied
     if it is enabled.
@@ -154,7 +154,7 @@ One iteration of the main loop, in order:
     Android and iOS it sleeps the whole remainder; on Web the browser owns the cadence and
     the limiter is skipped.
 
-> **Networking ticks after rendering.** `NetworkManager::Update` runs at the end of the
+> **Networking ticks after rendering.** Networking runs at the end of the
 > frame, so a snapshot always reflects the state the frame just finished producing. It
 > also has its own accumulator: it only does work once per **Tick Rate** interval
 > ([5.4](#54-entity-state--world-snapshots)), regardless of your framerate.
@@ -168,8 +168,8 @@ One iteration of the main loop, in order:
    for UI, debug text and timers that must ignore slow-motion.
 2. **Pause requests** — a pause requested from script or by `F5` in the editor is
    consumed, and the resulting state is published so every subsystem sees the same flag.
-3. **`Scene::OnUpdateRuntime(gameDelta)`** — the simulation, detailed below.
-4. **`NetworkReplication::Update`** — replication runs *after* the simulation, on the
+3. **Scene simulation** — run on the game delta; detailed below.
+4. **Replication** — replication runs *after* the simulation, on the
    **unscaled** delta, so slow-motion never changes network rates
    ([5.7](#57-automatic-replication)).
 5. **Widgets** — the UI runtime updates and then processes pointer/text input, with
@@ -178,7 +178,7 @@ One iteration of the main loop, in order:
    the primary Camera component drives it, with optional camera lag; then camera shake is
    decayed for the primary and every split-screen camera.
 
-`Scene::OnUpdateRuntime` itself runs these stages, each of which appears by name in the
+The scene simulation itself runs these stages, each of which appears by name in the
 [Profiler](Profiling-And-Building-EN-DOC.md#43-cpu-tab):
 
 | Stage | What happens |
@@ -199,15 +199,15 @@ One iteration of the main loop, in order:
 
 ### 2.4 Scenes, entities & components
 
-A **scene** is an `entt::registry` plus a Box2D world. An **entity** is a registry handle;
-everything about it lives in components:
+A **scene** is an ECS world plus a Box2D physics world. An **entity** is a handle into that
+world; everything about it lives in components:
 
 * Every entity carries an **`IDComponent`** (a 64-bit **UUID**, stable across save/load and
   used by joints, replication and replays), a **`TagComponent`** (its name) and a
   **`TransformComponent`**.
 * **Hierarchy** is a component, not a container: a child stores its parent and its local
-  transform, and `UpdateHierarchy` walks the tree each frame. Destroying a parent destroys
-  its children through a registry destroy-signal.
+  transform, and the engine walks the tree each frame. Destroying a parent destroys its
+  children with it.
 * **Multi-instance components.** Sprite Renderer, Flipbook, Collider, Audio, FX, Widget,
   Joint, Point Marker and Class Component each hold a **list of named instances** with
   their own local transforms — one entity can carry several sprites, several colliders and
@@ -780,7 +780,7 @@ widget, destructible, AI and class-component settings.
 Alongside it, a **dirty-flag mask** records which of those groups changed since the last
 send, so a snapshot only re-serializes what actually moved.
 
-**The tick.** `NetworkManager::Update` accumulates real time and only runs once per
+**The tick.** Networking accumulates real time and only runs once per
 **Tick Rate** interval (1–128 Hz, default 60). Inside a tick the server drains ENet events,
 updates voice, broadcasts snapshots on their own **Snapshot Rate** accumulator (1–128,
 default 20 Hz), records entity history for lag compensation, and reaps unauthenticated

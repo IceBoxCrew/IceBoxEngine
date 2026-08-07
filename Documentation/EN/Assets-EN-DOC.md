@@ -196,7 +196,7 @@ normally break every asset that points at it. IceBox prevents this with the
 When you move or rename an asset through the Content Browser, the engine:
 
 1. **Rewrites references** inside every dependent asset under `Content/` so they point
-   at the new path (handled by `UpdateAllReferences`).
+   at the new path.
 2. If anything still referenced the old path, it writes a **redirector** — a small
    `.ice_redirect` file recorded in **`Saved/Redirectors/`** that maps
    `OldPath → NewPath`. Any later load of the old path is transparently resolved to
