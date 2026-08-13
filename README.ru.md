@@ -76,7 +76,7 @@ IceBox Engine состоит из нескольких компонентов:
 |-----------|--------|-------------|
 | **Launcher** | `IceBoxLauncher` | Точка входа для пользователей. Управляет проектами (создание, открытие, удаление), проверяет обновления движка и запускает редактор для выбранного проекта. |
 | **Editor** | `IceBoxEngine` | Основной визуальный редактор. Редактирование сцен, управление ассетами, редактор тайлмапов, инструменты анимации, рабочая область для скриптинга и пайплайн сборки игры (Tools → Build Game). |
-| **Updater** | `IceBoxUpdater` | Отдельное приложение обновления. Проверяет релизы на GitHub, затем скачивает, проверяет и устанавливает новую версию движка — всегда по вашему явному подтверждению, никогда молча. |
+| **Updater** | `IceBoxUpdater` | Отдельное приложение обновления. Проверяет релизы на GitHub (или манифест обновлений), затем скачивает, проверяет и устанавливает новую версию движка — всегда по вашему явному подтверждению, никогда молча — и после установки открывается снова, чтобы сообщить результат. |
 | **Runtime** | `IceBoxRuntime` | Легковесный исполняемый файл без редактора, поставляемый со собранными играми. Запускает игровой проект напрямую на целевой платформе. |
 
 ---
@@ -93,7 +93,7 @@ IceBox Engine состоит из нескольких компонентов:
 
 | | |
 |-|-|
-| **ОС** | Windows 10+ (x64/x86), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86) или macOS 11.0+ (Apple Silicon или Intel) |
+| **ОС** | Windows 10+ (x64/x86/arm64), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86/arm64) или macOS 11.0+ (Apple Silicon или Intel) |
 | **CPU** | Двухъядерный процессор |
 | **RAM** | 4 ГБ |
 | **GPU** | Совместимая с OpenGL 3.3/4.6 или Vulkan 1.1-1.4 (Windows / Linux) или GPU с поддержкой Metal (macOS, через ANGLE или MoltenVK), 512 МБ видеопамяти |
@@ -169,6 +169,9 @@ sudo apt update && sudo apt install -y \
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
+
+# Опционально: кросс-сборка arm64 с этого x86_64-хоста требует своего тулчейна и
+# arm64-библиотек - см. "Кросс-сборки arm64 (AArch64)" ниже
 ```
 
 #### 32-битные (x86) сборки
@@ -197,6 +200,52 @@ sudo apt install --no-remove \
     libssl-dev:i386 libespeak-ng-dev:i386
 
 ```
+
+#### Кросс-сборки arm64 (AArch64)
+
+На **нативной AArch64-машине** ничего из перечисленного ниже не нужно: системный компилятор
+и системные библиотеки там уже arm64, поэтому пресеты `Linux-arm64-*`, префабрикация ядра и
+скрипты Build Game работают сразу.
+
+Кросс-сборка с x86_64-хоста требует тулчейн AArch64 **и** arm64-копии библиотек разработки —
+ровно того же вида, что набор i386 выше. Префабрикованное ядро — статический архив, оно ничего
+не линкует, поэтому его достаточно собрать одним тулчейном; а **исполняемый файл** (игра или
+сам движок) дополнительно линкует SDL3 с системным звуковым и графическим стеком (PulseAudio,
+Wayland, EGL, xkbcommon, libdecor), которого vcpkg не поставляет. Без `:arm64`-копий линковка
+AArch64 уходит в `/usr/lib/x86_64-linux-gnu` и падает с `file in wrong format`:
+
+```bash
+# 1. Включите архитектуру arm64 и обновите списки пакетов
+sudo dpkg --add-architecture arm64
+sudo apt update
+
+# 2. Установите тулчейн AArch64 и arm64-библиотеки разработки.
+sudo apt install crossbuild-essential-arm64
+sudo apt install --no-remove \
+    libx11-dev:arm64 libxft-dev:arm64 libxext-dev:arm64 libxrandr-dev:arm64 libxcursor-dev:arm64 libxi-dev:arm64 libxfixes-dev:arm64 libxss-dev:arm64 libxtst-dev:arm64 \
+    libxkbcommon-dev:arm64 libwayland-dev:arm64 libdecor-0-dev:arm64 \
+    libibus-1.0-dev:arm64 \
+    libgl1-mesa-dev:arm64 libegl1-mesa-dev:arm64 libgles2-mesa-dev:arm64 \
+    libasound2-dev:arm64 libpulse-dev:arm64 \
+    libdbus-1-dev:arm64 \
+    libssl-dev:arm64 libespeak-ng-dev:arm64
+
+# 3. Соберите arm64-ядро, затем игру поверх него
+Tools/BuildSystem/BuildEngine/prebuild_core_libs.sh --arch arm64
+Tools/BuildSystem/BuildGame/build_linux.sh --arch arm64 --release
+
+# 4. Кросс-соберите сам движок и упакуйте его в .deb.
+#    Cross-пресеты пишут в out/build/Linux-arm64-<config> - то же дерево, что и нативные,
+#    поэтому скрипту установщика не нужны дополнительные аргументы.
+cmake --preset Linux-arm64-Cross-Release
+cmake --build out/build/Linux-arm64-Release
+Tools/BuildSystem/BuildEngine/Linux/build_installer_linux.sh --arch arm64 --config Release
+```
+
+> `crossbuild-essential-arm64` **удаляет** `gcc-multilib` / `g++-multilib`: multilib-симлинк
+> `/usr/include/asm` неверен для любого кросс-компилятора, и apt отказывается держать оба
+> набора. Поэтому один хост кросс-собирает либо x86, либо arm64, но не оба сразу — меняйте
+> пакеты между запусками или держите две машины.
 
 ### Инструменты сборки macOS / iOS (требуется Apple-хост)
 
@@ -369,6 +418,14 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 | [Python API](Documentation/RU/PythonAPI-RU-DOC.md) | Автоматизация редактора и инструментарий. |
 
 Английские версии всех этих документов лежат рядом, в **[`Documentation/EN/`](Documentation/EN)**.
+
+---
+
+## 🔒 Конфиденциальность
+
+Редактор, лаунчер и апдейтер отправляют наружу всего две вещи, и только по вашей команде: отчёт о падении, если вы нажали **Отправить** в диалоге падения, и одну проверку активации лицензии, когда вы нажимаете **Активировать**. Никакой телеметрии, аналитики и фоновой отправки. Собранная игра не делает ни того, ни другого: лицензию она не проверяет вовсе, а отчёт о падении отправляет только на тот эндпоинт, который вы настроите сами.
+
+Что именно передаётся, зачем, сколько хранится и какие у вас права: **[PRIVACY_NOTICE.txt](PRIVACY_NOTICE.txt)**
 
 ---
 

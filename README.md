@@ -76,7 +76,7 @@ IceBox Engine consists of several components:
 |-----------|--------|-------------|
 | **Launcher** | `IceBoxLauncher` | Entry point for users. Manages projects (create, open, delete), checks for engine updates, and launches the editor for the selected project. |
 | **Editor** | `IceBoxEngine` | The main visual editor. Scene editing, asset management, tilemap editor, animation tools, scripting workspace, and game build pipeline (Tools → Build Game). |
-| **Updater** | `IceBoxUpdater` | Standalone update app. Checks GitHub releases for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently. |
+| **Updater** | `IceBoxUpdater` | Standalone update app. Checks GitHub releases (or an update manifest) for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
 | **Runtime** | `IceBoxRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
 
 ---
@@ -93,7 +93,7 @@ IceBox Engine consists of several components:
 
 | | |
 |-|-|
-| **OS** | Windows 10+ (x64/x86), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86) or macOS 11.0+ (Apple Silicon or Intel) |
+| **OS** | Windows 10+ (x64/x86/arm64), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86/arm64) or macOS 11.0+ (Apple Silicon or Intel) |
 | **CPU** | Dual-core processor |
 | **RAM** | 4 GB |
 | **GPU** | OpenGL 3.3/4.6 or Vulkan 1.1-1.4 compatible (Windows / Linux) or Metal-capable GPU (macOS, via ANGLE or MoltenVK), 512 MB VRAM |
@@ -169,6 +169,9 @@ sudo apt update && sudo apt install -y \
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
+
+# Optional: cross-building arm64 from this x86_64 host needs its own toolchain and
+# arm64 libraries - see "arm64 (AArch64) cross builds" below
 ```
 
 #### 32-bit (x86) builds
@@ -196,6 +199,42 @@ sudo apt install --no-remove \
     libssl-dev:i386 libespeak-ng-dev:i386
 
 ```
+
+#### arm64 (AArch64) cross builds
+
+On a **native AArch64 machine** nothing below is needed: the system compiler and the
+system libraries are already arm64, so the `Linux-arm64-*` presets, the core prebuild and
+the Build Game scripts all work out of the box.
+
+Cross-building from an x86_64 host needs the AArch64 toolchain **and** arm64 copies of the
+development libraries — the same shape as the i386 set above. The pre-built core is a
+static archive and links nothing, so the toolchain alone produces it; an **executable**
+(a game, or the engine itself) additionally links SDL3 against the system audio and display
+stack (PulseAudio, Wayland, EGL, xkbcommon, libdecor), which vcpkg does not ship. Without
+the `:arm64` copies the AArch64 link reaches into `/usr/lib/x86_64-linux-gnu` and fails with
+`file in wrong format`:
+
+```bash
+# 1. Enable the arm64 architecture and refresh the package lists
+sudo dpkg --add-architecture arm64
+sudo apt update
+
+# 2. Install the AArch64 toolchain and the arm64 development libraries.
+sudo apt install crossbuild-essential-arm64
+sudo apt install --no-remove \
+    libx11-dev:arm64 libxft-dev:arm64 libxext-dev:arm64 libxrandr-dev:arm64 libxcursor-dev:arm64 libxi-dev:arm64 libxfixes-dev:arm64 libxss-dev:arm64 libxtst-dev:arm64 \
+    libxkbcommon-dev:arm64 libwayland-dev:arm64 libdecor-0-dev:arm64 \
+    libibus-1.0-dev:arm64 \
+    libgl1-mesa-dev:arm64 libegl1-mesa-dev:arm64 libgles2-mesa-dev:arm64 \
+    libasound2-dev:arm64 libpulse-dev:arm64 \
+    libdbus-1-dev:arm64 \
+    libssl-dev:arm64 libespeak-ng-dev:arm64
+```
+
+> `crossbuild-essential-arm64` **removes** `gcc-multilib` / `g++-multilib`, because the
+> multilib `/usr/include/asm` symlink is wrong for every cross compiler and apt refuses to
+> keep both. One host therefore cross-builds either x86 or arm64, not both — swap the
+> packages between runs, or keep two machines.
 
 ### macOS / iOS build tools (Apple host required)
 
@@ -366,6 +405,14 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling. |
 
 Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.
+
+---
+
+## 🔒 Privacy
+
+The editor, launcher and updater send only two things, and only when you ask them to: a crash report, if you press **Send** in the crash dialog, and a single license activation check, when you press **Activate**. No telemetry, no analytics, no background reporting. A packaged game does neither — it never checks a license, and it reports a crash only to an endpoint you configure yourself.
+
+What is transmitted, why, how long it is kept and what your rights are: **[PRIVACY_NOTICE.txt](PRIVACY_NOTICE.txt)**
 
 ---
 
