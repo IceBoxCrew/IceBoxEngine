@@ -3236,7 +3236,7 @@ SetEntityCollisionFilter(entityId, 0x0002, 0xFFFF, 0)
 
 ### Именованные группы столкновений (для текущей сущности)
 
-> Применить **именованную** группу столкновений (задаётся в **Settings → Collision**) ко всем шейпам `RigidbodyComponent` этой сущности в рантайме. `categoryBits` / `maskBits` группы берутся из матрицы столкновений автоматически.
+> Применить **именованную** группу столкновений (задаётся в **Настройки → Коллизия**) ко всем шейпам `RigidbodyComponent` этой сущности в рантайме. `categoryBits` / `maskBits` группы берутся из матрицы столкновений автоматически.
 
 ```lua
 -- Применить именованную группу ко всем шейпам тела.
@@ -3259,7 +3259,7 @@ SetCollisionEnabled(2)
 
 ### Группы столкновений (глобально — `CollisionGroups.*`)
 
-> **Тип:** Глобально. Чтение / редактирование проектной матрицы столкновений из Lua. Группы и попарные флаги `collide?` задаются в **Settings → Collision** (сохраняются в `Config/CollisionGroups.json`).
+> **Тип:** Глобально. Чтение / редактирование проектной матрицы столкновений из Lua. Группы и попарные флаги `collide?` задаются в **Настройки → Коллизия** (сохраняются в `Config/CollisionGroups.json`).
 
 ```lua
 -- Поиск
@@ -10813,6 +10813,65 @@ Settings.LIGHTING_LIT    -- true
 Settings.LIGHTING_UNLIT  -- false
 ```
 
+### Масштабирование (FSR / NIS)
+
+> Рендерит сцену во внутреннем разрешении ниже выходного и восстанавливает её до полного в самом конце кадра, **после** постобработки. **Только Vulkan и только на совместимой видеокарте** — ровно как трассировка лучей. На любом другом бэкенде или неподдерживаемом устройстве настройка сохраняется, но не действует, и кадр масштабируется обычной линейной фильтрацией.
+>
+> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (пространственный апсемплинг с адаптацией к границам) и затем RCAS (устойчивое контрастно-адаптивное повышение резкости). Работает на **любой** видеокарте с Vulkan.
+> - **`"nis"`** — NVIDIA Image Scaling: направленное масштабирование по структурному тензору с адаптивной нерезкой маской, за один проход. Требует видеокарту **NVIDIA**.
+>
+> Пресет качества задаёт внутреннее разрешение рендера как долю от выходного и **перемножается** с `SetRenderScale()` и режимами SSAA, поэтому оставьте `RenderScale` равным `1.0`, чтобы разрешением управлял только пресет. По умолчанию — `"off"`.
+
+```lua
+-- Константы апскейлера
+--   Settings.UPSCALING_OFF   -- "off"   (обычная линейная фильтрация, по умолчанию)
+--   Settings.UPSCALING_FSR   -- "fsr"   (AMD FidelityFX Super Resolution 1.0)
+--   Settings.UPSCALING_NIS   -- "nis"   (NVIDIA Image Scaling, только видеокарты NVIDIA)
+Settings.SetUpscalingMode(Settings.UPSCALING_FSR)
+local upscaler = Settings.GetUpscalingMode()   -- → "off" | "fsr" | "nis"
+
+-- Константы пресетов качества (внутреннее разрешение рендера от выходного)
+--   Settings.UPSCALING_ULTRA_PERFORMANCE  -- "ultra_performance"   33%
+--   Settings.UPSCALING_PERFORMANCE        -- "performance"         50%
+--   Settings.UPSCALING_BALANCED           -- "balanced"            59%
+--   Settings.UPSCALING_QUALITY            -- "quality"             67%  (по умолчанию)
+--   Settings.UPSCALING_ULTRA_QUALITY      -- "ultra_quality"       77%
+--   Settings.UPSCALING_NATIVE             -- "native"             100%  (только проход резкости)
+Settings.SetUpscalingQuality(Settings.UPSCALING_QUALITY)
+local preset = Settings.GetUpscalingQuality()  -- → "quality"
+
+-- Проход повышения резкости (FSR → RCAS, NIS → адаптивная нерезкая маска)
+Settings.SetUpscalingSharpening(true)
+local sharpening = Settings.IsUpscalingSharpening()
+
+Settings.SetUpscalingSharpness(0.5)            -- 0.0 .. 1.0 (по умолчанию 0.5)
+local sharpness = Settings.GetUpscalingSharpness()
+
+-- Запрос поддержки
+local anySupported = Settings.IsUpscalingSupported()                        -- любой апскейлер на этом устройстве
+local fsrSupported = Settings.IsUpscalingSupported(Settings.UPSCALING_FSR)  -- конкретный
+local nisSupported = Settings.IsUpscalingSupported(Settings.UPSCALING_NIS)
+
+local active = Settings.IsUpscalingActive()       -- выбран И поддерживается прямо сейчас
+local factor = Settings.GetUpscalingRenderScale() -- 1.0 если неактивен, иначе коэффициент пресета
+```
+
+```lua
+-- Типичное графическое меню игры: выбрать лучший доступный апскейлер
+if Settings.IsUpscalingSupported(Settings.UPSCALING_NIS) then
+    Settings.SetUpscalingMode(Settings.UPSCALING_NIS)
+elseif Settings.IsUpscalingSupported(Settings.UPSCALING_FSR) then
+    Settings.SetUpscalingMode(Settings.UPSCALING_FSR)
+end
+
+if Settings.IsUpscalingActive() then
+    Settings.SetRenderScale(1.0)                              -- разрешением управляет пресет
+    Settings.SetUpscalingQuality(Settings.UPSCALING_BALANCED)
+    Settings.SetUpscalingSharpness(0.6)
+    Settings.Save()
+end
+```
+
 ### Рендерер / Графический API
 
 > Узнать активный графический бэкенд или запросить другой. `GetRenderer()` работает на **любой платформе** и возвращает используемый сейчас рендерер. `SetRenderer(name)` записывает выбранный бэкенд в `Config/Engine.json` → `Rendering.RenderBackend` и **применяется при следующем запуске** — бэкенд выбирается один раз при старте, когда создаются окно и графический контекст, поэтому переключение «на лету» не выполняется. На платформах, где бэкенд задан сборкой (Web → WebGPU или WebGL 2.0, выбирается при сборке с автоматическим откатом к WebGL 2.0, если браузер не поддерживает WebGPU; macOS/iOS → Metal через ANGLE; Android → тот бэкенд, с которым собран APK), значение всё равно сохраняется, но активный рендерер остаётся тем, что предоставляет платформа; бэкенд, не вкомпилированный в сборку, аккуратно откатывается при старте.
@@ -10900,7 +10959,7 @@ local muted = Settings.IsMuted()
 
 ### Платформа
 
-Движок поддерживает 6 платформ: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. Из Lua можно определить текущую платформу и писать как платформо-специфичный код, так и общий код для всех платформ сразу.
+Движок поддерживает 6 платформ: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. Из Lua можно определить текущую платформу и писать как платформо-специфичный код, так и общий код для всех платформ сразу. Про архитектуру процессора, под которую собрана эта же сборка, см. раздел **Архитектура** сразу ниже.
 
 ```lua
 local platform = Settings.GetPlatform()
@@ -10961,6 +11020,83 @@ end
 -- 4) Код «под все 6 платформ сразу» — просто не оборачивайте его в
 --    проверки: один и тот же скрипт работает везде, так как все 6
 --    платформ предоставляют одинаковый Lua API.
+```
+
+### Архитектура
+
+`Settings.GetPlatform()` отвечает на вопрос *какая ОС*, а `Settings.GetArch()` — *под какой процессор собрана эта сборка*. Именно на этом уровне и решается «устройство слабое»: старый 32-битный ARM-телефон и современный 64-битный оба вернут `"Android"`, но в 32-битное адресное пространство заперт только один из них.
+
+```lua
+local arch = Settings.GetArch()
+-- Возвращает одно из: "x64", "x86", "arm64", "arm32", "wasm32", "wasm64"
+-- ("Unknown" — только если собрано под неизвестную цель)
+
+-- Строковые константы архитектур (удобно для switch-логики и сравнений):
+Settings.ARCH_X86     -- "x86"     32-битный Intel/AMD
+Settings.ARCH_X64     -- "x64"     64-битный Intel/AMD
+Settings.ARCH_ARM32   -- "arm32"   32-битный ARM (Android armeabi-v7a)
+Settings.ARCH_ARM64   -- "arm64"   64-битный ARM (Apple Silicon, Android arm64-v8a, Windows/Linux на ARM)
+Settings.ARCH_WASM32  -- "wasm32"  WebAssembly с 32-битными указателями (куча упирается в 2 ГБ)
+Settings.ARCH_WASM64  -- "wasm64"  WebAssembly с 64-битными указателями (сборка с -sMEMORY64)
+
+-- Разрядность указателя — самая короткая проверка «сколько памяти сборка вообще может адресовать»:
+local is64 = Settings.Is64Bit()   -- true на x64, arm64, wasm64
+local is32 = Settings.Is32Bit()   -- true на x86, arm32, wasm32
+```
+
+Что могут вернуть все 6 платформ:
+
+| Платформа | Архитектуры, под которые собирается движок | Что вернёт `Settings.GetArch()` |
+|-----------|--------------------------------------------|---------------------------------|
+| Windows   | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
+| Linux     | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
+| macOS     | arm64 (Apple Silicon), x64 (Intel) | `"arm64"`, `"x64"` |
+| iOS       | arm64 (устройство и симулятор); x64 — только симулятор на Intel-маке | `"arm64"`, `"x64"` |
+| Android   | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | `"arm64"`, `"arm32"`, `"x64"`, `"x86"` |
+| Web       | wasm32, wasm64 (сборка с `-sMEMORY64`) | `"wasm32"`, `"wasm64"` |
+
+> **Имена Android-ABI нормализованы**, поэтому одно сравнение работает везде: `armeabi-v7a` → `"arm32"`, `arm64-v8a` → `"arm64"`, `x86_64` → `"x64"`, `x86` → `"x86"`. Пишите `arch == Settings.ARCH_ARM64` один раз вместо разбора платформенных написаний ABI.
+
+Значение — это свойство **самой запущенной сборки**, определённое на этапе компиляции, а не опрос железа: x64-сборка, запущенная на ARM-машине через эмуляцию, всё равно вернёт `"x64"`, потому что выполняется именно этот код — и именно под него и нужно закладывать бюджет. Вызов дешёвый (без системных вызовов и обращений к диску), так что его спокойно можно использовать в `OnStart` или в меню настроек.
+
+Шаблоны использования:
+
+```lua
+-- 1) Одна проверка на всё, что ограничено адресным пространством
+if Settings.Is32Bit() then
+    Settings.SetMaxTextureSize(2048)
+    Settings.SetAtlasSize(2048)
+    Settings.SetMaxPointLights(8)
+    Settings.SetAAMode(Settings.AA_MODE_OFF)
+end
+
+-- 2) switch-стиль по имени архитектуры
+local a = Settings.GetArch()
+if a == Settings.ARCH_ARM32 then
+    Settings.SetRenderScale(0.75)
+    Settings.SetAudioQuality(Settings.AUDIO_LOW)
+    Settings.SetFPSLimit(30)
+elseif a == Settings.ARCH_ARM64 then
+    Settings.SetRenderScale(1.0)
+    Settings.SetFPSLimit(60)
+elseif a == Settings.ARCH_WASM32 then
+    -- браузерная сборка без -sMEMORY64: всё должно уместиться в 2 ГБ кучи
+    Settings.SetMaxTextureSize(4096)
+end
+
+-- 3) Платформа + архитектура вместе — точная проверка «слабого устройства»
+if Settings.IsAndroid() and Settings.GetArch() == Settings.ARCH_ARM32 then
+    -- старый 32-битный телефон: самый низкий пресет
+elseif Settings.IsMobile() then
+    -- современный arm64-телефон/планшет: обычный мобильный пресет
+end
+
+-- 4) Либо отдайте бюджет движку вместо ручных пресетов
+if Settings.Is32Bit() then
+    Settings.SetAdaptiveQuality(true, 30)
+else
+    Settings.SetAdaptiveQuality(true, 60)
+end
 ```
 
 ### Специальные возможности (Accessibility)
@@ -11247,7 +11383,7 @@ Android, Web), и редактор ведёт себя так же.
   полностью скрытая вкладка всё же перестаёт рендериться, потому что
   браузер троттлит `requestAnimationFrame` — это вне контроля движка.
 
-Настройка живёт во вкладке **Settings → Optimization** редактора,
+Настройка живёт во вкладке **Настройки → Оптимизация** редактора,
 сохраняется в `Config/Engine.json` (`Optimization.IsSuspended`, по
 умолчанию `true`) и в пользовательском файле настроек игры (`SaveToFile()`).
 
@@ -11397,7 +11533,8 @@ end
 Подпишитесь на колбэк, который вызывается при любом изменении настройки
 (через Lua, панель настроек редактора, AutoDetect или AdaptiveQuality).
 Колбэк получает имя изменённого ключа (например `"AAMode"`, `"FPSLimit"`,
-`"RenderScale"`, `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, ...).
+`"RenderScale"`, `"UpscalingMode"`, `"UpscalingQuality"`, `"UpscalingSharpness"`,
+`"UpscalingSharpening"`, `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, ...).
 
 ```lua
 local id = Settings.OnSettingChanged(function(key)
@@ -12816,6 +12953,78 @@ end)
 | `ProfileScope` | `ProfileScope(name, fn)` → `any` | Удобный RAII-аналог. Вызывает `ProfileBegin(name)`, выполняет `fn()`, гарантированно вызывает `ProfileEnd(name)`. Возвращает то, что вернула `fn`. |
 
 > **Совет.** Используйте иерархические имена (`"AI.Update"`, `"AI.Pathfinding"`, `"Render.HUD"`) — редакторский профайлер и Chrome Trace-вьюверы будут группировать их визуально.
+
+#### Lua API — Пользовательские счётчики
+
+Публикуйте любое число геймплея или системы как **счётчик** профайлера. Счётчики не требуют регистрации: они сразу появляются на вкладке **Counters** профайлера редактора (сгруппированные по имени группы, раскрашенные по бюджету), записываются в каждый кадр трейса, экспортируются в Chrome Trace отдельными дорожками и становятся графиками Tracy в инструментированных сборках.
+
+```lua
+-- Обычное число.
+ProfilerSetCounter("Gameplay", "Alive Enemies", #enemies)
+
+-- С единицей и бюджетом: значение желтеет, оранжевеет и краснеет по мере
+-- приближения к 8 мс и их превышения.
+ProfilerSetCounter("Gameplay", "AI Think", thinkMs, "ms", 8.0)
+
+-- Накопление за кадр (на следующем кадре сбрасывается автоматически).
+ProfilerAddCounter("Gameplay", "Projectiles Spawned", 1)
+
+-- Прочитать любой счётчик, включая счётчики самого движка.
+local contacts = ProfilerGetCounter("Physics", "Contacts")
+local budgetMs = GetProfilerFrameBudgetMs()
+```
+
+| Функция | Сигнатура | Описание |
+|---------|-----------|----------|
+| `ProfilerSetCounter` | `ProfilerSetCounter(group, name, value[, unit[, budget]])` | Задаёт значение счётчика на этот кадр. `unit` — `"ms"`, `"b"`, `"kb"`, `"mb"`, `"%"` или `"/s"`; опустите для обычного числа. `budget` (необязательно) управляет цветовой индикацией. |
+| `ProfilerAddCounter` | `ProfilerAddCounter(group, name, delta)` | Прибавляет `delta` к счётчику за текущий кадр; на следующем кадре отсчёт начинается заново с первого `delta`. |
+| `ProfilerGetCounter` | `ProfilerGetCounter(group, name)` → `number` | Читает счётчик. Работает и для счётчиков движка (`"Physics"`, `"Renderer"`, `"FX"`, `"Audio"`, `"Assets"`, `"Shadows"`, `"Memory"`, `"Network"`, `"Lua"`, `"Components"`, `"Instances"`, `"Scene"`). |
+| `GetProfilerFrameBudgetMs` | `GetProfilerFrameBudgetMs()` → `number` | Бюджет кадра в миллисекундах, выведенный из целевого FPS проекта. |
+
+#### Lua API — Профайлер скриптов
+
+Движок измеряет каждый Lua-колбэк, который он вызывает, отдельно по скрипту и по типу колбэка (`OnUpdate`, `OnLateUpdate`, `OnFixedUpdate`, коллизии, сенсоры, удары, разрыв шарниров, события жизненного цикла, деревья поведения, колбэки уровня и модов, а также скрипты виджетов). Эти функции читают и настраивают эти данные из игрового кода — полезно в готовых сборках, где панель редактора недоступна.
+
+```lua
+if GetScriptProfilerTimeMs() > GetProfilerFrameBudgetMs() * 0.3 then
+    for _, row in ipairs(GetScriptProfilerRows()) do
+        if row.frameMs > 0.5 then
+            PrintScreen(string.format("%s: %.2f ms x%d", row.script, row.frameMs, row.instances), 2.0)
+        end
+    end
+end
+```
+
+| Функция | Сигнатура | Описание |
+|---------|-----------|----------|
+| `SetScriptProfilerEnabled` | `SetScriptProfilerEnabled(enabled)` | Включает или выключает измерение по скриптам. В выключенном состоянии не стоит ничего. |
+| `IsScriptProfilerEnabled` | `IsScriptProfilerEnabled()` → `bool` | Идёт ли измерение по скриптам. |
+| `ResetScriptProfiler` | `ResetScriptProfiler()` | Сбрасывает накопленную статистику по скриптам без перезапуска игры. |
+| `GetScriptProfilerTimeMs` | `GetScriptProfilerTimeMs()` → `number` | Суммарное время Lua в колбэках, вызванных движком, за последний кадр. |
+| `GetScriptProfilerCalls` | `GetScriptProfilerCalls()` → `number` | Число измеренных вызовов Lua-колбэков за последний кадр. |
+| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Текущий размер кучи Lua в КБ. |
+| `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Сглаженная скорость аллокаций Lua в КБ/с — растущее значение означает расход памяти скриптами. |
+| `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Массив строк по скриптам, отсортированный по стоимости за последний кадр. У каждой записи есть `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
+
+#### Lua API — Детектор фризов
+
+Профайлер автоматически захватывает залипшие кадры: кадр, который превысил порог *и* занял больше двойного скользящего среднего, сохраняется вместе с полным деревом скоупов для последующего разбора на вкладке **Hitches** редактора.
+
+```lua
+SetProfilerHitchThreshold(33.0)
+SetProfilerHitchDetection(true)
+
+if GetProfilerHitchCount() > 0 then
+    PrintScreen("Фризы: " .. GetProfilerHitchCount(), 1.0)
+end
+```
+
+| Функция | Сигнатура | Описание |
+|---------|-----------|----------|
+| `SetProfilerHitchDetection` | `SetProfilerHitchDetection(enabled)` | Включает или выключает автоматический захват фризов. |
+| `SetProfilerHitchThreshold` | `SetProfilerHitchThreshold(ms)` | Абсолютный порог в миллисекундах. Кадр должен ещё и превысить двойное скользящее среднее. |
+| `GetProfilerHitchCount` | `GetProfilerHitchCount()` → `number` | Сколько фризов сейчас сохранено (до 32, самые старые вытесняются). |
+| `ClearProfilerHitches` | `ClearProfilerHitches()` | Очищает список фризов. |
 
 #### Lua API — Управление видимостью профайлер-оверлея
 
@@ -17620,7 +17829,7 @@ MyGame/
 
 1. Создайте папку DLC-контента внутри `Content/`, например: `Content/DLC/DarkForest/`
 2. Разместите в ней уровни, текстуры, скрипты и другие ассеты
-3. Откройте **Tools → DLC Packager**
+3. Откройте **Инструменты → Упаковщик DLC**
 4. Заполните поля:
    - **DLC ID** — уникальный идентификатор (`expansion01`, `dark_forest`)
    - **DLC Name** — отображаемое имя (`Dark Forest Expansion`)
@@ -17896,13 +18105,11 @@ end
 > укажите ваш AdMob App ID. Gradle подтянет `play-services-ads` сам.
 >
 > **Требование при сборке — iOS:** Google Mobile Ads SDK не распространяется вместе с движком,
-> поэтому его нужно один раз положить локально:
+> поэтому один раз на машину скачайте его у Google и положите
+> `GoogleMobileAds.xcframework` в `Tools/BuildSystem/Vendor/GoogleMobileAds/` внутри папки
+> движка.
 >
-> ```sh
-> Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh
-> ```
->
-> Затем включите **Ads & Attribution** в Build Game → iOS и заполните **AdMob App ID**. CMake
+> Затем включите **Ads & Attribution** в Build Game → iOS и заполните **Идентификатор приложения Рекламы в приложении**. CMake
 > найдёт `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework`, определит
 > `ICE_HAS_ADMOB` и слинкует его; в логе сборки будет напечатана подхваченная версия SDK. Без
 > положенного SDK любой вызов `Ads.*` остаётся no-op и пишет в лог причину. Пустой AdMob App ID

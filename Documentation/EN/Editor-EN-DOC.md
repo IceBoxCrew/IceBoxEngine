@@ -956,10 +956,18 @@ Window and top-level performance:
 * **Window Mode** — Windowed / Fullscreen / Borderless.
 * **Anti-Aliasing** — Off, FXAA (Post), MSAA 2×/4×/8×, SSAA 2×/4×. Switching to or
   from MSAA shows a restart warning; MSAA also exposes **Alpha-to-Coverage**.
+* **Upscaling** — **FSR** (AMD FidelityFX Super Resolution 1.0) or **NIS**
+  (NVIDIA Image Scaling), with a quality preset (Ultra Performance 33 % / Performance
+  50 % / Balanced 59 % / Quality 67 % / Ultra Quality 77 % / Native 100 %), a
+  **Sharpening** toggle and its 0–1 strength. Off by default. Like ray tracing this is
+  **Vulkan-only and gated on the GPU** — NIS additionally requires an NVIDIA card — and
+  the section shows why it is unavailable when it is. The preset multiplies with Render
+  Scale and the SSAA modes, and the panel prints the resulting internal resolution. See
+  [Graphics → Upscaling](Graphics-EN-DOC.md#102-upscaling-fsr--nis).
 * **Adaptive Quality** with a target FPS (30–240) — auto-tunes quality to hold the
   framerate.
 * **Auto Detect** — probes the machine and fills in sensible FPS, render scale, AA,
-  VSync, HDR10, low-latency, pre-warm and audio-quality values.
+  upscaling, VSync, HDR10, low-latency, pre-warm and audio-quality values.
 * **Sound Quality** preset — Very Low (8000 Hz) / Low (16000 Hz) /
   Medium-Low (22050 Hz) / Medium (44100 Hz) / High (48000 Hz) /
   Very High (96000 Hz).
@@ -1209,10 +1217,11 @@ The panel shows:
 2. Detects an authorized device (and tells you if the USB-debugging prompt is still
    pending).
 3. Runs `adb reverse` for the bound port.
-4. Makes sure the **IceBox Preview** companion APK is present, building it from
-   `Tools/IceBoxPreview` the first time (this can take a few minutes), then
-   installs or updates it on the device — reinstalling from scratch if the
-   signatures don't match.
+4. Makes sure the **IceBox Preview** companion APK is present — the engine normally
+   ships it pre-built in `Tools/IceBoxPreview`, and only builds it there itself
+   (which needs an Android SDK and can take a few minutes) when no pre-built one
+   is available — then installs or updates it on the device, reinstalling from
+   scratch if the signatures don't match.
 5. Force-stops any previous instance, launches the companion with the port, and
    waits up to 25 seconds for the handshake.
 

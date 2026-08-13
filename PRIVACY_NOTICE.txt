@@ -1,17 +1,22 @@
 ================================================================================
-                     ICEBOX ENGINE - CRASH REPORT PRIVACY NOTICE
+                        ICEBOX ENGINE - PRIVACY NOTICE
+                 (CRASH REPORTS AND LICENSE ACTIVATION)
 ================================================================================
 
-Version:        1.0
-Effective date: 2026-07-27
+Version:        1.1
+Effective date: 2026-08-11
 Applies to:     IceBox Engine Editor, IceBox Launcher, IceBox Updater
-Does NOT apply: to games built with IceBox Engine (see section 8)
+Does NOT apply: to games built with IceBox Engine (see sections 8 and 9)
+
+Sections 1 to 8 cover crash reports. Section 9 covers the one-time license
+activation check. Those are the only two things these tools ever transmit.
 
 --------------------------------------------------------------------------------
 1. WHO IS RESPONSIBLE
 --------------------------------------------------------------------------------
 
-IceBox Crew is the controller for the crash reports described in this notice.
+IceBox Crew is the controller for the crash reports and the license activation
+records described in this notice.
 
     Contact: iceboxcrew057@gmail.com
     Website: https://www.ice-box-crew.com/
@@ -36,9 +41,11 @@ on your own machine, and a dialog appears asking whether you want to send it.
     retry is attempted on the next launch. Declining is not retried - a declined
     report is never queued.
 
-There is no other telemetry, analytics, usage tracking, advertising identifier,
-or background reporting in the editor, launcher or updater. Crash reports are
-the only data these tools ever transmit.
+There is no telemetry, analytics, usage tracking, advertising identifier, or
+background reporting in the editor, launcher or updater. Besides crash reports,
+the only thing these tools ever transmit is the one-time license activation
+check described in section 9, which happens when you press "Activate" and never
+again.
 
 --------------------------------------------------------------------------------
 3. WHAT A CRASH REPORT CONTAINS
@@ -105,9 +112,9 @@ logs personal data during the session, that content can still end up in the
 report. Please read the file before sending it if this matters to you.
 
 No account name, email address, licence key, IP-based identifier or advertising
-identifier is deliberately collected. Your IP address is visible to the
-receiving endpoint as it is for any HTTPS request; it is not stored in the
-report body.
+identifier is deliberately collected into a crash report. Your IP address is
+visible to the receiving endpoint as it is for any HTTPS request; it is not
+stored in the report body.
 
 --------------------------------------------------------------------------------
 5. WHY (LEGAL BASIS) AND FOR HOW LONG
@@ -208,7 +215,76 @@ If you enter an address in the Build panel's "Crash Report URL" field (stored as
     of the obligations above.
 
 --------------------------------------------------------------------------------
-9. CHANGES
+9. LICENSE ACTIVATION
+--------------------------------------------------------------------------------
+
+When the editor, launcher or updater is built with an activation endpoint
+configured, pressing "Activate" on the activation screen sends one HTTPS request
+to that endpoint. This is the only moment it happens:
+
+  * Nothing is sent while you are just typing, pasting or reading the screen.
+  * Nothing is sent after the activation succeeds. The engine does not re-check
+    the license later, on a timer, or at any launch.
+  * A build with no endpoint configured never sends anything at all and verifies
+    the key entirely on your own machine.
+
+What the request contains
+
+    - the license key text you entered, and the key id inside it
+    - the key set id of the build
+    - a Device ID: a 10-byte keyed BLAKE2b hash of one machine identifier
+      (Windows MachineGuid, macOS platform UUID, Linux /etc/machine-id, or the
+      system volume identifier when none of those is readable). It is a hash,
+      not the identifier itself, and it cannot be reversed back into it
+    - the key's policy (device-locked, single-machine or shared)
+    - the engine version, the platform name (Windows, macOS or Linux), a random
+      one-off number that ties the answer to this request, and a UTC timestamp
+
+No account name, user name, host name, email address, file path, hardware serial
+number, or IP-based identifier is placed in the request. Your IP address is
+visible to the receiving endpoint as it is for any HTTPS request; it is not
+stored in the activation record.
+
+What is stored
+
+    Key id, Device ID, policy, edition, expiry date, first and last activation
+    time, an activation counter, the engine version and the platform name, in a
+    spreadsheet controlled by IceBox Crew. Refused attempts are recorded the
+    same way, with the reason, so that a leaked key can be spotted and revoked.
+
+Why (legal basis)
+
+    Performance of the licence contract, GDPR Art. 6(1)(b): the record is what
+    makes a single-machine key single-machine, and it is the only way a revoked
+    key can be stopped without shipping a new build. Preventing licence fraud is
+    additionally a legitimate interest, GDPR Art. 6(1)(f). Unlike a crash
+    report, this check is not optional - it is part of delivering the licence -
+    so it does not rest on consent.
+
+Retention
+
+    For as long as the licence exists, plus up to 12 months, after which the
+    record is deleted.
+
+Who else sees it
+
+    Processor:  Google LLC and Google Ireland Limited
+                (Google Apps Script and Google Sheets)
+    Location:   United States and other countries where Google operates
+    Safeguard:  the same Data Privacy Framework certification and Standard
+                Contractual Clauses described in section 6.
+
+Your rights under section 7 apply to activation records as well. Because a
+record carries no account identifier, quote your Key ID and Device ID - both are
+shown on the launcher's About tab and on the activation screen - when you write
+to iceboxcrew057@gmail.com.
+
+A packaged game NEVER performs a license activation check. The licensing module
+is compiled into the editor, the launcher and the updater only; it is not part
+of IceBoxRuntime or IceBoxCore, which are what a packaged game is built from.
+
+--------------------------------------------------------------------------------
+10. CHANGES
 --------------------------------------------------------------------------------
 
 If this notice changes materially, the version number and effective date at the

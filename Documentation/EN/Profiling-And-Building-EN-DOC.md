@@ -27,9 +27,13 @@
 
 2. [Profiling architecture](#2-profiling-architecture)
    - 2.1 [What the profiler measures](#21-what-the-profiler-measures)
-   - 2.2 [Scopes & render-pass timing](#22-scopes--render-pass-timing)
-   - 2.3 [Tracy integration](#23-tracy-integration)
-   - 2.4 [Temperature sensors](#24-temperature-sensors)
+   - 2.2 [Scopes, threads & render-pass timing](#22-scopes-threads--render-pass-timing)
+   - 2.3 [Counters](#23-counters)
+   - 2.4 [Script (Lua) profiling](#24-script-lua-profiling)
+   - 2.5 [Hitch detection](#25-hitch-detection)
+   - 2.6 [Frame budget](#26-frame-budget)
+   - 2.7 [Tracy integration](#27-tracy-integration)
+   - 2.8 [Temperature sensors](#28-temperature-sensors)
 3. [The Statistics panel](#3-the-statistics-panel)
    - 3.1 [General](#31-general)
    - 3.2 [Texture Atlas](#32-texture-atlas)
@@ -45,6 +49,9 @@
    - 4.7 [Render Passes tab](#47-render-passes-tab)
    - 4.8 [Trace History tab — timeline, frame diff, trace compare](#48-trace-history-tab--timeline-frame-diff-trace-compare)
    - 4.9 [Where traces live & Chrome-trace export](#49-where-traces-live--chrome-trace-export)
+   - 4.10 [Scripts tab — per-script Lua profiling](#410-scripts-tab--per-script-lua-profiling)
+   - 4.11 [Counters tab](#411-counters-tab)
+   - 4.12 [Hitches tab](#412-hitches-tab)
 5. [Runtime profiling & debugging](#5-runtime-profiling--debugging)
    - 5.1 [On-screen debug (DebugScreen)](#51-on-screen-debug-debugscreen)
    - 5.2 [Developer Console](#52-developer-console)
@@ -126,14 +133,17 @@ Every frame the profiler can collect:
 | **Frame** | Frame time (ms), FPS, GPU frame time (ms). |
 | **CPU** | Process CPU usage (%, exponentially smoothed), physical core count, logical processor count, frequency (GHz). |
 | **Memory** | RAM current / peak / total (MB), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
-| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#24-temperature-sensors)). |
+| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
+| **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), audio (playing voices, listeners), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
+| **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
+| **Hitches** | Automatically captured stall frames with their full scope tree. See [2.5](#25-hitch-detection). |
 
 These feed both the [Statistics panel](#3-the-statistics-panel) and the
 [Advanced Profiler](#4-the-advanced-profiler-panel), and every one of them is stored per
 frame inside a recorded [trace](#41-recording-traces).
 
-### 2.2 Scopes & render-pass timing
+### 2.2 Scopes, threads & render-pass timing
 
 Fine-grained CPU timing comes from **scopes**. Engine (and your) code is instrumented
 with scope macros that time a block and nest by call depth:
@@ -141,11 +151,32 @@ with scope macros that time a block and nest by call depth:
 * `ICE_PROFILE_SCOPE("Name")` — time a named block.
 * `ICE_PROFILE_FUNCTION()` — time the current function.
 
-Scopes accumulate per-frame call counts and durations, and also produce a hierarchical
-**event list** used to draw the CPU **flame timeline**. The engine is instrumented
-throughout (update, render, physics, post-processing, shadows, etc.). Lua scripts can add
-their own scopes with `ProfileBegin` / `ProfileEnd` / `ProfileScope` (see
-[5.5](#55-driving-the-profiler-from-lua)).
+Scopes accumulate per-frame call counts, **inclusive** durations and **self** (exclusive)
+time — inclusive minus the time spent in nested scopes, which is what tells you whether a
+scope is slow *itself* or slow because of what it calls. They also produce a hierarchical
+**event list** used to draw the CPU **flame timeline**.
+
+Scope state is **per thread**: every thread that opens a scope gets its own stack, event
+buffer and accumulators, so jobs running on worker threads are measured correctly and
+never corrupt the main thread's tree. Each recorded event carries the thread it came from,
+and both the live and the offline flame graph draw one **lane per thread**. Name a thread
+with `ProfilerManager::SetCurrentThreadName()` so it shows up with a readable label (the
+main thread is named automatically). Up to 64 threads are tracked individually; anything
+beyond that shares an *Other Threads* lane.
+
+Scopes are recorded every frame, not only while a trace is running — that is what makes
+the live flame graph and automatic [hitch capture](#25-hitch-detection) possible. Per
+thread and per frame, at most 8192 events and 256 nesting levels are recorded, so a
+runaway loop cannot exhaust memory.
+
+The engine is instrumented throughout: update, scene runtime, physics (step, shape sync,
+collision-group refresh), scripts (systems, platform events, plugins, level, mods, entity
+update/late-update/fixed-update), AI, animation (flipbooks, skeletons, animators), cinema,
+video, audio, destruction, widgets (update, layout, animations, flipbooks, per-widget
+script), rendering (sprites, tilemaps, flipbooks, skeletons, lighting, fog of war, FX,
+post-process graph, widgets, editor UI, present), input, prewarm and texture streaming.
+Lua scripts can add their own scopes with `ProfileBegin` / `ProfileEnd` / `ProfileScope`
+(see [5.5](#55-driving-the-profiler-from-lua)).
 
 GPU work is timed per **render pass** by the **`RenderPassProfiler`**, which brackets
 passes with `ICE_RENDER_PASS("Name")` and uses triple-buffered GPU timer queries to
@@ -156,7 +187,78 @@ Up to **64 passes per frame** are recorded, and results are read back **two fram
 so the GPU is never stalled — which is why pass GPU times lag the CPU numbers slightly.
 Pass capture can be switched off entirely from the [Render Passes tab](#47-render-passes-tab).
 
-### 2.3 Tracy integration
+### 2.3 Counters
+
+Beyond the fixed scene counts, the profiler carries an open-ended **counter registry**.
+A counter has a **group** (`"Physics"`, `"Renderer"`, `"Components"`, `"Lua"`, …), a
+**name**, a **value**, an optional **unit** (count, ms, B/KB/MB, %, /s) and an optional
+**budget**. Any system — engine or gameplay — publishes one with a single call:
+
+```cpp
+ProfilerManager::Get().SetCounter("Physics", "Contacts", contactCount);
+ProfilerManager::Get().SetCounter("Renderer", "Draw Calls", drawCalls,
+                                  ProfilerCounterUnit::Count, 2000.0);
+```
+
+or from Lua with `ProfilerSetCounter(group, name, value[, unit[, budget]])`.
+
+Counters need no registration, no header change and no UI work: they appear automatically
+in the [Counters tab](#411-counters-tab) grouped by system, are colored against their
+budget, are written into every frame of a recorded trace, are exported to the Chrome trace
+as counter tracks, and become Tracy plots in instrumented builds. This is the mechanism to
+use for any subsystem the engine does not know about yet — a custom material system, a
+skeleton solver, a streaming manager, gameplay economy numbers — so a project gets full
+profiler coverage of its own systems without touching the profiler.
+
+Counters that stopped being updated are marked **stale** (greyed out) rather than silently
+showing an old value.
+
+### 2.4 Script (Lua) profiling
+
+Every Lua entry point the engine calls is measured individually by the **script
+profiler**, keyed by *script* × *callback*:
+
+| Callback group | Covered entry points |
+| -------------- | -------------------- |
+| `OnUpdate` / `OnLateUpdate` / `OnFixedUpdate` | Per entity, every frame / fixed step. |
+| `Collision` / `Sensor` | `OnCollisionEnter` / `Exit` / `Stay`, `OnSensorEnter` / `Exit` / `Stay`. |
+| `OnHit`, `OnJointBreak` | Physics impact and joint-break callbacks. |
+| `Lifecycle` | `CallEntityLifecycle` and broadcast lifecycle events. |
+| `OnDestroy` | Entity teardown. |
+| `BehaviorTree` | Lua nodes evaluated by AI behavior trees. |
+| `Level` | `OnLevelUpdate`, `OnLevelLateUpdate`, `OnLevelFixedUpdate`, level lifecycle events. |
+| `Mod` | Mod-script callbacks. |
+| Widget scripts | A widget's `OnUpdate`, keyed by widget asset path. |
+
+For each pair the profiler keeps **total**, **average**, **max** and **last-frame**
+milliseconds, **call count**, **live instance count** and **error count** (a callback that
+raised a Lua error is counted, so a spammy error is visible as cost *and* as a fault). On
+top of that it samples the **Lua heap** every frame (size, peak and a smoothed allocation
+rate in KB/s), which is how you catch script memory churn before it turns into GC spikes.
+
+The whole thing is a toggle: turn it off in the [Scripts tab](#410-scripts-tab--per-script-lua-profiling)
+or with `SetScriptProfilerEnabled(false)` and the measurement cost disappears entirely.
+
+### 2.5 Hitch detection
+
+The profiler watches frame time against a rolling average and, when a frame both exceeds
+a **threshold** (50 ms by default) and takes more than twice the running average, it
+**captures that frame** — the complete scope tree, the render-pass list, the GPU time and
+the heaviest scope — into a hitch list (the 32 most recent). Because scopes are always
+recorded, this works without a trace running, in the editor and in an instrumented build.
+Inspect them in the [Hitches tab](#412-hitches-tab); configure from Lua with
+`SetProfilerHitchDetection` / `SetProfilerHitchThreshold`.
+
+### 2.6 Frame budget
+
+The profiler knows the project's **target frame rate** (the FPS limit applied by the
+editor or by `SettingsLua::GetFPSLimit()` at runtime) and derives a **frame budget** in
+milliseconds from it. Every color threshold in the panel — frame time, GPU time, scopes,
+render passes, script time — is scaled against that budget instead of a hard-coded 60 FPS
+assumption, so a 30 FPS console target or a 144 FPS PC target is judged on its own terms.
+Counter budgets are independent and are set per counter.
+
+### 2.7 Tracy integration
 
 The engine integrates the **Tracy** frame profiler. When built with Tracy enabled, the
 same scope and render-pass macros emit Tracy zones, so you can attach the external
@@ -173,7 +275,7 @@ on Web, Android and iOS** regardless of configuration; use it on Windows, Linux 
 An instrumented build collects nothing until the Tracy application actually connects, so
 leaving it compiled in costs you nothing while nothing is attached.
 
-### 2.4 Temperature sensors
+### 2.8 Temperature sensors
 
 CPU/GPU temperatures come from a background sampler that polls roughly every **1.5
 seconds** on its own thread, so reading them costs nothing on the frame thread. The panel
@@ -256,10 +358,19 @@ Profiler"). This is the deep performance tool: tabbed views, recording, history,
 exports. Its **View** menu offers **Show Graphs**, **Show Engine Stats** and
 **Pause Updates** (which freezes the rolling graphs without stopping the engine).
 
-Tabs: **Overview · CPU · Memory · GPU · Engine · Trace History · Render Passes.**
-The **Engine** tab is only present while *Show Engine Stats* is enabled.
+Tabs: **Overview · CPU · Memory · GPU · Scripts · Counters · Engine · Render Passes ·
+Hitches · Trace History.** The **Engine** tab is only present while *Show Engine Stats* is
+enabled. The **View** menu also has **Live Flame Graph**, which shows the current frame's
+scope tree in the CPU tab.
 
-The trace controls sit above the tabs and stay visible on every tab.
+The trace controls sit above the tabs and stay visible on every tab. Next to the
+recording state they show the active **frame budget** (target FPS and the derived
+milliseconds), the live trace's frame count and memory use, and two export buttons:
+
+* **Snapshot** — writes the last frame (all threads' scopes, render passes and counters)
+  as a Chrome Trace file.
+* **Export Chrome Trace** — writes the most recent recorded trace as a Chrome Trace file.
+  (Per-trace export buttons live in the [Trace History tab](#48-trace-history-tab--timeline-frame-diff-trace-compare).)
 
 ### 4.1 Recording traces
 
@@ -270,11 +381,17 @@ A **trace** is a captured run of many frames you can analyze offline.
   is called `Trace_YYYYMMDD_HHMMSS`; characters illegal in filenames are replaced with
   `_`, and a numeric suffix is appended if that name is already taken.
 * On stop the trace is summarized (average/min/max frame time, **P95/P99** percentiles,
-  average FPS/CPU/GPU, average & peak RAM, average VRAM, per-scope statistics, spike
+  average FPS/CPU/GPU, average & peak RAM, average VRAM, per-scope statistics including
+  self time, per-script statistics, the thread table, the counter key table, spike
   frames), **written to disk automatically**, and kept in the **Trace History** (the 20
   most recent).
-* Every frame of a trace stores the full scope event list, the render-pass list and all
-  scene counters — that is what makes the offline timeline and frame diff possible.
+* Every frame of a trace stores the full scope event list (with the thread each scope ran
+  on), the render-pass list, every counter value and all scene counters — that is what
+  makes the offline timeline and frame diff possible.
+* Recording is bounded by a **memory budget** (512 MB by default). When a long trace
+  reaches it, recording stops, the trace stays valid and complete up to that point, and
+  both the log and the Trace History mark it as truncated — a long session can never take
+  the editor down with it.
 * Traces can also be started and stopped from gameplay code; see
   [5.5](#55-driving-the-profiler-from-lua).
 
@@ -303,19 +420,28 @@ Below the graphs the Overview repeats the two things you usually want at a glanc
 * **CPU Usage** (%) and **CPU Temperature** with its source name.
 * With **Show Graphs**: a CPU-usage graph (0–100 %) and, when a sensor is available, a
   CPU-temperature graph.
-* **CPU Scope Breakdown** — a table of the current frame's scopes with **time** and
-  **call count**, color-coded (green < 2 ms, yellow < 8 ms, red above).
+* **Live Flame Graph** — the last frame's scope tree, live, with one lane per thread, a
+  millisecond ruler, a green marker at the frame budget, a zoom slider and a scope filter.
+  Hovering a block shows its time, share of the frame, depth and thread. This is the same
+  widget the trace timeline uses, so you get flame-graph analysis without recording
+  anything.
+* **Threads** — every thread that produced scopes last frame, with its scope count and
+  busy milliseconds.
+* **CPU Scope Breakdown** — a table of the last frame's scopes with **time**, **self
+  time** and **call count**, color-coded against the frame budget.
 
-The deep scope analysis — flame timeline, scope statistics, spikes and frame diff — lives
-in the [Trace History tab](#48-trace-history-tab--timeline-frame-diff-trace-compare),
-because it needs a recorded trace.
+The offline analysis — trace timeline, scope statistics across many frames, spikes and
+frame diff — lives in the
+[Trace History tab](#48-trace-history-tab--timeline-frame-diff-trace-compare), because it
+needs a recorded trace.
 
 ### 4.4 Memory tab
 
 System **RAM** (current / total, peak, with a progress bar and a graph) and
 **Video RAM (VRAM)** (tracked / total, peak, with a progress bar and a graph), plus the
 running **GPU allocation count** — so you can watch for leaks and growth over a session
-or trace.
+or trace. A **Lua Memory** block closes the tab: current heap, peak heap, a color-coded
+allocation rate (green < 10 KB/s, yellow < 50, orange above) and a heap graph.
 
 VRAM numbers come from the engine's own **VRAM tracker** (every texture, buffer and
 render target the RHI allocates), not from the driver, so they measure *your* usage
@@ -383,29 +509,34 @@ Opening a trace in the timeline gives you:
 
 * **Scope filter** — type a substring; matching blocks in the flame graph are outlined in
   yellow and everything else is dimmed. A small **X** clears it.
-* **Frame bar** — every frame of the trace as a colored bar (green < 16.67 ms, yellow
-  < 33.33 ms, red above), with 60 FPS and 30 FPS reference lines. Hover for that frame's
+* **Frame bar** — every frame of the trace as a colored bar, colored against the frame
+  budget, with reference lines at the target frame rate and at half of it. Hover for that frame's
   time and FPS, click to select it, or step with the **←/→** arrow keys. The selected
   frame is highlighted.
 * **Frame header** — `Frame n / total | ms | FPS`, plus a red **[SPIKE]** tag when the
   frame took more than twice the trace average.
 * **Timeline (flame graph)** — the selected frame's nested scope events on a millisecond
-  ruler, with a green marker at 16.67 ms. Hover a block for its **time**, **% of frame**
-  and **depth**. Zoom with the mouse wheel (0.5×–20×) or the **Zoom** slider (0.5×–10×),
-  and **Reset** to go back to 1×. When the frame has a GPU time it is drawn as a green bar
-  under the CPU rows.
+  ruler, **one lane per thread**, with a green marker at the frame budget. Hover a block
+  for its **time**, **% of frame**, **depth** and **thread**. Zoom with the mouse wheel
+  (0.5×–20×) or the **Zoom** slider (0.5×–10×), and **Reset** to go back to 1×. When the
+  frame has a GPU time it is drawn as a green bar in its own lane under the CPU lanes.
+* **Counters** — a collapsible table of every counter value recorded on the selected
+  frame, so you can correlate a slow frame with, say, a contact-count explosion.
 * **Render Passes** — the selected frame's pass table (CPU / GPU ms, indented by depth)
   with a **Total** row that sums only top-level passes.
 * **Frame Comparison (Frame Diff)** — click **A** and **B** to pin the currently selected
   frame into either slot, then compare scope times side by side with a **Diff** column
   (red = slower, green = faster), with the frame time itself as the first row. **Clear**
   resets both slots.
-* **Scope Statistics** — **Avg / Min / Max / Total** time, call count and **spike** count
-  per scope, sortable by any column. A **spike** for a scope means a frame in which *that
-  scope* exceeded twice its own average — which is deliberately different from a *frame*
-  spike (a frame over twice the average **frame** time). The header shows how many frame
-  spikes the trace contains and offers **Go to spike**, which jumps the timeline to the
-  next one.
+* **Scope Statistics** — **Avg / Self / Min / Max / Total** time, call count and **spike**
+  count per scope, sortable by any column. **Self** is the average exclusive time, so a
+  parent scope with a large Avg but a tiny Self is simply a container for slow children.
+  A **spike** for a scope means a frame in which *that scope* exceeded twice its own
+  average — which is deliberately different from a *frame* spike (a frame over twice the
+  average **frame** time). The header shows how many frame spikes the trace contains and
+  offers **Go to spike**, which jumps the timeline to the next one.
+* **Scripts** — a collapsible table of the per-script Lua statistics captured with the
+  trace (script, callback, average, max, calls).
 
 ### 4.9 Where traces live & Chrome-trace export
 
@@ -418,15 +549,70 @@ On startup the profiler **loads the traces back from that folder** — the 20 mo
 modification time — so the Trace History survives editor restarts. Deleting a trace in the
 panel deletes its file too.
 
-A saved trace file contains the summary, the per-scope statistics, the spike frame
+A saved trace file contains the summary, the per-scope statistics (including self time),
+the per-script statistics, the counter key table, the thread table, the spike frame
 indices, and every captured frame (frame/GPU time, FPS, CPU, temperatures, RAM/VRAM, the
-scope event tree, the render-pass list and all scene counters).
+scope event tree with thread ids, the render-pass list, every counter value and all scene
+counters). Files are written compactly, and on load only the header and summary are parsed
+— the (potentially very large) frame array is read lazily the first time you open that
+trace in the timeline, so the editor starts instantly no matter how much you have
+recorded.
 
 **Chrome-trace export** produces a Chrome Trace Event JSON (`chrome://tracing`,
-Perfetto-compatible) with named `CPU Main`, `GPU` and counter tracks and engine metadata.
-It is exposed as a **scripting call, not a panel button** — call `SaveChromeTrace()` from
-Lua (see [5.5](#55-driving-the-profiler-from-lua)); with no argument it writes into the
-same profiler folder, and on Web it additionally triggers a browser download.
+Perfetto-, Firefox-Profiler- and speedscope-compatible) with **one track per CPU thread**,
+a **GPU** track, **counter tracks** for both the built-in metrics and every custom
+counter, frame markers with their stats, spike instants, and engine metadata. Three ways
+to produce one:
+
+* **Snapshot** in the trace controls — the last frame only.
+* **Export Chrome Trace** in the trace controls (latest trace) or the per-trace
+  **Export Chrome Trace** button in the [Trace History tab](#48-trace-history-tab--timeline-frame-diff-trace-compare).
+* `SaveChromeTrace()` from Lua (see [5.5](#55-driving-the-profiler-from-lua)).
+
+With no filename it writes into the same profiler folder, and on Web it additionally
+triggers a browser download.
+
+### 4.10 Scripts tab — per-script Lua profiling
+
+The Lua view described in [2.4](#24-script-lua-profiling).
+
+* **Enabled** turns the whole measurement on or off; **Reset** clears the accumulated
+  numbers without restarting the game; **Group by script** switches between one row per
+  script and one row per *script × callback*; the filter box narrows by script name or
+  path.
+* A header line gives the frame's **total script time** (colored against 30 % of the frame
+  budget), the **call count**, the **Lua heap** and its **allocation rate**, plus a red
+  error count when any callback has faulted.
+* A graph plots script time per frame.
+* The table lists **Frame ms**, **Avg ms**, **Max ms**, **Total ms**, **Calls** and
+  **Instances** (and **Callback** when not grouping), sortable by any column, with the
+  full asset path in a tooltip. Instances is how many live entities currently run that
+  script, which is what turns "this script costs 4 ms" into "this script costs 4 ms across
+  120 entities".
+
+The level script appears as `<Level Script>`, mods as `<Mods>`, and widget scripts under
+their widget asset path.
+
+### 4.11 Counters tab
+
+Every counter published this frame ([2.3](#23-counters)), grouped by system into
+collapsible sections, with a filter box that matches both group and counter names. Each
+row shows the value formatted for its unit and, when one is set, the **budget** — the
+value is colored against it. Rows that stopped updating are greyed out and say so on
+hover, so a system that went idle is never mistaken for a live measurement.
+
+### 4.12 Hitches tab
+
+The automatic stall capture described in [2.5](#25-hitch-detection).
+
+* **Detect hitches** toggles capture; **Threshold** sets the absolute millisecond trigger
+  (5–500 ms); **Clear** empties the list.
+* The table lists each hitch with the time it happened (seconds since the profiler
+  started), the **frame** time, the running **average** at that moment, and the
+  **heaviest scope** in that frame with its duration.
+* Selecting a row opens the captured frame's **flame graph** (all threads) and its
+  **render-pass table** — the same analysis you would get from a recorded trace, except
+  you did not have to be recording when it happened.
 
 ---
 
@@ -484,6 +670,10 @@ straight onto the screen — no editor, no external tool. It is drawn top-left a
 * **Engine Stats** — entities, sprites, draw calls, quads, physics bodies, scripts,
   tilemaps, lights, spot lights, FX, audio, widgets, cameras, flipbooks, animators,
   colliders, AI, destructibles, joints.
+* **Lua** — the last frame's total script time and call count, the Lua heap and its
+  allocation rate (the line turns amber past 30 % of the frame budget).
+* **Hitches** — how many stalls were captured and the last one's frame time and heaviest
+  scope, shown only once something has been captured.
 * **Hot Scopes** — the 8 most expensive scopes of the last frame with time and call count.
 * **Render Passes** — the first 6 passes with CPU (and GPU) milliseconds.
 * A `[TRACING: n frames]` line while a trace is being recorded.
@@ -526,6 +716,17 @@ profile on a phone or in a shipped build:
 | `SaveChromeTrace([filename])` → `bool` | Export the latest finished trace — or the live one, or a single-frame snapshot if there is none — as Chrome Trace Event JSON. |
 | `ProfileBegin(name)` / `ProfileEnd(name)` | Open and close a custom CPU scope by name. |
 | `ProfileScope(name, fn)` → `any` | Run `fn` inside a scope and return its result, even if it errors. |
+| `ProfilerSetCounter(group, name, value[, unit[, budget]])` | Publish a custom counter. `unit` is one of `"ms"`, `"b"`, `"kb"`, `"mb"`, `"%"`, `"/s"`; omit it for a plain count. |
+| `ProfilerAddCounter(group, name, delta)` | Accumulate into a counter for the current frame (it resets on the next frame). |
+| `ProfilerGetCounter(group, name)` → `number` | Read a counter back (engine counters included). |
+| `GetProfilerFrameBudgetMs()` → `number` | The frame budget derived from the target frame rate. |
+| `SetProfilerHitchDetection(on)` / `SetProfilerHitchThreshold(ms)` | Configure automatic hitch capture. |
+| `GetProfilerHitchCount()` → `number` / `ClearProfilerHitches()` | Read / clear the captured hitch list. |
+| `SetScriptProfilerEnabled(on)` / `IsScriptProfilerEnabled()` → `bool` | Turn per-script Lua measurement on or off. |
+| `ResetScriptProfiler()` | Clear accumulated per-script statistics. |
+| `GetScriptProfilerTimeMs()` → `number` / `GetScriptProfilerCalls()` → `number` | Last frame's total Lua time and call count. |
+| `GetLuaMemoryKB()` → `number` / `GetLuaAllocRateKBps()` → `number` | Lua heap size and smoothed allocation rate. |
+| `GetScriptProfilerRows()` → `table` | Array of per-script rows: `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
 | `ToggleDebugProfiler()` / `GetDebugProfilerVisible()` | Flip / read the [runtime profiler overlay](#53-the-runtime-profiler-overlay). |
 | `NetworkProfiler.Toggle()` / `NetworkProfiler.IsVisible()` | Flip / read the [network overlay](#54-the-network-profiler). |
 | `GetDebugFlag(name)` / `SetDebugFlag(name, v)` / `ToggleDebugFlag(name)` | Read/write any viewport debug flag by name (`"ShowColliders"`, `"WireframeMode"`, …). |
@@ -653,11 +854,19 @@ click.
   `game.json` inside the signed `.app`.
 * Leave it empty and the packaged game uploads nothing — reports stay on the player's disk.
 
-> **You do not have to build the endpoint yourself.** The engine ships a free, serverless
-> one: [`Tools/CrashReport/`](../../Tools/CrashReport/README.md) contains a Google Apps
-> Script web app that accepts the upload and forwards every report to your inbox as an
-> email with the report attached. Deploy it, paste the resulting URL into **Crash Report
-> URL**, and one-click sending works on every platform.
+> **What the endpoint has to do.** Any HTTPS address you control works — a small
+> serverless function is enough. The engine POSTs the report as a JSON body (`app`,
+> `version`, `engine`, `platform`, `signal`, `time`, `report`) and treats the upload as
+> delivered only when the reply has a 2xx/3xx status **and** its body contains
+> `"ok":true`. Anything else — a login page, a captive-portal redirect, a quota error —
+> counts as a failure, and the report stays queued and is retried on the next launch.
+>
+> **No server at all?** Add `"CrashReportEmail": "support@yourgame.com"` to the packaged
+> `game.json`. With no URL set, the **desktop** crash dialog then offers to compose an
+> email to that address instead of only naming the file it wrote, and the **Web** overlay
+> grows a *Send via Email* button that does the same through `mailto:`. **Android and
+> iOS** have no mail path: they ask to send only when a Crash Report URL is set, and stay
+> silent otherwise.
 
 ---
 
@@ -672,9 +881,14 @@ runtime (with fallbacks).
 * **Output:** `.exe` executable with DLLs.
 * **Graphics API:** **OpenGL 4.6** (default), **OpenGL 3.3** (compatible with GPUs from
   ~2010+), or **Vulkan** (falls back to OpenGL 4.6/3.3 if unavailable).
-* **Architecture:** **x64** (default) or **x86** (32-bit, for maximum compatibility with
-  older systems). A 64-bit editor builds both; a 32-bit editor is locked to **x86** and
-  the selector is disabled, because a 32-bit toolchain cannot emit 64-bit binaries.
+* **Architecture:** **x64** (default), **x86** (32-bit, for maximum compatibility with
+  older systems) or **arm64** (Windows on ARM). A 64-bit editor builds all three; a 32-bit
+  editor is locked to **x86** and the selector is disabled, because a 32-bit toolchain
+  cannot emit 64-bit binaries. The arm64 build uses the MSVC ARM64 cross toolset
+  (`vcvarsall amd64_arm64`) and the `arm64-windows` vcpkg triplet, so an ordinary x64
+  machine produces it; a Windows on ARM device is only needed to run the result. KTX2
+  texture cooking is unavailable for arm64 (no Basis Universal port) and falls back to
+  WebP automatically.
 * Supports the **Distribution** options (manifest, pack content, installer) — see
   [Section 10](#10-distribution-manifest-packing--installers).
 
@@ -682,9 +896,13 @@ runtime (with fallbacks).
 
 * **Output:** Linux ELF executable.
 * **Graphics API:** OpenGL 4.6 / OpenGL 3.3 / Vulkan (same as Windows).
-* **Architecture:** x64 / x86 — same host rule as Windows: 64-bit editor builds both,
-  32-bit editor builds x86 only. The x86 build needs the 32-bit multilib toolchain
-  (`gcc-multilib` / `g++-multilib`) and the `x86-linux` vcpkg triplet.
+* **Architecture:** x64 / x86 / arm64 — same host rule as Windows: 64-bit editor builds
+  all three, 32-bit editor builds x86 only. The x86 build needs the 32-bit multilib
+  toolchain (`gcc-multilib` / `g++-multilib`) and the `x86-linux` vcpkg triplet. The arm64
+  build uses the `arm64-linux` triplet; on a non-AArch64 host it picks up the
+  `aarch64-linux-gnu` cross toolchain (`crossbuild-essential-arm64`) automatically, and on
+  a native arm64 machine it builds without any cross setup. KTX2 texture cooking is
+  unavailable for arm64 (no Basis Universal port) and falls back to WebP automatically.
 * Supports **Distribution** options, including a **.deb** installer.
 
 ### 8.3 Android
@@ -721,6 +939,30 @@ runtime (with fallbacks).
 * **Renderer:** **Auto (WebGPU → WebGL 2.0)**, **WebGPU** (Chrome/Edge 113+, Safari 18+),
   or **WebGL 2.0** (maximum compatibility). Shaders are translated to **WGSL** in the
   browser at load time.
+* **Memory model:** **wasm32** (default, 32-bit pointers, runs everywhere, heap capped at
+  the 2 GB Emscripten defaults `MAXIMUM_MEMORY` to) or **wasm64** (Emscripten `-sMEMORY64`,
+  64-bit pointers, 4 GB heap ceiling for large worlds — raise it with
+  `-DICE_WEB_MEMORY64_MAX_HEAP=8GB`; Chrome/Edge cap Wasm64 memory at 16 GB). wasm64 runs
+  **only in Chrome/Edge 133+ and Firefox 134+** — no released Safari implements Memory64,
+  so a wasm64 build does not start on iPhone or iPad and Safari users on macOS need the
+  wasm32 build. It produces a slightly larger and slower module (raising the heap ceiling
+  past 2 GB also turns off Emscripten's garbage-free WebGL2 upload path), builds into
+  `out/build/Web-wasm64`, uses the `wasm64-emscripten` vcpkg triplet and links pre-built
+  cores from `lib/IceBoxCore/Web/wasm64/`. The two memory models are separate ABIs down to
+  every object file, so a wasm32 core can never link a wasm64 game.
+* **wasm64 build-host requirement: Node.js 24 or newer.** Emscripten emits MEMORY64 output
+  that refuses to start on older Node, and emsdk still bundles Node 22, so every `configure`
+  check that runs a compiled program fails — vcpkg's `libsodium` is the first casualty, with
+  `cannot run C compiled programs` and configure exit code 77. The Web build scripts
+  (`build_web.bat` / `build_web.sh`) call
+  `Tools/BuildSystem/Utilities/resolve_web_node.bat` / `.sh`, which looks for a newer Node
+  (PATH, the standard install dirs, nvm, Volta, fnm, asdf, Homebrew, snap), hands it to
+  Emscripten through `EM_NODE_JS`, prepends it to `PATH` so the `#!/usr/bin/env node`
+  shebang in Emscripten's own output resolves to it, and warns when none is installed. An
+  `EM_NODE_JS` you set yourself is always respected. The wasm64 triplets also pass
+  `--host=wasm64-unknown-emscripten` to autotools ports so they cross-compile instead of
+  trying to execute what they just built. wasm32 is unaffected end to end: the helper is a
+  no-op for it and its output runs on Node 22.
 * **Web options:** **Web3** support, **main-loop** mode, **pthreads** (multithreading,
   needs cross-origin isolation).
 * Version Name / Version Code / Publisher.
@@ -784,11 +1026,13 @@ runtime (with fallbacks).
   ITMS-91053. Drop your own `PrivacyInfo.xcprivacy` next to the project's `Content/` to
   override the engine's — the project copy always wins, so extend it rather than fight it
   when you add an SDK that collects data.
-* **Ads on iOS:** the Google Mobile Ads SDK is not shipped with the engine. Run
-  `Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh` once to vendor
-  `GoogleMobileAds.xcframework`, then enable **Ads & Attribution** and set the AdMob App
-  ID. With the SDK vendored the build links it and `Ads.*` goes live; without it those
-  calls stay no-ops. An empty AdMob App ID combined with a linked SDK fails configure on
+* **Ads on iOS:** the Google Mobile Ads SDK is not redistributed with the engine — Google
+  licenses it to you directly. Download it once and put `GoogleMobileAds.xcframework` into
+  `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder (add
+  `UserMessagingPlatform.xcframework` next to it if you also want Google's consent SDK),
+  then enable **Ads & Attribution** and set the AdMob App ID. With the SDK in place the
+  build links it and `Ads.*` goes live; without it those calls stay no-ops and the build
+  log says so. An empty AdMob App ID combined with a linked SDK fails configure on
   purpose, because the SDK aborts at launch when `GADApplicationIdentifier` is absent.
 * The `.app` bundle is fully self-contained: `game.json` (start scene, name, version,
   orientation, crash-report URL), `Content/`, `Config/` (with the render backend pinned to
@@ -823,7 +1067,8 @@ sidecar (`Lossless` to never compress, `Always Compressed` to skip the check).
 **Platform restrictions:** WebP textures are not available on the **iOS** and **Web**
 runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only);
 those are forced to PassThrough. **KTX2** requires a desktop x86/x64 runtime
-(Windows/Linux, or macOS Intel) because it needs the Basis Universal transcoder — on other
+(Windows/Linux, or macOS Intel) because it needs the Basis Universal transcoder, which has
+no arm64 vcpkg port, so arm64 desktop targets are excluded too — on other
 targets it falls back to WebP, or to PassThrough where WebP is unavailable too. The dialog
 enforces all of this automatically: unsupported entries are hidden or disabled, an orange
 note explains the substitution, and **your stored preference is kept** so switching back to
@@ -1016,7 +1261,8 @@ The scripts accept a consistent flag set assembled by the dialog. Common flags:
 | `--game-name "<name>"` | Product name. |
 | `--icon "<path>"` | App icon (converted as needed). |
 | `--backend <api>` | `OpenGL46`, `OpenGL33`, `Vulkan`, `OpenGLES32`, `WebGL2`, `MetalANGLE`, `MetalMoltenVK`. |
-| `--arch <arch>` | `x64`/`x86` (desktop), or `x86_64`/`arm64` (macOS). |
+| `--arch <arch>` | `x64`/`x86`/`arm64` (Windows, Linux), `x86_64`/`arm64` (macOS), or `wasm32`/`wasm64` (Web). |
+| `--wasm64` / `--no-wasm64` | Web only: switch the memory model between Wasm64 (`-sMEMORY64`) and the default Wasm32. Same effect as `--arch wasm64` / `--arch wasm32`. |
 | `--version "<v>"` / `--version-code <n>` | Version string / integer. |
 | `--publisher "<name>"` | Publisher. |
 | `--content-dir "<path>"` | Content to embed (raw or cooked). |
@@ -1065,9 +1311,11 @@ detected, the scripts fall back to `4` jobs.
 Set `ICE_BUILD_MB_PER_JOB` to change the memory budget per job (default `1536`, minimum
 `256`) — lower it to use more cores, raise it if a build ever runs out of memory.
 
-Building through **CMake presets** rather than the scripts (`cmake --build --preset ...`,
-Visual Studio, VS Code CMake Tools) uses the generator's own default instead; export
-`CMAKE_BUILD_PARALLEL_LEVEL` to pin it.
+Driving CMake yourself rather than through the scripts (Visual Studio, VS Code CMake
+Tools, a hand-written `cmake --build`) uses the generator's own default instead; export
+`CMAKE_BUILD_PARALLEL_LEVEL` to pin it. An installed engine carries no `CMakePresets.json`
+— the presets describe how the engine itself is built from source, which an installed
+engine cannot do, so the Build Game scripts are the supported path.
 
 **What a build script does** (Windows example): initializes the MSVC environment
 (`vcvarsall`), locates **vcpkg**, requires **CMake** + **Ninja**, configures the engine
@@ -1101,7 +1349,7 @@ The render backend is patched into the build's `Config/Engine.json` as
 | Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxRuntime` |
 | macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxRuntime.app` |
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` or `iphonesimulator`) |
-| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web.html` |
+| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web.html` (wasm64: `out/build/Web-wasm64/bin/Web/…`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
 
 The finished product is copied into **your chosen Output Path** under
@@ -1127,7 +1375,7 @@ You build with the native toolchain for each target. Install these on the build 
 | Platform | Required tools |
 | -------- | -------------- |
 | **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. |
-| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3; see the Linux / WSL2 section of `README.md`. |
+| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3, so check `cmake --version` and install a newer build from [cmake.org](https://cmake.org/download/) if apt gave you an older one. |
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |
 | **macOS / iOS** | A **macOS** host with **Xcode** (and command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization) and vcpkg. iOS additionally needs a development team / signing assets for device builds & IPAs. |
@@ -1180,10 +1428,10 @@ an incompatible build. The Lua side of this is
 
 | Platform | Output | Renderer options | Architectures |
 | -------- | ------ | ---------------- | ------------- |
-| **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan | x64, x86 |
-| **Linux** | ELF binary | OpenGL 4.6 / 3.3 / Vulkan | x64, x86 |
+| **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
+| **Linux** | ELF binary | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
 | **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64, x86 |
-| **Web** | `.html`+`.wasm`+data | WebGPU / WebGL 2.0 (Auto) | wasm |
+| **Web** | `.html`+`.wasm`+data | WebGPU / WebGL 2.0 (Auto) | wasm32, wasm64 |
 | **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
 | **iOS** | `.ipa` / `.app` | Metal (MoltenVK) | arm64 |
 
@@ -1191,7 +1439,7 @@ an incompatible build. The Lua side of this is
 
 | Media | Formats | Not available on |
 | ----- | ------- | ---------------- |
-| Texture | PassThrough · WebP · WebP Lossless · KTX2 UASTC · KTX2 ETC1S | WebP: iOS, Web · KTX2: everything except desktop x86/x64 |
+| Texture | PassThrough · WebP · WebP Lossless · KTX2 UASTC · KTX2 ETC1S | WebP: iOS, Web · KTX2: everything except desktop x86/x64 (not arm64) |
 | Audio | PassThrough · Ogg Vorbis · Opus | — |
 | Video | PassThrough · VP9 (WebM) | VP9: iOS |
 | Font | PassThrough · Subset · Auto-subset | — |
@@ -1224,8 +1472,9 @@ an incompatible build. The Lua side of this is
 ## 17. FAQ & troubleshooting
 
 **The Build dialog says the build script wasn't found.**
-Build scripts live in `Tools/BuildSystem/BuildGame/`. Make sure you're building from a
-complete engine checkout (the dialog locates the engine root automatically).
+Build scripts live in `Tools/BuildSystem/BuildGame/` inside the engine folder (the dialog
+locates it automatically). If that folder is missing, the installation is incomplete —
+reinstall the engine.
 
 **macOS/iOS build does nothing on Windows.**
 By design — the `.bat` scripts are stubs. Apple platforms require a macOS host with Xcode;
@@ -1242,7 +1491,8 @@ the per-user `GameBuilds` cache if the engine folder is read-only). If you enabl
 
 **WebP/KTX2/VP9 options are greyed out or forced to PassThrough.**
 Those formats aren't supported by every runtime: WebP is unavailable on iOS/Web, VP9 on
-iOS, and KTX2 needs a desktop x86/x64 runtime (it uses the Basis Universal transcoder). The
+iOS, and KTX2 needs a desktop x86/x64 runtime - not arm64 (it uses the Basis Universal
+transcoder, which has no arm64 port). The
 dialog enforces valid combinations per platform but keeps your preference for targets that
 do support it.
 
@@ -1258,7 +1508,7 @@ to use. CPU scopes, memory and counts still work.
 **CPU temperature shows "unavailable" on Windows.**
 Windows exposes no unprivileged CPU thermal API. Install LibreHardwareMonitor, run it as
 Administrator, enable *Options → Remote Web Server* (port 8085) and restart the engine —
-see [2.4](#24-temperature-sensors).
+see [2.4](#28-temperature-sensors).
 
 **My traces disappeared / I want to archive them.**
 They are plain JSON files in `Tools/Helpers/Profiler/` under the engine's writable path.

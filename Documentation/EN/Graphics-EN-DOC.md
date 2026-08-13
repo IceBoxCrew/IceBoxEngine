@@ -66,8 +66,9 @@
    - 9.4 [Post-process volumes](#94-post-process-volumes)
 10. [Image quality: AA, HDR & scaling](#10-image-quality-aa-hdr--scaling)
     - 10.1 [Anti-aliasing & render scale](#101-anti-aliasing--render-scale)
-    - 10.2 [HDR10 output](#102-hdr10-output)
-    - 10.3 [Pacing: VSync, low latency & adaptive quality](#103-pacing-vsync-low-latency--adaptive-quality)
+    - 10.2 [Upscaling: FSR & NIS](#102-upscaling-fsr--nis)
+    - 10.3 [HDR10 output](#103-hdr10-output)
+    - 10.4 [Pacing: VSync, low latency & adaptive quality](#104-pacing-vsync-low-latency--adaptive-quality)
 11. [Cameras & viewports](#11-cameras--viewports)
 12. [Debug visualization](#12-debug-visualization)
 13. [Physics](#13-physics)
@@ -1031,7 +1032,39 @@ is upscaled (performance); above 100 % it renders larger and is downsampled (qua
 UI drawn after the scene is composited at full resolution regardless, so a low render
 scale does not blur the interface.
 
-### 10.2 HDR10 output
+### 10.2 Upscaling: FSR & NIS
+
+Render the scene at a lower internal resolution and reconstruct it to the output
+resolution at the very end of the frame — after post-processing, before the UI. Like
+[ray tracing](#8-ray-traced-global-illumination) this is **Vulkan-only and gated on the
+GPU**: the capability is probed once at device creation, and on any other backend or an
+unsupported device the setting is stored but does nothing, leaving the normal linear
+blit in place. Defaults to **Off**.
+
+| Upscaler | How it works | Requires |
+| -------- | ------------ | -------- |
+| **FSR** | AMD FidelityFX Super Resolution 1.0 — **EASU**, a 12-tap edge-adaptive spatial upsample that fits an anisotropic elliptical filter to the local gradient, then **RCAS**, robust contrast-adaptive sharpening with a noise-aware limiter that cannot overshoot the local ring. Two passes. | Vulkan + any GPU that can sample and render `RGBA8` with linear filtering |
+| **NIS** | NVIDIA Image Scaling — directional scaling driven by the local structure tensor (eigen-decomposed to get edge direction and coherence), with the reconstruction kernel stretched along the edge, plus an edge-adaptive unsharp mask clamped against the local 2×2 range to suppress ringing. One pass. | Vulkan + an **NVIDIA** GPU |
+
+**Quality presets** set the internal render resolution as a fraction of the output:
+Ultra Performance 33 %, Performance 50 %, Balanced 59 %, Quality 67 %, Ultra Quality
+77 %, Native 100 % (sharpening pass only, no resolution reduction). The preset
+**multiplies** with **Render Scale** and the SSAA multiplier, so keep Render Scale at
+100 % to let the preset drive the resolution on its own.
+
+**Sharpening** is a separate toggle with a 0–1 strength: FSR routes it through RCAS as a
+second pass, NIS folds it into its single pass. Turning it off makes FSR a pure EASU
+upsample and zeroes the NIS unsharp mask.
+
+At **Native** no reconstruction is performed: FSR runs RCAS alone as a single pass and
+NIS applies only its unsharp mask, so the image is sharpened but never resampled. With
+Native **and** sharpening disabled the upscaler is a true no-op — the frame skips the
+extra render target entirely and costs exactly what it would with upscaling off. In
+every other case the engine routes the frame through the scaled framebuffer so the
+upscaler has a distinct source image to read. The passes appear in the render-pass
+profiler as `Upscale.FSR.EASU` / `Upscale.FSR.RCAS` / `Upscale.NIS`.
+
+### 10.3 HDR10 output
 
 HDR10 (ST.2084 PQ / Rec.2020) output with configurable **paper-white** and
 **max-luminance** nits. Real HDR signalling is delivered by the **Vulkan** backend in a
@@ -1043,7 +1076,7 @@ request is ignored and the image stays correct SDR rather than emitting a washed
 signal. When HDR10 is live, the normal SDR tonemap is bypassed so the image is not
 tonemapped twice.
 
-### 10.3 Pacing: VSync, low latency & adaptive quality
+### 10.4 Pacing: VSync, low latency & adaptive quality
 
 * **VSync** — present synchronized to the display; the Vulkan swapchain picks its
   present mode accordingly.
@@ -1499,7 +1532,7 @@ wins and the **Blend Radius** controls the crossfade.
 Real HDR10 signalling needs the **Vulkan** backend in a standalone build, on an HDR
 display with HDR enabled in the OS. Everywhere else — including the editor viewport —
 the request is deliberately ignored and a correct SDR image is shown instead of a
-washed-out PQ signal. See [10.2](#102-hdr10-output).
+washed-out PQ signal. See [10.3](#103-hdr10-output).
 
 **My UI is blurry when Render Scale is low.**
 It should not be: UI drawn after the scene is composited at full resolution over the

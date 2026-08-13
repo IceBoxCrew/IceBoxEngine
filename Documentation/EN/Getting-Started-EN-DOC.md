@@ -10,8 +10,9 @@
 >   your projects, creates new ones, attaches plugins and mods, carries your
 >   language/font/theme preferences, and opens a project in the editor.
 > * **The Updater** (`IceBoxUpdater`) — keeps your installation current. It checks
->   the project's GitHub releases, compares them to the version you have, downloads
->   the correct installer for your platform, verifies it, and installs it.
+>   the project's published releases, compares them to the version you have, downloads
+>   the correct installer for your platform, verifies it, installs it, and reopens
+>   itself afterwards to tell you how it went.
 >
 > The **editor itself** — menus, viewport, panels, play mode — is documented
 > separately in [The Editor & Interface](Editor-EN-DOC.md). **Building and shipping
@@ -47,8 +48,8 @@
    - 4.1 [The window at a glance](#41-the-window-at-a-glance)
    - 4.2 [How a check works](#42-how-a-check-works)
    - 4.3 [Downloading & installing an update](#43-downloading--installing-an-update)
-   - 4.4 [Settings & the GitHub token](#44-settings--the-github-token)
-   - 4.5 [The Updater.json config file](#45-the-updaterjson-config-file)
+   - 4.4 [Settings](#44-settings)
+   - 4.5 [Where the version is recorded](#45-where-the-version-is-recorded)
    - 4.6 [Per-platform install behavior](#46-per-platform-install-behavior)
 5. [Typical workflows](#5-typical-workflows)
 6. [Files & locations](#6-files--locations)
@@ -75,7 +76,7 @@ font/theme preferences and its crash reporter, so they feel like one product.
 
 > Everything in this document uses the **default English** labels. Both apps are
 > fully localized; switch language at any time in their **Settings** screens (see
-> [3.5](#35-settings) and [4.4](#44-settings--the-github-token)).
+> [3.5](#35-settings) and [4.4](#44-settings)).
 
 ---
 
@@ -87,9 +88,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-0.7.1-Release-Windows-x64-Setup.exe
-IceBoxEngine-0.7.1-Release-Linux-x64-Setup.deb
-IceBoxEngine-0.7.1-Release-Darwin-arm64-Setup.pkg
+IceBoxEngine-0.8.2-Release-Windows-x64-Setup.exe
+IceBoxEngine-0.8.2-Release-Windows-x86-Setup.exe
+IceBoxEngine-0.8.2-Release-Windows-arm64-Setup.exe
+IceBoxEngine-0.8.2-Release-Linux-x64-Setup.deb
+IceBoxEngine-0.8.2-Release-Linux-x86-Setup.deb
+IceBoxEngine-0.8.2-Release-Linux-arm64-Setup.deb
+IceBoxEngine-0.8.2-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-0.8.2-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -108,7 +114,8 @@ The **Components** page lets you turn parts of the install on and off:
 | **Register .iceproject Extension** | Associates `.iceproject` files so a double-click opens the **editor** directly, with the engine icon. |
 
 The 64-bit installer refuses to run on a 32-bit system and points you at the x86
-build instead. Installing **on top of** an existing installation is handled for
+build instead; the **arm64** installer likewise refuses to run on anything that is
+not Windows on ARM and points you at the x64 build. Installing **on top of** an existing installation is handled for
 you: the installer offers to uninstall the previous version first, and in silent
 mode (`/S`) it closes any running `IceBoxEngine`, `IceBoxLauncher` and
 `IceBoxUpdater`, removes the old version and installs into the same folder — which
@@ -167,7 +174,7 @@ Whatever the platform, the layout inside that folder is the same:
 ├── Plugins/  Mods/          ← engine-level packages you can add to projects
 ├── Tools/                   ← build system, helpers (logo/icons), preview app, Python scripts
 ├── Source/  lib/            ← the SDK headers and prebuilt core libraries used to build games
-├── CMakeLists.txt  CMakePresets.json  vcpkg.json
+├── CMakeLists.txt  vcpkg.json
 ├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  ThirdPartyLicenses/
 └── Uninstall.exe            ← Windows only
 ```
@@ -212,7 +219,7 @@ it is only worth knowing if a machine has unusual drivers.
 Both apps speak the same version format:
 
 ```
-<prefix>-<major>.<minor>.<patch>      e.g.  B-0.7.1
+<prefix>-<major>.<minor>.<patch>      e.g.  B-0.8.2
 ```
 
 The short prefix marks the **maturity stage**; the launcher and editor expand it
@@ -222,13 +229,13 @@ into a friendly name for display:
 | :----: | ----------------- | ------- | :--------: |
 | `P`  | Prototype   | `P-0.1.0`  | lowest |
 | `A`  | Alpha       | `A-0.3.0`  | ↓ |
-| `B`  | Beta        | `B-0.7.1`  | ↓ |
+| `B`  | Beta        | `B-0.8.2`  | ↓ |
 | `PR` | Pre-Release | `PR-0.9.0` | ↓ |
 | `R`  | Release     | `R-1.0.0`  | highest |
 
 When comparing two versions, the **stage is weighed first** (a `R-` build always
 outranks any `B-` build, regardless of numbers), and only then the numeric
-`major.minor.patch`. So `B-0.7.1` is *newer* than `B-0.6.9`, and `R-1.0.0` is newer
+`major.minor.patch`. So `B-0.8.2` is *newer* than `B-0.6.9`, and `R-1.0.0` is newer
 than `PR-9.9.9`. A tag carrying an unrecognized prefix sorts **below** `P`, and a
 tag with no prefix at all is read as `0.0.0` at the Prototype level — so a malformed
 release tag can never look newer than a real one.
@@ -236,15 +243,14 @@ release tag can never look newer than a real one.
 `Config/Updater.json` → `currentVersion` is the single source of truth for the
 version, and far more than the updater reads it:
 
-* the launcher shows it under the logo (e.g. **Beta 0.7.1**) and on its **About**
+* the launcher shows it under the logo (e.g. **Beta 0.8.2**) and on its **About**
   page, and the editor displays it too;
 * every IceBox program also carries it as a compiled-in fallback, so the version
   still displays correctly if the file is missing or unreadable;
-* the Windows installer takes its file name and version resources from it;
 * the updater uses it as the baseline for every comparison
-  ([4.5](#45-the-updaterjson-config-file)).
+  ([4.5](#45-where-the-version-is-recorded)).
 
-> Projects record only the **numeric part** (`0.7.1`) in their `.iceproject`
+> Projects record only the **numeric part** (`0.8.2`) in their `.iceproject`
 > manifest, and the launcher's *engine version mismatch* marker compares just those
 > numbers — it does not care whether a project was last saved by a Beta or a
 > Release build of the same `major.minor.patch`.
@@ -271,28 +277,41 @@ hub:
 | **Activate** | Validates and stores the key. `Ctrl+Enter` does the same. |
 | **Quit** | Closes the launcher without activating. |
 
-**Three kinds of key.** All of them are verified completely offline; neither the
-launcher nor the editor ever contacts a server for licensing.
+**Three kinds of key.**
 
 * A **machine-locked key** is issued for one specific **Device ID** and activates
   only on that computer. If you bought the engine before installing it, install
   first, read the Device ID off the activation screen, send it to support and you
   will receive a key that fits your machine.
 * A **single-machine key** is handed out immediately at purchase and is spent on
-  the first computer it is redeemed for. Pasting it does not activate anything by
-  itself: the screen answers with an **activation request** — a short
-  `ICEQ-…` code that names the key and this computer. Send that code to support
-  (the **Copy activation request** button puts it on the clipboard together with
-  the rest of the details) and you get back a machine-locked key for this
-  computer. Support records which machine the key was spent on, so the same key
-  cannot be redeemed for a second one.
+  the first computer it activates. When the build carries an activation endpoint,
+  pasting it is all you have to do — the key is checked once over the internet,
+  bound to this computer and activated on the spot; a second computer using the
+  same key is refused. When there is no endpoint, or it cannot be reached, the
+  screen answers instead with an **activation request** — a short `ICEQ-…` code
+  that names the key and this computer. Send that code to support (the **Copy
+  activation request** button puts it on the clipboard together with the rest of
+  the details) and you get back a machine-locked key for this computer.
 * A **shared key** activates straight away on any computer. Some stores hand
-  these out so that a purchase needs no message to support at all. An offline
-  check cannot tell one buyer's computer from another's, so a shared key is
-  limited by trust and by revocation, not by the engine.
+  these out so that a purchase needs no message to support at all.
 
-The activation screen tells you which kind you hold: a single-machine key is the
-only one that answers with an activation request instead of activating.
+**The one-time online check.** Distributed builds are configured with an
+activation endpoint. Pressing **Activate** then sends the key once over HTTPS so
+the server can confirm it is genuine, has not been revoked, and is not already in
+use on another computer. The screen says so above the key box, and shows
+*Checking the license key with the activation server…* while it waits.
+
+  * It happens **once**, when you activate. The engine never contacts the server
+    again — not at startup, not on a timer, not when it updates.
+  * A machine-locked key still activates with no internet at all, because it is
+    already tied to your computer.
+  * If the server cannot be reached, the message says so; connect and press
+    **Activate** again, or ask support for a key that activates offline.
+  * What is sent, and what is kept, is listed in section 9 of `PRIVACY_NOTICE.txt`
+    next to the engine.
+
+The launcher's **About** tab shows **Online activation: Verified** once the check
+has been passed.
 
 **Where the activation is stored.** Once a key is accepted, a signed activation
 record is written to several independent places at once, so removing any one of
@@ -331,7 +350,10 @@ Device ID, with a **Copy activation details** button for support requests.
 | *That does not look like an IceBox license key* | Part of the key is missing — copy the whole block again. |
 | *This key is not genuine* | The signature does not verify. The key was altered or did not come from IceBoxCrew. |
 | *This key was issued for a different computer* | A machine-locked key on the wrong machine. Send your Device ID to support. |
-| *This key unlocks one computer…* | Not an error. A single-machine key was recognised; send the `ICEQ-` activation request shown underneath to support and paste the key that comes back. |
+| *This key unlocks one computer…* | Not an error. A single-machine key was recognised and the activation server was not reachable; send the `ICEQ-` activation request shown underneath to support and paste the key that comes back. |
+| *This key is already activated on another computer* | A single-machine key that the activation server has already bound to a different machine. If you changed computers, contact support with the key id. |
+| *The activation server could not be reached* | No internet, or the endpoint is temporarily down. Connect and press **Activate** again, or ask support for a key that activates offline. |
+| *The activation server refused this key* | The server rejected the key for a reason other than the seat being taken. Contact support with the key id. |
 | *This key requires a newer version of IceBox Engine* | A single-machine key on a build that predates them. Update the engine, then activate. |
 | *This key has expired* / *has been revoked* | Contact support with the key id. |
 | *The activation could not be saved* | No storage location was writable. Start the launcher once as administrator (Windows) or check the home-directory permissions. |
@@ -351,7 +373,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 │   🧊 logo   │                                              │
 │ IceBox      │                                              │
 │ Engine™     │            Active tab content                │
-│ Beta 0.7.1  │   (My Projects / New Project / Plugins &     │
+│ Beta 0.8.2  │   (My Projects / New Project / Plugins &     │
 │ ─────────── │    Mods / Settings / About)                  │
 │ My Projects │                                              │
 │ New Project │                                              │
@@ -495,7 +517,7 @@ selected project (and *Select a project to see details* when nothing is selected
 * **Path**, **Last Modified**, **Last Launched** (or *Never*);
 * **Created with Engine** — the version recorded in the manifest, or
   *Unknown (legacy project)*, followed by an amber
-  **Engine version mismatch (`0.6.9` -> `0.7.1`)** line when they differ;
+  **Engine version mismatch (`0.6.9` -> `0.8.2`)** line when they differ;
 * **License** — the display name of the license chosen at creation;
 * **Scripting Mode** — *Code Scripting* or *Visual Scripting*;
 * **Plugins** and **Mods** — resolved to the packages' display names and versions
@@ -591,7 +613,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "0.7.1",
+    "EngineVersion": "0.8.2",
     "StartScene": "",
     "ScriptingMode": "Code",
     "Description": "…",
@@ -811,19 +833,25 @@ editor always stay a matched pair from the same installation.
 ## 4. The Updater
 
 The updater is a single window whose whole job is to move you from the version you
-have to the latest one published on GitHub — safely and on the right platform.
+have to the latest one published for your platform — safely, on the right
+architecture, and with a clear report once it is done.
 
 ### 4.1 The window at a glance
 
 Under the **IceBox Updater** title and logo, the main view shows:
 
+* A colored **result banner** at the very top, but only right after an update was
+  installed: green **Update installed successfully** with the version you are now on,
+  or red **Update was not installed** with the installer's exit code and the version
+  you are still on. **OK** dismisses it. This is the window that opens by itself when
+  an update finishes ([4.6](#46-per-platform-install-behavior)).
 * A colored **Status** line — grey (idle), amber (working: checking / downloading /
   verifying / installing), green (update available), blue (up to date / complete),
   red (error).
-* **Current version** (from your config, or *Not set*) and, once a check finishes,
-  **Latest version** (the newest published release).
-* A **No GitHub token set** warning whenever no token is configured (see
-  [4.4](#44-settings--the-github-token)).
+* **Current version** (the version actually installed, or *Not set*) and, once a check
+  finishes, **Latest version** (the newest published release).
+* The detected **Platform** and **Architecture**, so you can see at a glance which
+  installer the updater will pick for this machine.
 * A **progress bar** during download and install.
 * **Release Notes** for the available version, in a small scrollable box — shown
   only when an update is actually available and the release has notes.
@@ -839,34 +867,36 @@ A **Settings** button (bottom-left) toggles the settings screen, and **Exit**
 A check runs automatically on startup if **Check for updates on startup** is
 enabled, and any time you press **Check for Updates**. Under the hood the updater:
 
-1. Asks the GitHub Releases API for the published releases of the IceBox Engine
-   repository, authenticating with your token when one is set.
-2. Ignores **draft** releases, then sorts the rest by the version rules from
-   [2.4](#24-the-engine-version-scheme) and takes the newest.
+1. Asks the IceBox update service for the list of published releases. The address is
+   part of the installed engine, so there is nothing to configure.
+2. Ignores **draft** releases and releases without a version tag, then sorts the rest
+   by the version rules from [2.4](#24-the-engine-version-scheme) and takes the newest.
 3. Compares that newest release against your **current version**:
    * newer → **New version available: `<tag>`** (the **Install Update** button
      lights up, and release notes appear);
    * same or older → **Engine is up to date**;
    * nothing published → **No releases found**.
 
-The request verifies TLS, follows up to 10 redirects, gives up on a connection after
-15 s and on the whole request after 30 s, and aborts a stalled transfer. Transient
-failures — timeouts, dropped connections, HTTP 408/429/500/502/503/504 — are
-**retried up to three times** with a growing pause (0.5 s, then 1 s). Everything
-runs on a background thread, so the window stays responsive.
+The request verifies TLS, follows up to 10 redirects (HTTPS only), gives up on a
+connection after 15 s and on the whole request after 30 s, and aborts a stalled
+transfer. Transient failures — timeouts, dropped connections, HTTP
+408/429/500/502/503/504 — are **retried up to three times** with a growing pause
+(0.5 s, then 1 s). Everything runs on a background thread, so the window stays
+responsive.
 
 Failures map to a specific message rather than a generic error:
 
 | Situation | Message |
 | --------- | ------- |
-| HTTP 401 | *GitHub authentication failed. Check your token in Settings.* |
-| HTTP 404 without a token | *The IceBox Engine repository is private. Add a GitHub token that has access to it in Settings.* |
-| HTTP 404 with a token | *Repository or release not found* |
-| HTTP 403/429 without a token | *GitHub API rate limit exceeded. Please add a GitHub token in Settings.* |
+| The service refused the request | *Access to the update service was denied. Check your connection and try again; if it keeps happening, please report it to support.* |
+| The service had nothing to offer | *The update service returned no releases.* |
+| No response at all | *Failed to connect to the update service. Check your connection and try again.* |
 | Any other HTTP status | *HTTP error `<code>`* |
-| No response at all | *Failed to connect to GitHub API* |
-| GitHub replied with an error object | *GitHub API error: `<message>`* |
-| Reply was not valid JSON | *Failed to parse response: `<detail>`* |
+| The reply was not valid JSON | *Failed to parse response: `<detail>`* |
+
+All five mean the same thing from your side: the update service could not be reached
+or answered with something unusable. Check your internet connection and try again; if
+it persists, report it to support with the message shown.
 
 ### 4.3 Downloading & installing an update
 
@@ -883,81 +913,64 @@ Pressing **Install Update** runs a careful download-verify-install pipeline:
    scores highest, a name advertising a *different* architecture is penalised, and
    the platform's preferred format wins the tie-break — `.exe` over `.msi`,
    `.dmg` over `.pkg`, `.deb` over `.AppImage` over a tarball. If nothing fits, you
-   get *No installer found for this platform in release assets*.
+   get *No installer for `<platform>` found in the release assets*.
 2. **Download.** The staging folder `<temp>/IceBoxUpdate/` is wiped and recreated,
-   and the asset is downloaded into it with a live progress bar. A failed download is
-   retried up to three times (1 s, then 2 s pause), and a partial file is deleted
-   rather than left behind.
-3. **Verify.** The status changes to *Verifying download…*. The file must be at
-   least 1 KB and must match the size GitHub reported for the asset, then its
-   **SHA-256** is computed. If the release ships a matching `….sha256` sidecar
-   asset, the hash must match or the install is aborted with a checksum error. (If
-   no sidecar is published — or it cannot be downloaded, or is malformed —
-   verification is skipped gracefully and noted in the log.)
-4. **Install.** The verified installer runs for your platform
-   ([4.6](#46-per-platform-install-behavior)), the new version is written to your
-   config, and the status becomes **Update to `<tag>` complete!**
+   and the asset is downloaded into it with a live progress bar. The asset's name is
+   sanitised before it becomes a local file name, so a strange name published in a
+   release can never escape the staging folder. A failed download is retried up to
+   three times (1 s, then 2 s pause), and a partial file is deleted rather than left
+   behind.
+3. **Verify.** The status changes to *Verifying download…*. A download that turns out
+   to be a **web page** rather than an installer is rejected immediately with its own
+   message. The file must then be at least 1 KB and must match the size the service
+   reported for the asset, after which its **SHA-256** is computed and compared against
+   the published hash. A mismatch aborts the install with a checksum error. (If no hash
+   was published, verification is skipped gracefully and noted in the log.)
+4. **Install and report back.** The verified installer runs for your platform
+   ([4.6](#46-per-platform-install-behavior)). Because the updater has to get out of
+   the way while its own files are replaced, it shows *Installer started. The updater
+   will close and reopen when the installation finishes.*, closes, and the **newly
+   installed updater opens again by itself** with the green banner **Update installed
+   successfully**. If the installer failed instead — a declined UAC prompt, for
+   instance — the updater reopens with the red banner and the installer's exit code,
+   and your recorded version is left untouched so the update stays on offer.
 
 > The updater never installs silently behind your back. Auto-check only *checks*;
 > the actual download and install happen only when **you** press **Install
 > Update**. Closing the window during a download cancels it and cleans up the
 > staging folder.
 
-### 4.4 Settings & the GitHub token
+### 4.4 Settings
 
-The updater's **Settings** screen shows your **Current version** and the detected
-**Platform**, and lets you set:
+The updater's **Settings** screen shows your **Current version**, the detected
+**Platform** and **Architecture**, and the **Update source** it asks. The source is
+read-only — it is part of the installed engine, not a per-user preference. Below them
+you can set:
 
-* **GitHub Token (PAT)** — a GitHub Personal Access Token, entered in a masked
-  field. **The IceBox Engine repository is private**, so a token that has access to
-  it is what makes update checks work at all; without one the check comes back with
-  *The IceBox Engine repository is private…*. A token also lifts you off the
-  anonymous GitHub API rate limit of **60 requests per hour**. The main screen warns
-  whenever none is set.
 * **Check for updates on startup** — toggles the automatic check described in
   [4.2](#42-how-a-check-works).
 * **Language** and **Font** — the same 14 languages and font controls as the
   launcher ([3.5](#35-settings)), shared with the rest of the engine.
 
-**Save** writes the token and the auto-check flag to the config and closes Settings;
-**Cancel** restores the token field to the saved value and closes Settings. The
-language and font buttons apply immediately and are not affected by Cancel.
+**Save** writes the auto-check flag and closes Settings; **Cancel** closes Settings
+without saving it. The language and font buttons apply immediately and are not
+affected by Cancel.
 
-### 4.5 The Updater.json config file
+### 4.5 Where the version is recorded
 
-The updater is driven by a small JSON file, `Config/Updater.json`:
+The version of the engine you have is kept in `Config/Updater.json` inside the
+**install folder**, as `currentVersion` — that is the single value the launcher and
+the editor display, and the baseline every update check compares against. A new
+installation replaces the file, which is how the version bumps after an update.
 
-```json
-{
-  "currentVersion": "B-0.7.1",
-  "githubToken": "",
-  "platform": "",
-  "autoCheck": true
-}
-```
+Your own preferences — the auto-check flag and the version last installed — live in a
+second copy of the same file inside your **user-data folder**
+([6. Files & locations](#6-files--locations)). It is the only one the updater writes,
+and it is written atomically, so an interrupted write cannot corrupt it.
 
-| Field | Meaning |
-| ----- | ------- |
-| `currentVersion` | The engine version you currently have. This is the baseline every update check compares against, and what the launcher/editor display. |
-| `githubToken` | Your GitHub PAT. Empty by default. |
-| `platform` | Target platform; auto-detected (`windows` / `macos` / `linux`) when left empty. |
-| `autoCheck` | Whether to check for updates on startup. |
-
-There are **two copies** of this file, and knowing which is which explains
-everything the updater does:
-
-* `<install>/Config/Updater.json` is the **canonical, shipped** copy. The launcher
-  and the editor read the displayed version from it, the build system reads the
-  version from it, and a new installation replaces it — which is how the version
-  bumps after an update.
-* `<user data>/Config/Updater.json` is the updater's own **working copy**. It is the
-  only file the updater writes: your token, your auto-check preference and the
-  version it just installed all go there.
-
-On startup the updater reads its working copy; if that file is missing, or its
-`currentVersion` is empty, or it cannot be parsed, it falls back to the shipped copy
-in the install folder. You normally never edit either file by hand — set the token
-and auto-check from the **Settings** screen instead.
+The **installed** version always wins: if an install fails halfway, the recorded
+version stays where it was and the update is offered again instead of being treated as
+applied. Neither file is meant to be edited by hand — use the **Settings** screen.
 
 ### 4.6 Per-platform install behavior
 
@@ -965,15 +978,19 @@ The final install step is tailored to each OS:
 
 | Platform | How the update is installed |
 | -------- | --------------------------- |
-| **Windows** | The new version is written to the config first, then a small `run_installer.bat` shim is dropped next to the download. It waits about two seconds, launches the **NSIS** installer silently into the same folder (`"<asset>" /S /D=<install dir>`) — or, for an `.msi`, runs `msiexec /i … /qn /norestart INSTALLDIR=…` — and then deletes the temporary download folder. The shim is started detached and hidden; if Windows demands elevation it is relaunched through UAC. The updater then **exits** so the running files can be replaced. |
-| **macOS** | A `.dmg` is mounted read-only on a temporary mount point, its `.app` is copied into place with `ditto` and unmounted again; a `.pkg` is installed with `installer -pkg … -target /` after an administrator prompt; a `.zip` is expanded with `ditto -x -k`; a `.tar.gz` is untarred. The quarantine flag is cleared so the app runs without a Gatekeeper warning. |
-| **Linux** | A `.deb` is installed with `dpkg -i` (falling back to `apt-get install -f` to pull dependencies); an `.AppImage` is copied to `<install>/IceBoxEngine.AppImage` and made executable; a `.tar.gz` is extracted into the install folder. Elevation is obtained through `pkexec`, then `sudo`, then a graphical `sudo -A` askpass helper. |
+| **Windows** | A small `run_installer.bat` shim is dropped next to the download and started detached and hidden; if Windows demands elevation it is relaunched through UAC. The updater shows *Installer started…* for a couple of seconds and **exits**, so its own files can be replaced. The shim waits about four seconds, then launches the **NSIS** installer silently into the same folder (`"<asset>" /S /D=<install dir>`) — or, for an `.msi`, runs `msiexec /i … /qn /norestart INSTALLDIR=…`. When the installer returns, the shim **starts the freshly installed updater again**: with `--post-update=<tag>` on success (exit code 0, or 3010 "reboot pending" for an `.msi`), or with `--update-failed=<tag> --update-code=<n>` on failure. Finally it deletes the temporary download folder. |
+| **macOS** | A `.dmg` is mounted read-only on a temporary mount point, its `.app` is copied into place with `ditto` and unmounted again; a `.pkg` is installed with `installer -pkg … -target /` after an administrator prompt; a `.zip` is expanded with `ditto -x -k`; a `.tar.gz` is untarred. The quarantine flag is cleared so the app runs without a Gatekeeper warning. The install runs to completion inside the updater, which then **reopens the newly installed `IceBoxUpdater.app`** with `--post-update=<tag>` and closes itself. |
+| **Linux** | A `.deb` is installed with `dpkg -i` (falling back to `apt-get install -f` to pull dependencies); an `.AppImage` is copied to `<install>/IceBoxEngine.AppImage` and made executable; a `.tar.gz` is extracted into the install folder. Elevation is obtained through `pkexec`, then `sudo`, then a graphical `sudo -A` askpass helper. As on macOS, the updater then **reopens the newly installed `IceBoxUpdater`** with `--post-update=<tag>` and closes itself. |
 
-On macOS and Linux the config records the new version **after** the install
-succeeds; on Windows it is written **before** the installer is launched, because the
-updater has to exit for the replacement to happen. In all cases the engine ends up
-upgraded in the **same install folder**, and your projects, settings and language are
-untouched.
+So the visible behaviour is the same on all three systems: the updater goes away for
+a moment, and the **new** updater comes back on its own with a green banner naming
+the version you are now on. Should reopening fail (the binary is missing, the desktop
+session refuses to start it), the updater that ran the install stays open and shows
+the same banner itself instead — the result is never left unreported. On macOS and
+Linux the config records the new version as soon as the install returns; on Windows
+it is the reopened updater that records it, after reading the version the installer
+actually put on disk. In all cases the engine ends up upgraded in the **same install
+folder**, and your projects, settings and language are untouched.
 
 ---
 
@@ -1010,12 +1027,10 @@ the project.
 **Moving to a newer engine build.**
 1. Open the **Updater** — the launcher's amber **Updater** button, or Start Menu →
    *IceBox Updater*.
-2. Make sure a **GitHub token** with access to the repository is saved in
-   **Settings** ([4.4](#44-settings--the-github-token)).
-3. It checks automatically (or press **Check for Updates**).
-4. If it says **New version available**, read the **Release Notes** and press
+2. It checks automatically (or press **Check for Updates**).
+3. If it says **New version available**, read the **Release Notes** and press
    **Install Update**.
-5. Let it download, verify and install; the updater exits when done. Re-open the
+4. Let it download, verify and install; the updater exits when done. Re-open the
    **Launcher** — the sidebar now shows the new version.
 
 > If you opened the updater from the launcher's **Updater** button, close the
@@ -1032,7 +1047,7 @@ the project.
 | Path | What lives there |
 | ---- | ---------------- |
 | `<install>/IceBoxLauncher`, `IceBoxUpdater`, `IceBoxEngine` | The three programs, side by side. |
-| `<install>/Config/Updater.json` | Canonical engine **version** + updater settings the launcher/editor read. |
+| `<install>/Config/Updater.json` | The canonical engine **version** the launcher and editor display. |
 | `<install>/Config/Fonts/`, `Config/Languages/` | Fonts and the 14 language files shared by all three apps. |
 | `<install>/Plugins/`, `Mods/` | Engine-level packages the launcher can attach to projects. |
 | `<install>/Content/Examples/` | Starter content offered by **New Project**, described by `Examples.json` ([3.3](#33-new-project)). |
@@ -1046,7 +1061,7 @@ the project.
 | `Launcher.json` | The remembered **project list**: name, path, modified/launched timestamps, pin flag and custom order. |
 | `launcher_settings.json` | Launcher-only UI preferences: theme, sort mode, sort direction. |
 | `Config/Engine.json` | The shared editor preferences — language, font name, size and color — used by launcher, updater and editor. |
-| `Config/Updater.json` | The updater's working copy: token, auto-check, last installed version. |
+| `Config/Updater.json` | The updater's working copy: auto-check preference and the last installed version. |
 | `exported_projects.json` | Written by the bulk **Export List…** button. |
 
 Crash reports land in `Saved/CrashReports/` **inside the install folder** when that
@@ -1107,26 +1122,36 @@ That is by design: **Apply to Project** makes the project match the ticks exactl
 so an unticked package is removed. Use **Reload Selection** first if you are unsure
 what the project currently has.
 
-**The updater says the repository is private.**
-It is. Open **Settings**, paste a **GitHub token (PAT)** that has access to the
-IceBox Engine repository, press **Save**, and check again.
+**The updater closed by itself in the middle of an update.**
+That is the normal hand-off: the updater cannot replace its own running files, so it
+steps aside while the installer works and the **new** updater opens again a few
+seconds later with a green banner naming the version you are now on
+([4.6](#46-per-platform-install-behavior)). Nothing is lost if you close that window;
+the engine is already updated.
 
-**The updater says "rate limit exceeded".**
-Anonymous GitHub access is limited to 60 requests/hour. The same fix applies — add a
-token in **Settings**.
+**The updater reopened with a red "Update was not installed" banner.**
+The installer ran but did not finish — most often because an elevation prompt was
+declined (Windows reports code 740 for that). Your recorded version was deliberately
+left alone, so simply press **Install Update** again and allow the prompt.
 
-**"GitHub authentication failed."**
-The token is wrong, expired, or lacks access to the repository. Replace it in
-**Settings**.
+**The updater cannot reach the update service.**
+The messages in [4.2](#42-how-a-check-works) all come down to the same thing: the
+service did not answer, or answered with something the updater could not read. Check
+your internet connection (and any proxy or firewall) and press **Check for Updates**
+again. If it keeps failing, send the exact message to support.
 
-**"No installer found for this platform in release assets."**
-The chosen release has no asset matching your OS/architecture (for example, only a
-source archive was attached). Wait for a complete release, or grab the right
-installer manually from the releases page.
+**"No installer for … found in the release assets."**
+The published release carries no file matching your OS and CPU architecture. Wait for
+a complete release, or ask support for the installer for your platform.
 
 **"Checksum verification failed."**
-The download was corrupted or tampered with — its SHA-256 did not match the
-published `.sha256` sidecar. Simply check and install again.
+The download was corrupted in transit — its SHA-256 did not match the published hash.
+Simply press **Install Update** again; nothing was installed.
+
+**"The download server returned a web page instead of the installer."**
+The download host answered with an HTML page instead of a file — usually a captive
+portal (hotel/office Wi-Fi sign-in) or a temporary outage on the download host. Try
+again on a normal connection, and report it if it persists.
 
 **Does updating wipe my projects or settings?**
 No. Updates replace engine files in the install folder only. Your projects live in

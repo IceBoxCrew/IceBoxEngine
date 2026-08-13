@@ -3451,6 +3451,8 @@ es = editor.get_editor_settings()
 # }
 ```
 
+`show_grid` is the effective grid visibility of the main viewport: the **Show Viewport Grid** setting AND the grid toggle on the toolbar. It is `False` if either of them is off. The class editor has its own grid toggle stored inside the `.ice_class` asset, and it is not reported here.
+
 #### `editor.set_editor_settings(data)` → `bool`
 
 Changes editor settings.
@@ -3699,10 +3701,10 @@ editor.log_error('Something went wrong')
 
 ### 5.22 User scripts & script execution
 
-This subsection covers the Python tooling surface: executing script files on disk, controlling the Python console autocomplete, and integrating with the **Tools → Python Scripts** menu backed by `Tools/PythonScripts/`.
+This subsection covers the Python tooling surface: executing script files on disk, controlling the Python console autocomplete, and integrating with the Python Console panel's **Run Python Script** menu, which is backed by `Tools/PythonScripts/`.
 
 > 📁 **Script locations (editor-only — NOT game content):**
-> - `Tools/PythonScripts/` — user tool scripts, discovered recursively. Each subfolder becomes a **category** (submenu) in *Tools → Python Scripts*.
+> - `Tools/PythonScripts/` — user tool scripts, discovered recursively. Each subfolder becomes a **category** (submenu) in the panel's *Run Python Script* menu.
 > - `Tools/PythonScripts/Startup/` — scripts executed automatically once, right after the editor initializes the Python interpreter. Use them to register event handlers, timers, custom tools, etc.
 
 #### `editor.execute_file(filepath)` → `dict`
@@ -3729,7 +3731,7 @@ else:
 
 #### `editor.list_user_scripts()` → `list[str]`
 
-Returns display names of every `.py` file discovered under `Tools/PythonScripts/` — a recursive scan that **also includes** `Startup/`. The display name is the script's **bare file stem** (no folder prefix). Results are sorted by category, then by name; the category is what becomes a submenu in *Tools → Python Scripts*.
+Returns display names of every `.py` file discovered under `Tools/PythonScripts/` — a recursive scan that **also includes** `Startup/`. The display name is the script's **bare file stem** (no folder prefix). Results are sorted by category, then by name; the category is what becomes a submenu in the panel's *Run Python Script* menu.
 
 ```python
 for name in editor.list_user_scripts():
@@ -3753,7 +3755,7 @@ if editor.run_user_script('spawn_grid'):
 editor.run_user_script('Tools/PythonScripts/level_gen/spawn_grid.py')
 ```
 
-> This is the same entry point the **Tools → Python Scripts → <script>** menu items use.
+> This is the same entry point the panel's **Run Python Script → <category> → <script>** menu items use.
 
 #### `editor.rediscover_user_scripts()` → `int`
 

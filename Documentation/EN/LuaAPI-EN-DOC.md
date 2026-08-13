@@ -10801,6 +10801,65 @@ Settings.LIGHTING_LIT    -- true
 Settings.LIGHTING_UNLIT  -- false
 ```
 
+### Upscaling (FSR / NIS)
+
+> Renders the scene at a lower internal resolution and reconstructs it to the output resolution at the very end of the frame, **after** post-processing. **Vulkan only, and only on a compatible GPU** — exactly like ray tracing. On any other backend or an unsupported device the setting is still stored, but it has no effect and the frame falls back to the plain linear filter.
+>
+> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive spatial upsampling) followed by RCAS (robust contrast-adaptive sharpening). Runs on **any** Vulkan GPU.
+> - **`"nis"`** — NVIDIA Image Scaling: structure-tensor directional scaling with an edge-adaptive unsharp mask, in a single pass. Requires an **NVIDIA** GPU.
+>
+> The quality preset sets the internal render resolution as a fraction of the output resolution and **multiplies** with `SetRenderScale()` and the SSAA modes, so leave `RenderScale` at `1.0` to let the preset drive the resolution on its own. Defaults to `"off"`.
+
+```lua
+-- Upscaler constants
+--   Settings.UPSCALING_OFF   -- "off"   (plain linear filter, default)
+--   Settings.UPSCALING_FSR   -- "fsr"   (AMD FidelityFX Super Resolution 1.0)
+--   Settings.UPSCALING_NIS   -- "nis"   (NVIDIA Image Scaling, NVIDIA GPUs only)
+Settings.SetUpscalingMode(Settings.UPSCALING_FSR)
+local upscaler = Settings.GetUpscalingMode()   -- → "off" | "fsr" | "nis"
+
+-- Quality preset constants (internal render resolution vs. output resolution)
+--   Settings.UPSCALING_ULTRA_PERFORMANCE  -- "ultra_performance"   33%
+--   Settings.UPSCALING_PERFORMANCE        -- "performance"         50%
+--   Settings.UPSCALING_BALANCED           -- "balanced"            59%
+--   Settings.UPSCALING_QUALITY            -- "quality"             67%  (default)
+--   Settings.UPSCALING_ULTRA_QUALITY      -- "ultra_quality"       77%
+--   Settings.UPSCALING_NATIVE             -- "native"             100%  (sharpening pass only)
+Settings.SetUpscalingQuality(Settings.UPSCALING_QUALITY)
+local preset = Settings.GetUpscalingQuality()  -- → "quality"
+
+-- Sharpening pass (FSR → RCAS, NIS → adaptive unsharp mask)
+Settings.SetUpscalingSharpening(true)
+local sharpening = Settings.IsUpscalingSharpening()
+
+Settings.SetUpscalingSharpness(0.5)            -- 0.0 .. 1.0 (default 0.5)
+local sharpness = Settings.GetUpscalingSharpness()
+
+-- Capability queries
+local anySupported = Settings.IsUpscalingSupported()                        -- any upscaler on this device
+local fsrSupported = Settings.IsUpscalingSupported(Settings.UPSCALING_FSR)  -- a specific one
+local nisSupported = Settings.IsUpscalingSupported(Settings.UPSCALING_NIS)
+
+local active = Settings.IsUpscalingActive()       -- selected AND supported right now
+local factor = Settings.GetUpscalingRenderScale() -- 1.0 when inactive, otherwise the preset ratio
+```
+
+```lua
+-- Typical in-game graphics menu: pick the best upscaler the device supports
+if Settings.IsUpscalingSupported(Settings.UPSCALING_NIS) then
+    Settings.SetUpscalingMode(Settings.UPSCALING_NIS)
+elseif Settings.IsUpscalingSupported(Settings.UPSCALING_FSR) then
+    Settings.SetUpscalingMode(Settings.UPSCALING_FSR)
+end
+
+if Settings.IsUpscalingActive() then
+    Settings.SetRenderScale(1.0)                              -- let the preset drive the resolution
+    Settings.SetUpscalingQuality(Settings.UPSCALING_BALANCED)
+    Settings.SetUpscalingSharpness(0.6)
+    Settings.Save()
+end
+```
+
 ### Renderer / Graphics API
 
 > Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS/iOS → Metal via ANGLE; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
@@ -10888,7 +10947,7 @@ local muted = Settings.IsMuted()
 
 ### Platform
 
-The engine supports 6 platforms: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. From Lua you can detect the current platform and write platform-specific code (or code shared across all platforms).
+The engine supports 6 platforms: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. From Lua you can detect the current platform and write platform-specific code (or code shared across all platforms). For the CPU architecture that same build was compiled for, see the **Architecture** section right below.
 
 ```lua
 local platform = Settings.GetPlatform()
@@ -10949,6 +11008,83 @@ end
 -- 4) Code that runs on ALL 6 platforms — just don't gate it: the
 --    same script works everywhere because all platforms expose the
 --    same Lua API surface.
+```
+
+### Architecture
+
+`Settings.GetPlatform()` answers *which OS*, `Settings.GetArch()` answers *which CPU the build was compiled for*. That is the level at which "this device is weak" is actually decided: an old 32-bit ARM phone and a modern 64-bit one both report `"Android"`, but only one of them is stuck inside a 32-bit address space.
+
+```lua
+local arch = Settings.GetArch()
+-- Returns one of: "x64", "x86", "arm64", "arm32", "wasm32", "wasm64"
+-- ("Unknown" only if compiled for an unrecognized target)
+
+-- Architecture string constants (handy for switch-style logic and comparisons):
+Settings.ARCH_X86     -- "x86"     32-bit Intel/AMD
+Settings.ARCH_X64     -- "x64"     64-bit Intel/AMD
+Settings.ARCH_ARM32   -- "arm32"   32-bit ARM (Android armeabi-v7a)
+Settings.ARCH_ARM64   -- "arm64"   64-bit ARM (Apple Silicon, Android arm64-v8a, Windows/Linux on ARM)
+Settings.ARCH_WASM32  -- "wasm32"  WebAssembly with 32-bit pointers (heap tops out at 2 GB)
+Settings.ARCH_WASM64  -- "wasm64"  WebAssembly with 64-bit pointers (-sMEMORY64 build)
+
+-- Pointer width — the shortest "how much memory can this build even address" check:
+local is64 = Settings.Is64Bit()   -- true on x64, arm64, wasm64
+local is32 = Settings.Is32Bit()   -- true on x86, arm32, wasm32
+```
+
+What the 6 platforms can report:
+
+| Platform | Architectures the engine builds | `Settings.GetArch()` returns |
+|----------|---------------------------------|------------------------------|
+| Windows  | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
+| Linux    | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
+| macOS    | arm64 (Apple Silicon), x64 (Intel) | `"arm64"`, `"x64"` |
+| iOS      | arm64 (device and simulator); x64 only on an Intel-Mac simulator | `"arm64"`, `"x64"` |
+| Android  | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | `"arm64"`, `"arm32"`, `"x64"`, `"x86"` |
+| Web      | wasm32, wasm64 (`-sMEMORY64` build) | `"wasm32"`, `"wasm64"` |
+
+> **Android ABI names are normalized** so one comparison works everywhere: `armeabi-v7a` → `"arm32"`, `arm64-v8a` → `"arm64"`, `x86_64` → `"x64"`, `x86` → `"x86"`. Write `arch == Settings.ARCH_ARM64` once instead of matching per-platform ABI spellings.
+
+The value is a compile-time property of **the build that is running**, not a probe of the hardware: an x64 build executing on an ARM machine through emulation still reports `"x64"`, because that is the code actually running — which is exactly what you want when you are budgeting for it. The call is cheap (no syscalls, no I/O), so it is fine to use in `OnStart` or in a settings menu.
+
+Patterns:
+
+```lua
+-- 1) One gate for everything that is address-space limited
+if Settings.Is32Bit() then
+    Settings.SetMaxTextureSize(2048)
+    Settings.SetAtlasSize(2048)
+    Settings.SetMaxPointLights(8)
+    Settings.SetAAMode(Settings.AA_MODE_OFF)
+end
+
+-- 2) Switch-style on the architecture name
+local a = Settings.GetArch()
+if a == Settings.ARCH_ARM32 then
+    Settings.SetRenderScale(0.75)
+    Settings.SetAudioQuality(Settings.AUDIO_LOW)
+    Settings.SetFPSLimit(30)
+elseif a == Settings.ARCH_ARM64 then
+    Settings.SetRenderScale(1.0)
+    Settings.SetFPSLimit(60)
+elseif a == Settings.ARCH_WASM32 then
+    -- browser build without -sMEMORY64: everything has to fit under a 2 GB heap
+    Settings.SetMaxTextureSize(4096)
+end
+
+-- 3) Platform + architecture together — the precise "weak device" gate
+if Settings.IsAndroid() and Settings.GetArch() == Settings.ARCH_ARM32 then
+    -- old 32-bit phone: lowest tier
+elseif Settings.IsMobile() then
+    -- modern arm64 phone/tablet: normal mobile tier
+end
+
+-- 4) Or hand the budget to the engine instead of hardcoding tiers
+if Settings.Is32Bit() then
+    Settings.SetAdaptiveQuality(true, 30)
+else
+    Settings.SetAdaptiveQuality(true, 60)
+end
 ```
 
 ### Accessibility
@@ -11378,7 +11514,8 @@ end
 Subscribe to a callback that is fired whenever a setting is changed (via Lua,
 the editor settings panel, AutoDetect, or AdaptiveQuality). The callback
 receives the changed key as a string (for example `"AAMode"`, `"FPSLimit"`,
-`"RenderScale"`, `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, ...).
+`"RenderScale"`, `"UpscalingMode"`, `"UpscalingQuality"`, `"UpscalingSharpness"`,
+`"UpscalingSharpening"`, `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, ...).
 
 ```lua
 local id = Settings.OnSettingChanged(function(key)
@@ -12796,6 +12933,78 @@ end)
 | `ProfileScope` | `ProfileScope(name, fn)` → `any` | RAII-style helper. Calls `ProfileBegin(name)`, invokes `fn()`, then guarantees `ProfileEnd(name)` is called. Returns whatever `fn` returns. |
 
 > **Tip.** Use a hierarchical naming convention (`"AI.Update"`, `"AI.Pathfinding"`, `"Render.HUD"`) — the editor profiler and Chrome Trace viewers will group them visually.
+
+#### Lua API — Custom Counters
+
+Publish any gameplay or system number as a profiler **counter**. Counters need no registration: they appear immediately in the editor Profiler's **Counters** tab (grouped by the group name, colored against their budget), are recorded into every frame of a trace, are exported as Chrome Trace counter tracks, and become Tracy plots in instrumented builds.
+
+```lua
+-- A plain count.
+ProfilerSetCounter("Gameplay", "Alive Enemies", #enemies)
+
+-- With a unit and a budget: the value turns yellow/orange/red as it approaches
+-- and passes 8 ms.
+ProfilerSetCounter("Gameplay", "AI Think", thinkMs, "ms", 8.0)
+
+-- Accumulate over a frame (resets automatically on the next frame).
+ProfilerAddCounter("Gameplay", "Projectiles Spawned", 1)
+
+-- Read back any counter, including the engine's own.
+local contacts = ProfilerGetCounter("Physics", "Contacts")
+local budgetMs = GetProfilerFrameBudgetMs()
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `ProfilerSetCounter` | `ProfilerSetCounter(group, name, value[, unit[, budget]])` | Sets a counter's value for this frame. `unit` is `"ms"`, `"b"`, `"kb"`, `"mb"`, `"%"` or `"/s"`; omit it for a plain count. `budget` (optional) drives the color coding. |
+| `ProfilerAddCounter` | `ProfilerAddCounter(group, name, delta)` | Adds `delta` to the counter for the current frame; the value restarts from the first `delta` on the next frame. |
+| `ProfilerGetCounter` | `ProfilerGetCounter(group, name)` → `number` | Reads a counter back. Works for engine counters too (`"Physics"`, `"Renderer"`, `"FX"`, `"Audio"`, `"Assets"`, `"Shadows"`, `"Memory"`, `"Network"`, `"Lua"`, `"Components"`, `"Instances"`, `"Scene"`). |
+| `GetProfilerFrameBudgetMs` | `GetProfilerFrameBudgetMs()` → `number` | The frame budget in milliseconds derived from the project's target frame rate. |
+
+#### Lua API — Script Profiler
+
+The engine measures every Lua callback it invokes, per script and per callback type (`OnUpdate`, `OnLateUpdate`, `OnFixedUpdate`, collision, sensor, hit, joint-break, lifecycle, behavior-tree, level and mod callbacks, plus widget scripts). These functions read and control that data from gameplay code — useful for shipping builds where the editor panel is not available.
+
+```lua
+if GetScriptProfilerTimeMs() > GetProfilerFrameBudgetMs() * 0.3 then
+    for _, row in ipairs(GetScriptProfilerRows()) do
+        if row.frameMs > 0.5 then
+            PrintScreen(string.format("%s: %.2f ms x%d", row.script, row.frameMs, row.instances), 2.0)
+        end
+    end
+end
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `SetScriptProfilerEnabled` | `SetScriptProfilerEnabled(enabled)` | Turns per-script measurement on or off. Disabled, it costs nothing. |
+| `IsScriptProfilerEnabled` | `IsScriptProfilerEnabled()` → `bool` | Whether per-script measurement is running. |
+| `ResetScriptProfiler` | `ResetScriptProfiler()` | Clears accumulated per-script statistics without restarting the game. |
+| `GetScriptProfilerTimeMs` | `GetScriptProfilerTimeMs()` → `number` | Total Lua time spent in engine-invoked callbacks during the last frame. |
+| `GetScriptProfilerCalls` | `GetScriptProfilerCalls()` → `number` | Number of measured Lua callback invocations during the last frame. |
+| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Current Lua heap size in KB. |
+| `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Smoothed Lua allocation rate in KB/s — a growing value means script memory churn. |
+| `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Array of per-script rows, sorted by last-frame cost. Each entry has `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
+
+#### Lua API — Hitch Detection
+
+The profiler automatically captures frames that stall — a frame that exceeds the threshold *and* takes more than twice the running average is stored with its complete scope tree for later inspection in the editor's **Hitches** tab.
+
+```lua
+SetProfilerHitchThreshold(33.0)
+SetProfilerHitchDetection(true)
+
+if GetProfilerHitchCount() > 0 then
+    PrintScreen("Hitches: " .. GetProfilerHitchCount(), 1.0)
+end
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `SetProfilerHitchDetection` | `SetProfilerHitchDetection(enabled)` | Turns automatic hitch capture on or off. |
+| `SetProfilerHitchThreshold` | `SetProfilerHitchThreshold(ms)` | Absolute millisecond trigger. A frame must also exceed twice the running average to count. |
+| `GetProfilerHitchCount` | `GetProfilerHitchCount()` → `number` | How many hitches are currently stored (up to 32, oldest dropped first). |
+| `ClearProfilerHitches` | `ClearProfilerHitches()` | Empties the hitch list. |
 
 #### Lua API — Profiler Overlay Toggle
 
@@ -17868,11 +18077,8 @@ Supports **banner**, **interstitial** (full-screen between screens), and **rewar
 > provide your AdMob App ID. Gradle pulls `play-services-ads` automatically.
 >
 > **Build requirement — iOS:** the Google Mobile Ads SDK is not redistributed with the engine,
-> so vendor it once per machine:
->
-> ```sh
-> Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh
-> ```
+> so download it from Google once per machine and put `GoogleMobileAds.xcframework` into
+> `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder.
 >
 > Then enable **Ads & Attribution** in Build Game → iOS and fill in the **AdMob App ID**.
 > CMake finds `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework`, defines

@@ -40,10 +40,10 @@
    - 3.7 [Plugin contexts & ImGui](#37-plugin-contexts--imgui)
    - 3.8 [Entry points: dynamic vs static](#38-entry-points-dynamic-vs-static)
    - 3.9 [API / ABI versioning](#39-api--abi-versioning)
-   - 3.10 [Building a plugin (CMake)](#310-building-a-plugin-cmake)
+   - 3.10 [The plugin's `CMakeLists.txt`](#310-the-plugins-cmakeliststxt)
    - 3.11 [Worked example: a minimal editor plugin](#311-worked-example-a-minimal-editor-plugin)
    - 3.12 [Shipping data & Visual Script nodes with a plugin](#312-shipping-data--visual-script-nodes-with-a-plugin)
-   - 3.13 [Building a plugin without the engine — the Plugin Builder](#313-building-a-plugin-without-the-engine--the-plugin-builder)
+   - 3.13 [Building a plugin — the Plugin Builder](#313-building-a-plugin--the-plugin-builder)
 
 **Part II — Mods (Lua + content)**
 
@@ -431,11 +431,13 @@ plugin reports the version it was built against in `PluginInfo::APIVersion` (set
 
 Always rebuild plugins against the engine version you ship with.
 
-### 3.10 Building a plugin (CMake)
+### 3.10 The plugin's `CMakeLists.txt`
 
-Each plugin folder has a `CMakeLists.txt`. The engine **auto-discovers** plugin folders
-at configure time and adds them to the build, so you don't edit the engine's build files
-— you just drop your plugin folder in. Discovery rules:
+Every plugin folder carries a `CMakeLists.txt`. It is what the
+[Plugin Builder](#313-building-a-plugin--the-plugin-builder) compiles
+when you build the plugin, and what a **game build** picks up when the plugin ships with
+your game — you never edit the engine's own build files, you just drop your plugin folder
+in. Discovery rules:
 
 * A folder is only added if it contains a **`CMakeLists.txt`**.
 * Folders are searched in the **project root** first (the parent of `ICE_CONTENT_DIR`,
@@ -443,8 +445,8 @@ at configure time and adds them to the build, so you don't edit the engine's bui
   given name wins, so a project can shadow an engine plugin.
 * If `Config/Plugins.json` exists and has an `Enabled` object, only plugins listed there
   with `true` are configured — everything else is skipped with
-  `Skipping disabled plugin '<name>' (not enabled in Plugins.json)`. **Enable a new
-  plugin in `Plugins.json` before you build it.**
+  `Skipping disabled plugin '<name>' (not enabled in Plugins.json)`. **Tick a new plugin
+  in *Tools → Plugins & Mods* before you build a game with it.**
 * A plugin whose `plugin.json` declares `"EditorOnly": true` is configured **only** for
   editor builds. Every runtime configuration skips it with
   `Skipping editor-only plugin '<name>' (never built into a game)`.
@@ -488,18 +490,24 @@ Notes:
   `PRIVATE`.
 * Guard editor-only plugins (those that include `imgui.h`) so they **skip** on platforms
   where they don't apply — e.g. `if(ANDROID OR EMSCRIPTEN OR IOS) return() endif()` and
-  `if(NOT TARGET imgui::imgui) return() endif()`, as the bundled AIHelper does.
+  `if(NOT TARGET imgui::imgui) return() endif()`, as the bundled AIHelper does. Its build
+  file ships next to the plugin as `Plugins/AIHelper/CMakeLists.txt.example` — a complete,
+  working reference you can copy. It carries the `.example` suffix so neither a game build
+  nor the Plugin Builder mistakes the bundled binary plugin for one to compile.
 * The engine sets `ICE_PLUGIN_OUTPUT_DIR` to wherever the binary has to land for that
   build to find it: `Plugins/<Name>/` next to the editor in an **editor** build,
   `bin/<platform>/Plugins/<Name>/` next to the game executable in a **runtime/game**
   build, `lib/Android/<ABI>/` on Android, and `static_plugins/<Name>/` for static
-  builds. Respect it if you customize output paths (the AIHelper `CMakeLists.txt` shows
-  the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for multi-config
-  generators). That is also the directory the installer packages from, so a plugin that
-  ignores it will not ship.
-* Add `add_dependencies(IceBoxEngine <plugin>)` / `add_dependencies(IceBoxRuntime <plugin>)`
-  (guarded by `if(TARGET …)`) so your plugin rebuilds whenever the editor or runtime is
-  built. The user builds the engine; you don't need to build the plugin manually.
+  builds. Respect it if you customize output paths (`Plugins/AIHelper/CMakeLists.txt.example`
+  shows the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for
+  multi-config generators). That is also the directory a game build packages from, so
+  a plugin that ignores it will not ship.
+* Add `add_dependencies(IceBoxRuntime <plugin>)` — guarded by
+  `if(TARGET IceBoxRuntime)` — so your plugin is rebuilt as part of every game build
+  that includes it. `Plugins/AIHelper/CMakeLists.txt.example` also guards an
+  `add_dependencies(IceBoxEngine <plugin>)` the same way; that target only exists in an
+  engine source tree, so the guard simply skips it everywhere else. Keeping both makes
+  one `CMakeLists.txt` work in either place.
 
 ### 3.11 Worked example: a minimal editor plugin
 
@@ -558,8 +566,8 @@ ICE_PLUGIN_ENTRY(MyPlugin)
 ```
 
 Drop this (plus `plugin.json` and `CMakeLists.txt` from above) into `Plugins/MyPlugin/`,
-add `"MyPlugin": true` to `Config/Plugins.json`, build the engine, and you'll find
-*Tools → My Plugin*.
+build it with the [Plugin Builder](#313-building-a-plugin--the-plugin-builder), tick it in
+*Tools → Plugins & Mods*, and you'll find *Tools → My Plugin*.
 
 ### 3.12 Shipping data & Visual Script nodes with a plugin
 
@@ -610,12 +618,11 @@ same shape as the engine catalog:
 Duplicate names are ignored, and entries that collide with a curated engine node are
 skipped, so you cannot accidentally overwrite the built-in palette.
 
-### 3.13 Building a plugin without the engine — the Plugin Builder
+### 3.13 Building a plugin — the Plugin Builder
 
-Everything in [3.10](#310-building-a-plugin-cmake) describes what happens when **the
-engine** is built. You do not have to go that way: because a plugin never links against
-the engine — it only includes `PluginInterface.h` and talks through the host function
-tables — a plugin can be compiled entirely on its own.
+Because a plugin never links against the engine — it only includes `PluginInterface.h`
+and talks through the host function tables — it is compiled entirely on its own, with no
+engine build involved. That is how you build every plugin you write.
 
 `Tools/PluginBuilder/` does exactly that, and ships with every engine installation:
 
@@ -897,10 +904,10 @@ corresponding config file. The panel's own visibility is remembered in
 | Mod checkbox | Saves `Config/Mods.json`. If a level is currently running the mod is loaded/unloaded immediately; otherwise it takes effect at the next Play. |
 | Mod **Refresh** | Unloads all mods and re-scans `Mods/` + config. |
 
-> **A brand-new plugin still needs a build.** CMake only configures plugin folders that
-> are enabled in `Config/Plugins.json`, so the order is: add the folder → enable it in
-> `Plugins.json` (by hand or via the checkbox) → build the engine → **Refresh** or
-> restart. Once the library exists, enabling and disabling is live.
+> **A brand-new plugin still needs a build.** The checkbox only loads a library that
+> already exists, so the order is: add the folder → build it with the **Plugin Builder**
+> ([3.13](#313-building-a-plugin--the-plugin-builder)) → tick it here
+> → **Refresh**. Once the library exists, enabling and disabling is live.
 
 ### 5.2 Configuration files
 
@@ -983,7 +990,7 @@ Two consequences matter here:
   copy independent of the engine installation it was created from.
 * Project-level `Plugins/` folders are also picked up by the build: CMake searches the
   project root before the engine root, so a project can ship — or shadow — a plugin
-  ([3.10](#310-building-a-plugin-cmake)).
+  ([3.10](#310-the-plugins-cmakeliststxt)).
 
 ### 5.5 Player-installed plugins & mods
 
@@ -1149,12 +1156,10 @@ Lua. See [Section 2](#2-plugins-vs-mods--which-should-i-use).
 
 **I enabled a plugin but nothing happened.**
 If its library was already built, enabling loads it immediately. If it is a new plugin,
-CMake never configured it — plugin folders are only added to the build when they are
-enabled in `Config/Plugins.json`. Enable it there, rebuild the engine, then press
-**Refresh** — or build just that plugin with the Plugin Builder
-([3.13](#313-building-a-plugin-without-the-engine--the-plugin-builder)), which needs no
-engine build at all. Also check the log: a plugin whose `APIVersion` is newer than the
-engine's is refused, as is one whose folder has no `.dll`/`.so`/`.dylib`.
+nothing has compiled it yet — build it with the Plugin Builder
+([3.13](#313-building-a-plugin--the-plugin-builder)) and press
+**Refresh**. Also check the log: a plugin whose `APIVersion` is newer than the engine's
+is refused, as is one whose folder has no `.dll`/`.so`/`.dylib`.
 
 **My plugin's ImGui windows don't show.**
 You must adopt the host's ImGui context and allocator in `OnEditorInit` (Section
@@ -1207,7 +1212,7 @@ discovered. The build option only controls what *your* build ships.
 
 **How do I distribute a plugin to others?**
 Build it with the Plugin Builder
-([3.13](#313-building-a-plugin-without-the-engine--the-plugin-builder)) and share the
+([3.13](#313-building-a-plugin--the-plugin-builder)) and share the
 plugin **folder** — after a build it holds `plugin.json` next to the compiled library,
 which is everything the engine needs. Keep `CMakeLists.txt` and `Source/` in it if you
 also want the recipient to be able to rebuild it for their platform, configuration or
