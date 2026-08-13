@@ -129,7 +129,7 @@ IceBox Engine состоит из нескольких компонентов:
 |-----------------|----------------------|
 | 🪟 **Windows** | *(ничего дополнительно — те же инструменты, что и выше)* |
 | 🐧 **Linux** | WSL2 (если собирается из Windows) или нативный GCC/Clang + Ninja |
-| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`, MoltenVK через `fetch_moltenvk.sh macos` |
+| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`, MoltenVK через `fetch_moltenvk.sh macos`. Сборка пресетов `macOS-x64-*` (Intel) **на хосте Apple Silicon** дополнительно требует Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — потому что `configure` CPython и `FindPython` из CMake запускают только что собранные x86_64-бинарники |
 | 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, MoltenVK через `fetch_moltenvk.sh ios` *(обязательно — без него configure падает)*, аккаунт Apple Developer нужен **только** для деплоя на устройство (для компиляции не нужен) |
 | 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(скачивается автоматически)* |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) |
