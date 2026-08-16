@@ -84,6 +84,25 @@ MoltenVK.txt              MoltenVK                     Apache-2.0           vend
 NotoFonts-OFL.txt         Noto Sans font family        OFL-1.1              bundled: Config/Fonts/NotoSans*.ttf
 Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bundled: Content/Examples/Platformer/Widgets/F_Tiny5-Regular.ttf
 
+-- Compiler runtimes redistributed inside a built game (not from vcpkg) --
+
+libcxx-LLVM.txt           LLVM libc++                  Apache-2.0 + LLVM-exception   Android NDK libc++_shared.so, copied into jniLibs/ by build_android.bat / build_android.sh
+Emscripten.txt            Emscripten (+ musl libc)     MIT OR NCSA          Emscripten runtime glue and system libraries linked into the .wasm / .js of a Web build
+
+Windows additionally carries the Microsoft Visual C++ runtime (msvcp140*.dll,
+vcruntime140*.dll, concrt140.dll) next to the engine binaries and next to every
+Windows game built with it, so neither needs the Visual C++ Redistributable to be
+installed on the machine. Those files are Microsoft "Distributable Code": they are
+redistributed unmodified, exactly as the Visual Studio licence terms permit, and
+they carry no open-source attribution obligation, which is why no licence file for
+them appears in this directory. The debug variants (msvcp140d.dll and friends) are
+not redistributable and are never shipped - the build stages release runtimes only.
+See https://visualstudio.microsoft.com/license-terms/
+
+Linux and Apple platforms redistribute no C/C++ runtime of their own: the Debian
+package declares libstdc++6 and libgcc-s1 as dependencies and links the system
+copies, and macOS and iOS link the system libc++ that ships with the OS.
+
 ------------------------------------------------------------------------
 vcpkg CROSS-CHECK
 ------------------------------------------------------------------------

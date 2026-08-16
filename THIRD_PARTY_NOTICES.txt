@@ -61,6 +61,7 @@ Used by:
 - libffi (Foreign function interface; bundled inside the embedded Python runtime, used by ctypes) - https://github.com/libffi/libffi/blob/master/LICENSE
 - SPIRV-Headers (Khronos SPIR-V header files; bundled inside shaderc, SPIRV-Tools and SPIRV-Cross) - https://github.com/KhronosGroup/SPIRV-Headers/blob/main/LICENSE
 - ethers.js v6.16.0 (Ethereum/EVM JavaScript library; embedded verbatim into the page of Web builds made with the Web3 option, so those builds fetch no script at runtime) - https://github.com/ethers-io/ethers.js/blob/main/LICENSE.md
+- Emscripten (LLVM-to-WebAssembly toolchain; dual-licensed MIT OR University of Illinois/NCSA, used here under MIT. Web builds link its JavaScript glue and its system libraries, including the musl-derived C library and the C++ runtime, into the .wasm and .js of the packaged game. It bundles musl libc and portions of Node.js, both MIT. Full text in ThirdPartyLicenses/Emscripten.txt) - https://github.com/emscripten-core/emscripten/blob/main/LICENSE
 
 Copyright (c) The respective authors of these libraries.
 
@@ -197,10 +198,12 @@ Used by:
 - OpenSSL (TLS and cryptography library; used by cURL and IXWebSocket for HTTPS / secure WebSockets) - https://github.com/openssl/openssl/blob/master/LICENSE.txt
 - MoltenVK (Vulkan to Metal translation layer, used as the Vulkan backend on macOS and iOS) - https://github.com/KhronosGroup/MoltenVK/blob/main/LICENSE
 - OpenGL-Registry and EGL-Registry (Khronos OpenGL/EGL API registries; used to generate the GL/EGL loaders. The registries are Apache-2.0; some legacy OpenGL header files they contain are additionally covered by the SGI Free Software License B) - https://github.com/KhronosGroup/OpenGL-Registry
+- LLVM libc++ (C++ standard library; redistributed only inside Android builds, as the libc++_shared.so that the Android NDK supplies and a packaged Android game loads. Apache-2.0 WITH LLVM-exception, and its pre-2019 contributions remain additionally available under the legacy dual University of Illinois/NCSA and MIT licensing. Both the exception and the legacy texts are reproduced in full in ThirdPartyLicenses/libcxx-LLVM.txt. No other platform redistributes it: Windows links the Microsoft C++ runtime, Linux the system libstdc++, macOS and iOS the system libc++, and Web the Emscripten C++ runtime listed in the MIT section above) - https://github.com/llvm/llvm-project
 
 Copyright (C) Google Inc.
 Copyright (C) The Khronos Group Inc.
 Copyright (C) The OpenSSL Project Authors.
+Copyright (C) The LLVM Project contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -213,6 +216,13 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+LLVM libc++ carries, in addition, the LLVM Exception to the Apache 2.0 License,
+which relaxes Sections 4(a), 4(b) and 4(d) for portions of the library embedded
+into compiled object code, and allows Sections 3 and 9 to be waived where a
+court finds them in conflict with the GPLv2 in a combined work. Its verbatim
+text is in ThirdPartyLicenses/libcxx-LLVM.txt and applies only to that
+component.
 
 ========================================================================
 8. GNU LESSER GENERAL PUBLIC LICENSE v2.1

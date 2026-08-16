@@ -39,7 +39,7 @@ the engine exists. The request contains no license key, no device identifier,
 no account, no file path and no usage data - it only asks for the list of
 releases. Your IP address is visible to the receiving service as it is for any
 HTTPS request; we do not record it. The manifest is served by a Google Apps
-Script web app - the same processor named in section 6. You can switch this
+Script web app - the same recipient named in section 6. You can switch this
 check off with "Check for updates on startup" in the updater, and still check
 by hand with "Check for Updates".
 
@@ -153,23 +153,33 @@ Retention
     older ones automatically; you may delete the folder at any time.
 
 --------------------------------------------------------------------------------
-6. WHO ELSE SEES THE DATA (PROCESSORS AND TRANSFERS)
+6. WHO ELSE SEES THE DATA (RECIPIENTS AND TRANSFERS)
 --------------------------------------------------------------------------------
 
 The default receiving endpoint is a Google Apps Script web app that forwards
 each report to a Gmail mailbox. Consequently:
 
-    Processor:  Google LLC and Google Ireland Limited
+    Recipient:  Google LLC and Google Ireland Limited
                 (Google Apps Script and Gmail)
     Location:   United States and other countries where Google operates
-    Safeguard:  Google LLC is certified under the EU-U.S. Data Privacy
-                Framework, and the UK Extension and Swiss-U.S. Framework.
-                Google's Cloud Data Processing Addendum additionally provides
-                Standard Contractual Clauses.
+    Basis:      The endpoint runs on an ordinary Google account, governed by
+                Google's own Terms of Service and Privacy Policy. We have no
+                data processing agreement with Google for it, and Google is
+                therefore not acting as our processor on this service: it
+                handles what reaches the mailbox on its own terms rather than
+                solely on our instructions. We are telling you this plainly
+                because it is the honest description of the arrangement, and
+                because it is your decision whether to press Send.
     Google's privacy policy: https://policies.google.com/privacy
 
-No crash report is sold, rented, or shared with advertisers, data brokers or any
-other third party. Access is limited to the engine maintainers.
+We keep what reaches the endpoint to the minimum described in sections 3 and 4,
+and no crash report is sold, rented, or shared with advertisers, data brokers or
+any other third party. Access on our side is limited to the engine maintainers.
+
+If you would rather that no report of yours passed through Google, simply do not
+press Send. The report stays on your disk, you can read it, and you can send it
+to the address in section 7 by whatever means you prefer - or not at all. The
+engine works exactly the same either way.
 
 If you build IceBox Engine yourself and point
 Source/Engine/Core/CrashReportConfig.h at your own endpoint, the recipient is
@@ -212,9 +222,11 @@ If you enter an address in the Build panel's "Crash Report URL" field (stored as
     IceBoxCrew Studio. IceBoxCrew Studio never receives them and is not a
     recipient, a processor, or a joint controller.
   * You must disclose that collection in your own game's privacy policy, name
-    your own processors (for example Google, if you use the Apps Script
-    endpoint), state a retention period, and provide a contact for data subject
-    requests. Sections 3 to 7 of this document are a usable starting point.
+    the recipients and processors you use (for example Google, if you host the
+    endpoint on Apps Script - and note that an ordinary Google account carries
+    no data processing agreement, as section 6 explains), state a retention
+    period, and provide a contact for data subject requests. Sections 3 to 7 of
+    this document are a usable starting point.
   * On iOS you must additionally declare crash data collection in your app's
     PrivacyInfo.xcprivacy. The template shipped with the engine declares
     NSPrivacyCollectedDataTypes as empty, which is correct only while no
@@ -282,11 +294,26 @@ Retention
 
 Who else sees it
 
-    Processor:  Google LLC and Google Ireland Limited
+    Recipient:  Google LLC and Google Ireland Limited
                 (Google Apps Script and Google Sheets)
     Location:   United States and other countries where Google operates
-    Safeguard:  the same Data Privacy Framework certification and Standard
-                Contractual Clauses described in section 6.
+    Basis:      the same arrangement described in section 6 - an ordinary
+                Google account under Google's own terms, with no data
+                processing agreement behind it, so Google is not acting as our
+                processor here either.
+
+If you would rather not have an activation record on Google's infrastructure,
+write to us before you activate and we will issue you a device-locked key
+instead, at no cost. A device-locked key is verified on your own machine, against
+the signature inside the key and the machine it was issued for, and it activates
+whether or not our endpoint answers - so it also works with that endpoint
+blocked, with the machine offline, and after our service one day stops existing.
+The editor still attempts the single request described above when it can reach
+the network; if that request does not get through, your activation succeeds all
+the same and no record of it reaches us or Google - the only record is the one
+on your own disk, which is yours. The only practical difference from an ordinary
+key is that a device-locked key is tied to the machine you tell us about, so
+replacing that machine means asking us for a new one.
 
 Your rights under section 7 apply to activation records as well. Because a
 record carries no account identifier, quote your Key ID and Device ID - both are

@@ -591,6 +591,37 @@ short header with the `SPDX-License-Identifier`, the copyright line and a link t
 the full text on spdx.org — replace it with the full license if you ship the
 project.
 
+##### Copyleft licenses need a linking exception
+
+`LGPL-3.0-only`, `GPL-3.0-only` and `AGPL-3.0-only` are copyleft licenses, and the
+launcher shows a warning when you pick one. The file they write covers **your own
+source code and assets**, which is yours to license however you like. It does not,
+on its own, cover the **binary** that Build Game produces.
+
+The reason is that a built game links statically against `lib/IceBoxCore`, the
+prebuilt engine core, which is proprietary and licensed to you under `LICENSE.txt`.
+The GPL family requires the whole combined work to be distributable under GPL terms;
+the engine core cannot be, and the GPL's system-library exception does not reach it.
+So the binary you ship would satisfy neither license at once.
+
+There is a standard, well-understood fix, and it is one paragraph. Add a linking
+exception to your own license, alongside the SPDX header:
+
+```
+As a special exception, the copyright holders of this program give you permission
+to link it with the IceBox Engine runtime and the prebuilt IceBox Engine core
+libraries (lib/IceBoxCore), and to distribute the resulting executable, without
+this permission extending the requirements of the GNU General Public License to
+those components. You must obey the GNU General Public License in all respects for
+all of the code used other than those components.
+```
+
+With that paragraph in place your source stays copyleft, the shipped binary is
+distributable, and nobody has to guess. `MPL-2.0` needs none of this — it is
+file-level copyleft and explicitly permits combining with proprietary code in a
+Larger Work. Every other license in the table above is permissive and combines with
+the engine core without any extra wording.
+
 #### What Create Project does
 
 Pressing **Create Project** makes the launcher:
