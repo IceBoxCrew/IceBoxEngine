@@ -54,7 +54,7 @@ glslang.txt               glslang                      BSD-3-Clause (+MIT)  vcpk
 IXWebSocket.txt           IXWebSocket                  BSD-3-Clause         vcpkg: ixwebsocket
 FreeType.txt              FreeType                     FTL (FreeType)       vcpkg: freetype
 Python.txt                Python (embedded)            PSF License 2.0      vcpkg: python3
-GNU-FriBidi.txt           GNU FriBidi                  LGPL-2.1-or-later    vcpkg: fribidi
+SheenBidi.txt             SheenBidi                    Apache-2.0           vcpkg: sheenbidi
 shaderc.txt               shaderc                      Apache-2.0           vcpkg: shaderc
 SPIRV-Tools.txt           SPIRV-Tools                  Apache-2.0           vcpkg: spirv-tools
 Vulkan-Headers.txt        Vulkan-Headers               Apache-2.0 OR MIT    vcpkg: vulkan-headers
@@ -140,7 +140,7 @@ project by the developer. None of these are shipped inside IceBox Engine, so
 they carry no license file in this directory; they are licensed directly to
 the developer under Google's own terms. The resulting attribution and privacy
 duties fall on the developer of the game. See THIRD_PARTY_NOTICES.txt
-section 14 for the full list and the specific obligations.
+section 13 for the full list and the specific obligations.
 
 ------------------------------------------------------------------------
 NOTES
@@ -151,18 +151,22 @@ NOTES
   PRODUCES royalty-free output (VP9 via libvpx, Opus, Vorbis). The editor's media
   importer additionally uses FFmpeg's standard built-in decoders to read the
   source video/audio that a developer chooses to import. See THIRD_PARTY_NOTICES.txt
-  section 8.
+  section 7.
 - Cooked video uses the royalty-free VP9 video codec (libvpx, which carries the
   WebM patent grant) with Opus audio in a WebM container; see libvpx.txt. No
   patent-encumbered codec is produced by the engine.
-- GNU FriBidi (LGPL-2.1) and FFmpeg (LGPL-2.1) are dynamically linked and shipped
-  as separate replaceable shared libraries on every platform where they are
-  included (Windows, Linux, macOS and Android), so they can be replaced/relinked
-  freely without any further action. FFmpeg is not included on iOS or Web. FriBidi
-  is also included on iOS and Web, where all libraries are linked statically; there
-  it is shipped unmodified, so its upstream release at
-  https://github.com/fribidi/fribidi is the complete corresponding source code.
-  See THIRD_PARTY_NOTICES.txt sections 6 and 8.
+- FFmpeg (LGPL-2.1) is the only copyleft component in the product. It is dynamically
+  linked and shipped as separate replaceable shared libraries on every platform where
+  it is included (Windows, Linux, macOS and Android), so it can be replaced/relinked
+  freely without any further action. It is not included on iOS or Web, the two
+  platforms that link every library statically, so a game shipped for iOS or Web
+  carries no copyleft component at all. See THIRD_PARTY_NOTICES.txt section 7.
+- SheenBidi (Apache-2.0) provides the Unicode Bidirectional Algorithm on every
+  platform and is statically linked everywhere. It replaced GNU FriBidi (LGPL-2.1),
+  which earlier versions of the engine used: static LGPL linkage on iOS and Web would
+  have obliged every developer shipping a game to also hand their players the object
+  code of that game so the library could be relinked, which the Apache-2.0 licence of
+  SheenBidi does not require. See THIRD_PARTY_NOTICES.txt section 6.
 - ANGLE and MoltenVK ship only in macOS/iOS builds; they are listed here so
   this attribution set is complete across all six target platforms.
 - enkiTS is statically linked into Windows, Linux, macOS, iOS and Android builds,

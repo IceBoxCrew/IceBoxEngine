@@ -404,17 +404,21 @@ while the Software is pre-release.
      obligation to reproduce those notices becomes yours to satisfy in some
      other way.
 
-12.3 LGPL components. FFmpeg and GNU FriBidi are licensed under the LGPL-2.1.
-     You, and the users of your Products, may modify, replace and relink them,
-     and reverse engineer for the purpose of debugging those modifications,
-     exactly as the LGPL allows. Section 7 does not restrict that.
-     THIRD_PARTY_NOTICES.txt explains how they are linked on each platform and
-     where their complete corresponding source code is available.
+12.3 LGPL components. FFmpeg is licensed under the LGPL-2.1 and is the only
+     copyleft component the Software contains. You, and the users of your
+     Products, may modify, replace and relink it, and reverse engineer for the
+     purpose of debugging those modifications, exactly as the LGPL allows.
+     Section 7 does not restrict that. It is always dynamically linked and
+     always shipped as separate replaceable shared libraries, and it is not
+     included in iOS or Web (WebAssembly) builds at all, so a Product you ship
+     for those two platforms contains no copyleft component.
+     THIRD_PARTY_NOTICES.txt explains how it is linked on each platform and
+     where its complete corresponding source code is available.
 
 12.4 Platform SDKs. Where you enable a feature that pulls in a Google or other
      platform SDK into your Product, that SDK is licensed to you directly by
      its owner under its own terms and is not covered by this License.
-     THIRD_PARTY_NOTICES.txt, Section 14, lists those SDKs and the obligations
+     THIRD_PARTY_NOTICES.txt, Section 13, lists those SDKs and the obligations
      that come with them.
 
 --------------------------------------------------------------------------------

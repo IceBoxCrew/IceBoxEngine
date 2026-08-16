@@ -153,43 +153,10 @@ The full text of the license can be found at:
 https://docs.python.org/3/license.html
 
 ========================================================================
-6. GNU LESSER GENERAL PUBLIC LICENSE v2.1 (LGPL-2.1)
+6. APACHE LICENSE 2.0
 ========================================================================
 Used by:
-- GNU FriBidi (Unicode Bidirectional Algorithm implementation) - https://github.com/fribidi/fribidi/blob/master/COPYING
-
-Copyright (C) 2004  Behdad Esfahbod
-Copyright (C) 2001, 2002, 2004  Dov Grobgeld
-
-GNU FriBidi is free software; you can redistribute it and/or modify it
-under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation; either version 2.1 of the License, or
-(at your option) any later version.
-
-GNU FriBidi is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
-General Public License for more details.
-
-In accordance with the LGPL, the complete corresponding source code of GNU
-FriBidi is available from the official project at
-https://github.com/fribidi/fribidi. On Windows, Linux, macOS and Android,
-FriBidi is dynamically linked and shipped as a separate shared library
-(fribidi-*.dll or libfribidi-*.dll on Windows, depending on whether the build used
-MSVC or MinGW-w64; libfribidi.so; libfribidi.*.dylib) alongside IceBox Engine and
-any Product built with it, so the end user can replace it with a modified version
-without relinking. On iOS and Web (WebAssembly) — platforms that link all
-libraries statically — IceBox Engine ships FriBidi unmodified, and that upstream
-release at https://github.com/fribidi/fribidi is the complete corresponding
-source code for it.
-
-The full text of the license can be found at:
-https://github.com/fribidi/fribidi/blob/master/COPYING
-
-========================================================================
-7. APACHE LICENSE 2.0
-========================================================================
-Used by:
+- SheenBidi (Unicode Bidirectional Algorithm implementation) - https://github.com/Tehreer/SheenBidi/blob/master/LICENSE
 - shaderc (GLSL to SPIR-V compiler) - https://github.com/google/shaderc/blob/main/LICENSE
 - SPIRV-Tools (SPIR-V assembler, validator and optimizer; bundled inside shaderc) - https://github.com/KhronosGroup/SPIRV-Tools/blob/main/LICENSE
 - Vulkan-Headers (Vulkan API header files; dual-licensed Apache-2.0 OR MIT) - https://github.com/KhronosGroup/Vulkan-Headers/blob/main/LICENSE.md
@@ -200,6 +167,7 @@ Used by:
 - OpenGL-Registry and EGL-Registry (Khronos OpenGL/EGL API registries; used to generate the GL/EGL loaders. The registries are Apache-2.0; some legacy OpenGL header files they contain are additionally covered by the SGI Free Software License B) - https://github.com/KhronosGroup/OpenGL-Registry
 - LLVM libc++ (C++ standard library; redistributed only inside Android builds, as the libc++_shared.so that the Android NDK supplies and a packaged Android game loads. Apache-2.0 WITH LLVM-exception, and its pre-2019 contributions remain additionally available under the legacy dual University of Illinois/NCSA and MIT licensing. Both the exception and the legacy texts are reproduced in full in ThirdPartyLicenses/libcxx-LLVM.txt. No other platform redistributes it: Windows links the Microsoft C++ runtime, Linux the system libstdc++, macOS and iOS the system libc++, and Web the Emscripten C++ runtime listed in the MIT section above) - https://github.com/llvm/llvm-project
 
+Copyright (C) Muhammad Tayyab Akram (SheenBidi).
 Copyright (C) Google Inc.
 Copyright (C) The Khronos Group Inc.
 Copyright (C) The OpenSSL Project Authors.
@@ -224,8 +192,16 @@ court finds them in conflict with the GPLv2 in a combined work. Its verbatim
 text is in ThirdPartyLicenses/libcxx-LLVM.txt and applies only to that
 component.
 
+SheenBidi is statically linked into IceBox Engine and into every Product built
+with it, on every platform. The Apache License 2.0 permits that without any
+relinking or source-disclosure obligation; the notice above, together with the
+verbatim licence text in ThirdPartyLicenses/SheenBidi.txt, is the whole of what
+it requires. SheenBidi replaced GNU FriBidi so that no component of a shipped
+Product carries a copyleft obligation on platforms that link everything
+statically, namely iOS and Web (WebAssembly).
+
 ========================================================================
-8. GNU LESSER GENERAL PUBLIC LICENSE v2.1
+7. GNU LESSER GENERAL PUBLIC LICENSE v2.1
 ========================================================================
 Used by:
 - FFmpeg (libavcodec, libavdevice, libavfilter, libavformat, libavutil, libswresample, libswscale) - https://ffmpeg.org/legal.html
@@ -273,7 +249,7 @@ The full text of the license can be found at:
 https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 
 ========================================================================
-9. ISC LICENSE
+8. ISC LICENSE
 ========================================================================
 Used by:
 - libsodium (Modern cryptography library; transport AEAD encryption and password hashing) - https://github.com/jedisct1/libsodium/blob/master/LICENSE
@@ -293,7 +269,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ========================================================================
-10. PNG REFERENCE LIBRARY LICENSE (libpng)
+9. PNG REFERENCE LIBRARY LICENSE (libpng)
 ========================================================================
 Used by:
 - libpng (PNG image reference library; used by FreeType and basis_universal) - https://github.com/pnggroup/libpng/blob/master/LICENSE
@@ -326,7 +302,7 @@ following restrictions:
    altered source distribution.
 
 ========================================================================
-11. BZIP2 LICENSE
+10. BZIP2 LICENSE
 ========================================================================
 Used by:
 - bzip2 / libbzip2 (Compression library; used by FreeType) - https://gitlab.com/bzip2/bzip2/-/blob/master/LICENSE
@@ -359,7 +335,7 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
 OF SUCH DAMAGE.
 
 ========================================================================
-12. SIL OPEN FONT LICENSE, VERSION 1.1
+11. SIL OPEN FONT LICENSE, VERSION 1.1
 ========================================================================
 Used by:
 - Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew, Noto Sans JP, and Noto Sans SC (bundled fonts used to render Latin, Cyrillic, Arabic, Hebrew, Devanagari, Japanese and Simplified Chinese text in the editor and in games) - https://github.com/notofonts
@@ -457,7 +433,7 @@ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE
 THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ========================================================================
-13. PUBLIC DOMAIN / BSD ZERO CLAUSE LICENSE (0BSD)
+12. PUBLIC DOMAIN / BSD ZERO CLAUSE LICENSE (0BSD)
 ========================================================================
 Used by:
 - SQLite (SQL database engine; bundled inside the embedded Python runtime via the sqlite3 module) - https://www.sqlite.org/copyright.html
@@ -483,10 +459,10 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 
 ========================================================================
-14. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+13. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
 ========================================================================
 
-The components listed in sections 1-13 above are the ones that IceBoxCrew
+The components listed in sections 1-12 above are the ones that IceBoxCrew
 Studio redistributes as part of IceBox Engine. The Android game template
 additionally resolves the following packages from Google's Maven repository
 through the game developer's own Gradle build. They are not shipped inside
