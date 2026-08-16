@@ -5,7 +5,7 @@
 <h1 align="center">🧊 IceBox Engine™</h1>
 
 <p align="center">
-  <strong>EN English</strong> &nbsp;•&nbsp; <a href="README.ru.md">🇷🇺 Русский</a>
+  <strong>🇬🇧 English</strong> &nbsp;•&nbsp; <a href="README.ru.md">🇷🇺 Русский</a>
 </p>
 
 <p align="center">
@@ -43,7 +43,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 - **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D, with a multithreaded solver (enkiTS) on desktop and mobile.
 - **Sprites & Tilemaps** — Sprite editor, spritesheet slicer, flipbook animation, and dedicated tilemap / tileset editors.
 - **Animation** — Skeletal animation, flipbooks, and timeline-driven clips.
-- **Text & UI** — In-engine UI widgets and high-quality text via FreeType, HarfBuzz, and FriBidi (full Unicode shaping with right-to-left support).
+- **Text & UI** — In-engine UI widgets and high-quality text via FreeType, HarfBuzz, and SheenBidi (full Unicode shaping with right-to-left support).
 - **Audio** — Mixing and playback with Opus / Vorbis codec support.
 - **Scripting** — Lua gameplay scripting with an integrated debugger, a **visual node-graph** editor, and Python for editor tooling.
 - **AI** — Pathfinding, behaviour trees, and navigation.
@@ -97,7 +97,7 @@ IceBox Engine consists of several components:
 | **CPU** | Dual-core processor |
 | **RAM** | 4 GB |
 | **GPU** | OpenGL 3.3/4.6 or Vulkan 1.1-1.4 compatible (Windows / Linux) or Metal-capable GPU (macOS, via ANGLE or MoltenVK), 512 MB VRAM |
-| **Disk** | 5–10 GB free space |
+| **Disk** | 10-20 GB free space |
 
 ### Runtime — iOS
 
@@ -123,16 +123,49 @@ IceBox Engine consists of several components:
 
 ## 📦 Build Requirements
 
+Building a game runs the native toolchain of the target platform on your machine: the engine ships the SDK headers and the pre-built cores, you supply the compiler.
+
+### Base tools (every target)
+
+| | |
+|-|-|
+| **Compiler** | Visual Studio 2026+ (MSVC — the "Desktop development with C++" workload) on Windows, latest GCC / Clang on Linux, or Apple Clang (Xcode 15+) on macOS |
+| **Build tools** | CMake 4.3+ and Ninja (Xcode on iOS) |
+| **Package manager** | [vcpkg](https://github.com/microsoft/vcpkg) |
+| **Optional** | NSIS (Windows game installers), `dpkg-deb` (Linux `.deb` packages), ImageMagick (higher-quality icon conversion) |
+
 ### To build games (Tools → Build Game)
 
 | Target platform | Additional requirements |
 |-----------------|----------------------|
 | 🪟 **Windows** | *(nothing extra — same tools as above)* |
 | 🐧 **Linux** | WSL2 (if building from Windows) or native GCC/Clang + Ninja |
-| 🍎 **macOS** | macOS host with Xcode 15+ Command Line Tools, Python 3.12+ **with development headers** (Homebrew — the bundled system Python 3.9 is too old), vcpkg with `arm64-osx` / `x64-osx` triplets, MoltenVK vendored via `fetch_moltenvk.sh macos`. Building the `macOS-x64-*` (Intel) presets **on an Apple Silicon host** additionally needs Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — because CPython's `configure` and CMake's `FindPython` execute freshly built x86_64 binaries |
-| 📱 **iOS** | macOS host with Xcode 15+ (full IDE, not just CLI tools), vcpkg with `arm64-ios` triplet, MoltenVK vendored via `fetch_moltenvk.sh ios` *(mandatory — configure fails without it)*, Apple Developer account **only** for on-device deployment (compiling needs no account) |
+| 🍎 **macOS** | macOS host with Xcode 15+ Command Line Tools, Python 3.12+ **with development headers** (Homebrew — the bundled system Python 3.9 is too old), vcpkg with `arm64-osx` / `x64-osx` triplets. Building the x86_64 (Intel) target **on an Apple Silicon host** additionally needs Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — because CPython's `configure` and CMake's `FindPython` execute freshly built x86_64 binaries |
+| 📱 **iOS** | macOS host with Xcode 15+ (full IDE, not just CLI tools), vcpkg with `arm64-ios` triplet, Apple Developer account **only** for on-device deployment (compiling needs no account) |
 | 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(auto-downloaded)* |
-| 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) |
+| 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — plus Node.js 24+ if you build the `wasm64` memory model |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Install the engine
+
+Run the installer for your platform: an NSIS `…-Setup.exe` on Windows, a `…-Setup.deb` on Linux (installs into `/opt/iceboxengine`), or a `…-Setup.pkg` on macOS (installs into `/Applications/IceBoxEngine`). Every installer carries the Launcher, the Editor, the Updater and the Runtime, together with the documentation, the example projects and the SDK used to build games.
+
+### 2. Launch and activate
+
+Start **IceBox Launcher** — from the desktop shortcut, the Start-menu / application-menu entry, or `IceBoxLauncher` in the install folder. On a computer that is not activated yet the launcher opens the activation screen: paste your license key and press **Activate**. That is a one-off step per computer; afterwards the launcher, the editor and the updater all open straight away.
+
+### 3. Create a project
+
+In the Launcher, open the **New Project** tab, choose a name, location and license, then press **Create Project**. The Launcher sets up the project structure and opens the **Editor**.
+
+### 4. Build your game
+
+In the Editor, go to **Tools → Build Game**, select the target platform (Windows, Linux, macOS, iOS, Android, or Web), and build. The output is a ready-to-distribute package with the Runtime included — and, when you ask for one, an NSIS `.exe`, a `.deb` package or a macOS `.pkg` / `.dmg` installer next to it.
+
+Step-by-step walkthroughs: **[Getting Started](Documentation/EN/Getting-Started-EN-DOC.md)** for the installer, the Launcher and the Updater; **[Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md)** for every build option and platform setting.
 
 ---
 
@@ -146,6 +179,10 @@ git clone https://github.com/microsoft/vcpkg C:\dev\vcpkg
 C:\dev\vcpkg\bootstrap-vcpkg.bat
 set VCPKG_ROOT=C:\dev\vcpkg
 ```
+
+> Building a game needs no Developer Command Prompt: the build script locates the Visual
+> Studio installation with `vswhere` and calls `vcvarsall.bat` for the target architecture
+> itself.
 
 ### Linux / WSL2
 
@@ -165,7 +202,16 @@ sudo apt update && sudo apt install -y \
     libssl-dev zenity libespeak-ng-dev \
     mingw-w64 g++-mingw-w64
 
-# 2. Install vcpkg
+# 2. CMake 4.3+ — what the game build's cmake_minimum_required asks for. Debian and
+#    Ubuntu, the usual WSL2 images included, still package an older one, so check
+#    `cmake --version` first and skip this step if apt already gave you 4.3+.
+ICE_CMAKE_VERSION=4.3.3
+curl -fsSLO https://github.com/Kitware/CMake/releases/download/v$ICE_CMAKE_VERSION/cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz
+sudo tar -xzf cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz -C /opt
+sudo ln -sf /opt/cmake-$ICE_CMAKE_VERSION-linux-x86_64/bin/{cmake,cpack,ctest} /usr/local/bin/
+cmake --version
+
+# 3. Install vcpkg
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
@@ -176,18 +222,19 @@ echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
 
 #### 32-bit (x86) builds
 
-The steps above build the default 64-bit engine. The `Linux-x86-*` presets build
-32-bit binaries with `-m32`, which additionally needs the **i386 multiarch**
-enabled plus the multilib toolchain and i386 copies of the development libraries.
-The tools installed above (CMake, Ninja, git, NSIS, etc.) are architecture-neutral
-and are **not** reinstalled — only the compiler and the linkable `:i386` libraries:
+The steps above cover the default 64-bit games. A 32-bit Linux game — **Tools → Build
+Game → Linux** with the x86 architecture, or `build_linux.sh --arch x86` — is compiled
+with `-m32`, which additionally needs the **i386 multiarch** enabled plus the multilib
+toolchain and i386 copies of the development libraries. The tools installed above (CMake,
+Ninja, git, NSIS, etc.) are architecture-neutral and are **not** reinstalled — only the
+compiler and the linkable `:i386` libraries:
 
 ```bash
 # 1. Enable the i386 architecture and refresh the package lists
 sudo dpkg --add-architecture i386
 sudo apt update
 
-# 2. Install the 32-bit toolchain and the i386 development libraries
+# 2. Install the 32-bit toolchain and the i386 development libraries.
 sudo apt install --no-remove \
     gcc-multilib g++-multilib \
     libx11-dev:i386 libxft-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxfixes-dev:i386 libxss-dev:i386 libxtst-dev:i386 \
@@ -203,16 +250,14 @@ sudo apt install --no-remove \
 #### arm64 (AArch64) cross builds
 
 On a **native AArch64 machine** nothing below is needed: the system compiler and the
-system libraries are already arm64, so the `Linux-arm64-*` presets, the core prebuild and
-the Build Game scripts all work out of the box.
+system libraries are already arm64, so the arm64 target and the Build Game scripts work
+out of the box.
 
 Cross-building from an x86_64 host needs the AArch64 toolchain **and** arm64 copies of the
-development libraries — the same shape as the i386 set above. The pre-built core is a
-static archive and links nothing, so the toolchain alone produces it; an **executable**
-(a game, or the engine itself) additionally links SDL3 against the system audio and display
-stack (PulseAudio, Wayland, EGL, xkbcommon, libdecor), which vcpkg does not ship. Without
-the `:arm64` copies the AArch64 link reaches into `/usr/lib/x86_64-linux-gnu` and fails with
-`file in wrong format`:
+development libraries — the same shape as the i386 set above. A game links SDL3 against the
+system audio and display stack (PulseAudio, Wayland, EGL, xkbcommon, libdecor), which vcpkg
+does not ship. Without the `:arm64` copies the AArch64 link reaches into
+`/usr/lib/x86_64-linux-gnu` and fails with `file in wrong format`:
 
 ```bash
 # 1. Enable the arm64 architecture and refresh the package lists
@@ -235,6 +280,39 @@ sudo apt install --no-remove \
 > multilib `/usr/include/asm` symlink is wrong for every cross compiler and apt refuses to
 > keep both. One host therefore cross-builds either x86 or arm64, not both — swap the
 > packages between runs, or keep two machines.
+
+#### Windows game builds from a Linux host (MinGW-w64)
+
+`build_windows.sh` cross-compiles a Windows game from Linux with MinGW-w64 and links the
+MinGW cores that ship with the engine, so no Windows machine is needed for that target.
+
+`mingw-w64 g++-mingw-w64` from the dependency command above covers **x64 and x86**. There is
+no `aarch64-w64-mingw32` compiler in any distribution repository, so **arm64 needs
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)**, which provides the
+`aarch64-w64-mingw32-*` drivers (clang behind the gcc/g++ names) plus `dlltool` and
+`windres`:
+
+```bash
+# 1. Unpack a release next to the other toolchains. Pick the ucrt-ubuntu-*-x86_64 build.
+curl -fsSLO https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64.tar.xz
+tar -xJf llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64.tar.xz -C ~
+mv ~/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64 ~/llvm-mingw
+
+# 2. Put it on PATH for this shell only, then build the arm64 game
+export PATH="$HOME/llvm-mingw/bin:$PATH"
+aarch64-w64-mingw32-g++ --version
+Tools/BuildSystem/BuildGame/build_windows.sh --arch arm64 --release
+```
+
+> Add llvm-mingw to `PATH` **only in the shell that builds the arm64 game**, not to
+> `~/.bashrc`. Its `bin/` also carries `clang`, `ld.lld` and the `llvm-*` tools, plus its own
+> `x86_64-` and `i686-w64-mingw32-` drivers; left on `PATH` permanently they shadow the
+> system ones and quietly build the x64 and x86 targets with clang instead of GCC.
+
+`dlltool` has to be present, not just the compiler: FFmpeg is LGPL-2.1 and ships as a
+replaceable DLL, so it is built shared, and `dlltool` is what turns its export tables into
+MinGW import libraries. Without it the vcpkg `ffmpeg` port fails while installing
+`avdevice`.
 
 ### macOS / iOS build tools (Apple host required)
 
@@ -263,10 +341,11 @@ git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.zprofile && source ~/.zprofile
 
-# 4. Vendor MoltenVK (Vulkan-over-Metal)
-Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh all
-
 ```
+
+> **MoltenVK needs no extra step.** Vulkan-over-Metal ships with the engine in
+> `Tools/BuildSystem/Vendor/MoltenVK`, and on macOS the vcpkg `apple-moltenvk` feature
+> provides `libMoltenVK.dylib` as a fallback — there is nothing to fetch by hand.
 
 ### Android build tools (Windows)
 
@@ -346,6 +425,13 @@ export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
 ### Web build tools (Windows)
 
+> **`wasm64` needs Node.js 24 or newer.** emsdk still bundles Node 22, and Emscripten's
+> MEMORY64 output refuses to start on it, so every configure check that runs a compiled
+> program fails — vcpkg's `libsodium` is the usual first casualty, with `cannot run C
+> compiled programs` and configure exit code 77. The build scripts search `PATH`, nvm, Volta,
+> fnm and asdf for a newer Node and hand it to Emscripten through `EM_NODE_JS`, so installing
+> one anywhere is enough. `wasm32` builds fine on the bundled Node.
+
 ```bash
 # Install Emscripten SDK
 git clone https://github.com/emscripten-core/emsdk.git C:\dev\emsdk
@@ -355,6 +441,10 @@ cd C:\dev\emsdk
 ```
 
 ### Web build tools (Linux / WSL2)
+
+> **`wasm64` needs Node.js 24 or newer** — see the note under *Web build tools (Windows)*.
+> Debian and Ubuntu package an older one, so install it separately if `node --version` is
+> below 24; nvm is enough, the scripts pick it up on their own.
 
 ```bash
 # 1. Install Emscripten SDK
@@ -369,6 +459,9 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.bashrc
 ```
 
 ### Web build tools (macOS)
+
+> **`wasm64` needs Node.js 24 or newer** — see the note under *Web build tools (Windows)*.
+> `brew install node` covers it.
 
 ```bash
 # 1. Install Emscripten SDK. emsdk needs Python >= 3.10; the system Python is
@@ -410,7 +503,7 @@ Russian versions of all of the above live next to them in **[`Documentation/RU/`
 
 ## 🔒 Privacy
 
-The editor, launcher and updater send only two things, and only when you ask them to: a crash report, if you press **Send** in the crash dialog, and a single license activation check, when you press **Activate**. No telemetry, no analytics, no background reporting. A packaged game does neither — it never checks a license, and it reports a crash only to an endpoint you configure yourself.
+The editor, launcher and updater send only two things, and only when you ask them to: a crash report, if you press **Send** in the crash dialog, and a single license activation check, when you press **Activate**. The updater additionally asks the release manifest whether a newer version exists when it starts — that carries nothing about you, and it can be switched off. No telemetry, no analytics, no background reporting. A packaged game does none of it — it never checks a license, never contacts us, and reports a crash only to an endpoint you configure yourself.
 
 What is transmitted, why, how long it is kept and what your rights are: **[PRIVACY_NOTICE.txt](PRIVACY_NOTICE.txt)**
 
@@ -418,7 +511,7 @@ What is transmitted, why, how long it is kept and what your rights are: **[PRIVA
 
 ## 📚 Third-Party Libraries
 
-IceBox Engine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg and GNU FriBidi, which are dynamically linked so they can be replaced freely).
+IceBox Engine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg, which is dynamically linked so it can be replaced freely and is not part of iOS or Web builds). Games you ship for iOS and Web contain no copyleft component at all.
 
 Full list of libraries and their licenses: **[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)**
 

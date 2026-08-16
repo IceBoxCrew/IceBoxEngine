@@ -5,7 +5,7 @@
 <h1 align="center">🧊 IceBox Engine™</h1>
 
 <p align="center">
-  <a href="README.md">EN English</a> &nbsp;•&nbsp; <strong>🇷🇺 Русский</strong>
+  <a href="README.md">🇬🇧 English</a> &nbsp;•&nbsp; <strong>🇷🇺 Русский</strong>
 </p>
 
 <p align="center">
@@ -43,7 +43,7 @@ IceBox Engine — это кроссплатформенный 2D игровой 
 - **2D-физика** — Твёрдые тела, коллайдеры и сочленения на базе Box2D с многопоточным решателем (enkiTS) на десктопе и мобильных.
 - **Спрайты и тайлмапы** — Редактор спрайтов, слайсер спрайт-листов, флипбук-анимация и отдельные редакторы тайлмапов / тайлсетов.
 - **Анимация** — Скелетная анимация, флипбуки и клипы по таймлайну.
-- **Текст и UI** — Внутренние UI-виджеты и высококачественный текст через FreeType, HarfBuzz и FriBidi (полный Unicode-шейпинг с поддержкой письма справа налево).
+- **Текст и UI** — Внутренние UI-виджеты и высококачественный текст через FreeType, HarfBuzz и SheenBidi (полный Unicode-шейпинг с поддержкой письма справа налево).
 - **Аудио** — Микширование и воспроизведение с поддержкой кодеков Opus / Vorbis.
 - **Скриптинг** — Игровой скриптинг на Lua со встроенным отладчиком, **визуальный нодовый** редактор и Python для инструментов редактора.
 - **ИИ** — Поиск пути, деревья поведения и навигация.
@@ -97,7 +97,7 @@ IceBox Engine состоит из нескольких компонентов:
 | **CPU** | Двухъядерный процессор |
 | **RAM** | 4 ГБ |
 | **GPU** | Совместимая с OpenGL 3.3/4.6 или Vulkan 1.1-1.4 (Windows / Linux) или GPU с поддержкой Metal (macOS, через ANGLE или MoltenVK), 512 МБ видеопамяти |
-| **Диск** | 5–10 ГБ свободного места |
+| **Диск** | 10-20 ГБ свободного места |
 
 ### Runtime — iOS
 
@@ -123,16 +123,49 @@ IceBox Engine состоит из нескольких компонентов:
 
 ## 📦 Требования для сборки
 
+Сборка игры запускает нативный тулчейн целевой платформы прямо на вашей машине: движок везёт с собой SDK-заголовки и заранее собранные ядра, компилятор — за вами.
+
+### Базовые инструменты (для любой цели)
+
+| | |
+|-|-|
+| **Компилятор** | Visual Studio 2026+ (MSVC — рабочая нагрузка «Разработка классических приложений на C++») на Windows, последняя версия GCC / Clang на Linux или Apple Clang (Xcode 15+) на macOS |
+| **Инструменты сборки** | CMake 4.3+ и Ninja (Xcode для iOS) |
+| **Менеджер пакетов** | [vcpkg](https://github.com/microsoft/vcpkg) |
+| **Опционально** | NSIS (установщики игр под Windows), `dpkg-deb` (пакеты `.deb` под Linux), ImageMagick (более качественная конвертация иконок) |
+
 ### Для сборки игр (Tools → Build Game)
 
 | Целевая платформа | Дополнительные требования |
 |-----------------|----------------------|
 | 🪟 **Windows** | *(ничего дополнительно — те же инструменты, что и выше)* |
 | 🐧 **Linux** | WSL2 (если собирается из Windows) или нативный GCC/Clang + Ninja |
-| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`, MoltenVK через `fetch_moltenvk.sh macos`. Сборка пресетов `macOS-x64-*` (Intel) **на хосте Apple Silicon** дополнительно требует Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — потому что `configure` CPython и `FindPython` из CMake запускают только что собранные x86_64-бинарники |
-| 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, MoltenVK через `fetch_moltenvk.sh ios` *(обязательно — без него configure падает)*, аккаунт Apple Developer нужен **только** для деплоя на устройство (для компиляции не нужен) |
+| 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`. Сборка цели x86_64 (Intel) **на хосте Apple Silicon** дополнительно требует Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — потому что `configure` CPython и `FindPython` из CMake запускают только что собранные x86_64-бинарники |
+| 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, аккаунт Apple Developer нужен **только** для деплоя на устройство (для компиляции не нужен) |
 | 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(скачивается автоматически)* |
-| 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) |
+| 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — плюс Node.js 24+, если собираете модель памяти `wasm64` |
+
+---
+
+## 🚀 Начало работы
+
+### 1. Установка движка
+
+Запустите установщик для своей платформы: NSIS-`…-Setup.exe` на Windows, `…-Setup.deb` на Linux (ставится в `/opt/iceboxengine`) или `…-Setup.pkg` на macOS (ставится в `/Applications/IceBoxEngine`). В любом установщике едут Лаунчер, Редактор, Апдейтер и Runtime, а вместе с ними документация, примеры проектов и SDK для сборки игр.
+
+### 2. Запуск и активация
+
+Запустите **IceBox Launcher** — с ярлыка на рабочем столе, из меню «Пуск» / меню приложений или файлом `IceBoxLauncher` в папке установки. На ещё не активированном компьютере лаунчер откроет экран активации: вставьте лицензионный ключ и нажмите **Активировать**. Это разовый шаг для каждого компьютера — после него лаунчер, редактор и апдейтер открываются сразу.
+
+### 3. Создание проекта
+
+В Launcher откройте вкладку **New Project**, задайте имя, расположение и лицензию, затем нажмите **Create Project**. Launcher настроит структуру проекта и откроет **Editor**.
+
+### 4. Сборка вашей игры
+
+В редакторе перейдите в **Tools → Build Game**, выберите целевую платформу (Windows, Linux, macOS, iOS, Android или Web) и соберите. Результатом будет готовый к распространению пакет с включённым Runtime — а если попросите, рядом ляжет NSIS-`.exe`, пакет `.deb` или установщик `.pkg` / образ `.dmg` для macOS.
+
+Пошаговые разборы: **[Начало работы](Documentation/RU/Getting-Started-RU-DOC.md)** — про установщик, Лаунчер и Апдейтер; **[Профайлинг и сборка игр](Documentation/RU/Profiling-And-Building-RU-DOC.md)** — про все опции сборки и настройки платформ.
 
 ---
 
@@ -146,6 +179,9 @@ git clone https://github.com/microsoft/vcpkg C:\dev\vcpkg
 C:\dev\vcpkg\bootstrap-vcpkg.bat
 set VCPKG_ROOT=C:\dev\vcpkg
 ```
+
+> Для сборки игры Developer Command Prompt не нужен: скрипт сборки сам находит установку
+> Visual Studio через `vswhere` и вызывает `vcvarsall.bat` для нужной архитектуры.
 
 ### Linux / WSL2
 
@@ -165,7 +201,16 @@ sudo apt update && sudo apt install -y \
     libssl-dev zenity libespeak-ng-dev \
     mingw-w64 g++-mingw-w64
 
-# 2. Установить vcpkg
+# 2. CMake 4.3+ — именно его требует cmake_minimum_required сборки игры. Debian и Ubuntu,
+#    включая обычные образы WSL2, до сих пор кладут в репозиторий версию постарше,
+#    поэтому сначала проверьте `cmake --version` и пропустите шаг, если apt уже дал 4.3+.
+ICE_CMAKE_VERSION=4.3.3
+curl -fsSLO https://github.com/Kitware/CMake/releases/download/v$ICE_CMAKE_VERSION/cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz
+sudo tar -xzf cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz -C /opt
+sudo ln -sf /opt/cmake-$ICE_CMAKE_VERSION-linux-x86_64/bin/{cmake,cpack,ctest} /usr/local/bin/
+cmake --version
+
+# 3. Установить vcpkg
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
@@ -176,19 +221,19 @@ echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc && source ~/.bashrc
 
 #### 32-битные (x86) сборки
 
-Шаги выше собирают движок по умолчанию в 64-битном варианте. Пресеты `Linux-x86-*`
-собирают 32-битные бинарники с `-m32`, для чего дополнительно нужны включённая
-**мультиархитектура i386**, multilib-тулчейн и i386-копии библиотек разработки.
-Инструменты, установленные выше (CMake, Ninja, git, NSIS и т. д.), не зависят от
-архитектуры и **не** переустанавливаются — нужны только компилятор и линкуемые
-`:i386`-библиотеки:
+Шаги выше покрывают обычные 64-битные игры. 32-битная игра под Linux — **Tools → Build
+Game → Linux** с архитектурой x86 или `build_linux.sh --arch x86` — собирается с `-m32`,
+для чего дополнительно нужны включённая **мультиархитектура i386**, multilib-тулчейн и
+i386-копии библиотек разработки. Инструменты, установленные выше (CMake, Ninja, git, NSIS
+и т. д.), не зависят от архитектуры и **не** переустанавливаются — нужны только компилятор
+и линкуемые `:i386`-библиотеки:
 
 ```bash
 # 1. Включить архитектуру i386 и обновить списки пакетов
 sudo dpkg --add-architecture i386
 sudo apt update
 
-# 2. Установить 32-битный тулчейн и i386-библиотеки разработки
+# 2. Установить 32-битный тулчейн и i386-библиотеки разработки.
 sudo apt install --no-remove \
     gcc-multilib g++-multilib \
     libx11-dev:i386 libxft-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxfixes-dev:i386 libxss-dev:i386 libxtst-dev:i386 \
@@ -198,21 +243,19 @@ sudo apt install --no-remove \
     libasound2-dev:i386 libpulse-dev:i386 \
     libdbus-1-dev:i386 \
     libssl-dev:i386 libespeak-ng-dev:i386
-
+    
 ```
 
 #### Кросс-сборки arm64 (AArch64)
 
 На **нативной AArch64-машине** ничего из перечисленного ниже не нужно: системный компилятор
-и системные библиотеки там уже arm64, поэтому пресеты `Linux-arm64-*`, префабрикация ядра и
-скрипты Build Game работают сразу.
+и системные библиотеки там уже arm64, поэтому arm64-цель и скрипты Build Game работают сразу.
 
 Кросс-сборка с x86_64-хоста требует тулчейн AArch64 **и** arm64-копии библиотек разработки —
-ровно того же вида, что набор i386 выше. Префабрикованное ядро — статический архив, оно ничего
-не линкует, поэтому его достаточно собрать одним тулчейном; а **исполняемый файл** (игра или
-сам движок) дополнительно линкует SDL3 с системным звуковым и графическим стеком (PulseAudio,
-Wayland, EGL, xkbcommon, libdecor), которого vcpkg не поставляет. Без `:arm64`-копий линковка
-AArch64 уходит в `/usr/lib/x86_64-linux-gnu` и падает с `file in wrong format`:
+ровно того же вида, что набор i386 выше. Игра дополнительно линкует SDL3 с системным звуковым
+и графическим стеком (PulseAudio, Wayland, EGL, xkbcommon, libdecor), которого vcpkg не
+поставляет. Без `:arm64`-копий линковка AArch64 уходит в `/usr/lib/x86_64-linux-gnu` и падает
+с `file in wrong format`:
 
 ```bash
 # 1. Включите архитектуру arm64 и обновите списки пакетов
@@ -230,22 +273,45 @@ sudo apt install --no-remove \
     libdbus-1-dev:arm64 \
     libssl-dev:arm64 libespeak-ng-dev:arm64
 
-# 3. Соберите arm64-ядро, затем игру поверх него
-Tools/BuildSystem/BuildEngine/prebuild_core_libs.sh --arch arm64
-Tools/BuildSystem/BuildGame/build_linux.sh --arch arm64 --release
-
-# 4. Кросс-соберите сам движок и упакуйте его в .deb.
-#    Cross-пресеты пишут в out/build/Linux-arm64-<config> - то же дерево, что и нативные,
-#    поэтому скрипту установщика не нужны дополнительные аргументы.
-cmake --preset Linux-arm64-Cross-Release
-cmake --build out/build/Linux-arm64-Release
-Tools/BuildSystem/BuildEngine/Linux/build_installer_linux.sh --arch arm64 --config Release
 ```
 
 > `crossbuild-essential-arm64` **удаляет** `gcc-multilib` / `g++-multilib`: multilib-симлинк
 > `/usr/include/asm` неверен для любого кросс-компилятора, и apt отказывается держать оба
 > набора. Поэтому один хост кросс-собирает либо x86, либо arm64, но не оба сразу — меняйте
 > пакеты между запусками или держите две машины.
+
+#### Сборка Windows-игр с Linux-хоста (MinGW-w64)
+
+`build_windows.sh` кросс-собирает Windows-игру с Linux через MinGW-w64 и линкует MinGW-ядра,
+которые едут вместе с движком, — машина с Windows для этой цели не нужна.
+
+`mingw-w64 g++-mingw-w64` из команды установки зависимостей выше покрывает **x64 и x86**.
+Компилятора `aarch64-w64-mingw32` нет ни в одном репозитории дистрибутивов, поэтому
+**для arm64 нужен [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** — он даёт
+драйверы `aarch64-w64-mingw32-*` (clang под именами gcc/g++), а также `dlltool` и `windres`:
+
+```bash
+# 1. Распаковать релиз рядом с остальными тулчейнами. Брать сборку ucrt-ubuntu-*-x86_64.
+curl -fsSLO https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64.tar.xz
+tar -xJf llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64.tar.xz -C ~
+mv ~/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64 ~/llvm-mingw
+
+# 2. Добавить в PATH только для этой сессии и собрать arm64-игру
+export PATH="$HOME/llvm-mingw/bin:$PATH"
+aarch64-w64-mingw32-g++ --version
+Tools/BuildSystem/BuildGame/build_windows.sh --arch arm64 --release
+```
+
+> Добавляйте llvm-mingw в `PATH` **только в той сессии, где собираете arm64-игру**, и не
+> прописывайте в `~/.bashrc`. В его `bin/` лежат свои `clang`, `ld.lld` и утилиты `llvm-*`,
+> а также собственные драйверы `x86_64-` и `i686-w64-mingw32-`; оставленные в `PATH`
+> постоянно, они перекрывают системные, и x64- и x86-цели молча соберутся clang'ом вместо
+> GCC.
+
+Нужен именно `dlltool`, а не только компилятор: FFmpeg распространяется под LGPL-2.1 и едет
+заменяемой DLL, поэтому собирается динамически, а `dlltool` превращает его таблицы экспорта
+в import-библиотеки MinGW. Без него порт `ffmpeg` из vcpkg падает на установке
+`avdevice`.
 
 ### Инструменты сборки macOS / iOS (требуется Apple-хост)
 
@@ -275,10 +341,11 @@ git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh
 echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.zprofile && source ~/.zprofile
 
-# 4. Подтянуть MoltenVK (Vulkan поверх Metal)
-Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh all
-
 ```
+
+> **MoltenVK отдельного шага не требует.** Vulkan-поверх-Metal едет вместе с движком в
+> `Tools/BuildSystem/Vendor/MoltenVK`, а на macOS фича vcpkg `apple-moltenvk` даёт
+> `libMoltenVK.dylib` запасным путём — вручную ничего подтягивать не нужно.
 
 ### Инструменты сборки Android (Windows)
 
@@ -358,6 +425,13 @@ export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
 ### Инструменты сборки Web (Windows)
 
+> **Для `wasm64` нужен Node.js 24 или новее.** emsdk до сих пор тащит Node 22, а
+> MEMORY64-вывод Emscripten на нём не запускается, поэтому падает любая проверка configure,
+> которая запускает скомпилированную программу, — первым обычно ложится `libsodium` из vcpkg
+> с `cannot run C compiled programs` и кодом выхода 77. Скрипты сборки ищут более новый Node
+> в `PATH`, nvm, Volta, fnm и asdf и подсовывают его Emscripten через `EM_NODE_JS`, так что
+> достаточно поставить его куда угодно. Для `wasm32` штатного Node хватает.
+
 ```bash
 # Установить Emscripten SDK
 git clone https://github.com/emscripten-core/emsdk.git C:\dev\emsdk
@@ -367,6 +441,10 @@ cd C:\dev\emsdk
 ```
 
 ### Инструменты сборки Web (Linux / WSL2)
+
+> **Для `wasm64` нужен Node.js 24 или новее** — см. примечание в разделе *Инструменты сборки
+> Web (Windows)*. В Debian и Ubuntu пакет старее, поэтому ставьте отдельно, если
+> `node --version` ниже 24; хватит nvm — скрипты подхватят его сами.
 
 ```bash
 # 1. Установить Emscripten SDK
@@ -381,6 +459,9 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.bashrc
 ```
 
 ### Инструменты сборки Web (macOS)
+
+> **Для `wasm64` нужен Node.js 24 или новее** — см. примечание в разделе *Инструменты сборки
+> Web (Windows)*. Достаточно `brew install node`.
 
 ```bash
 # 1. Установить Emscripten SDK. emsdk требует Python >= 3.10; системный Python —
@@ -423,7 +504,7 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 
 ## 🔒 Конфиденциальность
 
-Редактор, лаунчер и апдейтер отправляют наружу всего две вещи, и только по вашей команде: отчёт о падении, если вы нажали **Отправить** в диалоге падения, и одну проверку активации лицензии, когда вы нажимаете **Активировать**. Никакой телеметрии, аналитики и фоновой отправки. Собранная игра не делает ни того, ни другого: лицензию она не проверяет вовсе, а отчёт о падении отправляет только на тот эндпоинт, который вы настроите сами.
+Редактор, лаунчер и апдейтер отправляют наружу всего две вещи, и только по вашей команде: отчёт о падении, если вы нажали **Отправить** в диалоге падения, и одну проверку активации лицензии, когда вы нажимаете **Активировать**. Дополнительно апдейтер при запуске спрашивает у манифеста релизов, вышла ли новая версия, — в этом запросе нет ничего о вас, и его можно отключить. Никакой телеметрии, аналитики и фоновой отправки. Собранная игра не делает ничего из этого: лицензию она не проверяет вовсе, к нам не обращается никогда, а отчёт о падении отправляет только на тот эндпоинт, который вы настроите сами.
 
 Что именно передаётся, зачем, сколько хранится и какие у вас права: **[PRIVACY_NOTICE.txt](PRIVACY_NOTICE.txt)**
 
@@ -431,7 +512,7 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 
 ## 📚 Сторонние библиотеки
 
-IceBox Engine использует ряд сторонних open-source библиотек, каждая из которых распространяется под своей лицензией (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL для встроенных шрифтов, а также LGPL-2.1 для FFmpeg и GNU FriBidi, которые подключаются динамически и могут быть свободно заменены).
+IceBox Engine использует ряд сторонних open-source библиотек, каждая из которых распространяется под своей лицензией (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL для встроенных шрифтов, а также LGPL-2.1 для FFmpeg, который подключается динамически, может быть свободно заменён и не входит в сборки для iOS и Web). В играх, которые вы выпускаете для iOS и Web, копилефт-компонентов нет вообще.
 
 Полный список библиотек и их лицензий: **[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)**
 
