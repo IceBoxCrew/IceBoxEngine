@@ -2,6 +2,8 @@
 
 ## Full documentation in English
 
+### Actual for B-0.8.3 Version
+
 > **IceBox Engine** is extensible in two complementary ways:
 >
 > * **Plugins** — native **C++** modules that extend the **editor** and/or the

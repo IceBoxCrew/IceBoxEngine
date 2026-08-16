@@ -2,6 +2,8 @@
 
 ## Full documentation in English
 
+### Actual for B-0.8.3 Version
+
 > **IceBox Engine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
 > components, project files, panels, and much more — right from the built-in Python console.

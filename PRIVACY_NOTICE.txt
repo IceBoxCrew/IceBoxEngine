@@ -3,20 +3,22 @@
                  (CRASH REPORTS AND LICENSE ACTIVATION)
 ================================================================================
 
-Version:        1.1
-Effective date: 2026-08-11
+Version:        0.8.3
+Effective date: 2026-08-16
 Applies to:     IceBox Engine Editor, IceBox Launcher, IceBox Updater
 Does NOT apply: to games built with IceBox Engine (see sections 8 and 9)
 
 Sections 1 to 8 cover crash reports. Section 9 covers the one-time license
-activation check. Those are the only two things these tools ever transmit.
+activation check. Those are the only two things these tools ever transmit that
+say anything about you. Section 2 also describes the updater's version check,
+which carries nothing about you and can be switched off.
 
 --------------------------------------------------------------------------------
 1. WHO IS RESPONSIBLE
 --------------------------------------------------------------------------------
 
-IceBox Crew is the controller for the crash reports and the license activation
-records described in this notice.
+IceBoxCrew Studio is the controller for the crash reports and the license
+activation records described in this notice.
 
     Contact: iceboxcrew057@gmail.com
     Website: https://www.ice-box-crew.com/
@@ -28,7 +30,18 @@ If you are in the EEA or the UK, this notice is provided under Articles 13 and
 2. WHEN ANYTHING IS SENT AT ALL
 --------------------------------------------------------------------------------
 
-Nothing is transmitted automatically.
+No personal data is transmitted automatically. Nothing about you, your machine
+or your work leaves your computer unless you press a button.
+
+There is one automatic outbound request, and it carries nothing about you: when
+IceBox Updater starts, it asks our release manifest whether a newer version of
+the engine exists. The request contains no license key, no device identifier,
+no account, no file path and no usage data - it only asks for the list of
+releases. Your IP address is visible to the receiving service as it is for any
+HTTPS request; we do not record it. The manifest is served by a Google Apps
+Script web app - the same processor named in section 6. You can switch this
+check off with "Check for updates on startup" in the updater, and still check
+by hand with "Check for Updates".
 
 When the editor, launcher or updater crashes, a report file is written to
     <application data folder>/Saved/CrashReports/
@@ -42,10 +55,10 @@ on your own machine, and a dialog appears asking whether you want to send it.
     report is never queued.
 
 There is no telemetry, analytics, usage tracking, advertising identifier, or
-background reporting in the editor, launcher or updater. Besides crash reports,
-the only thing these tools ever transmit is the one-time license activation
-check described in section 9, which happens when you press "Activate" and never
-again.
+background reporting in the editor, launcher or updater. Besides crash reports
+and the version check above, the only thing these tools ever transmit is the
+one-time license activation check described in section 9, which happens when
+you press "Activate" and never again.
 
 --------------------------------------------------------------------------------
 3. WHAT A CRASH REPORT CONTAINS
@@ -184,7 +197,7 @@ the crash and the engine version so the report can be located.
 8. GAMES BUILT WITH ICEBOX ENGINE - READ THIS IF YOU SHIP A GAME
 --------------------------------------------------------------------------------
 
-A packaged game NEVER sends crash reports to IceBox Crew.
+A packaged game NEVER sends crash reports to IceBoxCrew Studio.
 
 The engine's built-in endpoint and contact address are compiled into the editor,
 launcher and updater only. They are compiled out of IceBoxRuntime and
@@ -196,8 +209,8 @@ If you enter an address in the Build panel's "Crash Report URL" field (stored as
 "CrashReportUrl" in game.json), or add an optional "CrashReportEmail", then:
 
   * YOU become the data controller for your players' crash reports, not
-    IceBox Crew. IceBox Crew never receives them and is not a recipient,
-    a processor, or a joint controller.
+    IceBoxCrew Studio. IceBoxCrew Studio never receives them and is not a
+    recipient, a processor, or a joint controller.
   * You must disclose that collection in your own game's privacy policy, name
     your own processors (for example Google, if you use the Apps Script
     endpoint), state a retention period, and provide a contact for data subject
@@ -249,8 +262,9 @@ What is stored
 
     Key id, Device ID, policy, edition, expiry date, first and last activation
     time, an activation counter, the engine version and the platform name, in a
-    spreadsheet controlled by IceBox Crew. Refused attempts are recorded the
-    same way, with the reason, so that a leaked key can be spotted and revoked.
+    spreadsheet controlled by IceBoxCrew Studio. Refused attempts are recorded
+    the same way, with the reason, so that a leaked key can be spotted and
+    revoked.
 
 Why (legal basis)
 

@@ -1,130 +1,652 @@
-IceBox Engine License Agreement
+================================================================================
+                     ICEBOX ENGINE - LICENSE AGREEMENT
+================================================================================
+
+Version:        0.8.3
+Effective date: 2026-08-16
+Applies to:     IceBox Engine (editor), IceBox Launcher, IceBox Updater,
+                IceBox Runtime, and everything distributed with them
 
 Copyright (c) 2026 IceBoxCrew Studio. All rights reserved.
 
 This License Agreement ("License") is a legal agreement between you, either an
-individual or a single entity ("You"), and IceBoxCrew Studio ("Licensor")
-governing your use of IceBox Engine, including its editor, runtime, source code,
-tools, sample content, and documentation (collectively, the "Software").
+individual or a single legal entity ("You"), and IceBoxCrew Studio, of Israel
+("IceBoxCrew Studio", "Licensor", "we", "us", "our"), governing your use of
+IceBox Engine and everything we ship with it (the "Software").
 
-By installing, copying, or otherwise using the Software, you agree to be bound by
-the terms of this License. If you do not agree to these terms, do not install or
-use the Software.
+--------------------------------------------------------------------------------
+IN PLAIN LANGUAGE
+--------------------------------------------------------------------------------
 
-1. Ownership
-============
+  * Everything you make with IceBox Engine is yours. Your games, your code,
+    your art, your scripts, your plugins and your mods belong to you. We claim
+    no ownership of them and assert no rights in them.
 
-The Software is licensed, not sold. IceBoxCrew Studio retains all right, title,
-and interest in and to the Software, including all intellectual property rights
-in it. Except for the rights expressly granted to you in Section 2, no rights are
-granted, by implication or otherwise.
+  * You keep all of your revenue. No royalties, no revenue share, no per-title
+    fee, no reporting. You pay once for the engine and that is the whole price.
 
-2. License Grant
-================
+  * Every future update is free. All of them, across major versions too. There
+    is no paid upgrade and no edition you have to buy again later.
 
-Subject to your continued compliance with this License, IceBoxCrew Studio grants
-you a worldwide, non-exclusive, non-transferable license to:
+  * You do not have to credit us. There is no forced splash screen, watermark
+    or logo in anything you build. If you want to credit us anyway, you may -
+    Section 14 says how.
 
-(a) install and use the Software to design, develop, and test games and other
-    interactive applications (each, a "Product"); and
+  * Your players need nothing from us. They need no key and no account, and
+    their copy of your game never contacts us. The license check lives in the
+    editor, the launcher and the updater only; it is not compiled into games.
 
-(b) build, publish, distribute, and sell the Products you create with the
-    Software, including for commercial purposes, with no royalties, revenue
-    share, or per-title fees owed to IceBoxCrew Studio.
+  * What you may not do is resell the engine. Do not sell, give away, publish
+    or repackage IceBox Engine itself, modified or not, and do not present it
+    as your own engine. That is the one thing this License exists to protect.
 
-You own the Products you create with the Software, including your own source
-code, assets, and content. IceBoxCrew Studio claims no ownership of, and asserts
-no rights in, your Products.
+This box is a summary, written for convenience. It is not the agreement. The
+numbered Sections below are, and they govern if anything here reads
+differently.
 
-3. Restrictions
-===============
+--------------------------------------------------------------------------------
+1. DEFINITIONS
+--------------------------------------------------------------------------------
 
-You may NOT:
+"Software" means IceBox Engine in every form in which we supply it: the
+editor, the launcher, the updater, the runtime, the prebuilt core libraries,
+the public SDK headers, the build tools and scripts, the Sample Content, the
+bundled configuration files and assets, and the documentation - together with
+every update we supply for them.
 
-(a) sell, resell, rent, lease, lend, sublicense, publish, distribute, share, or
-    otherwise make the Software itself, in whole or in part and in original or
-    modified form, available to any third party, whether for a fee or free of
-    charge;
+"Editor Tools" means IceBox Engine (the editor), IceBox Launcher and IceBox
+Updater.
 
-(b) modify, adapt, translate, reverse engineer, decompile, disassemble, or
-    create derivative works of the Software, except to the extent this
-    restriction is prohibited by applicable law or is expressly permitted by the
-    license of a third-party component included in the Software (see Section 5);
+"Runtime Components" means the parts of the Software that are linked into or
+packaged with a Product so that the Product can run: IceBox Runtime, the
+prebuilt core libraries in lib/IceBoxCore, the shared libraries we ship
+alongside them, and the engine data files a built Product needs.
 
-(c) remove, alter, or obscure any copyright, trademark, license, or other
-    proprietary notice in or on the Software, including the contents of the
-    accompanying THIRD_PARTY_NOTICES.txt file;
+"Sample Content" means the example projects, templates, default assets,
+materials, shaders, fonts, widgets and project scaffolding that we ship with
+the Software for you to build on.
 
-(d) claim authorship or ownership of the Software, or represent the Software, or
-    any modified version of it, as your own engine, framework, library, or
-    development tool; or
+"Product" means any game, application, tool, dedicated or headless server,
+downloadable content, or other software or media that you create with the
+Software.
 
-(e) use the name, logo, or trademarks of IceBoxCrew Studio to endorse or promote
-    your Products without prior written permission.
+"Extension" means a plugin, mod, script, node graph, template, configuration
+file or localization file that you write in order to run on, extend, configure
+or automate the Software or a Product - including a native C++ plugin built
+against the public SDK headers.
 
-For the avoidance of doubt, the restrictions in this Section apply to the
-Software (the engine) itself and NOT to the Products you make with it. Creating,
-publishing, and selling Products is expressly permitted under Section 2.
+"License Key" or "Key" means an activation key we issue for the Software.
 
-4. Distribution of the Runtime
-==============================
+"Seat" means one individual person who uses the Editor Tools under one Key.
 
-The runtime components of the Software that are linked into or packaged with your
-Products may be distributed only as an integral part of a Product. They may not
-be distributed on their own or repackaged or offered as a development tool,
-engine, software development kit, or library.
+--------------------------------------------------------------------------------
+2. ACCEPTANCE
+--------------------------------------------------------------------------------
 
-5. Third-Party Components
-=========================
+By installing, copying, activating or otherwise using the Software, you accept
+this License. If you do not accept it, do not install or use the Software.
+Where you obtained the Software from a store, that store's refund policy
+applies, and any mandatory statutory right of withdrawal you may have is
+unaffected.
 
-The Software includes third-party open-source components that are licensed to you
-under their own respective licenses, as listed in the accompanying
-THIRD_PARTY_NOTICES.txt file. Those components remain governed by their own terms.
-Nothing in this License limits, supersedes, restricts, or removes any right
-granted to you, or any obligation imposed on IceBoxCrew Studio, under the license
-of any such third-party component. To the extent of any conflict between this
-License and the license of a third-party component, the third-party license
-governs with respect to that component.
+--------------------------------------------------------------------------------
+3. OWNERSHIP
+--------------------------------------------------------------------------------
 
-6. No Warranty
-==============
+The Software is licensed, not sold. IceBoxCrew Studio retains all right, title
+and interest in and to the Software, including all intellectual property
+rights in it. Except for the rights expressly granted to you in this License,
+no rights are granted, by implication, estoppel or otherwise.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+This Section is about the Software. It is not about your Products or your
+Extensions, which are yours - see Sections 5 and 6.
 
-7. Limitation of Liability
-==========================
+--------------------------------------------------------------------------------
+4. LICENSE GRANT
+--------------------------------------------------------------------------------
 
-IN NO EVENT SHALL ICEBOXCREW STUDIO BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
-OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+4.1 Grant. Subject to your compliance with this License, we grant you a
+    worldwide, non-exclusive, non-transferable (except as Section 18 allows),
+    royalty-free license to install and use the Software to design, develop,
+    test, build, debug and ship Products and Extensions, for commercial and
+    non-commercial purposes, including work you do for clients.
 
-8. Termination
-==============
+4.2 Term of the grant. The license is perpetual, unless your Key states an
+    expiry date, in which case it runs until that date. It is not a
+    subscription. The one-time price you paid is the entire price: there are
+    no royalties, no revenue share, no per-title fee, no seat renewal, and no
+    obligation to report your sales, your revenue or your Products to us.
 
-This License terminates automatically and immediately if you breach any of its
-terms. Upon termination, you must cease all use of the Software and destroy all
-copies of it in your possession or control. Termination of this License does not
-affect the rights of end users who obtained Products you distributed while this
-License was in effect, and does not require you to recall, disable, or stop
-selling Products you had already distributed.
+4.3 Seats. One Key licenses one Seat - one individual person. Every additional
+    person who uses the Editor Tools needs their own Key. If you are a company,
+    your employees and contractors may use the Software under your Keys, one
+    Seat per person, and you are responsible for their compliance with this
+    License.
 
-9. Governing Law
-================
+4.4 Machines. A Key activates the Editor Tools on one computer at a time, as
+    described in Section 9. Reinstalling the operating system on the same
+    computer costs you nothing. If you replace your computer, we will move your
+    Key - see Section 9.4. Additional computers in use at the same time,
+    including unattended build or CI machines, need their own Key; write to us
+    if you need one.
 
-This License shall be governed by and interpreted in accordance with the laws
-applicable in the jurisdiction of IceBoxCrew Studio, without regard to its
-conflict of law principles.
+4.5 Backups. You may make copies of the Software for backup and archival
+    purposes.
 
-10. Contact
-===========
+4.6 Updates. Updates we supply are part of the Software and are covered by
+    this License, unless we ship them with different terms and say so.
 
-For permissions, redistribution rights, or other licensing inquiries, contact:
+--------------------------------------------------------------------------------
+5. YOUR PRODUCTS
+--------------------------------------------------------------------------------
 
-IceBoxCrew Studio
-Email:   iceboxcrew057@gmail.com
-Website: https://www.ice-box-crew.com/
+5.1 You own your Products. You own everything you create with the Software:
+    your Products, your source code, your Lua and Python scripts, your visual
+    scripts, your art, audio, levels, materials and shaders, your project files
+    and your data. We claim no ownership of them and assert no rights in them.
+    Nothing in this License gives us any license to your Products, and nothing
+    in it requires you to share them, register them, or disclose them to us.
 
+5.2 You may ship and sell them. You may build, publish, distribute, sell,
+    license and monetise your Products however you choose, on any platform and
+    under any business model, with no royalties, revenue share or per-title
+    fees owed to us.
+
+5.3 No credit required. You do not have to credit IceBox Engine in your
+    Product. The Software adds no splash screen, watermark, logo or attribution
+    of ours to anything you build. If you want to credit us anyway, Section 14
+    tells you how.
+
+5.4 Your players need nothing from us. A person who receives your Product
+    needs no License Key, no account and no agreement with us in order to run
+    it, and we will never require one. Section 8.2 sets out the license they
+    receive. Section 9.6 sets out what a built Product does, and does not do,
+    on a network.
+
+5.5 Sample Content. You may use, modify and distribute Sample Content as part
+    of a Product, with no attribution to us required. You may not redistribute
+    Sample Content on its own, or as an asset pack, template pack, library or
+    development tool - it ships with the engine so that you can build with it,
+    not so that it can be resold as content. Some Sample Content contains
+    third-party material, such as the bundled fonts; Section 12 applies to it.
+
+--------------------------------------------------------------------------------
+6. PLUGINS, MODS, SCRIPTS AND CONFIGURATION
+--------------------------------------------------------------------------------
+
+6.1 You may write Extensions. The Software is built to be extended, and this
+    License permits it. You may write Extensions, including native C++ plugins
+    built against the public SDK headers and the prebuilt core libraries we
+    ship, Lua and Python scripts, visual scripts, mods, and templates.
+
+6.2 You own them. Your Extensions are yours, on the same terms as Section 5.1.
+
+6.3 You may distribute and sell them. You may publish, distribute and sell
+    your Extensions, free of charge or for a fee, provided that:
+
+    (a) the Extension does not include the Software's source code, binaries,
+        prebuilt core libraries or SDK headers, other than the parts of the
+        SDK headers that a compiler necessarily embeds when building your
+        Extension against them;
+
+    (b) the Extension is not a means of giving someone the use of the Software
+        without their own Key - a recipient still needs their own licensed
+        copy of the Software in order to use it; and
+
+    (c) the Extension is not presented as IceBox Engine, as a version or
+        edition of it, or as coming from us.
+
+6.4 Configuration and localization. Editing the configuration and localization
+    files we ship, including adding your own language, is permitted and is not
+    a breach of Section 7. Nothing in Section 7 prevents you from configuring
+    the Software or from using it the way it was designed to be used.
+
+--------------------------------------------------------------------------------
+7. RESTRICTIONS
+--------------------------------------------------------------------------------
+
+Except as Sections 4, 5, 6 and 8 expressly permit, you may NOT:
+
+(a) sell, resell, rent, lease, lend, sublicense, publish, distribute, share,
+    upload or otherwise make the Software itself available to any third party,
+    in whole or in part, in original or modified form, whether for a fee or
+    free of charge;
+
+(b) modify, adapt, translate, reverse engineer, decompile, disassemble or
+    create derivative works of the Software;
+
+(c) remove, alter, obscure or fail to reproduce any copyright, trademark,
+    license or other proprietary notice in or on the Software, including
+    THIRD_PARTY_NOTICES.txt and the contents of ThirdPartyLicenses/;
+
+(d) claim authorship or ownership of the Software, or present the Software, or
+    any modified version of it, as your own engine, framework, library,
+    software development kit or development tool;
+
+(e) circumvent, disable, remove or interfere with the License Key check, the
+    activation mechanism or any other technical protection measure in the
+    Software, or use the Software with a Key that was not issued to you; or
+
+(f) publish, share, sell or otherwise disclose your License Key, or use it for
+    more Seats or more computers than Section 4 allows.
+
+Paragraph (b) does not apply, and your rights are unaffected, to the extent
+that:
+
+    (i)   applicable mandatory law gives you the right regardless of this
+          License - including, where it applies to you, the right to observe,
+          study and test the functioning of the Software, and the right to
+          decompile it to achieve interoperability;
+
+    (ii)  the license of a third-party component permits it (Section 12) - in
+          particular, you may modify, replace and relink the LGPL-licensed
+          components we ship, and reverse engineer them for the purpose of
+          debugging your modifications; or
+
+    (iii) you are debugging your own Product or Extension.
+
+For the avoidance of doubt: this Section restricts what you may do with IceBox
+Engine itself. It does not restrict your Products or your Extensions. Creating,
+publishing and selling those is expressly permitted by Sections 5 and 6.
+
+--------------------------------------------------------------------------------
+8. DISTRIBUTION OF THE RUNTIME
+--------------------------------------------------------------------------------
+
+8.1 In Products only. Runtime Components may be distributed only as an
+    integral part of a Product. They may not be distributed on their own, or
+    repackaged or offered as a development tool, engine, software development
+    kit or library.
+
+8.2 The license your end users receive. You may grant - and this Section
+    grants through you - to every person who receives a Product from you a
+    non-exclusive, non-transferable, royalty-free, perpetual right to use the
+    Runtime Components embedded in that Product, solely as part of that
+    Product. They need no Key, no account and no agreement with us. This right
+    is not affected by anything that happens between you and us, and it
+    survives termination of this License (Section 17.4).
+
+8.3 No separate extraction. Your end users receive no right to extract the
+    Runtime Components from your Product and use them for anything else, and
+    you should not encourage or assist them in doing so.
+
+8.4 Mod support in your Product. If you enable mod support in your Product,
+    your players may create and distribute mods for it. That is your decision
+    to make, and this License does not restrict it, provided those mods do not
+    include the Software itself beyond what Section 8.2 already permits.
+
+--------------------------------------------------------------------------------
+9. LICENSE KEYS AND ACTIVATION
+--------------------------------------------------------------------------------
+
+9.1 A Key is required for the Editor Tools. The editor, the launcher and the
+    updater require an activated License Key. Your Key states its activation
+    policy, its edition, and its expiry date if it has one. The Runtime never
+    requires a Key - see Section 9.6.
+
+9.2 One computer at a time. Unless your Key states otherwise, a Key activates
+    one computer at a time. Activating it on a second computer while it is
+    bound to the first will be refused.
+
+9.3 One online check, once. When you press Activate, the Software contacts our
+    activation endpoint one time. That is the only moment it happens. After
+    activation succeeds:
+
+    * the Software never checks your license again - not at launch, not on a
+      timer, not after an update, not ever;
+
+    * the Software does not require an internet connection in order to run;
+      and
+
+    * if our activation service, our website or our studio should ever cease
+      to exist, your activated installation keeps working.
+
+    Separately from the license check, the updater asks our release manifest
+    whether a newer version exists when it starts. That is a version check and
+    not a license check, it says nothing about you, and you can switch it off
+    with "Check for updates on startup" in the updater.
+
+    What the activation request contains, what we store, on what legal basis
+    and for how long, is set out in PRIVACY_NOTICE.txt, Section 9.
+
+9.4 Reinstalling, and replacing your computer. Reactivating on the same
+    computer - after reinstalling the operating system, for example - always
+    works and costs you nothing. If you replace your computer, or your
+    hardware changes enough that your Key no longer recognises the machine,
+    write to us and we will move your Key to the new machine. We will not
+    refuse a genuine request. We may refuse requests that are repeated in a
+    pattern that is plainly not a machine replacement.
+
+9.5 Keep your Key to yourself. Your Key is personal to you. Do not publish it,
+    share it, resell it or post it anywhere.
+
+9.6 Your Products never check anything. The licensing code is compiled into
+    the editor, the launcher and the updater only. It is not part of IceBox
+    Runtime or of the prebuilt core libraries. A Product you build therefore
+    contains no license check, no key, no device identifier and no activation
+    code, and never contacts us - not on first run, not ever. See
+    PRIVACY_NOTICE.txt.
+
+9.7 When we may revoke a Key. We may deactivate or revoke a Key only where:
+
+    (a) the purchase was reversed, refunded or charged back, or was never
+        paid for;
+
+    (b) the Key was published, shared, resold, or used for more Seats or more
+        computers than Section 4 allows;
+
+    (c) the Key was obtained fraudulently, or the activation mechanism was
+        circumvented; or
+
+    (d) this License has been terminated under Section 17.
+
+    We will not revoke a Key for any other reason. Revoking a Key never
+    affects Products you have already shipped or the people who received them
+    (Sections 8.2 and 17.4).
+
+9.8 If we cannot be reached. If our activation service is unavailable at the
+    moment you activate, the Software shows you an activation request code;
+    send it to the address in Section 21 and we will issue you an unlock key
+    by hand. If we ever permanently cease to operate the activation service,
+    we will make available a build, or a means of activation, that does not
+    depend on it.
+
+--------------------------------------------------------------------------------
+10. PRE-RELEASE SOFTWARE
+--------------------------------------------------------------------------------
+
+While the version of the Software you have is marked Prototype, Alpha, Beta or
+Pre-Release - the marking is shown in the launcher and in the editor - it is
+pre-release software. It will change; features may be added, altered or
+removed between versions; and project, asset or save formats may change in
+ways that require you to migrate your work. Keep backups, and keep your
+projects under version control. Sections 15 and 16 apply with particular force
+while the Software is pre-release.
+
+--------------------------------------------------------------------------------
+11. UPDATES AND SUPPORT
+--------------------------------------------------------------------------------
+
+11.1 Updates. Updates are delivered through IceBox Updater. We intend to keep
+     improving the Software, but we do not promise any particular update,
+     feature, release date or support period.
+
+11.2 What your purchase includes: every future update, free. Your purchase
+     includes the version of the Software you bought and every update we ever
+     publish for it, at no additional charge and with no further payment of any
+     kind. That applies across major versions too: there is no paid upgrade,
+     no separate 1.0 edition to buy again, and no version at which your Key
+     stops working. You buy IceBox Engine once and you keep every version of
+     it that follows.
+
+11.3 Support. Support is offered as a courtesy at the address in Section 21.
+     It is not a contractual commitment, and there is no guaranteed response
+     time.
+
+--------------------------------------------------------------------------------
+12. THIRD-PARTY COMPONENTS
+--------------------------------------------------------------------------------
+
+12.1 The Software includes third-party open-source components that are
+     licensed to you under their own respective licenses, listed in
+     THIRD_PARTY_NOTICES.txt and reproduced in full in ThirdPartyLicenses/.
+     Those components remain governed by their own terms. Nothing in this
+     License limits, supersedes, restricts or removes any right granted to
+     you, or any obligation imposed on IceBoxCrew Studio, under the license of
+     any such component. To the extent of any conflict between this License
+     and the license of a third-party component, the third-party license
+     governs with respect to that component.
+
+12.2 Your obligations when you ship a Product. A Product you build contains
+     some of those components. We bundle THIRD_PARTY_NOTICES.txt and
+     ThirdPartyLicenses/ into every build so that the required attribution
+     travels with your Product - leave them in place. If you remove them, the
+     obligation to reproduce those notices becomes yours to satisfy in some
+     other way.
+
+12.3 LGPL components. FFmpeg and GNU FriBidi are licensed under the LGPL-2.1.
+     You, and the users of your Products, may modify, replace and relink them,
+     and reverse engineer for the purpose of debugging those modifications,
+     exactly as the LGPL allows. Section 7 does not restrict that.
+     THIRD_PARTY_NOTICES.txt explains how they are linked on each platform and
+     where their complete corresponding source code is available.
+
+12.4 Platform SDKs. Where you enable a feature that pulls in a Google or other
+     platform SDK into your Product, that SDK is licensed to you directly by
+     its owner under its own terms and is not covered by this License.
+     THIRD_PARTY_NOTICES.txt, Section 14, lists those SDKs and the obligations
+     that come with them.
+
+--------------------------------------------------------------------------------
+13. PRIVACY
+--------------------------------------------------------------------------------
+
+Apart from the version check described in Section 9.3, which you can switch
+off, the Editor Tools transmit two things, and only when you act: a crash
+report, if you press Send in the crash dialog, and the one-time license
+activation check described in Section 9.3. There is no telemetry, no
+analytics, no usage tracking, no advertising identifier and no background
+reporting in the editor, the launcher or the updater - and none at all in a
+Product you build.
+
+PRIVACY_NOTICE.txt is the full notice and describes what is transmitted, why,
+how long it is kept, and what your rights are.
+
+--------------------------------------------------------------------------------
+14. TRADEMARKS AND CREDIT
+--------------------------------------------------------------------------------
+
+14.1 Our marks. "IceBox Engine", "IceBoxCrew Studio", the IceBox logo and our
+     other names and logos are our trademarks. This License grants you no
+     rights in them except those in Section 14.2.
+
+14.2 Credit is permitted and welcome. You may state truthfully that your
+     Product was made with IceBox Engine, and you may use our name and our
+     unmodified logo to say so - in your credits, on your splash or title
+     screen, in your store listing, in your press material and on your
+     website. You are not required to, and nothing you build is treated
+     differently if you do not.
+
+14.3 What you may not do with them. You may not use our names or logos in a
+     way that suggests that we made your Product, that we endorse, sponsor or
+     are affiliated with you or your Product, or that your Product is an
+     official IceBox product. You may not use them in your own product name,
+     company name, domain name or app-store title, and you may not register
+     them, or anything confusingly similar to them, as a trademark.
+
+--------------------------------------------------------------------------------
+15. NO WARRANTY
+--------------------------------------------------------------------------------
+
+15.1 THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF
+     ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE AND
+     NON-INFRINGEMENT, AND ANY WARRANTY THAT THE SOFTWARE WILL BE
+     UNINTERRUPTED, ERROR-FREE OR FREE OF HARMFUL COMPONENTS.
+
+15.2 We do not warrant that the Software is fit for any particular platform,
+     store or certification process, or that a Product built with it will be
+     accepted by any store or platform.
+
+15.3 Nothing in this Section excludes or limits any warranty, guarantee or
+     right that mandatory law gives you and that cannot lawfully be excluded.
+     In particular, if you are a consumer, your statutory rights - including
+     those under the Israeli Consumer Protection Law, 5741-1981, and, where
+     they apply to you, the consumer laws of the country where you live -
+     remain unaffected.
+
+--------------------------------------------------------------------------------
+16. LIMITATION OF LIABILITY
+--------------------------------------------------------------------------------
+
+16.1 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, ICEBOXCREW STUDIO
+     SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+     PUNITIVE OR CONSEQUENTIAL DAMAGES, OR FOR ANY LOSS OF PROFIT, REVENUE,
+     BUSINESS, GOODWILL, DATA, PROJECTS, WORK PRODUCT OR ANTICIPATED SAVINGS,
+     ARISING OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THIS LICENSE,
+     WHETHER IN AN ACTION OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT
+     LIABILITY OR OTHERWISE, AND WHETHER OR NOT WE HAVE BEEN ADVISED OF THE
+     POSSIBILITY OF SUCH DAMAGE.
+
+16.2 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, OUR TOTAL AGGREGATE
+     LIABILITY ARISING OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THIS
+     LICENSE SHALL NOT EXCEED THE AMOUNT YOU ACTUALLY PAID FOR THE LICENSE KEY
+     GIVING RISE TO THE CLAIM.
+
+16.3 Nothing in this License excludes or limits our liability for death or
+     personal injury caused by our negligence, for fraud or fraudulent
+     misrepresentation, for wilful misconduct, or for any other liability that
+     cannot lawfully be excluded or limited. If any exclusion or limitation in
+     Sections 15 or 16 is held to be unenforceable, it applies to the maximum
+     extent permitted by law, and the remainder of those Sections stays in
+     force.
+
+16.4 The allocation of risk in Sections 15 and 16 is a fundamental part of the
+     bargain between us and is reflected in the price of the Software.
+
+--------------------------------------------------------------------------------
+17. TERM AND TERMINATION
+--------------------------------------------------------------------------------
+
+17.1 Term. This License begins when you first install, copy, activate or use
+     the Software, and continues until it is terminated under this Section or,
+     if your Key states an expiry date, until that date.
+
+17.2 Termination by you. You may terminate this License at any time by
+     ceasing to use the Software and deleting your copies of it. Doing so does
+     not entitle you to a refund, except where mandatory law or the refund
+     policy of the store you bought from provides otherwise.
+
+17.3 Termination by us. If you breach this License, we will make reasonable
+     efforts to notify you and you then have 30 days to put the breach right.
+     If you do not, or if the breach cannot be put right, we may terminate
+     this License. We may terminate it immediately, without waiting 30 days,
+     if you breach Section 7(a), 7(d), 7(e) or 7(f) - that is, if you
+     redistribute or resell the Software, pass it off as your own, defeat the
+     license check, or share your Key.
+
+17.4 What termination does not do. Termination ends your right to use the
+     Software. It does NOT:
+
+     (a) affect the rights of anyone who received a Product you distributed
+         while this License was in force - the license they hold under
+         Section 8.2 is permanent and is unaffected by anything between you
+         and us;
+
+     (b) require you to recall, disable, unpublish or stop selling any Product
+         you had already distributed; or
+
+     (c) affect your ownership of your Products, your Extensions, or anything
+         else you created.
+
+     On termination you must stop using the Software, stop building new
+     Products or updates with it, and delete your copies of it.
+
+17.5 Survival. Sections 3, 5.1, 6.2, 7, 8.2, 8.3, 12, 15, 16, 17.4, 19 and 20
+     survive termination of this License.
+
+--------------------------------------------------------------------------------
+18. TRANSFER AND ASSIGNMENT
+--------------------------------------------------------------------------------
+
+18.1 You may not transfer, sell, rent, lend or sublicense your License Key or
+     your rights under this License, except as this Section allows.
+
+18.2 With our prior written consent, which we will not unreasonably withhold,
+     you may transfer this License together with your Key to another person or
+     entity, provided that they accept this License and that you stop using
+     the Software and delete your copies of it.
+
+18.3 This License transfers automatically, without our consent being required,
+     on a merger, reorganisation, or sale of all or substantially all of your
+     business or assets, provided that you notify us and the transferee
+     accepts this License.
+
+18.4 Where mandatory law gives you a right to transfer your copy of the
+     Software that this Section would otherwise restrict, that law prevails.
+     In that case you must transfer the copy in full, cease using it, delete
+     all copies you retain, and tell us, so that we can move the Key to the
+     new holder.
+
+18.5 We may assign this License as part of a transfer of our business or of
+     IceBox Engine, provided that your rights under it are not reduced.
+
+--------------------------------------------------------------------------------
+19. GOVERNING LAW AND JURISDICTION
+--------------------------------------------------------------------------------
+
+19.1 This License is governed by and interpreted in accordance with the laws
+     of the State of Israel, without regard to its conflict-of-law rules. The
+     United Nations Convention on Contracts for the International Sale of
+     Goods does not apply.
+
+19.2 The competent courts of Tel Aviv-Yafo, Israel have exclusive jurisdiction
+     over any dispute arising out of or in connection with this License.
+
+19.3 Consumers. If you are a consumer, Sections 19.1 and 19.2 do not deprive
+     you of the protection afforded by the mandatory consumer law of the
+     country where you live, and do not remove your right to bring proceedings
+     in the courts of that country. Where the mandatory consumer law of your
+     country conflicts with this License, that law prevails to the extent of
+     the conflict.
+
+19.4 Talk to us first. Before going to court we would much rather hear from
+     you: write to the address in Section 21 and we will make a genuine effort
+     to resolve the matter.
+
+--------------------------------------------------------------------------------
+20. GENERAL
+--------------------------------------------------------------------------------
+
+20.1 Entire agreement. This License, together with THIRD_PARTY_NOTICES.txt and
+     PRIVACY_NOTICE.txt, is the entire agreement between you and us regarding
+     the Software, and it replaces any earlier understanding or agreement
+     about it. If you are a consumer, this does not take away your right to
+     rely on statements we made about the Software before you bought it, and
+     nothing here excludes liability for fraudulent misrepresentation.
+
+20.2 Severability. If any provision of this License is held invalid or
+     unenforceable, it is modified to the minimum extent necessary to make it
+     enforceable or, if that is not possible, severed. The remainder of the
+     License stays in force.
+
+20.3 No waiver. Our failure to enforce a provision is not a waiver of it and
+     does not prevent us from enforcing it later.
+
+20.4 Versions of this License. Each release of the Software ships with the
+     version of this License that governs that release, identified at the top
+     of this file. A newer version of this License applies to releases
+     published after it; it does not change the terms of the copy you already
+     hold.
+
+20.5 Language. This License is written in English. If we publish a translation
+     and the two differ, the English text governs, except where mandatory law
+     in your country provides otherwise.
+
+20.6 Compliance with law. You are responsible for using the Software, and for
+     distributing your Products, in compliance with the laws that apply to
+     you, including export control and sanctions law.
+
+20.7 Notices. Notices to us go to the email address in Section 21. Notices to
+     you go to the email address associated with your purchase or your Key or,
+     where we have none, are given by publication on our website.
+
+20.8 Relationship. Nothing in this License creates a partnership, joint
+     venture, agency or employment relationship between us.
+
+--------------------------------------------------------------------------------
+21. CONTACT
+--------------------------------------------------------------------------------
+
+For license transfers, additional Seats, moving a Key to a new computer,
+redistribution rights beyond this License, or anything else at all:
+
+    IceBoxCrew Studio
+    Israel
+
+    Email:   iceboxcrew057@gmail.com
+    Website: https://www.ice-box-crew.com/
+
+================================================================================
 Copyright (c) 2026 IceBoxCrew Studio. All rights reserved.
+================================================================================

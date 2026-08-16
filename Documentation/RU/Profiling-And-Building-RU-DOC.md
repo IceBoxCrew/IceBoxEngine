@@ -2,6 +2,8 @@
 
 ## Полная документация на русском языке
 
+### Актуальная для версии B-0.8.3
+
 > Этот документ охватывает два критически важных для продакшена рабочих процесса
 > **IceBox Engine**:
 >
@@ -822,7 +824,7 @@ Hitches · Trace History.** Вкладка **Engine** присутствует �
 | **Configuration** | **Debug** или **Release** (см. [7.2](#72-конфигурация-debug-vs-release)). |
 | **Название игры** | Имя продукта; используется для имени исполняемого файла/бандла и метаданных инсталлятора. |
 | **Путь к иконке** | Иконка приложения (`.png`/`.ico`/`.jpg`/`.jpeg`/`.bmp`); PNG автоматически конвертируется в платформенные форматы иконок. |
-| **Путь вывода** | Папка для готовой сборки — подпапка `<Output>/<GameName>` создаётся и **очищается** в начале каждой сборки. Кнопка **…** открывает системный выбор папки. |
+| **Путь вывода** | Папка для готовой сборки — подпапка под конкретную сборку создаётся и **очищается** в начале каждой сборки. Она называется по самой сборке, `<GameName>-<version>-<Config>-<Platform>-<arch>`, на **всех шести платформах**, поэтому сборки, различающиеся версией, конфигурацией, архитектурой или моделью памяти, лежат рядом, а не затирают друг друга. Кнопка **…** открывает системный выбор папки. |
 | **Version Name / Version Code** | Человекочитаемая строка версии (например, `1.2.0`) и целочисленный номер сборки (минимум 1). |
 | **Издатель** | Имя студии/издателя, используется в инсталляторах и метаданных. |
 | **Включить плагины** | *(Packages)* Поставлять плагины, отмеченные в `Инструменты → Плагины и моды`. Включено по умолчанию; действует на все шесть платформ. Плагины с `"EditorOnly": true` не поставляются никогда, независимо от этой опции. |
@@ -942,6 +944,9 @@ Hitches · Trace History.** Вкладка **Engine** присутствует �
 * **Сервисы** (переключатели, встроенные в шаблон Android): **Ads** (AdMob App ID),
   **In-App Purchases**, **Play Games** (App ID), **Consent**, **Отзыв в приложении**,
   **Notifications**, **Bluetooth**, **Firebase**, **Saved Games**.
+  Включённый **Ads** без корректного AdMob App ID (`ca-app-pub-…~…`) намеренно валит сборку:
+  SDK читает его из манифеста при старте процесса и без него ничего не отдаёт, то есть APK
+  собрался бы без ошибок и никогда не показал рекламу.
 * **Extra Permissions** (кастомные разрешения Android).
 * **Подпись:** путь к keystore, пароль keystore, key alias, пароль ключа (для подписи
   релиза; иначе без подписи/с debug-подписью). Пароли **никогда не сохраняются в конфиг
@@ -1184,10 +1189,10 @@ Web-видео выбирайте VP9.
 
 Инсталлятор пишется **рядом** с папкой вывода —
 `<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.exe` или
-`…-Linux-<arch>-Setup.deb`, — и после его успешного создания уложенная папка
-`<Output>/<GameName>/` **удаляется**, потому что инсталлятор уже содержит всё. Если шаг
-создания инсталлятора провалился, россыпная сборка остаётся на месте, и об этом пишется в
-лог.
+`…-Linux-<arch>-Setup.deb`, то есть имя папки вывода плюс `-Setup.exe` / `-Setup.deb`, — и
+после его успешного создания уложенная папка сборки **удаляется**, потому что инсталлятор
+уже содержит всё. Если шаг создания инсталлятора провалился, россыпная сборка остаётся на
+месте, и об этом пишется в лог.
 
 **Лимиты размера проверяются до упаковки.** Инсталлятор для **Windows** не может быть
 больше **2 ГБ**, и ни один файл внутри него тоже не может достигать 2 ГБ. Скрипт сначала
@@ -1391,23 +1396,39 @@ export ICE_STAGING_ROOT=$HOME/.cache/icebox-stage
 | Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxRuntime` |
 | macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxRuntime.app` |
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` или `iphonesimulator`) |
-| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web.html` (wasm64: `out/build/Web-wasm64/bin/Web/…`) |
+| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web-wasm32.html` (wasm64: `out/build/Web-wasm64/bin/Web/…-Web-wasm64.html`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
 
-Готовый продукт копируется в **выбранную вами Output Path** в `<Output>/<GameName>/`,
-вместе с `game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`,
+Готовый продукт копируется в подпапку **выбранной вами Output Path** вместе с
+`game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`,
 `Config/`, `Content/` (или `Content.icepak`), включёнными `Plugins/`, `Mods/` и
-`game_manifest.json`, где применимо. По пути он переименовывается:
+`game_manifest.json`, где применимо. По пути именуются и папка, и артефакты, причём имя
+папки — ниже оно обозначено как `<Base>` — устроено одинаково на всех платформах:
 
-| Платформа | Итоговое имя файла |
-| --------- | ------------------ |
-| Windows / Linux | `<GameName>.exe` / `<GameName>` |
-| macOS / iOS | `<GameName>.app` либо `<GameName>.ipa` при создании IPA |
-| Android | `<GameName>-<version>-<Config>-Android-<abi>.apk` (или `.aab`) |
-| Web | `<GameName>-<version>-<Config>-Web.html` + сопутствующие файлы |
+`<Base>` = `<GameName>-<version>-<Config>-<Platform>-<arch>`
+
+| Платформа | Подпапка вывода | Что оказывается внутри |
+| --------- | --------------- | ---------------------- |
+| Windows | `<GameName>-<version>-<Config>-Windows-<arch>` | `<GameName>.exe` (инсталлятор `<Base>-Setup.exe` — уровнем выше) |
+| Linux | `<GameName>-<version>-<Config>-Linux-<arch>` | `<GameName>` (инсталлятор `<Base>-Setup.deb` — уровнем выше) |
+| macOS | `<GameName>-<version>-<Config>-macOS-<arch>` | `<GameName>.app`, а также `<Base>.dmg` и `<Base>-Installer.pkg` |
+| iOS | `<GameName>-<version>-<Config>-iOS-arm64` (`…-iOS-Simulator-arm64` для симулятора) | `<Base>.app` либо `<Base>.ipa` при создании IPA |
+| Android | `<GameName>-<version>-<Config>-Android-<abi>` | `<Base>.apk` (или `<Base>.aab`) |
+| Web | `<GameName>-<version>-<Config>-Web-<mem>` (`<mem>` — `wasm32` или `wasm64`) | `<Base>.html` + `<Base>.js` / `.wasm` / `.data` |
+
+То есть имя папки — это полная идентичность сборки: игра, версия, конфигурация, платформа
+и архитектура, — и **каждый дистрибутив внутри повторяет это имя**: `.apk`/`.aab` для
+Android, `.app`/`.ipa` для iOS, весь набор Web-файлов, `.dmg`/`.pkg` для macOS и
+инсталлятор Windows/Linux уровнем выше. Ничего нельзя перепутать со сборкой другой версии,
+конфигурации, ABI или модели памяти, и ничто не затирает друг друга.
+
+Единственные имена, намеренно оставленные «чистыми», — те, что запускает **игрок** после
+установки: `<GameName>.exe`, бинарник Linux и `<GameName>.app`. Они становятся
+установленной программой: их имена попадают в ярлыки меню «Пуск», в лаунчер `.deb`, в
+`/Applications` и в заголовок окна, поэтому несут только название продукта.
 
 Если промежуточный результат не найден в `out/`, проверяется пользовательский кэш
-**GameBuilds**. Инсталляторы пишутся на уровень выше, рядом с папкой `<GameName>` — см.
+**GameBuilds**. Инсталляторы пишутся на уровень выше, рядом с папкой сборки — см.
 [10.3](#103-инсталляторы).
 
 ## 14. Требования к тулчейнам
@@ -1416,7 +1437,7 @@ export ICE_STAGING_ROOT=$HOME/.cache/icebox-stage
 
 | Платформа | Необходимые инструменты |
 | --------- | ----------------------- |
-| **Windows** | Visual Studio (рабочая нагрузка C++ / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick опционально (лучше PNG→ICO). NSIS для инсталляторов. |
+| **Windows** | Visual Studio (рабочая нагрузка C++ / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick опционально (лучше PNG→ICO). NSIS для инсталляторов. **С Linux-хоста** та же цель собирается кросс-компиляцией через MinGW: `mingw-w64 g++-mingw-w64` покрывает x64 и x86, а **для arm64 нужен [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** в `PATH` — компилятора `aarch64-w64-mingw32` нет ни в одном дистрибутиве. |
 | **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` для инсталляторов `.deb`. (Из Windows: кросс-компиляция MinGW, опционально через WSL для инсталляторов.) CMake из репозиториев Debian/Ubuntu — включая образы WSL2 — обычно старее 4.3, поэтому проверьте `cmake --version` и, если apt дал более старый, поставьте свежую сборку с [cmake.org](https://cmake.org/download/). |
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (через встроенный wrapper), **JDK** (JBR из Android Studio определяется автоматически; `keytool` берётся оттуда же), Android-триплеты vcpkg. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` в PATH). |

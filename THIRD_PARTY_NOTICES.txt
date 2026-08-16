@@ -60,6 +60,7 @@ Used by:
 - Expat (XML parser; bundled inside the embedded Python runtime via the pyexpat module) - https://github.com/libexpat/libexpat/blob/master/expat/COPYING
 - libffi (Foreign function interface; bundled inside the embedded Python runtime, used by ctypes) - https://github.com/libffi/libffi/blob/master/LICENSE
 - SPIRV-Headers (Khronos SPIR-V header files; bundled inside shaderc, SPIRV-Tools and SPIRV-Cross) - https://github.com/KhronosGroup/SPIRV-Headers/blob/main/LICENSE
+- ethers.js v6.16.0 (Ethereum/EVM JavaScript library; embedded verbatim into the page of Web builds made with the Web3 option, so those builds fetch no script at runtime) - https://github.com/ethers-io/ethers.js/blob/main/LICENSE.md
 
 Copyright (c) The respective authors of these libraries.
 

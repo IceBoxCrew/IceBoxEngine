@@ -2,6 +2,8 @@
 
 ## Full documentation in English
 
+### Actual for B-0.8.3 Version
+
 > This document covers two production-critical workflows of **IceBox Engine**:
 >
 > * **Profiling** — measuring and visualizing performance, both in the **editor**
@@ -802,7 +804,7 @@ every setting is remembered in the editor config between sessions (passwords exc
 | **Configuration** | **Debug** or **Release** (see [7.2](#72-configuration-debug-vs-release)). |
 | **Game Name** | The product name; used for the executable/bundle name and installer metadata. |
 | **Icon Path** | App icon (`.png`/`.ico`/`.jpg`/`.jpeg`/`.bmp`); PNG is converted to platform icon formats automatically. |
-| **Output Path** | Folder to place the finished build — a `<Output>/<GameName>` subfolder is created and **wiped** at the start of each build. A **…** button opens a native folder picker. |
+| **Output Path** | Folder to place the finished build — a per-build subfolder is created and **wiped** at the start of each build. It is named after the build itself, `<GameName>-<version>-<Config>-<Platform>-<arch>`, on **all six platforms**, so builds that differ in version, configuration, architecture or memory model sit side by side instead of overwriting each other. A **…** button opens a native folder picker. |
 | **Version Name / Version Code** | Human version string (e.g. `1.2.0`) and integer build number (minimum 1). |
 | **Publisher** | Studio/publisher name, used in installers and metadata. |
 | **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all six platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
@@ -917,6 +919,9 @@ runtime (with fallbacks).
 * **Services** (toggles, wired into the Android template): **Ads** (AdMob App ID),
   **In-App Purchases**, **Play Games** (App ID), **Consent**, **In-App Review**,
   **Notifications**, **Bluetooth**, **Firebase**, **Saved Games**.
+  Enabling **Ads** without a valid AdMob App ID (`ca-app-pub-…~…`) fails the build on
+  purpose — the SDK reads it from the manifest at process start and serves nothing without
+  it, so the APK would build clean and never show an ad.
 * **Extra Permissions** (custom Android permissions).
 * **Signing:** keystore path, keystore password, key alias, key password (for release
   signing; unsigned/debug-signed otherwise). Passwords are **never stored in the editor
@@ -1150,9 +1155,10 @@ found in the output folder (`.ico` > `.png` > `.bmp` > `.jpg`) and the project's
   so save files written next to the game do not survive an uninstall.
 
 The installer is written **next to** the output folder — `<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.exe`
-or `…-Linux-<arch>-Setup.deb` — and, once it exists, the staged `<Output>/<GameName>/`
-folder is **deleted**, because the installer now contains everything. If the installer step
-fails, the loose build is left in place and the log says so.
+or `…-Linux-<arch>-Setup.deb`, that is the output folder's own name plus `-Setup.exe` /
+`-Setup.deb` — and, once it exists, the staged build folder is **deleted**, because the
+installer now contains everything. If the installer step fails, the loose build is left in
+place and the log says so.
 
 **Size limits are checked before packing.** A **Windows** installer cannot exceed **2 GB**,
 and no single file inside it may reach 2 GB either. The script measures your game folder
@@ -1349,23 +1355,40 @@ The render backend is patched into the build's `Config/Engine.json` as
 | Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxRuntime` |
 | macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxRuntime.app` |
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` or `iphonesimulator`) |
-| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web.html` (wasm64: `out/build/Web-wasm64/bin/Web/…`) |
+| Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web-wasm32.html` (wasm64: `out/build/Web-wasm64/bin/Web/…-Web-wasm64.html`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
 
-The finished product is copied into **your chosen Output Path** under
-`<Output>/<GameName>/`, alongside `game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`,
-`ThirdPartyLicenses/`, `Config/`, `Content/` (or `Content.icepak`), the enabled
-`Plugins/`, `Mods/`, and `game_manifest.json` as applicable. It is renamed on the way:
+The finished product is copied into a subfolder of **your chosen Output Path**, alongside
+`game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`, `Config/`,
+`Content/` (or `Content.icepak`), the enabled `Plugins/`, `Mods/`, and
+`game_manifest.json` as applicable. Both the folder and the artifacts are named on the way,
+and the folder name — written `<Base>` below — is the same on every platform:
 
-| Platform | Final file name |
-| -------- | --------------- |
-| Windows / Linux | `<GameName>.exe` / `<GameName>` |
-| macOS / iOS | `<GameName>.app`, or `<GameName>.ipa` when creating an IPA |
-| Android | `<GameName>-<version>-<Config>-Android-<abi>.apk` (or `.aab`) |
-| Web | `<GameName>-<version>-<Config>-Web.html` + companion files |
+`<Base>` = `<GameName>-<version>-<Config>-<Platform>-<arch>`
+
+| Platform | Output subfolder | What lands inside |
+| -------- | ---------------- | ----------------- |
+| Windows | `<GameName>-<version>-<Config>-Windows-<arch>` | `<GameName>.exe` (installer `<Base>-Setup.exe` goes one level up) |
+| Linux | `<GameName>-<version>-<Config>-Linux-<arch>` | `<GameName>` (installer `<Base>-Setup.deb` goes one level up) |
+| macOS | `<GameName>-<version>-<Config>-macOS-<arch>` | `<GameName>.app`, plus `<Base>.dmg` and `<Base>-Installer.pkg` |
+| iOS | `<GameName>-<version>-<Config>-iOS-arm64` (`…-iOS-Simulator-arm64` for the simulator) | `<Base>.app`, or `<Base>.ipa` when creating an IPA |
+| Android | `<GameName>-<version>-<Config>-Android-<abi>` | `<Base>.apk` (or `<Base>.aab`) |
+| Web | `<GameName>-<version>-<Config>-Web-<mem>` (`<mem>` = `wasm32` or `wasm64`) | `<Base>.html` + `<Base>.js` / `.wasm` / `.data` |
+
+So the folder name is the build's full identity — game, version, configuration, platform
+and architecture — and **every distributable inside it repeats that name**: the Android
+`.apk`/`.aab`, the iOS `.app`/`.ipa`, the whole Web file set, the macOS `.dmg`/`.pkg` and
+the Windows/Linux installer written one level up. Nothing can be confused with a build
+from another version, configuration, ABI or memory model, and none of them overwrite each
+other.
+
+The only names deliberately kept clean are the ones a **player** launches after
+installing — `<GameName>.exe`, the Linux binary and `<GameName>.app`. Those become the
+installed program: their names end up in Start-menu shortcuts, the `.deb` launcher,
+`/Applications` and the window title, so they carry the product name and nothing else.
 
 If the intermediate isn't found in `out/`, the per-user **GameBuilds** cache is checked.
-Installers are written one level up, next to the `<GameName>` folder — see
+Installers are written one level up, next to the build folder — see
 [10.3](#103-installers).
 
 ## 14. Toolchain prerequisites
@@ -1374,7 +1397,7 @@ You build with the native toolchain for each target. Install these on the build 
 
 | Platform | Required tools |
 | -------- | -------------- |
-| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. |
+| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. **From a Linux host** the same target is a MinGW cross-compile instead: `mingw-w64 g++-mingw-w64` covers x64 and x86, while **arm64 needs [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** on your `PATH` — no distribution packages an `aarch64-w64-mingw32` compiler. |
 | **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3, so check `cmake --version` and install a newer build from [cmake.org](https://cmake.org/download/) if apt gave you an older one. |
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |

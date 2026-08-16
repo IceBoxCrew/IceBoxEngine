@@ -2,6 +2,8 @@
 
 ## Полная документация на русском языке
 
+### Актуальная для версии B-0.8.3
+
 > **IceBox Engine** использует **Lua** через библиотеку **sol2** для скриптинга игровой логики.
 > Скрипты встраиваются в файлы `.ice_class` (классы объектов), `.icemap` (скрипт уровня),
 > `.ice_widget` (виджеты UI).
@@ -106,6 +108,7 @@
 58. [Replay — Запись, воспроизведение, killcam](#58-replay--запись-воспроизведение-killcam)
 59. [Matchmaking — Подбор игроков](#59-matchmaking--подбор-игроков)
 60. [Console — Консоль разработчика и система команд](#60-console--консоль-разработчика-и-система-команд)
+61. [Draw — Немедленная отрисовка (Draw / Texture / RenderTarget)](#61-draw--немедленная-отрисовка-draw--texture--rendertarget)
 
 ---
 
@@ -3663,21 +3666,38 @@ if IsHapticSupported() then
     PlayHaptic(0.7, 300)    -- сила (0..1), длительность в мс
     StopHaptic()             -- остановить вибрацию
 end
+
+-- Чёткий отклик интерфейса: один системный тап вместо самодельного «бззз»
+PlayHapticPreset("tick")          -- "tick" | "click" | "doubleclick" | "heavyclick"
+
+-- Своя форма волны: длительности отрезков + сила каждого отрезка
+PlayHapticPattern({ 0, 40, 80, 120 }, { 0.0, 0.4, 0.0, 1.0 })
+
+-- Зацикленный паттерн: повтор с отрезка 1 -> 60 мс вибрации, 60 мс паузы, ...
+PlayHapticPattern({ 60, 60 }, { 1.0, 0.0 }, 1)
+StopHaptic()                      -- зацикленный паттерн иначе не остановить
 ```
 
 | Функция | Описание |
 |---|---|
 | `IsHapticSupported()` | Есть ли haptic-устройство (мобильная вибрация, вибромотор и т.д.) |
+| `IsHapticAmplitudeControlSupported()` | Учитывает ли устройство `strength`. Если `false`, любая вибрация играется на системной громкости и форму задаёт только `durationMs` |
 | `PlayHaptic(strength, durationMs)` | Запустить вибрацию (`strength` 0..1, `durationMs` — миллисекунды) |
+| `PlayHapticPreset(name?)` | Короткий системный эффект: `"tick"` (по умолчанию), `"click"`, `"doubleclick"`, `"heavyclick"` |
+| `PlayHapticPattern(timingsMs, amplitudes?, repeatIndex?)` | Проиграть форму волны. `timingsMs[i]` — длина отрезка `i` в мс, `amplitudes[i]` — его сила `0..1` (`0` = пауза). Без `amplitudes` отрезки чередуются вкл/выкл, начиная с **вкл**. `repeatIndex` — индекс таблицы (с 1), на который паттерн зацикливается до `StopHaptic()`; без него (или `-1`) играется один раз |
 | `StopHaptic()` | Остановить текущую вибрацию |
 
 > **Бэкенды по платформам:**
-> • **Windows / Linux / macOS** — первое SDL force-feedback устройство (FFB-руль или джойстик). Без такого железа возвращается `false`.
-> • **Android** — системный вибромотор, который SDL отдаёт как haptic-устройство. Нужно разрешение `VIBRATE` — оно уже объявлено в шаблоне Android-сборки.
-> • **iOS** — Core Haptics (`CHHapticEngine`) с запасным путём через `UIImpactFeedbackGenerator`: в самом SDL на iOS собирается только dummy-драйвер haptic, поэтому Taptic Engine движок дёргает нативно. Длительность 60 мс и меньше играется одиночным коротким тапом, длиннее — непрерывным событием. У iPad / iPod touch вибромотора нет, там `false`.
-> • **Web** — `navigator.vibrate` в мобильных браузерах (Chrome, Firefox, Edge, Samsung Internet на Android). Десктопные браузеры дают `false`. **Safari никогда не реализовывал Vibration API, поэтому браузер на iOS/iPadOS завибрировать не может в принципе** — это ограничение платформы, а не движка. Управления силой в Web API нет: `strength` там игнорируется, работает только `durationMs`. Chrome вдобавок гасит вызовы вибрации до первого взаимодействия пользователя со страницей.
+> • **Windows / Linux / macOS** — первое SDL force-feedback устройство (FFB-руль или джойстик). Без такого железа возвращается `false`. Пресеты сводятся к короткому `PlayHaptic`, паттерны — к одной вибрации длиной суммы «включённых» отрезков на пиковой силе.
+> • **Android** — движок нативно управляет `android.os.Vibrator` через `IceBoxHaptics` (на Android 12+ — через `VibratorManager`), поэтому `strength` превращается в настоящую амплитуду `VibrationEffect` там, где мотор это умеет, `PlayHapticPreset` берёт подобранные вендором `EFFECT_TICK / CLICK / DOUBLE_CLICK / HEAVY_CLICK`, а `PlayHapticPattern` — это `VibrationEffect`-волна с зацикливанием. Каждая вибрация помечается игровыми/медийными usage-атрибутами, поэтому ей управляет громкость отклика самой игры, а не системный тумблер «отклик при касании». Нужно разрешение `VIBRATE` — оно уже объявлено в шаблоне Android-сборки. Если нативного класса в проекте нет (старый сгенерированный проект), движок молча откатывается на haptic-устройство SDL.
+> • **iOS** — Core Haptics (`CHHapticEngine`) с запасным путём через `UIImpactFeedbackGenerator`: в самом SDL на iOS собирается только dummy-драйвер haptic, поэтому Taptic Engine движок дёргает нативно. Длительность 60 мс и меньше играется одиночным коротким тапом, длиннее — непрерывным событием; паттерн превращается в `CHHapticPattern` из нескольких событий. `repeatIndex` игнорируется — у Core Haptics нет зацикливания паттерна, перезапускайте его из Lua. У iPad / iPod touch вибромотора нет, там `false`.
+> • **Web** — `navigator.vibrate` в мобильных браузерах (Chrome, Firefox, Edge, Samsung Internet на Android). Десктопные браузеры дают `false`. **Safari никогда не реализовывал Vibration API, поэтому браузер на iOS/iPadOS завибрировать не может в принципе** — это ограничение платформы, а не движка. Управления силой в Web API нет: `strength` там игнорируется, работает только `durationMs` (`IsHapticAmplitudeControlSupported()` вернёт `false`); паттерн переводится в массив вкл/выкл для `navigator.vibrate`, `repeatIndex` игнорируется. Chrome вдобавок гасит вызовы вибрации до первого взаимодействия пользователя со страницей.
 >
 > `PlayHaptic` работает с *устройством*, а не с геймпадом. Для моторов геймпада всегда используйте `SetGamepadRumble(...)` — он в браузере **работает** (Chromium отдаёт `gamepad.vibrationActuator`), так что веб-сборка может трясти пад даже там, где `IsHapticSupported()` возвращает `false`.
+>
+> На мобильных устройствах системный бэкенд всегда имеет приоритет над haptic-устройством SDL, а при уходе приложения в фон вибрация останавливается сама — зацикленный паттерн не сможет жужжать за домашним экраном.
+>
+> **В удалённом предпросмотре редактора** все вызовы из этого раздела уходят на подключённое Android-устройство, а не на десктоп, и `IsHapticSupported()` возвращает `true` — мобильную вибрацию можно почувствовать и настроить без полной сборки. См. *Редактор → Удалённый предпросмотр*.
 
 ### Force-Feedback эффекты (расширенный haptic)
 
@@ -3801,12 +3821,20 @@ SetDeviceSensorEnabled("gyro", false)
 | `"rotationvector"` | Объединённый вектор вращения | компоненты един. кватерниона | Android (JNI), iOS (CoreMotion) |
 | `"proximity"` | Датчик приближения | см (`x`) — на iOS `0` (близко) или `5` (далеко) | Android (JNI), iOS (UIDevice) |
 | `"light"` | Освещённость | люкс (`x`) | **Только Android** |
-| `"stepcounter"` | Шаги с загрузки | шт (`x`) | **Только Android** |
+| `"stepcounter"` / `"step"` | Счётчик шагов | шт (`x`) | Android (JNI), iOS (CMPedometer) — см. примечание про точку отсчёта ниже |
 | `"ambienttemperature"` / `"temperature"` | Температура воздуха | °C (`x`) | **Только Android** |
 | `"humidity"` | Относительная влажность | % (`x`) | **Только Android** |
 
 > **Примечание:** Это **встроенные** сенсоры устройства (телефон/планшет), а не сенсоры геймпада.
 > Для сенсоров геймпада (DualSense, Joy-Con) используйте `GamepadHasSensor()` / `GetGamepadSensorData()`.
+>
+> Имена сенсоров сравниваются без учёта регистра на всех платформах.
+>
+> **Счётчик шагов — точка отсчёта и разрешения.** У платформ разные точки отсчёта, поэтому считайте значение **монотонным счётчиком и работайте с разницей**, а не с абсолютным числом, которое везде значит одно и то же:
+> • **Android** — `TYPE_STEP_COUNTER`, счёт с момента загрузки устройства. На Android 10+ нужно runtime-разрешение `ACTIVITY_RECOGNITION`. `IsDeviceSensorAvailable("stepcounter")` сообщает о *железе*, поэтому может вернуть `true`, пока счётчик остаётся `0` — запросите разрешение через `Permissions.Request(Permissions.ACTIVITY_RECOGNITION)` и добавьте его в дополнительные разрешения сборки.
+> • **iOS** — `CMPedometer`, счёт с полуночи текущего дня. `SetDeviceSensorEnabled("stepcounter", true)` сразу подтягивает уже сделанные за сегодня шаги разовым запросом и дальше держит значение живым, поэтому первое чтение сразу корректное, а не `0`. Первое включение вызывает системный запрос «Движение и фитнес»; движок сам объявляет `NSMotionUsageDescription` в Info.plist (текст переопределяется через `NSMotionUsageDescription=<причина>` в Extra Usage Descriptions). В отличие от Android, `IsDeviceSensorAvailable("stepcounter")` вернёт `false`, если пользователь запретил или ограничил «Движение и фитнес», — то есть отказ виден игре.
+>
+> **Особенности Web:** SDL регистрирует акселерометр и гироскоп в *любом* браузере, поэтому `IsDeviceSensorAvailable("accel")` вернёт `true` даже в десктопном браузере без датчиков — значения просто остаются `0`. В Safari на iOS/iPadOS браузер вдобавок требует отдельное разрешение на движение: `SetDeviceSensorEnabled("accel", true)` запрашивает его сразу и, если вызов был не внутри пользовательского жеста, повторяет запрос один раз при следующем касании или клике — значения пойдут после того, как игрок тронет страницу.
 
 ### Компас и барометр (Android / iOS)
 
@@ -10572,6 +10600,34 @@ PP.ClearCustomMaterials()
 ```
 
 > Примечание: изменения применяются к **активным** настройкам пост-процесса (как и остальные функции `PP.*`) и не сохраняются в ассет `.ice_view`. Чтобы материал стал постоянным, добавьте его в Редакторе вида → Post Process → Custom Post Process.
+
+
+### Параметры кастомных пост-обработочных материалов
+
+> Пост-обработочные материалы могут содержать узлы **Scalar Parameter**, **Vector Parameter** и **Texture Parameter**, как и
+> поверхностные материалы. Эти функции задают такие параметры для конкретного материала каждый кадр прямо из Lua — коллекция
+> параметров материалов больше не нужна. Переопределения привязаны к пути материала и сохраняются при смене силы,
+> включении/выключении и смешивании объёмов.
+
+```lua
+local MAT = "Content/PP_Raycast.ice_material"
+
+PP.SetCustomMaterialScalar(MAT, "PlayerAngle", angle)          -- параметр float
+PP.SetCustomMaterialVector(MAT, "PlayerPos", x, y, 0, 1)       -- параметр vec4 (a по умолчанию 1)
+PP.SetCustomMaterialTexture(MAT, "MapData", "levelmap")        -- параметр-текстура; принимает путь
+                                                               -- к файлу или имя из Texture.Create
+
+local angleNow = PP.GetCustomMaterialScalar(MAT, "PlayerAngle")
+local posNow   = PP.GetCustomMaterialVector(MAT, "PlayerPos")  -- возвращает { r, g, b, a }
+
+PP.ClearCustomMaterialParams(MAT)      -- сбросить переопределения одного материала
+PP.ClearAllCustomMaterialParams()      -- сбросить все переопределения
+```
+
+> Сеттеры загружают материал, если он ещё не загружен, и возвращают `false`, если материал не найден.
+> Имена параметров должны совпадать с полем **Parameter Name** узла в редакторе материалов.
+> Коллекции параметров материалов (`MPC.*`) продолжают работать и остаются правильным инструментом для значений,
+> общих для многих материалов.
 
 ### Колбэки post-process volume
 
@@ -18099,10 +18155,13 @@ end
 > что ветвления в скрипте не нужны. `Ads.IsSupported()` сообщает, присутствует ли SDK в
 > запущенном бинарнике на самом деле.
 >
-> **Платформа — всё остальное в этой главе:** рекламный идентификатор работает и на Android, и на iOS, а собственные фреймворки Apple для атрибуции и промо в сторе (SKAdNetwork, Apple Search Ads, SKOverlay) поддержаны полностью и без сторонних SDK — см. 43.8.
+> **Платформа — всё остальное в этой главе:** рекламный идентификатор работает и на Android, и на iOS, а собственные фреймворки Apple для атрибуции и промо в сторе (SKAdNetwork, Apple Search Ads, SKOverlay) поддержаны полностью и без сторонних SDK — см. 43.10.
 >
 > **Требование при сборке — Android:** включите «Google AdMob (Ads)» в окне Build Game и
-> укажите ваш AdMob App ID. Gradle подтянет `play-services-ads` сам.
+> укажите ваш AdMob App ID. Gradle подтянет `play-services-ads` сам. Пустой AdMob App ID при
+> включённой рекламе — жёсткая ошибка сборки, ровно как на iOS: SDK читает
+> `com.google.android.gms.ads.APPLICATION_ID` из манифеста при старте процесса и без настоящего
+> идентификатора ничего не отдаёт, то есть APK выглядел бы рабочим и никогда не показал рекламу.
 >
 > **Требование при сборке — iOS:** Google Mobile Ads SDK не распространяется вместе с движком,
 > поэтому один раз на машину скачайте его у Google и положите
@@ -18136,7 +18195,9 @@ end
 Ads.IsSupported() -> bool
 ```
 
-Возвращает `true`, если текущая платформа поддерживает рекламу (Android с включенными Ads).
+Возвращает `true`, когда Google Mobile Ads SDK действительно присутствует в запущенном бинарнике:
+Android с включённой «Google AdMob (Ads)» либо iOS со слинкованным
+`GoogleMobileAds.xcframework`. Везде остальном — `false`, и любой вызов `Ads.*` ничего не делает.
 
 ```lua
 if Ads.IsSupported() then
@@ -18153,7 +18214,9 @@ Ads.Init()
 ```
 
 Инициализирует AdMob SDK. Должна быть вызвана один раз перед использованием любых других функций `Ads`.
-Результат приходит асинхронно через `Ads.OnInitialized`.
+Результат приходит асинхронно через `Ads.OnInitialized`. `Ads.IsInitialized()` возвращает то же
+состояние синхронно, а повторный `Ads.Init()` после успешной инициализации просто ещё раз
+вызовет `Ads.OnInitialized(true)`, не переинициализируя SDK.
 
 ```lua
 Ads.Init()
@@ -18166,7 +18229,35 @@ end)
 
 ---
 
-### 43.3 Баннерная реклама
+### 43.3 Конфигурация рекламных запросов (политики и тестирование)
+
+Вызывайте это **до** `Ads.Init()` — Google требует, чтобы теги child-directed и under-age были
+выставлены до старта SDK. Дальше они применяются ко всем запросам баннеров, межстраничной и
+наградной рекламы и работают одинаково на Android и iOS.
+
+```lua
+Ads.SetTestDeviceIds({ "33BE2250B43518CCDA7DE426D04EE231" })  -- тестовая реклама на своих устройствах
+Ads.SetChildDirected(true)          -- COPPA: true / false / nil (= не указано)
+Ads.SetUnderAgeOfConsent(true)      -- GDPR, младше 16: true / false / nil (= не указано)
+Ads.SetMaxAdContentRating("G")      -- "G", "PG", "T", "MA" либо "" (не указано)
+Ads.SetNonPersonalizedAds(true)     -- запрашивать только неперсонализированную рекламу
+Ads.Init()
+```
+
+| Функция | Описание |
+|---------|----------|
+| `Ads.SetTestDeviceIds(list)` | Массив ID устройств, которым отдавать тестовую рекламу. ID печатается в logcat / консоль Xcode при первом рекламном запросе. **Никогда не кликайте свою боевую рекламу** — за это блокируют аккаунт AdMob. |
+| `Ads.SetChildDirected(enabled?)` | Помечает запросы как предназначенные детям (COPPA). Без аргумента — «не указано». |
+| `Ads.SetUnderAgeOfConsent(enabled?)` | Помечает пользователя как не достигшего возраста согласия (GDPR). Без аргумента — «не указано». |
+| `Ads.SetMaxAdContentRating(rating)` | Ограничивает рейтинг контента рекламы: `"G"`, `"PG"`, `"T"`, `"MA"`. Любое другое значение — «не указано». |
+| `Ads.SetNonPersonalizedAds(flag)` | При `true` каждый запрос уходит с `npa=1`. Нужно, когда `Consent.CanShowAds()` истинно, но пользователь отказался от персонализации. |
+
+> Неперсонализированная реклама приносит меньше денег, чем персонализированная. Включайте флаг
+> только когда этого действительно требует согласие — решение принимается по главе 49 (Consent).
+
+---
+
+### 43.4 Баннерная реклама
 
 ```lua
 Ads.SetBannerUnitId(unitId)       -- Установить ID рекламного блока баннера
@@ -18174,6 +18265,7 @@ Ads.ShowBanner(position?)          -- Показать баннер (0 = све�
 Ads.HideBanner()                   -- Скрыть баннер (оставляет загруженным)
 Ads.DestroyBanner()                -- Полностью уничтожить баннер
 Ads.IsBannerVisible() -> bool      -- Проверить, виден ли баннер
+Ads.GetBannerHeight() -> int       -- Высота видимого баннера в пикселях устройства (0, если скрыт)
 ```
 
 **Константы:** `Ads.BANNER_TOP` (0), `Ads.BANNER_BOTTOM` (1)
@@ -18183,13 +18275,32 @@ Ads.SetBannerUnitId("ca-app-pub-XXXXX/YYYYY")
 Ads.ShowBanner(Ads.BANNER_BOTTOM)
 
 Ads.OnBannerEvent(function(event)
-    Print("Событие баннера: " .. event) -- "loaded", "failed:X", "clicked", "opened", "closed"
+    Print("Событие баннера: " .. event) -- "loaded", "failed:X", "impression", "clicked", "opened", "closed"
+    if event == "loaded" then
+        -- Держим кнопки HUD подальше от полосы баннера:
+        SetHudBottomInset(Ads.GetBannerHeight())
+    end
 end)
 ```
 
+Обе платформы используют **адаптивный закреплённый баннер** по текущей ширине экрана, отступая
+от выреза дисплея и системных панелей: баннер никогда не наезжает на «чёлку» и не остаётся с
+пустыми полями по краям. Именно поэтому `Ads.GetBannerHeight()` — единственный корректный способ
+зарезервировать под него место: высота зависит от устройства и ориентации, а не равна
+фиксированным 50 dp.
+
+Баннер автоматически ставится на паузу и возобновляется вместе с приложением, а при повороте
+экрана пересчитывает размер и перезапрашивает рекламу — на обеих платформах, из Lua ничего для
+этого делать не нужно. После поворота перечитывайте `Ads.GetBannerHeight()`: у игры со свободной
+ориентацией высота в альбомном режиме отличается от портретной.
+
+Повторный `Ads.ShowBanner(position)` при уже существующем баннере переносит его на новую позицию
+и снова показывает, не запрашивая рекламу заново — если только между вызовами вы не поменяли
+`Ads.SetBannerUnitId()`: тогда старый баннер сносится и запрашивается новый блок.
+
 ---
 
-### 43.4 Межстраничная реклама (Interstitial)
+### 43.5 Межстраничная реклама (Interstitial)
 
 ```lua
 Ads.SetInterstitialUnitId(unitId)  -- Установить ID рекламного блока
@@ -18197,6 +18308,11 @@ Ads.LoadInterstitial()              -- Предзагрузить межстра
 Ads.ShowInterstitial()              -- Показать предзагруженную рекламу
 Ads.IsInterstitialReady() -> bool   -- Проверить, загружена ли реклама
 ```
+
+Полноэкранный объект AdMob **одноразовый**. `Ads.ShowInterstitial()` сразу расходует загруженную
+рекламу, поэтому `Ads.IsInterstitialReady()` становится `false` в момент показа — предзагружайте
+следующую по событию `closed`. `Ads.LoadInterstitial()` ничего не делает, если загрузка уже идёт
+или реклама уже в кэше, так что вызывать её «на всякий случай» безопасно.
 
 ```lua
 Ads.SetInterstitialUnitId("ca-app-pub-XXXXX/ZZZZZ")
@@ -18221,13 +18337,15 @@ end
 
 ---
 
-### 43.5 Наградная реклама (Rewarded)
+### 43.6 Наградная реклама (Rewarded)
 
 ```lua
-Ads.SetRewardedUnitId(unitId)      -- Установить ID рекламного блока
-Ads.LoadRewarded()                  -- Предзагрузить наградную рекламу
-Ads.ShowRewarded()                  -- Показать наградную рекламу
-Ads.IsRewardedReady() -> bool       -- Проверить, загружена ли реклама
+Ads.SetRewardedUnitId(unitId)          -- Установить ID рекламного блока
+Ads.SetRewardedUserId(userId)          -- Серверная верификация: ваш ID пользователя
+Ads.SetRewardedCustomData(customData)  -- Серверная верификация: произвольные данные
+Ads.LoadRewarded()                      -- Предзагрузить наградную рекламу
+Ads.ShowRewarded()                      -- Показать наградную рекламу
+Ads.IsRewardedReady() -> bool           -- Проверить, загружена ли реклама
 ```
 
 ```lua
@@ -18255,9 +18373,47 @@ function OnWatchAdButton()
 end
 ```
 
+Как и межстраничная, наградная реклама одноразовая: `Ads.IsRewardedReady()` становится `false`
+сразу при вызове `Ads.ShowRewarded()`, поэтому следующую предзагружайте по событию `closed`.
+
+**Серверная верификация (SSV).** `Ads.OnRewardEarned` срабатывает на устройстве, то есть
+модифицированный клиент может её подделать. Для всего, что стоит вам реальных денег — валюта в
+донатной экономике, премиум-разблокировки — включите SSV в консоли AdMob для наградного блока,
+укажите адрес своего сервера и помечайте каждый показ:
+
+```lua
+Ads.SetRewardedUserId(myAccountId)                   -- придёт как user_id в SSV-колбэке
+Ads.SetRewardedCustomData("quest=daily_bonus")       -- придёт как custom_data
+Ads.LoadRewarded()
+```
+
+Оба значения прикрепляются к **следующей** загружаемой рекламе, поэтому выставляйте их до
+`Ads.LoadRewarded()`. Награду выдавайте на сервере, когда придёт проверенный колбэк от Google, а
+клиентский `Ads.OnRewardEarned` считайте только подсказкой для интерфейса. Если оба значения не
+заданы, поведение прежнее — опции SSV не прикрепляются.
+
 ---
 
-### 43.6 Ads.Destroy
+### 43.7 Доход от рекламы (по каждому показу)
+
+```lua
+Ads.OnPaidEvent(function(info)
+    -- info.format      "banner" | "interstitial" | "rewarded"
+    -- info.valueMicros целое, 1 000 000 микро = 1.0 в валюте info.currency
+    -- info.unitId      рекламный блок, который принёс доход
+    -- info.value       та же сумма числом с плавающей точкой
+    -- info.currency    код ISO-4217, например "USD"
+    -- info.precision   "estimated" | "publisher_provided" | "precise" | "unknown"
+    Analytics.TrackRevenue(info.value, info.currency)
+end)
+```
+
+Срабатывает один раз на каждый оплаченный показ на обеих платформах. Именно это скармливают в
+отчёты ROAS/LTV; другого способа привязать рекламный доход к конкретному игроку нет.
+
+---
+
+### 43.8 Ads.Destroy
 
 ```lua
 Ads.Destroy()
@@ -18267,20 +18423,21 @@ Ads.Destroy()
 
 ---
 
-### 43.7 Сводка колбэков
+### 43.9 Сводка колбэков
 
 | Колбэк | Параметры | Описание |
 |--------|-----------|----------|
 | `Ads.OnInitialized(fn)` | `(success: bool)` | AdMob SDK инициализирован |
-| `Ads.OnBannerEvent(fn)` | `(event: string)` | События баннера: `loaded`, `failed:CODE`, `clicked`, `opened`, `closed` |
-| `Ads.OnInterstitialEvent(fn)` | `(event: string)` | События межстраничной: `loaded`, `failed:CODE`, `shown`, `closed`, `not_ready` |
-| `Ads.OnRewardedEvent(fn)` | `(event: string)` | События наградной: `loaded`, `failed:CODE`, `shown`, `closed`, `earned`, `not_ready` |
+| `Ads.OnBannerEvent(fn)` | `(event: string)` | События баннера: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `impression`, `clicked`, `opened`, `closed` |
+| `Ads.OnInterstitialEvent(fn)` | `(event: string)` | События межстраничной: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `shown`, `impression`, `clicked`, `show_failed:CODE`, `closed`, `not_ready` |
+| `Ads.OnRewardedEvent(fn)` | `(event: string)` | События наградной: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `shown`, `impression`, `clicked`, `show_failed:CODE`, `earned`, `closed`, `not_ready` |
 | `Ads.OnRewardEarned(fn)` | `(type: string, amount: int)` | Пользователь получил награду |
+| `Ads.OnPaidEvent(fn)` | `(info: table)` | Доход по каждому показу — см. 43.7 |
 | `Ads.ClearCallbacks()` | — | Удалить все колбэки |
 
 ---
 
-### 43.8 Рекламный идентификатор, атрибуция и промо в App Store
+### 43.10 Рекламный идентификатор, атрибуция и промо в App Store
 
 Помимо показа рекламы обе платформы дают **рекламный идентификатор**, а iOS вдобавок —
 собственные фреймворки атрибуции и промо в App Store. Всё это работает **вообще без
@@ -18354,7 +18511,12 @@ end
 
 > **Платформа:** Android (Google Play Billing) и iOS (StoreKit). На других платформах `IAP.IsSupported()` возвращает `false`, а все вызовы ничего не делают.
 >
-> **Про разные сторы:** ID товаров настраиваются отдельно для каждого стора — Google Play Console для Android, App Store Connect для iOS. На iOS `IAP.Consume()` ничего не делает (StoreKit финализирует транзакции сам); выдавайте товар в `IAP.OnPurchaseComplete`.
+> **Про разные сторы:** ID товаров настраиваются отдельно для каждого стора — Google Play Console для Android, App Store Connect для iOS. На iOS `IAP.Consume()` и `IAP.Acknowledge()` ничего не делают, но всё равно присылают свои события (StoreKit финализирует транзакции сам); выдавайте товар в `IAP.OnPurchaseComplete`.
+>
+> **Одна схема товара на оба стора:** `IAP.OnProductsQueried` отдаёт одинаковые имена полей на
+> Android и iOS (`id`, `name`, `title`, `description`, `price`, `priceMicros`, `currency`,
+> `billingPeriod`, `type`), поэтому экран магазина, написанный один раз, работает на обеих
+> платформах.
 >
 > **Требование при сборке:** включите «Google Play Billing (IAP)» в окне Build Game.
 
@@ -18376,7 +18538,7 @@ IAP.IsSupported() -> bool
 IAP.Init()
 ```
 
-Подключается к Google Play Billing. Должна быть вызвана один раз перед другими функциями `IAP`.
+Подключается к стору. Должна быть вызвана один раз перед другими функциями `IAP`.
 
 ```lua
 IAP.Init()
@@ -18388,6 +18550,21 @@ IAP.OnInitialized(function(success)
 end)
 ```
 
+На Android соединение **самовосстанавливающееся**: если Google Play отключит сервис биллинга,
+придёт `IAP.OnEvent("disconnected")`, а движок сам переподключится с экспоненциальной задержкой
+(1 с → 60 с). Любой вызов, сделанный в отключённом состоянии, завершается явной ошибкой, а не
+исчезает молча — вы всегда получите результат покупки `failed:service_unavailable`, пустой
+`IAP.OnProductsQueried` либо событие `consume_failed:service_unavailable` /
+`acknowledge_failed:service_unavailable`, — так что экран магазина не может зависнуть на
+крутилке навсегда.
+
+Движок также **сам сверяет покупки**: при каждом успешном подключении и каждом возврате
+приложения на передний план он перезапрашивает Google Play и повторно отдаёт любую покупку в
+состоянии `PURCHASED`, которая так и не была подтверждена, обычным
+`IAP.OnPurchaseComplete{status="purchased"}`. Именно это ловит покупку, завершённую при закрытой
+игре, отложенный платёж (медленная карта / наличные), который прошёл позже, или промокод,
+активированный в приложении Play Store. **Делайте выдачу товара идемпотентной.**
+
 ---
 
 ### 44.3 IAP.IsConnected
@@ -18396,7 +18573,21 @@ end)
 IAP.IsConnected() -> bool
 ```
 
-Возвращает `true`, если сервис покупок подключён.
+Возвращает `true`, если стор доступен: соединение Play Billing на Android, `canMakePayments` на
+iOS.
+
+---
+
+### 44.3a IAP.SetUserId
+
+```lua
+IAP.SetUserId(userId)
+```
+
+Привязывает все последующие покупки к вашему ID аккаунта. Google Play получает его как
+*obfuscated account ID* (движок отправляет SHA-256-дайджест, а не исходное значение), StoreKit —
+как `applicationUsername`. Оба стора используют это для антифрода, а вашему серверу это позволяет
+сопоставить чек с игроком. Выставляйте, как только знаете, кто играет, — до `IAP.Purchase`.
 
 ---
 
@@ -18427,7 +18618,7 @@ IAP.OnProductsQueried(function(products)
 end)
 ```
 
-**Поля продукта:**
+**Поля продукта** — одинаковые на Android и iOS:
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -18435,20 +18626,43 @@ end)
 | `name` | `string` | Название продукта |
 | `title` | `string` | Заголовок продукта |
 | `description` | `string` | Описание продукта |
-| `price` | `string` | Форматированная цена (напр. "$0.99") |
+| `price` | `string` | Форматированная цена в локали стора (напр. "$0.99") |
 | `priceMicros` | `int` | Цена в микро (990000 = $0.99) |
 | `currency` | `string` | Код валюты ("USD", "EUR", "RUB") |
-| `billingPeriod` | `string` | Период подписки ("P1M" = ежемесячно) |
+| `billingPeriod` | `string` | Период подписки ("P1M" = ежемесячно), `""` для разовых товаров |
+| `type` | `string` | `"inapp"` или `"subs"` |
+
+`productId`, `priceAmountMicros` и `priceCurrencyCode` также присутствуют как псевдонимы `id`,
+`priceMicros` и `currency`.
+
+**Подписки на Android** дополнительно приносят каталог предложений, потому что у одного
+подписочного товара может быть несколько базовых планов и вводных/пробных предложений:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `offerToken` | `string` | Токен предложения по умолчанию (первого) — его использует `IAP.Purchase`, если ничего не передать |
+| `offers` | `table` | Массив `{ offerToken, basePlanId, offerId, phases }` |
+| `offers[i].phases` | `table` | Массив `{ price, priceMicros, currency, billingPeriod, billingCycleCount, recurrenceMode }` — бесплатный пробный период это фаза с `priceMicros == 0` |
+
+Верхнеуровневые `price` / `billingPeriod` подписки описывают **финальную регулярную фазу**, а не
+вводное предложение, поэтому план «0 ₽ 7 дней, далее 499 ₽/мес» покажет в магазине 499 ₽/мес.
+
+`IAP.OnProductsQueried` вызывается всегда — с пустой таблицей, если запрос не удался, — так что
+экран магазина не зависает. При неудаче дополнительно приходит
+`IAP.OnEvent("query_failed:CODE")`.
 
 ---
 
 ### 44.5 IAP.Purchase
 
 ```lua
-IAP.Purchase(productId)
+IAP.Purchase(productId, offerToken?)
 ```
 
-Запускает процесс покупки через Google Play для указанного продукта.
+Запускает процесс покупки в сторе для указанного продукта. `offerToken` — только для Android,
+выбирает конкретное подписочное предложение из `product.offers`; не передавайте его, чтобы
+использовать предложение по умолчанию. На iOS параметр игнорируется — там вводными предложениями
+управляет App Store Connect.
 
 ```lua
 IAP.Purchase("coins_100")
@@ -18462,23 +18676,36 @@ IAP.OnPurchaseComplete(function(info)
     elseif info.status == "cancelled" then
         Print("Покупка отменена")
     elseif info.status == "pending" then
-        Print("Покупка ожидает подтверждения")
+        Print("Покупка ожидает подтверждения")   -- ничего пока НЕ выдавать
     else
-        Print("Ошибка покупки: " .. info.status)
+        Print("Ошибка покупки: " .. info.status .. " " .. info.message)
     end
 end)
 ```
 
+Когда пользователь закрывает окно оплаты, на **обеих** платформах приходит
+`status == "cancelled"` — не показывайте на это ошибку.
+
 ---
 
-### 44.6 IAP.Consume
+### 44.6 IAP.Consume и IAP.Acknowledge
 
 ```lua
 IAP.Consume(purchaseToken)
+IAP.Acknowledge(purchaseToken)
 ```
 
-Потребляет покупку, позволяя пользователю купить тот же продукт снова.
-Используйте для расходуемых предметов (монеты, гемы, жизни). Нерасходуемые предметы («убрать рекламу») потреблять НЕ нужно.
+`IAP.Consume` потребляет покупку, позволяя пользователю купить тот же продукт снова. Используйте
+для расходуемых предметов (монеты, гемы, жизни) и вызывайте **после** того, как выдали товар.
+Нерасходуемые предметы («убрать рекламу») потреблять нельзя.
+
+`IAP.Acknowledge` явно подтверждает покупку. Движок и так подтверждает каждую увиденную покупку
+в состоянии `PURCHASED`, включая найденные через `IAP.RestorePurchases()`, поэтому эта функция
+нужна редко — она существует для сценариев, где подтверждение делается только после проверки чека
+на сервере. Подтверждать дважды безопасно: движок отбрасывает дубли запросов «в полёте».
+
+> Google **автоматически возвращает деньги за любую покупку, не подтверждённую в течение трёх
+> суток**. Именно поэтому восстановление и сверка не только сообщают о покупках, но и подтверждают их.
 
 ---
 
@@ -18488,8 +18715,10 @@ IAP.Consume(purchaseToken)
 IAP.RestorePurchases()
 ```
 
-Восстанавливает ранее купленные нерасходуемые предметы и активные подписки.
-Результаты приходят через `IAP.OnPurchaseRestored`.
+Восстанавливает ранее купленные нерасходуемые предметы и активные подписки, а также подтверждает
+те из них, которые стор всё ещё считает неподтверждёнными. Результаты приходят через
+`IAP.OnPurchaseRestored`. Вызывайте при старте (и по кнопке «Восстановить покупки», которой
+требует Apple), чтобы вернуть права после переустановки или на новом устройстве.
 
 ```lua
 IAP.RestorePurchases()
@@ -18505,6 +18734,67 @@ IAP.OnPurchaseRestored(function(info)
 end)
 ```
 
+Android отдаёт разовые товары как `restored`, а подписки как `subscription_active`, затем
+`IAP.OnEvent("restore_complete")` и `IAP.OnEvent("restore_subs_complete")`. iOS отдаёт всё как
+`restored`, а затем `IAP.OnEvent("restore_complete")`.
+
+---
+
+### 44.7a IAP.QueryPurchases
+
+```lua
+IAP.QueryPurchases()
+```
+
+Немедленно запускает ту самую сверку из [44.2](#442-iapinit), но без событий `restored`. Полезно
+после возврата из внешнего сценария. Сверка и так выполняется при подключении и при возврате
+приложения на передний план, поэтому большинству игр вызывать её не нужно.
+
+---
+
+### 44.7b Проверка чеков на сервере
+
+Для донатной экономики проверяйте покупку на своём сервере, прежде чем выдавать что-то ценное:
+`IAP.OnPurchaseComplete` выполняется на устройстве, которое контролирует игрок. Каждый колбэк
+покупки несёт всё, что нужно бэкенду:
+
+| Поле | Платформа | Описание |
+|------|-----------|----------|
+| `token` | обе | Purchase token на Android / идентификатор транзакции на iOS |
+| `orderId` | обе | Order ID Google Play / original transaction identifier на iOS |
+| `signature` | Android | RSA-подпись `originalJson`, проверяется вашим публичным ключом из Play Console |
+| `originalJson` | Android | Ровно та строка, которую подписывает `signature` — отправляйте обе как есть, не пересериализуя |
+| `receipt` | iOS | Чек App Store в base-64 (доступен также в любой момент через `IAP.GetReceipt()`) |
+| `purchaseTime` | обе | Unix-время в миллисекундах |
+| `quantity` | обе | Количество купленных единиц |
+| `acknowledged` | Android | Есть ли у Google Play подтверждение |
+| `autoRenewing` | Android | Состояние автопродления подписки |
+| `success` | обе | `false` для отменённых и неуспешных результатов |
+| `message` | обе | Человекочитаемая причина ошибки |
+
+`status`, `productId`, `success`, `quantity`, `acknowledged` и `autoRenewing` присутствуют
+всегда. Строковые поля и `purchaseTime` **отсутствуют (`nil`)**, если платформа или статус их не
+даёт: `signature`/`originalJson` никогда не приходят на iOS, `receipt` — на Android, а
+`token`/`orderId` отсутствуют у результата `cancelled` или `failed`. Проверяйте их через
+`if info.signature then`, а не сравнением с `""`.
+
+```lua
+IAP.OnPurchaseComplete(function(info)
+    if info.status ~= "purchased" then return end
+
+    local payload = {
+        platform     = Settings.GetPlatform(),
+        productId    = info.productId,
+        token        = info.token,
+        orderId      = info.orderId,
+        signature    = info.signature,      -- Android
+        originalJson = info.originalJson,   -- Android
+        receipt      = info.receipt,        -- iOS
+    }
+    SendToVerificationBackend(Network.JsonEncode(payload))   -- ваш собственный транспорт
+end)
+```
+
 ---
 
 ### 44.8 IAP.Destroy
@@ -18513,7 +18803,7 @@ end)
 IAP.Destroy()
 ```
 
-Отключается от сервиса покупок и очищает колбэки.
+Отключается от стора, останавливает цикл переподключения и очищает колбэки.
 
 ---
 
@@ -18521,12 +18811,19 @@ IAP.Destroy()
 
 | Колбэк | Параметры | Описание |
 |--------|-----------|----------|
-| `IAP.OnInitialized(fn)` | `(success: bool)` | Сервис покупок подключён/ошибка |
-| `IAP.OnEvent(fn)` | `(event: string)` | Общие события: `disconnected`, `consumed:TOKEN`, `acknowledged`, `restore_complete` |
-| `IAP.OnProductsQueried(fn)` | `(products: table)` | Информация о продуктах получена |
-| `IAP.OnPurchaseComplete(fn)` | `(info: table)` | Результат покупки: `{status, productId, token, message}` |
-| `IAP.OnPurchaseRestored(fn)` | `(info: table)` | Восстановленная покупка: `{status, productId, token}` |
+| `IAP.OnInitialized(fn)` | `(success: bool)` | Стор подключён/ошибка |
+| `IAP.OnEvent(fn)` | `(event: string)` | Общие события: `disconnected`, `consumed:TOKEN`, `consume_failed:CODE`, `acknowledged`, `acknowledge_failed:CODE`, `query_failed:CODE`, `restore_complete`, `restore_subs_complete`, `store_promotion:PRODUCT_ID` (iOS) |
+| `IAP.OnProductsQueried(fn)` | `(products: table)` | Информация о продуктах получена (пустая таблица при ошибке) |
+| `IAP.OnPurchaseComplete(fn)` | `(info: table)` | Результат покупки — статусы `purchased`, `pending`, `cancelled`, `failed:CODE` |
+| `IAP.OnPurchaseRestored(fn)` | `(info: table)` | Восстановленная покупка — статусы `restored`, `subscription_active` |
 | `IAP.ClearCallbacks()` | — | Удалить все колбэки |
+
+Обе таблицы `info` содержат полный набор полей из [44.7b](#447b-проверка-чеков-на-сервере).
+
+> **Промо-покупки в App Store (iOS).** Когда игрок покупает ваш товар прямо со страницы
+> приложения в App Store, StoreKit передаёт платёж запущенной игре. Движок принимает его и
+> сначала поднимает `IAP.OnEvent("store_promotion:PRODUCT_ID")`, а затем обычный
+> `IAP.OnPurchaseComplete`, когда транзакция завершится.
 
 ---
 
@@ -20536,11 +20833,17 @@ end
 
 Модуль `Web3` предоставляет подключение кошелька MetaMask, запросы баланса нативных монет и ERC-20 токенов, подпись транзакций и взаимодействие со смарт-контрактами — всё прямо из Lua-скриптов. Доступен только на платформе **Web (WASM)** при включённой опции **Web3** в настройках сборки.
 
+Библиотека Web3 (`ethers.js`) встраивается в страницу игры на этапе сборки, поэтому Web3-сборка **не загружает ни одного скрипта со сторонних сайтов** — она работает офлайн, с `file://`, при строгом CSP и на игровых порталах, где внешние запросы запрещены, а IP игрока не уходит ни на какой CDN. Единственные хосты, к которым обращается игра, — это RPC-узлы блокчейна и шлюз IPFS/Arweave, которые вы сами задали.
+
+Каждый асинхронный вызов возвращает `requestId` и всегда завершается ровно одним колбэком. Если мост Web3 недоступен — сборка без опции Web3, страница без моста, либо запуск на Windows/Linux/macOS/Android/iOS — вызов всё равно завершится через `onError` (и через `Web3.OnError`), а не зависнет молча. Благодаря этому один и тот же скрипт работает без изменений на любой платформе.
+
+Поля таблиц принимают не только строки, но и **числа** Lua (`tokenId = 42` и `tokenId = "42"` равнозначны), а `abi` / `args` / `owners` / `tokenIds` принимают Lua-**таблицу** вместо JSON-строки.
+
 ### Проверка платформы
 
 | Функция | Возвращает | Описание |
 |---------|-----------|----------|
-| `Web3.IsSupported()` | `bool` | `true` на Web-сборках с включённым Web3 |
+| `Web3.IsSupported()` | `bool` | `true` только если страница действительно может работать с Web3: Web-сборка, мост присутствует и библиотека `ethers` загружена. Проверка выполняется во время работы, поэтому вернёт `false` и в случае, если библиотека не скачалась |
 | `Web3.IsConnected()` | `bool` | `true` если кошелёк подключён |
 
 ### Кошелёк
@@ -20557,24 +20860,39 @@ end
 | Функция | Возвращает | Описание |
 |---------|-----------|----------|
 | `Web3.SwitchChain(chain)` | — | Переключиться на сеть по hex ID или имени (`"ethereum"`, `"bsc"`, `"sepolia"`, …). Автоматически добавляет неизвестные сети через MetaMask |
-| `Web3.AddChain(config)` | — | Зарегистрировать пользовательскую сеть. `config` — таблица: `{ chainId, name, rpcUrl, symbol, explorerUrl }` |
+| `Web3.AddChain(config)` | — | Зарегистрировать пользовательскую сеть. `config` — таблица: `{ chainId, name, rpcUrl, symbol, explorerUrl }`. В `chainId` также принимается сокращённое имя сети |
+| `Web3.SetReadOnlyChain(chain, rpcUrl?)` | — | Включить **режим чтения**: все читающие функции работают до подключения кошелька (или вообще без него). `chain` — hex ID или имя сети; `rpcUrl` необязателен и по умолчанию берётся встроенный адрес для известных сетей. Вызов `Web3.SetReadOnlyChain("", "")` отключает режим |
 
-**Поддерживаемые сокращения сетей:** `ethereum` / `eth` / `mainnet`, `holesky`, `sepolia`, `bsc` / `bnb`, `bsc_testnet` / `bnb_testnet`, `polygon`, `arbitrum`, `optimism`, `avalanche`, `base`.
+**Поддерживаемые сокращения сетей:** `ethereum` / `eth` / `mainnet`, `holesky`, `sepolia`, `bsc` / `bnb`, `bsc_testnet` / `bnb_testnet`, `polygon`, `polygon_amoy` / `amoy`, `arbitrum`, `arbitrum_sepolia`, `optimism`, `optimism_sepolia`, `avalanche`, `avalanche_fuji` / `fuji`, `base`, `base_sepolia`, `linea`, `scroll`, `zksync`, `blast`, `gnosis`, `celo`, `mantle`.
+
+**Режим чтения.** Подключённый кошелёк не нужен, чтобы читать данные из сети. После `Web3.SetReadOnlyChain("base")` вызовы `GetBalance`, `GetTokenBalance`, `CallContract`, `GetNFTOwner`, `GetTokenURI`, `GetOwnedTokens`, `GetAllowance`, `EstimateGas`, `GetTransactionReceipt`, `SubscribeEvent` и `Multicall` идут через публичный RPC — это удобно для таблиц лидеров, галерей NFT и витрин магазина, которые показываются до подключения игрока. Для каждой встроенной сети задано два независимых RPC-адреса, и при недоступности первого автоматически используется второй. Как только кошелёк подключён, чтение идёт через него и его текущую сеть — RPC режима чтения используется только пока кошелёк не подключён, и сохраняется после `Web3.DisconnectWallet()`. Подпись (`SendTransaction`, `WriteContract`, `TransferToken`, `TransferNFT`, `ApproveToken`, `SetApprovalForAll`, `SignMessage`, `SignTypedData`) всегда требует подключённого кошелька.
 
 ### Константы Chain ID
 
 | Константа | Значение | Сеть |
 |-----------|---------|------|
 | `Web3.CHAIN_ETHEREUM` | `"0x1"` | Ethereum Mainnet |
-| `Web3.CHAIN_BSC` | `"0x38"` | BNB Smart Chain |
-| `Web3.CHAIN_SEPOLIA` | `"0xaa36a7"` | Sepolia Testnet |
-| `Web3.CHAIN_BSC_TESTNET` | `"0x61"` | BSC Testnet |
 | `Web3.CHAIN_HOLESKY` | `"0x4268"` | Holesky Testnet |
+| `Web3.CHAIN_SEPOLIA` | `"0xaa36a7"` | Sepolia Testnet |
+| `Web3.CHAIN_BSC` | `"0x38"` | BNB Smart Chain |
+| `Web3.CHAIN_BSC_TESTNET` | `"0x61"` | BSC Testnet |
 | `Web3.CHAIN_POLYGON` | `"0x89"` | Polygon |
+| `Web3.CHAIN_POLYGON_AMOY` | `"0x13882"` | Polygon Amoy Testnet |
 | `Web3.CHAIN_ARBITRUM` | `"0xa4b1"` | Arbitrum One |
+| `Web3.CHAIN_ARBITRUM_SEPOLIA` | `"0x66eee"` | Arbitrum Sepolia Testnet |
 | `Web3.CHAIN_OPTIMISM` | `"0xa"` | Optimism |
+| `Web3.CHAIN_OPTIMISM_SEPOLIA` | `"0xaa37dc"` | Optimism Sepolia Testnet |
 | `Web3.CHAIN_AVALANCHE` | `"0xa86a"` | Avalanche C-Chain |
+| `Web3.CHAIN_AVALANCHE_FUJI` | `"0xa869"` | Avalanche Fuji Testnet |
 | `Web3.CHAIN_BASE` | `"0x2105"` | Base |
+| `Web3.CHAIN_BASE_SEPOLIA` | `"0x14a34"` | Base Sepolia Testnet |
+| `Web3.CHAIN_LINEA` | `"0xe708"` | Linea |
+| `Web3.CHAIN_SCROLL` | `"0x82750"` | Scroll |
+| `Web3.CHAIN_ZKSYNC` | `"0x144"` | zkSync Era |
+| `Web3.CHAIN_BLAST` | `"0x13e31"` | Blast |
+| `Web3.CHAIN_GNOSIS` | `"0x64"` | Gnosis |
+| `Web3.CHAIN_CELO` | `"0xa4ec"` | Celo |
+| `Web3.CHAIN_MANTLE` | `"0x1388"` | Mantle |
 
 ### Транзакции
 
@@ -20588,7 +20906,7 @@ end
 | Функция | Возвращает | Описание |
 |---------|-----------|----------|
 | `Web3.GetBalance(address?, callback?, onError?)` | `requestId` | Баланс нативной монеты в ETH/BNB. По умолчанию — подключённый кошелёк |
-| `Web3.GetTokenBalance(tokenAddress, ownerAddress?, callback?, onError?)` | `requestId` | Баланс ERC-20 токена. По умолчанию — подключённый кошелёк |
+| `Web3.GetTokenBalance(tokenAddress, ownerAddress?, callback?, onError?)` | `requestId` | Баланс ERC-20 токена, уже приведённый по `decimals()` токена. По умолчанию — подключённый кошелёк. Для токенов без метода `decimals()` принимается 18 знаков — так же, как это делают кошельки |
 
 ### Смарт-контракты
 
@@ -20603,7 +20921,7 @@ end
 |---------|-----------|----------|
 | `Web3.GetNFTBalance(params, callback?, onError?)` | `requestId` | Количество токенов. `params = { address, owner?, tokenId? }`. Без `tokenId` → ERC-721 `balanceOf(address)`. С `tokenId` → ERC-1155 `balanceOf(address, tokenId)`. По умолчанию owner — подключённый кошелёк. `callback(count)` |
 | `Web3.GetNFTOwner(params, callback?, onError?)` | `requestId` | Владелец конкретного ERC-721 токена. `params = { address, tokenId }`. `callback(ownerAddress)` |
-| `Web3.GetTokenURI(params, callback?, onError?)` | `requestId` | URI метаданных токена. `params = { address, tokenId }`. Сначала пробует ERC-721 `tokenURI()`, при неудаче — ERC-1155 `uri()`. `callback(uri)` |
+| `Web3.GetTokenURI(params, callback?, onError?)` | `requestId` | URI метаданных токена. `params = { address, tokenId }`. Сначала пробует ERC-721 `tokenURI()`, при неудаче — ERC-1155 `uri()`. Плейсхолдер ERC-1155 `{id}` заменяется на 64-символьный hex-идентификатор в нижнем регистре с ведущими нулями, как требует стандарт. `callback(uri)` |
 | `Web3.GetNFTBalanceBatch(params, callback?, onError?)` | `requestId` | Пакетный запрос баланса ERC-1155. `params = { address, owners, tokenIds }`. `owners` и `tokenIds` — JSON-массивы. `callback(balancesJson)` |
 | `Web3.GetOwnedTokens(params, callback?, onError?)` | `requestId` | Перечисление всех NFT владельца (требуется ERC721Enumerable). `params = { address, owner? }`. `callback(tokenIdsJson)` |
 
@@ -20674,14 +20992,14 @@ end
 
 | Функция | Возвращает | Описание |
 |---------|-----------|----------|
-| `Web3.ResolveMetadata(uri, callback?, onError?)` | `requestId` | Загрузить и распарсить метаданные NFT из URI. Автоматически разрешает протоколы `ipfs://` и `ar://`. Также разрешает `ipfs://` URI внутри полей `image` и `animation_url`. `callback(metadataJson)` |
+| `Web3.ResolveMetadata(uri, callback?, onError?)` | `requestId` | Загрузить и распарсить метаданные NFT из URI. Автоматически разрешает схемы `ipfs://`, `ipfs://ipfs/` и `ar://`, в том числе внутри полей `image`, `image_url`, `animation_url` и `external_url`. Запрос прерывается через 30 секунд с ошибкой вместо бесконечного ожидания. `callback(metadataJson)` |
 | `Web3.SetIPFSGateway(url)` | — | Установить пользовательский IPFS-шлюз для `ResolveMetadata`. По умолчанию `"https://ipfs.io/ipfs/"`. Пример: `Web3.SetIPFSGateway("https://gateway.pinata.cloud/ipfs/")` |
 
 ### Multicall (Пакетное чтение)
 
 | Функция | Возвращает | Описание |
 |---------|-----------|----------|
-| `Web3.Multicall(calls, callback?, onError?)` | `requestId` | Выполнить несколько read-only вызовов контрактов одним RPC-запросом через Multicall3. `calls` — Lua-таблица из `{ address, abi, method, args? }`. `callback(resultsJson)` возвращает массив `{ success, data }`. Доступно на всех основных EVM-сетях |
+| `Web3.Multicall(calls, callback?, onError?)` | `requestId` | Выполнить несколько read-only вызовов контрактов одним RPC-запросом через Multicall3. `calls` — Lua-массив из `{ address, abi, method, args? }`, порядок вызовов сохраняется в результате. `callback(resultsJson)` возвращает массив `{ success, decoded, data }`: `success` — результат вызова в сети, `decoded` — удалось ли декодировать возвращённое значение по переданному ABI (при `false` в `data` остаётся сырой hex). Доступно на всех основных EVM-сетях; для zkSync Era автоматически используется её собственный контракт Multicall3 |
 
 ### Колбэки событий
 
@@ -20692,7 +21010,31 @@ end
 | `Web3.OnChainChanged(callback)` | `callback(chainId)` — пользователь сменил сеть в MetaMask |
 | `Web3.OnAccountChanged(callback)` | `callback(address)` — пользователь сменил аккаунт в MetaMask |
 | `Web3.OnError(callback)` | `callback(errorMessage, requestId)` — любая ошибка |
-| `Web3.ClearCallbacks()` | Удалить все зарегистрированные колбэки |
+| `Web3.ClearCallbacks()` | Удалить все зарегистрированные колбэки и отменить все активные подписки на события |
+
+Колбэки и подписки также очищаются автоматически при остановке игры **и при каждой смене уровня** — так же, как у `Input`, `Network` и остальных скриптовых подсистем: замыкания старого уровня не должны продолжать срабатывать после того, как его сцена уничтожена. Нужные обработчики регистрируйте заново в `OnLevelLoaded` нового уровня. Само подключение кошелька при этом не трогается: `Web3.IsConnected()`, `Web3.GetAddress()` и `Web3.GetChainId()` продолжают работать между уровнями, режим чтения тоже сохраняется. Если при смене уровня транзакция ещё может быть в полёте, сохраните её `txHash` и подхватите её через `Web3.WatchTransaction(txHash, …)` после загрузки нового уровня.
+
+### Пример — Чтение сети до подключения кошелька
+
+```lua
+function OnLevelLoaded()
+    if not Web3.IsSupported() then return end
+
+    -- Кошелёк не нужен: читаем напрямую через публичный RPC
+    Web3.SetReadOnlyChain("base")
+
+    Web3.GetTokenBalance(
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "0x1111111111111111111111111111111111111111",
+        function(balance)
+            Print("USDC на балансе казны: " .. balance)
+        end,
+        function(err)
+            PrintError("Ошибка чтения: " .. err)
+        end
+    )
+end
+```
 
 ### Пример — Подключение кошелька и показ баланса BNB
 
@@ -21372,7 +21714,10 @@ end
 > Видеофайлы воспроизводятся напрямую (`.mp4`, `.webm`, `.avi`, `.mkv` — любой формат, поддерживаемый FFmpeg).
 > Работает как с обычными файлами на диске, так и с файлами, запакованными в `.ICEPAK` архивы через VFS.
 >
-> **Важно:** Требует FFmpeg. Доступно на **Windows**, **Linux**, **Android**. Недоступно на Web (Emscripten).
+> **Важно:** Доступно на всех шести платформах. **Windows**, **Linux**, **macOS** и **Android** декодируют
+> через FFmpeg; **iOS** воспроизводит через AVFoundation (только H.264/HEVC — WebM/VP9 там не декодируется,
+> поэтому кукинг видео для iOS-сборок переключается на PassThrough); **Web** воспроизводит через
+> браузерный элемент `<video>`.
 
 ### Воспроизведение
 
@@ -22445,6 +22790,280 @@ end
 
 function OnDestroy()
     Console.ArchiveCVars("Config/Console.cfg")
+end
+```
+
+---
+
+## 61. Draw — Немедленная отрисовка (Draw / Texture / RenderTarget)
+
+> `Draw` отправляет текстурированные квады и произвольные треугольные меши прямо в батч-рендерер, без создания сущностей.
+> Всё, что отправлено за кадр, рисуется один раз и сбрасывается — вызывайте заново каждый кадр из `OnUpdate`.
+>
+> Это самый быстрый способ отрисовать большой объём сгенерированной геометрии: **один вызов Lua может отправить тысячи квадов**,
+> тогда как управление таким же числом спрайтовых сущностей стоило бы нескольких вызовов Lua→C++ на каждую.
+>
+> Типичное применение: процедурная графика, кастомные частицы, внутриигровые редакторы уровней, миникарты, отладочные оверлеи,
+> тайловые и колоночные рендереры, а также псевдо-3D техники (raycasting, пол в стиле Mode-7, дорога с перспективой),
+> полностью остающиеся в 2D.
+
+### Соглашения о координатах
+
+`Draw` полностью следует соглашениям движка:
+
+- **X+** вправо, **X-** влево.
+- **Y+** вверх, **Y-** вниз.
+- **Поворот** в градусах; **положительный — по часовой стрелке**, отрицательный — против (как у `SetSpriteLocalRotation`).
+- **Z+** к зрителю (передний план), **Z-** от зрителя (задний план) — как у `SetSpriteOrder`.
+  Геометрия в мировом пространстве проходит тест глубины вместе со спрайтами, тайлмапами и всем остальным в сцене,
+  поэтому Z бесплатно даёт корректное попиксельное перекрытие.
+- **Пивот** `px, py` нормализован `0..1`, причём **`py` отсчитывается сверху** — точно как у `SetSpritePivot`.
+  По умолчанию пивот `0.5, 0.5` (центр), поэтому `x, y` — это центр квада, пока вы не измените пивот.
+- **UV** `u, v, uw, vh` нормализованы `0..1` ровно в том же пространстве, что и `SetSpriteRegion`, делённое на размер
+  текстуры: `v = 0` — это **верх** изображения, и картинка выводится не перевёрнутой, точно как у спрайта.
+  Вместо них можно передать `sx, sy, sw, sh` — исходный прямоугольник **в пикселях**.
+  У `Draw.Mesh` соглашение намеренно другое — там каждая вершина несёт сырую координату выборки, поэтому `v = 0`
+  читает верхнюю строку изображения, а какой вершине это соответствует — решаете вы.
+
+### Пространства
+
+```lua
+Draw.SetSpace("world")   -- по умолчанию: мировые единицы, тест глубины, движется с камерой
+Draw.SetSpace("screen")  -- пиксели экрана, начало в ЛЕВОМ НИЖНЕМ углу, без теста глубины, порядок отправки
+local space = Draw.GetSpace()
+```
+
+Геометрия `world` рисуется вместе со сценой (после частиц, до тумана войны и виджетов), поэтому на неё действует
+пост-обработка и она участвует в буфере глубины.
+Геометрия `screen` игнорирует камеру и буфер глубины и рисуется в порядке отправки.
+
+### Состояние отрисовки
+
+Состояние глобальное и сохраняется между вызовами: настраиваете один раз, отправляете много примитивов.
+
+```lua
+Draw.SetTexture("Content/Textures/wall.png")  -- текстура по умолчанию; nil = белая
+Draw.SetColor(1, 1, 1, 1)                     -- цвет по умолчанию
+Draw.SetZ(0)                                  -- глубина по умолчанию
+Draw.SetPivot(0.5, 0.5)                       -- пивот по умолчанию (py сверху)
+Draw.SetBlend("masked")                       -- "masked" | "additive" | "translucent" | "opaque"
+Draw.SetShading("unlit")                      -- "unlit" (по умолчанию) | "lit"
+Draw.SetAlphaClip(0.5)                        -- порог отсечения альфы для "masked"
+Draw.SetTarget(nil)                           -- nil = экран, либо имя RenderTarget
+
+Draw.GetTexture(); Draw.GetColor(); Draw.GetZ(); Draw.GetPivot()
+Draw.GetBlend(); Draw.GetShading(); Draw.GetAlphaClip(); Draw.GetTarget()
+
+Draw.Push()   -- сохранить всё состояние (глубина стека до 64)
+Draw.Pop()    -- восстановить
+Draw.Reset()  -- вернуть значения по умолчанию и очистить стек
+```
+
+### Примитивы
+
+```lua
+-- Один квад со всеми параметрами. Любое поле можно опустить.
+Draw.Quad{
+    x = 100, y = 200,      -- точка пивота (по умолчанию центр)
+    w = 64,  h = 64,       -- размер в мировых/экранных единицах
+    z = 0,                 -- глубина (Z+ = передний план)
+    rot = 0,               -- градусы, по часовой стрелке положительно
+    px = 0.5, py = 0.5,    -- пивот, py сверху
+    u = 0, v = 0, uw = 1, vh = 1,       -- нормализованный UV-прямоугольник
+    -- либо пиксельный исходный прямоугольник вместо u/v/uw/vh:
+    -- sx = 0, sy = 0, sw = 16, sh = 16,
+    r = 1, g = 1, b = 1, a = 1,         -- цвет
+    texture = "Content/Textures/x.png", -- своя текстура для этого квада
+}
+
+-- Сплошной прямоугольник без текстуры. x, y — ЛЕВЫЙ НИЖНИЙ угол.
+Draw.Rect(x, y, w, h, r, g, b, a, z)
+
+-- Текстурированный спрайт; w/h по умолчанию равны размеру текстуры, пивот из состояния.
+Draw.Sprite("Content/Textures/hero.png", x, y, w, h, rotation, z)
+
+-- Текстурированный квад с исходным прямоугольником в пикселях.
+Draw.Region("Content/Textures/atlas.png", x, y, w, h, sx, sy, sw, sh, rotation, z)
+
+-- Линия, нарисованная как повёрнутый квад.
+Draw.Line(x1, y1, x2, y2, thickness, r, g, b, a, z)
+```
+
+### Массовая отправка
+
+```lua
+-- Массив таблиц-квадов. Возвращает количество отправленных.
+local n = Draw.Quads("Content/Textures/wall.png", {
+    { x = 0, y = 0, w = 1, h = 100 },
+    { x = 1, y = 0, w = 1, h = 120 },
+})
+
+-- То же самое, с текстурой из Draw.SetTexture:
+Draw.Quads(quadList)
+```
+
+`Draw.QuadsPacked` — самый быстрый путь: **плоский массив чисел**, по 14 на квад, ровно в таком порядке:
+
+```
+x, y, w, h, z, rot, u, v, uw, vh, r, g, b, a
+```
+
+```lua
+local data = {}
+local i = 0
+for col = 0, 319 do
+    local h = ColumnHeight(col)
+    data[i+1]  = col        -- x
+    data[i+2]  = 180        -- y (центр)
+    data[i+3]  = 1          -- w
+    data[i+4]  = h          -- h
+    data[i+5]  = 0          -- z
+    data[i+6]  = 0          -- rot
+    data[i+7]  = TexU(col)  -- u
+    data[i+8]  = 0          -- v
+    data[i+9]  = 1 / 64     -- uw (один столбец текселей текстуры 64 px)
+    data[i+10] = 1          -- vh
+    data[i+11] = 1; data[i+12] = 1; data[i+13] = 1; data[i+14] = 1  -- rgba
+    i = i + 14
+end
+Draw.QuadsPacked("Content/Textures/wall.png", data)   -- 320 колонн, один вызов Lua
+```
+
+Необязательный третий аргумент ограничивает число читаемых квадов: `Draw.QuadsPacked(path, data, count)`.
+
+### Меши
+
+`Draw.Mesh` отправляет произвольный треугольный меш с UV на каждую вершину — именно это позволяет строить трапеции с
+перспективой, пол в стиле Mode-7, изогнутые дороги и свободные деформации, не выходя из 2D.
+
+```lua
+Draw.Mesh(texturePath, positions, uvs, indices, options)
+```
+
+- `positions` — плоский массив `{x1, y1, x2, y2, ...}` (минимум 3 вершины, максимум 65535).
+- `uvs` — плоский массив `{u1, v1, u2, v2, ...}` с тем же числом вершин. Необязателен; если опущен — все нули.
+- `indices` — плоский массив индексов вершин, **нумерация с 1**, кратно 3. Необязателен; если опущен — строится веер треугольников.
+- `options` — необязательная таблица: `{ r, g, b, a, z, blend, shading, alphaClip }`.
+
+```lua
+-- Текстурированная трапеция: широкая снизу, узкая сверху (сегмент дороги).
+Draw.Mesh("Content/Textures/road.png",
+    { -100, 0,  100, 0,  40, 60,  -40, 60 },   -- позиции
+    {    0, 1,    1, 1,   1, 0,     0, 0 },    -- uv
+    { 1, 2, 3,  1, 3, 4 },                     -- индексы (с 1)
+    { z = -10 })
+```
+
+Идущие подряд меши с одинаковой текстурой и состоянием объединяются в один draw call.
+
+### Лимиты и статистика
+
+```lua
+Draw.GetViewportSize()     -- { width, height } поверхности, куда рисует Draw,
+                           -- в тех же единицах, что и экранное пространство.
+                           -- Используйте это для вёрстки HUD, а не разрешение окна.
+Draw.GetQuadCount()        -- квадов отправлено за кадр
+Draw.GetCommandCount()     -- батч-команд за кадр
+Draw.GetMeshVertexCount()  -- вершин мешей за кадр
+Draw.DidOverflow()         -- true, если лимит превышен и геометрия была отброшена
+
+Draw.SetMaxQuads(200000)        -- лимит квадов на кадр (по умолчанию 200000)
+Draw.SetMaxMeshVertices(400000) -- лимит вершин мешей на кадр (по умолчанию 400000)
+Draw.GetMaxQuads(); Draw.GetMaxMeshVertices()
+
+Draw.Clear()  -- отбросить всё отправленное в этом кадре
+```
+
+Список очищается автоматически в начале каждого кадра и при выгрузке сцены.
+
+### Texture — текстуры, созданные из скрипта
+
+Такие текстуры регистрируются под своим именем, поэтому **любой API, принимающий путь к текстуре, принимает и это имя**:
+`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, `Draw.SetTexture`, виджеты и так далее.
+
+```lua
+Texture.Create("minimap", 256, 256, {
+    r = 0, g = 0, b = 0, a = 0,   -- цвет начальной заливки
+    filter = "nearest",           -- "nearest" (по умолчанию) | "linear"
+    wrap = "clamp",               -- "clamp" (по умолчанию) | "repeat"
+})
+
+Texture.Exists("minimap")
+Texture.GetSize("minimap")            -- возвращает { width, height }
+Texture.Destroy("minimap")
+Texture.GetCount()
+
+Texture.Fill("minimap", 0, 0, 0, 1)                    -- залить всю текстуру
+Texture.SetPixel("minimap", x, y, r, g, b, a)          -- один пиксель, компоненты 0..1
+Texture.SetPixels("minimap", x, y, w, h, floats)       -- RGBA float 0..1, w*h*4 значений
+Texture.SetPixelBytes("minimap", x, y, w, h, bytes)    -- RGBA байты 0..255, w*h*4 значений
+
+Texture.SetFilter("minimap", "linear")
+Texture.SetWrap("minimap", "repeat")
+Texture.GenerateMipmaps("minimap")
+```
+
+`SetPixels` и `SetPixelBytes` ожидают область построчно, по 4 компонента на пиксель, начиная с `x, y`.
+Это классический путь софтверного рендерера: собрать буфер пикселей в Lua, загрузить его одним вызовом и нарисовать одним квадом.
+
+### RenderTarget — отрисовка в текстуру
+
+Render target — это текстура, в которую можно рисовать. Она тоже регистрируется по имени, поэтому её могут читать спрайты и материалы.
+
+```lua
+RenderTarget.Create("mirror", 512, 512, { filter = "linear", wrap = "clamp" })
+RenderTarget.Exists("mirror")
+RenderTarget.GetSize("mirror")
+RenderTarget.Destroy("mirror")
+
+RenderTarget.Clear("mirror", r, g, b, a, clearDepth)   -- clearDepth по умолчанию true
+RenderTarget.CaptureScene("mirror")                    -- скопировать в неё отрисованную сцену этого кадра
+RenderTarget.ReadPixels("mirror", x, y, w, h)          -- плоский массив байтов RGBA (медленно, тормозит GPU)
+
+-- Направить немедленную геометрию в цель:
+Draw.SetTarget("mirror")
+Draw.Rect(0, 0, 512, 512, 0, 0, 0, 1)
+Draw.SetTarget(nil)
+```
+
+Геометрия render target рисуется **до** основной сцены каждый кадр, поэтому цель, заполненная в этом кадре, уже может быть
+прочитана спрайтами и материалами в том же кадре. В экранном пространстве используется собственный пиксельный прямоугольник
+цели (начало в левом нижнем углу); в мировом — текущая проекция камеры растягивается на цель.
+
+Буфер глубины render target **не** очищается автоматически — вызывайте `RenderTarget.Clear` каждый кадр, если рисуете туда
+мировую геометрию с тестом глубины.
+
+### Полный пример — текстурные колонны в стиле Wolfenstein
+
+```lua
+local COLUMNS = 320
+local WALL_TEX = "Content/Textures/wall.png"
+
+function OnUpdate(dt)
+    local px, py = GetPlayerPos()
+    local angle  = GetPlayerAngle()
+
+    local data = {}
+    local i = 0
+    for col = 0, COLUMNS - 1 do
+        local rayAngle = angle + (col / COLUMNS - 0.5) * 60
+        local dist, texU = CastRay(px, py, rayAngle)   -- ваш DDA на чистом Lua
+        local height = 12000 / math.max(dist, 0.1)
+        local shade  = math.max(0.2, 1 - dist / 20)
+
+        data[i+1]  = col; data[i+2] = 180
+        data[i+3]  = 1;   data[i+4] = height
+        data[i+5]  = -dist            -- Z: дальние стены уходят назад
+        data[i+6]  = 0
+        data[i+7]  = texU; data[i+8] = 0
+        data[i+9]  = 1 / 64; data[i+10] = 1
+        data[i+11] = shade; data[i+12] = shade; data[i+13] = shade; data[i+14] = 1
+        i = i + 14
+    end
+
+    Draw.SetSpace("screen")
+    Draw.SetBlend("opaque")
+    Draw.QuadsPacked(WALL_TEX, data)
 end
 ```
 

@@ -77,6 +77,7 @@ ANGLE.txt                 ANGLE                        BSD-3-Clause         vcpk
 
 -- Vendored in-tree or bundled as assets (not from vcpkg) --
 
+ethers-js.txt             ethers.js v6.16.0            MIT                  vendored: Tools/BuildSystem/BuildGame/Templates/Web/ethers.umd.min.js (embedded into the page of Web builds with Web3)
 miniaudio.txt             miniaudio                    Unlicense OR MIT-0   vendored: Source/Engine/ThirdLibrary/miniaudio.h
 ImGuiColorTextEdit.txt    ImGuiColorTextEdit           MIT                  vendored: Source/Engine/ThirdLibrary/ImGuiColorTextEdit
 MoltenVK.txt              MoltenVK                     Apache-2.0           vendored: fetched by Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh (macOS/iOS)

@@ -1,6 +1,8 @@
 # 🧊 IceBox Engine — Lua API (Ice Scripting)
 
-## Complete English Documentation
+## Full documentation in English
+
+### Actual for B-0.8.3 Version
 
 > **IceBox Engine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -106,6 +108,7 @@
 58. [Replay — Recording, Playback, Killcams](#58-replay--recording-playback-killcams)
 59. [Matchmaking — Player Matchmaking](#59-matchmaking--player-matchmaking)
 60. [Console — Developer Console & Command System](#60-console--developer-console--command-system)
+61. [Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)](#61-draw--immediate-mode-rendering-draw--texture--rendertarget)
 
 ---
 
@@ -3662,21 +3665,38 @@ if IsHapticSupported() then
     PlayHaptic(0.7, 300)    -- strength (0..1), duration in ms
     StopHaptic()             -- stop vibration
 end
+
+-- Crisp UI feedback: one system-tuned tap instead of a hand-timed buzz
+PlayHapticPreset("tick")          -- "tick" | "click" | "doubleclick" | "heavyclick"
+
+-- Custom waveform: segment durations + per-segment strength
+PlayHapticPattern({ 0, 40, 80, 120 }, { 0.0, 0.4, 0.0, 1.0 })
+
+-- Looping pattern: loop forever from segment 1 -> 60 ms on, 60 ms off, ...
+PlayHapticPattern({ 60, 60 }, { 1.0, 0.0 }, 1)
+StopHaptic()                      -- always needed to end a looping pattern
 ```
 
 | Function | Description |
 |---|---|
 | `IsHapticSupported()` | Is a haptic device available (mobile vibration, rumble motor, etc.) |
+| `IsHapticAmplitudeControlSupported()` | Does the device honour `strength`. When `false`, every vibration plays at the system default level and only `durationMs` shapes the feel |
 | `PlayHaptic(strength, durationMs)` | Start vibration (`strength` 0..1, `durationMs` in milliseconds) |
+| `PlayHapticPreset(name?)` | Play a short system-tuned effect: `"tick"` (default), `"click"`, `"doubleclick"`, `"heavyclick"` |
+| `PlayHapticPattern(timingsMs, amplitudes?, repeatIndex?)` | Play a waveform. `timingsMs[i]` is the length of segment `i` in ms, `amplitudes[i]` its strength `0..1` (`0` = pause). Without `amplitudes` the segments alternate on/off starting with **on**. `repeatIndex` is the 1-based table index the pattern loops back to and runs until `StopHaptic()`; omit it (or pass `-1`) to play once |
 | `StopHaptic()` | Stop current vibration |
 
 > **Platform backends:**
-> • **Windows / Linux / macOS** — the first SDL force-feedback device (FFB wheel or joystick). A desktop without such hardware reports `false`.
-> • **Android** — the system vibrator, exposed by SDL as a haptic device. Requires the `VIBRATE` permission, which the Android build template already declares.
-> • **iOS** — Core Haptics (`CHHapticEngine`) with a `UIImpactFeedbackGenerator` fallback; SDL itself ships only a dummy haptic driver on iOS, so the engine drives the Taptic Engine natively. Durations of 60 ms or less play as a single transient tap, longer ones as a continuous event. iPad / iPod touch have no vibration motor and report `false`.
-> • **Web** — `navigator.vibrate` on mobile browsers (Chrome, Firefox, Edge, Samsung Internet on Android). Desktop browsers report `false`. **Safari never implemented the Vibration API, so a browser on iOS/iPadOS can never vibrate the device** — that is a platform limit, not an engine one. The Web API has no amplitude control: `strength` is ignored there and only `durationMs` applies. Chrome additionally drops vibration calls made before the user has interacted with the page.
+> • **Windows / Linux / macOS** — the first SDL force-feedback device (FFB wheel or joystick). A desktop without such hardware reports `false`. Presets fall back to a short `PlayHaptic`, patterns to one rumble of the total "on" time at peak strength.
+> • **Android** — the engine drives `android.os.Vibrator` natively through `IceBoxHaptics` (`VibratorManager` on Android 12+), so `strength` maps to a real `VibrationEffect` amplitude where the motor supports it, `PlayHapticPreset` uses the OEM-tuned `EFFECT_TICK / CLICK / DOUBLE_CLICK / HEAVY_CLICK`, and `PlayHapticPattern` becomes a `VibrationEffect` waveform with looping. Every vibration is tagged with game/media usage attributes so it is governed by the game's own volume of feedback rather than by the system "touch feedback" toggle. Requires the `VIBRATE` permission, which the Android build template already declares. If the native class is missing (an old generated project) the engine silently falls back to SDL's haptic device.
+> • **iOS** — Core Haptics (`CHHapticEngine`) with a `UIImpactFeedbackGenerator` fallback; SDL itself ships only a dummy haptic driver on iOS, so the engine drives the Taptic Engine natively. Durations of 60 ms or less play as a single transient tap, longer ones as a continuous event; patterns become a multi-event `CHHapticPattern`. `repeatIndex` is ignored — Core Haptics has no pattern loop, so re-trigger from Lua instead. iPad / iPod touch have no vibration motor and report `false`.
+> • **Web** — `navigator.vibrate` on mobile browsers (Chrome, Firefox, Edge, Samsung Internet on Android). Desktop browsers report `false`. **Safari never implemented the Vibration API, so a browser on iOS/iPadOS can never vibrate the device** — that is a platform limit, not an engine one. The Web API has no amplitude control: `strength` is ignored there and only `durationMs` applies (`IsHapticAmplitudeControlSupported()` returns `false`); patterns are converted to a `navigator.vibrate` on/off array and `repeatIndex` is ignored. Chrome additionally drops vibration calls made before the user has interacted with the page.
 >
 > `PlayHaptic` targets the *device*, not the controller. For gamepad motors always use `SetGamepadRumble(...)` — that one **does** work in the browser (Chromium exposes `gamepad.vibrationActuator`), so a web build can rumble a pad even where `IsHapticSupported()` is `false`.
+>
+> On mobile the device backend always wins over SDL's haptic device, and vibration is stopped automatically when the app goes to the background — a looping pattern can never keep buzzing behind the home screen.
+>
+> **In the editor's Remote Preview**, every call in this section is routed to the connected Android device instead of the desktop, and `IsHapticSupported()` reports `true` — so mobile vibration can be felt and tuned without a full build. See *Editor → Remote Preview*.
 
 ### Force-Feedback Effects (advanced haptic)
 
@@ -3800,12 +3820,20 @@ SetDeviceSensorEnabled("gyro", false)
 | `"rotationvector"` | Fused rotation vector | unit quaternion components | Android (JNI), iOS (CoreMotion) |
 | `"proximity"` | Proximity sensor | cm (`x`) — iOS reports `0` (near) or `5` (far) | Android (JNI), iOS (UIDevice) |
 | `"light"` | Ambient light | lux (`x`) | **Android only** |
-| `"stepcounter"` | Steps since boot | count (`x`) | **Android only** |
+| `"stepcounter"` / `"step"` | Step count | count (`x`) | Android (JNI), iOS (CMPedometer) — see the counter-origin note below |
 | `"ambienttemperature"` / `"temperature"` | Ambient temperature | °C (`x`) | **Android only** |
 | `"humidity"` | Relative humidity | % (`x`) | **Android only** |
 
 > **Note:** These are the **device's built-in** sensors (phone/tablet hardware), not gamepad sensors.
 > For gamepad sensors (DualSense, Joy-Con), use `GamepadHasSensor()` / `GetGamepadSensorData()` instead.
+>
+> Sensor names are matched case-insensitively on every platform.
+>
+> **Step counter — origin and permissions.** The two platforms count from different origins, so treat the value as a **monotonic counter and use deltas**, never as an absolute number that means the same thing everywhere:
+> • **Android** — `TYPE_STEP_COUNTER`, counting since the device booted. Needs the `ACTIVITY_RECOGNITION` runtime permission on Android 10+. `IsDeviceSensorAvailable("stepcounter")` reports the *hardware*, so it can return `true` while the counter stays at `0` until the permission is granted — request it with `Permissions.Request(Permissions.ACTIVITY_RECOGNITION)` and add it to the build's extra permissions.
+> • **iOS** — `CMPedometer`, counting from midnight of the current day. `SetDeviceSensorEnabled("stepcounter", true)` seeds the value with a one-shot query for the steps already taken today and then keeps it live, so the first read is correct rather than `0`. The first enable triggers the system "Motion & Fitness" prompt; the engine auto-declares `NSMotionUsageDescription` in Info.plist (override the wording with `NSMotionUsageDescription=<reason>` in Extra Usage Descriptions). Unlike Android, `IsDeviceSensorAvailable("stepcounter")` returns `false` once the user has denied or restricted Motion & Fitness, so a denied permission is visible to the game.
+>
+> **Web caveats:** SDL registers accelerometer and gyroscope on *every* browser, so `IsDeviceSensorAvailable("accel")` returns `true` even on a desktop browser with no motion hardware — the readings simply stay `0`. On iOS/iPadOS Safari the browser also requires an explicit motion permission: `SetDeviceSensorEnabled("accel", true)` asks for it right away and, if that call was not inside a user gesture, re-asks once on the next tap or click, so the values start arriving after the player touches the page.
 
 ### Compass and Barometer (Android / iOS)
 
@@ -10560,6 +10588,31 @@ PP.ClearCustomMaterials()
 ```
 
 > Note: changes target the **active** post-process settings (like the other `PP.*` functions) and are not persisted to the `.ice_view` asset. To make a material permanent, add it in the View Editor → Post Process → Custom Post Process.
+
+### Custom Post-Process Material Parameters
+
+> Post-process materials can expose **Scalar Parameter**, **Vector Parameter** and **Texture Parameter** nodes just like surface
+> materials. These functions feed those parameters per material, every frame, straight from Lua — no Material Parameter
+> Collection needed. Overrides are keyed by material path and survive strength/enable changes and volume blending.
+
+```lua
+local MAT = "Content/PP_Raycast.ice_material"
+
+PP.SetCustomMaterialScalar(MAT, "PlayerAngle", angle)          -- float parameter
+PP.SetCustomMaterialVector(MAT, "PlayerPos", x, y, 0, 1)       -- vec4 parameter (a defaults to 1)
+PP.SetCustomMaterialTexture(MAT, "MapData", "levelmap")        -- texture parameter; accepts a
+                                                               -- file path or a Texture.Create name
+
+local angleNow = PP.GetCustomMaterialScalar(MAT, "PlayerAngle")
+local posNow   = PP.GetCustomMaterialVector(MAT, "PlayerPos")  -- returns { r, g, b, a }
+
+PP.ClearCustomMaterialParams(MAT)      -- drop overrides for one material
+PP.ClearAllCustomMaterialParams()      -- drop every override
+```
+
+> The setters load the material if it is not loaded yet and return `false` if it cannot be found.
+> Parameter names must match the **Parameter Name** field of the node in the Material Editor.
+> Material Parameter Collections (`MPC.*`) still work and are still the right tool for values shared by many materials.
 
 ### Post-Process Volume callbacks
 
@@ -18071,10 +18124,13 @@ Supports **banner**, **interstitial** (full-screen between screens), and **rewar
 > the identical `Ads.*` calls and the identical event strings, so no branching is needed.
 > `Ads.IsSupported()` reports whether the SDK is actually present in the running binary.
 >
-> **Platform — everything else in this chapter:** the advertising identifier works on Android **and** iOS, and Apple's own attribution and store-promotion frameworks (SKAdNetwork, Apple Search Ads, SKOverlay) are fully supported with no third-party SDK — see [43.8](#438-advertising-id-attribution-and-app-store-promotion).
+> **Platform — everything else in this chapter:** the advertising identifier works on Android **and** iOS, and Apple's own attribution and store-promotion frameworks (SKAdNetwork, Apple Search Ads, SKOverlay) are fully supported with no third-party SDK — see [43.10](#4310-advertising-id-attribution-and-app-store-promotion).
 >
 > **Build requirement — Android:** enable "Google AdMob (Ads)" in the Build Game popup and
-> provide your AdMob App ID. Gradle pulls `play-services-ads` automatically.
+> provide your AdMob App ID. Gradle pulls `play-services-ads` automatically. Leaving the AdMob
+> App ID empty while ads are enabled is a hard build error, exactly as on iOS: the SDK reads
+> `com.google.android.gms.ads.APPLICATION_ID` from the manifest at process start and refuses to
+> serve anything without a real one, so the APK would look fine and never show an ad.
 >
 > **Build requirement — iOS:** the Google Mobile Ads SDK is not redistributed with the engine,
 > so download it from Google once per machine and put `GoogleMobileAds.xcframework` into
@@ -18106,7 +18162,9 @@ Supports **banner**, **interstitial** (full-screen between screens), and **rewar
 Ads.IsSupported() -> bool
 ```
 
-Returns `true` if the current platform supports ads (Android with ads enabled).
+Returns `true` when the Google Mobile Ads SDK is actually present in the running binary —
+Android with "Google AdMob (Ads)" enabled, or iOS with the vendored `GoogleMobileAds.xcframework`
+linked. `false` everywhere else, where every `Ads.*` call is a no-op.
 
 ```lua
 if Ads.IsSupported() then
@@ -18123,7 +18181,9 @@ Ads.Init()
 ```
 
 Initializes the AdMob SDK. Must be called once before any other `Ads` function.
-The result is delivered asynchronously via `Ads.OnInitialized`.
+The result is delivered asynchronously via `Ads.OnInitialized`. `Ads.IsInitialized()` returns
+the same state synchronously, and calling `Ads.Init()` again once initialized simply re-fires
+`Ads.OnInitialized(true)` instead of re-initializing.
 
 ```lua
 Ads.Init()
@@ -18136,7 +18196,35 @@ end)
 
 ---
 
-### 43.3 Banner Ads
+### 43.3 Ad request configuration (policy and testing)
+
+Call these **before** `Ads.Init()` — Google requires the child-directed and under-age tags to be
+set before the SDK starts. They apply to every banner, interstitial and rewarded request from
+then on, and they behave identically on Android and iOS.
+
+```lua
+Ads.SetTestDeviceIds({ "33BE2250B43518CCDA7DE426D04EE231" })  -- test ads on your own devices
+Ads.SetChildDirected(true)          -- COPPA: true / false / nil (= unspecified)
+Ads.SetUnderAgeOfConsent(true)      -- GDPR under-16: true / false / nil (= unspecified)
+Ads.SetMaxAdContentRating("G")      -- "G", "PG", "T", "MA", or "" for unspecified
+Ads.SetNonPersonalizedAds(true)     -- request non-personalised ads only
+Ads.Init()
+```
+
+| Function | Description |
+|----------|-------------|
+| `Ads.SetTestDeviceIds(list)` | Array of device IDs that should receive test ads. The device ID is printed in logcat / the Xcode console on the first ad request. **Never tap your own live ads** — it is an AdMob ban. |
+| `Ads.SetChildDirected(enabled?)` | Tags requests for child-directed treatment (COPPA). Omit the argument for "unspecified". |
+| `Ads.SetUnderAgeOfConsent(enabled?)` | Tags the user as under the age of consent (GDPR). Omit the argument for "unspecified". |
+| `Ads.SetMaxAdContentRating(rating)` | Caps ad content rating: `"G"`, `"PG"`, `"T"`, `"MA"`. Anything else means unspecified. |
+| `Ads.SetNonPersonalizedAds(flag)` | When `true`, every request carries `npa=1`. Use it when `Consent.CanShowAds()` is true but the user refused personalisation. |
+
+> Non-personalised ads earn less than personalised ones. Only force the flag when consent
+> actually requires it — the [Consent](#49-consent--gdpr-consent-ump) chapter drives that decision.
+
+---
+
+### 43.4 Banner Ads
 
 ```lua
 Ads.SetBannerUnitId(unitId)       -- Set the AdMob banner unit ID
@@ -18144,6 +18232,7 @@ Ads.ShowBanner(position?)          -- Show banner (0 = top, 1 = bottom; default 
 Ads.HideBanner()                   -- Hide banner (keeps it loaded)
 Ads.DestroyBanner()                -- Destroy banner completely
 Ads.IsBannerVisible() -> bool      -- Check if banner is currently visible
+Ads.GetBannerHeight() -> int       -- Height of the visible banner in device pixels (0 when hidden)
 ```
 
 **Constants:** `Ads.BANNER_TOP` (0), `Ads.BANNER_BOTTOM` (1)
@@ -18153,13 +18242,32 @@ Ads.SetBannerUnitId("ca-app-pub-XXXXX/YYYYY")
 Ads.ShowBanner(Ads.BANNER_BOTTOM)
 
 Ads.OnBannerEvent(function(event)
-    Print("Banner event: " .. event) -- "loaded", "failed:X", "clicked", "opened", "closed"
+    Print("Banner event: " .. event) -- "loaded", "failed:X", "impression", "clicked", "opened", "closed"
+    if event == "loaded" then
+        -- Keep HUD buttons clear of the banner strip:
+        SetHudBottomInset(Ads.GetBannerHeight())
+    end
 end)
 ```
 
+Both platforms use an **anchored adaptive banner** sized to the current screen width and inset
+out of the display cutout / system bars, so the banner never overlaps a notch and never gets
+letterboxed. That is why `Ads.GetBannerHeight()` is the only correct way to reserve space for
+it — the height is device- and orientation-dependent, not a fixed 50 dp.
+
+The banner is paused and resumed automatically with the app, and re-sized and re-requested on
+rotation, on both platforms; there is no lifecycle bookkeeping to do from Lua. Re-read
+`Ads.GetBannerHeight()` after a rotation — an auto-orientation game gets a different height in
+landscape than in portrait.
+
+Calling `Ads.ShowBanner(position)` again while a banner already exists moves it to the new
+position and makes it visible again without re-requesting an ad — unless you changed
+`Ads.SetBannerUnitId()` in between, in which case the old banner is torn down and the new unit
+is requested.
+
 ---
 
-### 43.4 Interstitial Ads
+### 43.5 Interstitial Ads
 
 ```lua
 Ads.SetInterstitialUnitId(unitId)  -- Set interstitial unit ID
@@ -18167,6 +18275,11 @@ Ads.LoadInterstitial()              -- Pre-load interstitial
 Ads.ShowInterstitial()              -- Show pre-loaded interstitial
 Ads.IsInterstitialReady() -> bool   -- Check if interstitial is loaded
 ```
+
+An AdMob full-screen ad object is **single-use**. `Ads.ShowInterstitial()` consumes the loaded
+ad immediately, so `Ads.IsInterstitialReady()` turns `false` the moment you show it — pre-load
+the next one when you get `closed`. `Ads.LoadInterstitial()` is a no-op while a load is already
+in flight or an ad is already cached, so it is safe to call it defensively.
 
 ```lua
 Ads.SetInterstitialUnitId("ca-app-pub-XXXXX/ZZZZZ")
@@ -18191,13 +18304,15 @@ end
 
 ---
 
-### 43.5 Rewarded Ads
+### 43.6 Rewarded Ads
 
 ```lua
-Ads.SetRewardedUnitId(unitId)      -- Set rewarded ad unit ID
-Ads.LoadRewarded()                  -- Pre-load rewarded ad
-Ads.ShowRewarded()                  -- Show rewarded ad
-Ads.IsRewardedReady() -> bool       -- Check if rewarded ad is loaded
+Ads.SetRewardedUnitId(unitId)          -- Set rewarded ad unit ID
+Ads.SetRewardedUserId(userId)          -- Server-side verification: your user ID
+Ads.SetRewardedCustomData(customData)  -- Server-side verification: opaque payload
+Ads.LoadRewarded()                      -- Pre-load rewarded ad
+Ads.ShowRewarded()                      -- Show rewarded ad
+Ads.IsRewardedReady() -> bool           -- Check if rewarded ad is loaded
 ```
 
 ```lua
@@ -18225,9 +18340,47 @@ function OnWatchAdButton()
 end
 ```
 
+Like interstitials, a rewarded ad is single-use: `Ads.IsRewardedReady()` goes `false` as soon as
+you call `Ads.ShowRewarded()`, so pre-load the next one on `closed`.
+
+**Server-side verification (SSV).** `Ads.OnRewardEarned` fires on the device, so a modified
+client can fake it. For anything that costs you real money — currency in a donation-driven
+economy, premium unlocks — turn on SSV in the AdMob console for the rewarded unit, point it at
+your server, and tag each impression:
+
+```lua
+Ads.SetRewardedUserId(myAccountId)                   -- arrives as user_id in the SSV callback
+Ads.SetRewardedCustomData("quest=daily_bonus")       -- arrives as custom_data
+Ads.LoadRewarded()
+```
+
+Both values are attached to the **next** ad you load, so set them before `Ads.LoadRewarded()`.
+Grant the reward on your server when Google's verified callback arrives, and treat the client's
+`Ads.OnRewardEarned` as a UI cue only. Leaving both unset keeps the previous behaviour (no SSV
+options attached).
+
 ---
 
-### 43.6 Ads.Destroy
+### 43.7 Ad revenue (impression-level)
+
+```lua
+Ads.OnPaidEvent(function(info)
+    -- info.format      "banner" | "interstitial" | "rewarded"
+    -- info.unitId      the ad unit that earned it
+    -- info.valueMicros integer, 1 000 000 micros = 1.0 of info.currency
+    -- info.value       the same amount as a float
+    -- info.currency    ISO-4217 code, e.g. "USD"
+    -- info.precision   "estimated" | "publisher_provided" | "precise" | "unknown"
+    Analytics.TrackRevenue(info.value, info.currency)
+end)
+```
+
+Fires once per paid impression on both platforms. This is what you feed into ROAS/LTV
+reporting; it is the only way to attribute ad revenue to an individual player.
+
+---
+
+### 43.8 Ads.Destroy
 
 ```lua
 Ads.Destroy()
@@ -18237,20 +18390,21 @@ Cleans up all ad resources and callbacks.
 
 ---
 
-### 43.7 Callbacks summary
+### 43.9 Callbacks summary
 
 | Callback | Parameters | Description |
 |----------|------------|-------------|
 | `Ads.OnInitialized(fn)` | `(success: bool)` | AdMob SDK initialized |
-| `Ads.OnBannerEvent(fn)` | `(event: string)` | Banner events: `loaded`, `failed:CODE`, `clicked`, `opened`, `closed` |
-| `Ads.OnInterstitialEvent(fn)` | `(event: string)` | Interstitial events: `loaded`, `failed:CODE`, `shown`, `closed`, `not_ready` |
-| `Ads.OnRewardedEvent(fn)` | `(event: string)` | Rewarded events: `loaded`, `failed:CODE`, `shown`, `closed`, `earned`, `not_ready` |
+| `Ads.OnBannerEvent(fn)` | `(event: string)` | Banner events: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `impression`, `clicked`, `opened`, `closed` |
+| `Ads.OnInterstitialEvent(fn)` | `(event: string)` | Interstitial events: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `shown`, `impression`, `clicked`, `show_failed:CODE`, `closed`, `not_ready` |
+| `Ads.OnRewardedEvent(fn)` | `(event: string)` | Rewarded events: `loaded`, `failed:CODE`, `failed:no_unit_id`, `failed:not_initialized`, `shown`, `impression`, `clicked`, `show_failed:CODE`, `earned`, `closed`, `not_ready` |
 | `Ads.OnRewardEarned(fn)` | `(type: string, amount: int)` | User earned a reward |
+| `Ads.OnPaidEvent(fn)` | `(info: table)` | Impression-level ad revenue — see [43.7](#437-ad-revenue-impression-level) |
 | `Ads.ClearCallbacks()` | — | Remove all callbacks |
 
 ---
 
-### 43.8 Advertising ID, attribution and App Store promotion
+### 43.10 Advertising ID, attribution and App Store promotion
 
 Beyond ad serving, both platforms expose an **advertising identifier**, and iOS additionally
 ships Apple's own attribution and store-promotion frameworks. These work with **no third-party
@@ -18324,7 +18478,11 @@ Supports one-time purchases (consumable items like coins/gems, non-consumable li
 
 > **Platform:** Android (Google Play Billing) and iOS (StoreKit). On other platforms `IAP.IsSupported()` returns `false` and all calls are no-ops.
 >
-> **Cross-store note:** product IDs are configured per store — Google Play Console for Android, App Store Connect for iOS. On iOS `IAP.Consume()` is a no-op (StoreKit finalizes transactions automatically); grant the item on `IAP.OnPurchaseComplete`.
+> **Cross-store note:** product IDs are configured per store — Google Play Console for Android, App Store Connect for iOS. On iOS `IAP.Consume()` and `IAP.Acknowledge()` are no-ops that still fire their events (StoreKit finalizes transactions automatically); grant the item on `IAP.OnPurchaseComplete`.
+>
+> **One product schema, both stores:** `IAP.OnProductsQueried` hands you the same field names on
+> Android and iOS (`id`, `name`, `title`, `description`, `price`, `priceMicros`, `currency`,
+> `billingPeriod`, `type`), so a shop screen written once runs on both.
 >
 > **Build requirement:** Enable "Google Play Billing (IAP)" in the Build Game popup.
 
@@ -18346,7 +18504,7 @@ Returns `true` if the current platform supports in-app purchases.
 IAP.Init()
 ```
 
-Connects to the Google Play Billing service. Must be called once before any other `IAP` function.
+Connects to the store. Must be called once before any other `IAP` function.
 
 ```lua
 IAP.Init()
@@ -18358,6 +18516,20 @@ IAP.OnInitialized(function(success)
 end)
 ```
 
+On Android the connection is **self-healing**: if Google Play drops the billing service you get
+`IAP.OnEvent("disconnected")` and the engine reconnects on its own with exponential backoff
+(1 s → 60 s). Any call made while disconnected fails loudly instead of vanishing — you always
+get a `failed:service_unavailable` purchase result, an empty `IAP.OnProductsQueried`, or a
+`consume_failed:service_unavailable` / `acknowledge_failed:service_unavailable` event — so a
+shop screen can never sit on a spinner forever.
+
+The engine also **reconciles purchases automatically**: on every successful connection and every
+time the app returns to the foreground it re-queries Google Play and replays any `PURCHASED`
+purchase that was never acknowledged as a normal `IAP.OnPurchaseComplete{status="purchased"}`.
+That is what catches a purchase that completed while your game was closed, a pending
+(slow-card / cash) payment that cleared later, or a promo code redeemed in the Play Store app.
+**Make your grant logic idempotent.**
+
 ---
 
 ### 44.3 IAP.IsConnected
@@ -18366,7 +18538,21 @@ end)
 IAP.IsConnected() -> bool
 ```
 
-Returns `true` if the billing service is connected.
+Returns `true` if the store is reachable — the Play Billing connection on Android,
+`canMakePayments` on iOS.
+
+---
+
+### 44.3a IAP.SetUserId
+
+```lua
+IAP.SetUserId(userId)
+```
+
+Ties every subsequent purchase to your own account ID. Google Play receives it as the
+*obfuscated account ID* (the engine sends a SHA-256 digest, never the raw value); StoreKit
+receives it as `applicationUsername`. Both stores use it for fraud detection, and it lets your
+server match a receipt to a player. Set it once you know who is playing, before `IAP.Purchase`.
 
 ---
 
@@ -18397,7 +18583,7 @@ IAP.OnProductsQueried(function(products)
 end)
 ```
 
-**Product fields returned:**
+**Product fields returned** — identical on Android and iOS:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -18405,20 +18591,41 @@ end)
 | `name` | `string` | Product name |
 | `title` | `string` | Product title |
 | `description` | `string` | Product description |
-| `price` | `string` | Formatted price (e.g. "$0.99") |
+| `price` | `string` | Formatted price in the store's locale (e.g. "$0.99") |
 | `priceMicros` | `int` | Price in micros (990000 = $0.99) |
 | `currency` | `string` | Currency code ("USD", "EUR") |
-| `billingPeriod` | `string` | Subscription period ("P1M" = monthly) |
+| `billingPeriod` | `string` | Subscription period ("P1M" = monthly), `""` for one-time products |
+| `type` | `string` | `"inapp"` or `"subs"` |
+
+`productId`, `priceAmountMicros` and `priceCurrencyCode` are also present as aliases of `id`,
+`priceMicros` and `currency`.
+
+**Android subscriptions** additionally carry the offer catalogue, because one subscription
+product can have several base plans and intro/free-trial offers:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `offerToken` | `string` | Token of the default (first) offer — what `IAP.Purchase` uses when you pass nothing |
+| `offers` | `table` | Array of `{ offerToken, basePlanId, offerId, phases }` |
+| `offers[i].phases` | `table` | Array of `{ price, priceMicros, currency, billingPeriod, billingCycleCount, recurrenceMode }` — a free trial is a phase with `priceMicros == 0` |
+
+The top-level `price` / `billingPeriod` of a subscription describe the **final recurring phase**,
+not the intro offer, so a "£0 for 7 days then £4.99/month" plan shows £4.99/month in the shop.
+
+`IAP.OnProductsQueried` always fires — with an empty table when the query fails — so a shop
+screen never hangs. A failing query also emits `IAP.OnEvent("query_failed:CODE")`.
 
 ---
 
 ### 44.5 IAP.Purchase
 
 ```lua
-IAP.Purchase(productId)
+IAP.Purchase(productId, offerToken?)
 ```
 
-Launches the Google Play purchase flow for the given product.
+Launches the store purchase flow for the given product. `offerToken` is Android-only and picks a
+specific subscription offer from `product.offers`; omit it to use the default offer. It is
+ignored on iOS, where App Store Connect owns the intro-offer logic.
 
 ```lua
 IAP.Purchase("coins_100")
@@ -18432,23 +18639,36 @@ IAP.OnPurchaseComplete(function(info)
     elseif info.status == "cancelled" then
         Print("Purchase cancelled")
     elseif info.status == "pending" then
-        Print("Purchase pending approval")
+        Print("Purchase pending approval")   -- do NOT grant anything yet
     else
-        Print("Purchase failed: " .. info.status)
+        Print("Purchase failed: " .. info.status .. " " .. info.message)
     end
 end)
 ```
 
+A user backing out of the store sheet reports `status == "cancelled"` on **both** platforms —
+do not show an error for it.
+
 ---
 
-### 44.6 IAP.Consume
+### 44.6 IAP.Consume and IAP.Acknowledge
 
 ```lua
 IAP.Consume(purchaseToken)
+IAP.Acknowledge(purchaseToken)
 ```
 
-Consumes a purchase, allowing the user to buy the same product again.
-Use for consumable items (coins, gems, lives). Non-consumable items ("remove ads") should NOT be consumed.
+`IAP.Consume` consumes a purchase so the user can buy the same product again. Use it for
+consumables (coins, gems, lives) and call it **after** you have granted the item. Non-consumables
+("remove ads") must not be consumed.
+
+`IAP.Acknowledge` explicitly acknowledges a purchase. The engine already acknowledges every
+`PURCHASED` purchase it sees, including ones found by `IAP.RestorePurchases()`, so you rarely
+need this — it exists for flows that acknowledge only after a server has validated the receipt.
+Acknowledging twice is harmless; the engine drops duplicate in-flight requests.
+
+> Google **auto-refunds any purchase left unacknowledged for three days**. That is why restore
+> and reconciliation acknowledge as well as report.
 
 ---
 
@@ -18458,8 +18678,10 @@ Use for consumable items (coins, gems, lives). Non-consumable items ("remove ads
 IAP.RestorePurchases()
 ```
 
-Restores previously purchased non-consumable items and active subscriptions.
-Results are delivered via `IAP.OnPurchaseRestored`.
+Restores previously purchased non-consumable items and active subscriptions, and acknowledges
+any of them the store still considers unacknowledged. Results are delivered via
+`IAP.OnPurchaseRestored`. Call it at startup (and behind a "Restore purchases" button, which
+Apple requires) to re-apply entitlements after a reinstall or on a new device.
 
 ```lua
 IAP.RestorePurchases()
@@ -18475,6 +18697,67 @@ IAP.OnPurchaseRestored(function(info)
 end)
 ```
 
+Android reports one-time products as `restored` and subscriptions as `subscription_active`, then
+`IAP.OnEvent("restore_complete")` and `IAP.OnEvent("restore_subs_complete")`. iOS reports
+everything as `restored` followed by `IAP.OnEvent("restore_complete")`.
+
+---
+
+### 44.7a IAP.QueryPurchases
+
+```lua
+IAP.QueryPurchases()
+```
+
+Forces the reconciliation pass described in [44.2](#442-iapinit) right now, without the
+`restored` events. Useful after returning from an external flow. It runs automatically on
+connect and on app resume, so most games never call it.
+
+---
+
+### 44.7b Server-side receipt validation
+
+For a donation-driven economy, validate on your server before granting anything valuable —
+`IAP.OnPurchaseComplete` runs on a device the player controls. Every purchase callback carries
+what your backend needs:
+
+| Field | Platform | Description |
+|-------|----------|-------------|
+| `token` | both | Android purchase token / iOS transaction identifier |
+| `orderId` | both | Google Play order ID / iOS original transaction identifier |
+| `signature` | Android | RSA signature of `originalJson`, verified against your Play Console public key |
+| `originalJson` | Android | The exact payload that `signature` signs — send both verbatim, never re-serialise |
+| `receipt` | iOS | Base-64 App Store receipt (also available any time from `IAP.GetReceipt()`) |
+| `purchaseTime` | both | Unix time in milliseconds |
+| `quantity` | both | Units bought |
+| `acknowledged` | Android | Whether Google Play already has an acknowledgement |
+| `autoRenewing` | Android | Subscription auto-renew state |
+| `success` | both | `false` for cancelled/failed results |
+| `message` | both | Human-readable reason on failure |
+
+`status`, `productId`, `success`, `quantity`, `acknowledged` and `autoRenewing` are always
+present. The string fields and `purchaseTime` are **absent (`nil`)** when the platform or the
+status does not provide them — `signature`/`originalJson` never appear on iOS, `receipt` never
+on Android, and `token`/`orderId` are missing on a `cancelled` or `failed` result. Test them
+with `if info.signature then`, not against `""`.
+
+```lua
+IAP.OnPurchaseComplete(function(info)
+    if info.status ~= "purchased" then return end
+
+    local payload = {
+        platform     = Settings.GetPlatform(),
+        productId    = info.productId,
+        token        = info.token,
+        orderId      = info.orderId,
+        signature    = info.signature,      -- Android
+        originalJson = info.originalJson,   -- Android
+        receipt      = info.receipt,        -- iOS
+    }
+    SendToVerificationBackend(Network.JsonEncode(payload))   -- your own transport
+end)
+```
+
 ---
 
 ### 44.8 IAP.Destroy
@@ -18483,7 +18766,7 @@ end)
 IAP.Destroy()
 ```
 
-Disconnects from billing service and clears callbacks.
+Disconnects from the store, stops the reconnect loop, and clears callbacks.
 
 ---
 
@@ -18491,12 +18774,19 @@ Disconnects from billing service and clears callbacks.
 
 | Callback | Parameters | Description |
 |----------|------------|-------------|
-| `IAP.OnInitialized(fn)` | `(success: bool)` | Billing service connected/failed |
-| `IAP.OnEvent(fn)` | `(event: string)` | General events: `disconnected`, `consumed:TOKEN`, `acknowledged`, `restore_complete` |
-| `IAP.OnProductsQueried(fn)` | `(products: table)` | Product details received |
-| `IAP.OnPurchaseComplete(fn)` | `(info: table)` | Purchase result: `{status, productId, token, message}` |
-| `IAP.OnPurchaseRestored(fn)` | `(info: table)` | Restored purchase: `{status, productId, token}` |
+| `IAP.OnInitialized(fn)` | `(success: bool)` | Store connected/failed |
+| `IAP.OnEvent(fn)` | `(event: string)` | General events: `disconnected`, `consumed:TOKEN`, `consume_failed:CODE`, `acknowledged`, `acknowledge_failed:CODE`, `query_failed:CODE`, `restore_complete`, `restore_subs_complete`, `store_promotion:PRODUCT_ID` (iOS) |
+| `IAP.OnProductsQueried(fn)` | `(products: table)` | Product details received (empty table on failure) |
+| `IAP.OnPurchaseComplete(fn)` | `(info: table)` | Purchase result — statuses `purchased`, `pending`, `cancelled`, `failed:CODE` |
+| `IAP.OnPurchaseRestored(fn)` | `(info: table)` | Restored purchase — statuses `restored`, `subscription_active` |
 | `IAP.ClearCallbacks()` | — | Remove all callbacks |
+
+Both `info` tables carry the full field set from [44.7b](#447b-server-side-receipt-validation).
+
+> **iOS promoted in-app purchases.** When a player buys one of your products straight from the
+> App Store product page, StoreKit hands the payment to the running game. The engine accepts it
+> and raises `IAP.OnEvent("store_promotion:PRODUCT_ID")` first, then the normal
+> `IAP.OnPurchaseComplete` when the transaction settles.
 
 ---
 
@@ -20506,11 +20796,17 @@ end
 
 The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 token balance queries, transaction signing, and smart contract interaction — all directly from Lua scripts. Available only on the **Web (WASM)** platform with the **Web3** build option enabled.
 
+The Web3 library (`ethers.js`) is embedded into the game page at build time, so a Web3 build **loads no script from any third party** — it works offline, from `file://`, behind a strict CSP, and on game portals that forbid external requests, and no player IP is handed to a CDN. The only hosts the game contacts are the blockchain RPC endpoints and the IPFS/Arweave gateway you actually use.
+
+Every asynchronous call returns a `requestId` and always finishes in exactly one callback. If the Web3 bridge is missing — the build has Web3 disabled, the page does not ship the bridge, or you are running on Windows/Linux/macOS/Android/iOS — the call still completes through `onError` (and through `Web3.OnError`) instead of silently hanging, so the same script runs unchanged on every platform.
+
+Table parameters accept Lua **numbers** as well as strings (`tokenId = 42` and `tokenId = "42"` behave identically), and `abi` / `args` / `owners` / `tokenIds` accept a Lua **table** in place of a JSON string.
+
 ### Platform Check
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `Web3.IsSupported()` | `bool` | `true` on Web builds with Web3 enabled |
+| `Web3.IsSupported()` | `bool` | `true` only when the page really can do Web3: a Web build with the bridge present and the `ethers` library loaded. Checked at runtime, so it also returns `false` if the library failed to download |
 | `Web3.IsConnected()` | `bool` | `true` if a wallet is currently connected |
 
 ### Wallet
@@ -20527,24 +20823,39 @@ The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 to
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `Web3.SwitchChain(chain)` | — | Switch to a chain by hex ID or name (`"ethereum"`, `"bsc"`, `"sepolia"`, …). Auto-adds unknown chains via MetaMask |
-| `Web3.AddChain(config)` | — | Register a custom chain. `config` is a table: `{ chainId, name, rpcUrl, symbol, explorerUrl }` |
+| `Web3.AddChain(config)` | — | Register a custom chain. `config` is a table: `{ chainId, name, rpcUrl, symbol, explorerUrl }`. `chainId` also accepts a chain name shortcut |
+| `Web3.SetReadOnlyChain(chain, rpcUrl?)` | — | Enable **read-only mode**: every read function works before (or without) a wallet connection. `chain` is a hex ID or name; `rpcUrl` is optional and defaults to the built-in endpoints for known chains. Call `Web3.SetReadOnlyChain("", "")` to turn it off |
 
-**Supported chain name shortcuts:** `ethereum` / `eth` / `mainnet`, `holesky`, `sepolia`, `bsc` / `bnb`, `bsc_testnet` / `bnb_testnet`, `polygon`, `arbitrum`, `optimism`, `avalanche`, `base`.
+**Supported chain name shortcuts:** `ethereum` / `eth` / `mainnet`, `holesky`, `sepolia`, `bsc` / `bnb`, `bsc_testnet` / `bnb_testnet`, `polygon`, `polygon_amoy` / `amoy`, `arbitrum`, `arbitrum_sepolia`, `optimism`, `optimism_sepolia`, `avalanche`, `avalanche_fuji` / `fuji`, `base`, `base_sepolia`, `linea`, `scroll`, `zksync`, `blast`, `gnosis`, `celo`, `mantle`.
+
+**Read-only mode.** A connected wallet is not required to read the chain. After `Web3.SetReadOnlyChain("base")`, calls such as `GetBalance`, `GetTokenBalance`, `CallContract`, `GetNFTOwner`, `GetTokenURI`, `GetOwnedTokens`, `GetAllowance`, `EstimateGas`, `GetTransactionReceipt`, `SubscribeEvent` and `Multicall` run against a public RPC — useful for leaderboards, NFT galleries and shop previews shown before the player connects. Every built-in chain ships two independent RPC endpoints and automatically falls over to the second one if the first is unreachable. Once a wallet is connected, reads go through the wallet and its current chain — the read-only RPC is used only while no wallet is connected, and it survives `Web3.DisconnectWallet()`. Signing (`SendTransaction`, `WriteContract`, `TransferToken`, `TransferNFT`, `ApproveToken`, `SetApprovalForAll`, `SignMessage`, `SignTypedData`) always requires a connected wallet.
 
 ### Chain ID Constants
 
 | Constant | Value | Chain |
 |----------|-------|-------|
 | `Web3.CHAIN_ETHEREUM` | `"0x1"` | Ethereum Mainnet |
-| `Web3.CHAIN_BSC` | `"0x38"` | BNB Smart Chain |
-| `Web3.CHAIN_SEPOLIA` | `"0xaa36a7"` | Sepolia Testnet |
-| `Web3.CHAIN_BSC_TESTNET` | `"0x61"` | BSC Testnet |
 | `Web3.CHAIN_HOLESKY` | `"0x4268"` | Holesky Testnet |
+| `Web3.CHAIN_SEPOLIA` | `"0xaa36a7"` | Sepolia Testnet |
+| `Web3.CHAIN_BSC` | `"0x38"` | BNB Smart Chain |
+| `Web3.CHAIN_BSC_TESTNET` | `"0x61"` | BSC Testnet |
 | `Web3.CHAIN_POLYGON` | `"0x89"` | Polygon |
+| `Web3.CHAIN_POLYGON_AMOY` | `"0x13882"` | Polygon Amoy Testnet |
 | `Web3.CHAIN_ARBITRUM` | `"0xa4b1"` | Arbitrum One |
+| `Web3.CHAIN_ARBITRUM_SEPOLIA` | `"0x66eee"` | Arbitrum Sepolia Testnet |
 | `Web3.CHAIN_OPTIMISM` | `"0xa"` | Optimism |
+| `Web3.CHAIN_OPTIMISM_SEPOLIA` | `"0xaa37dc"` | Optimism Sepolia Testnet |
 | `Web3.CHAIN_AVALANCHE` | `"0xa86a"` | Avalanche C-Chain |
+| `Web3.CHAIN_AVALANCHE_FUJI` | `"0xa869"` | Avalanche Fuji Testnet |
 | `Web3.CHAIN_BASE` | `"0x2105"` | Base |
+| `Web3.CHAIN_BASE_SEPOLIA` | `"0x14a34"` | Base Sepolia Testnet |
+| `Web3.CHAIN_LINEA` | `"0xe708"` | Linea |
+| `Web3.CHAIN_SCROLL` | `"0x82750"` | Scroll |
+| `Web3.CHAIN_ZKSYNC` | `"0x144"` | zkSync Era |
+| `Web3.CHAIN_BLAST` | `"0x13e31"` | Blast |
+| `Web3.CHAIN_GNOSIS` | `"0x64"` | Gnosis |
+| `Web3.CHAIN_CELO` | `"0xa4ec"` | Celo |
+| `Web3.CHAIN_MANTLE` | `"0x1388"` | Mantle |
 
 ### Transactions
 
@@ -20558,7 +20869,7 @@ The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 to
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `Web3.GetBalance(address?, callback?, onError?)` | `requestId` | Native coin balance in ETH/BNB. Defaults to connected wallet |
-| `Web3.GetTokenBalance(tokenAddress, ownerAddress?, callback?, onError?)` | `requestId` | ERC-20 token balance. Defaults to connected wallet |
+| `Web3.GetTokenBalance(tokenAddress, ownerAddress?, callback?, onError?)` | `requestId` | ERC-20 token balance, already scaled by the token's `decimals()`. Defaults to the connected wallet. Tokens that do not expose `decimals()` are treated as 18-decimal, the same assumption wallets make |
 
 ### Smart Contracts
 
@@ -20573,7 +20884,7 @@ The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 to
 |----------|---------|-------------|
 | `Web3.GetNFTBalance(params, callback?, onError?)` | `requestId` | Token count. `params = { address, owner?, tokenId? }`. Without `tokenId` → ERC-721 `balanceOf(address)`. With `tokenId` → ERC-1155 `balanceOf(address, tokenId)`. Defaults owner to connected wallet. `callback(count)` |
 | `Web3.GetNFTOwner(params, callback?, onError?)` | `requestId` | Owner of a specific ERC-721 token. `params = { address, tokenId }`. `callback(ownerAddress)` |
-| `Web3.GetTokenURI(params, callback?, onError?)` | `requestId` | Token metadata URI. `params = { address, tokenId }`. Tries ERC-721 `tokenURI()` first, falls back to ERC-1155 `uri()`. `callback(uri)` |
+| `Web3.GetTokenURI(params, callback?, onError?)` | `requestId` | Token metadata URI. `params = { address, tokenId }`. Tries ERC-721 `tokenURI()` first, falls back to ERC-1155 `uri()`. An ERC-1155 `{id}` placeholder is replaced with the 64-character zero-padded lowercase hex token ID, as the standard requires. `callback(uri)` |
 | `Web3.GetNFTBalanceBatch(params, callback?, onError?)` | `requestId` | ERC-1155 batch balance. `params = { address, owners, tokenIds }`. `owners` and `tokenIds` are JSON arrays. `callback(balancesJson)` |
 | `Web3.GetOwnedTokens(params, callback?, onError?)` | `requestId` | Enumerate all NFTs owned (requires ERC721Enumerable). `params = { address, owner? }`. `callback(tokenIdsJson)` |
 
@@ -20644,14 +20955,14 @@ The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 to
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `Web3.ResolveMetadata(uri, callback?, onError?)` | `requestId` | Fetch and parse NFT metadata from a URI. Automatically resolves `ipfs://` and `ar://` protocols. Also resolves `ipfs://` URIs inside `image` and `animation_url` fields. `callback(metadataJson)` |
+| `Web3.ResolveMetadata(uri, callback?, onError?)` | `requestId` | Fetch and parse NFT metadata from a URI. Automatically resolves the `ipfs://`, `ipfs://ipfs/` and `ar://` schemes, and resolves them again inside the `image`, `image_url`, `animation_url` and `external_url` fields. The request is aborted after 30 seconds with an error rather than hanging. `callback(metadataJson)` |
 | `Web3.SetIPFSGateway(url)` | — | Set a custom IPFS gateway URL for `ResolveMetadata`. Default is `"https://ipfs.io/ipfs/"`. Example: `Web3.SetIPFSGateway("https://gateway.pinata.cloud/ipfs/")` |
 
 ### Multicall (Batch Reads)
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `Web3.Multicall(calls, callback?, onError?)` | `requestId` | Execute multiple read-only contract calls in a single RPC request using Multicall3. `calls` is a Lua table of `{ address, abi, method, args? }`. `callback(resultsJson)` returns array of `{ success, data }`. Available on all major EVM chains |
+| `Web3.Multicall(calls, callback?, onError?)` | `requestId` | Execute multiple read-only contract calls in a single RPC request using Multicall3. `calls` is a Lua array of `{ address, abi, method, args? }` and call order is preserved in the result. `callback(resultsJson)` returns an array of `{ success, decoded, data }`: `success` is the on-chain call result, `decoded` says whether the return value could be decoded with the supplied ABI (`false` leaves the raw hex in `data`). Available on all major EVM chains; zkSync Era uses its own Multicall3 deployment automatically |
 
 ### Event Callbacks
 
@@ -20662,7 +20973,31 @@ The `Web3` module provides MetaMask wallet connection, native coin and ERC-20 to
 | `Web3.OnChainChanged(callback)` | `callback(chainId)` — user switched chain in MetaMask |
 | `Web3.OnAccountChanged(callback)` | `callback(address)` — user switched account in MetaMask |
 | `Web3.OnError(callback)` | `callback(errorMessage, requestId)` — any error |
-| `Web3.ClearCallbacks()` | Remove all registered callbacks |
+| `Web3.ClearCallbacks()` | Remove all registered callbacks and cancel every live event subscription |
+
+Callbacks and subscriptions are also cleared automatically when the game stops **and on every level change**, exactly like `Input`, `Network` and the other script subsystems — the old level's closures must not keep firing after its scene is gone. Re-register the handlers you need in the new level's `OnLevelLoaded`. The wallet connection itself is untouched: `Web3.IsConnected()`, `Web3.GetAddress()` and `Web3.GetChainId()` keep working across levels, and read-only mode stays configured. If a transaction may still be in flight while you change level, remember its `txHash` and pick it back up with `Web3.WatchTransaction(txHash, …)` after the new level loads.
+
+### Example — Read the chain before the player connects a wallet
+
+```lua
+function OnLevelLoaded()
+    if not Web3.IsSupported() then return end
+
+    -- No wallet needed: read straight from a public RPC
+    Web3.SetReadOnlyChain("base")
+
+    Web3.GetTokenBalance(
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "0x1111111111111111111111111111111111111111",
+        function(balance)
+            Print("USDC held by the treasury: " .. balance)
+        end,
+        function(err)
+            PrintError("Read failed: " .. err)
+        end
+    )
+end
+```
 
 ### Example — Connect wallet and show BNB balance
 
@@ -21342,7 +21677,9 @@ end
 > Video files are played directly (`.mp4`, `.webm`, `.avi`, `.mkv` — any format supported by FFmpeg).
 > Works with both loose files on disk and files packed in `.ICEPAK` archives via VFS.
 >
-> **Note:** Requires FFmpeg. Available on **Windows**, **Linux**, **Android**. Not available on Web (Emscripten).
+> **Note:** Available on all six platforms. **Windows**, **Linux**, **macOS** and **Android** decode through
+> FFmpeg; **iOS** plays through AVFoundation (H.264/HEVC only — WebM/VP9 is not decodable there, so video
+> cooking falls back to PassThrough for iOS builds); **Web** plays through the browser's `<video>` element.
 
 ### Playback
 
@@ -22415,6 +22752,279 @@ end
 
 function OnDestroy()
     Console.ArchiveCVars("Config/Console.cfg")
+end
+```
+
+---
+
+## 61. Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)
+
+> `Draw` submits textured quads and arbitrary triangle meshes straight into the batch renderer, without creating entities.
+> Everything you submit during a frame is drawn once and discarded — call it again every frame from `OnUpdate`.
+>
+> This is the fastest way to push large amounts of generated geometry: **one Lua call can submit thousands of quads**, whereas
+> driving the same number of sprite entities would cost several Lua-to-C++ calls each.
+>
+> Typical uses: procedural graphics, custom particles, in-game level editors, minimaps, debug overlays, tile/column renderers,
+> and pseudo-3D techniques (raycasting, Mode-7 style floors, perspective roads) that stay entirely 2D.
+
+### Coordinate conventions
+
+The `Draw` API follows the engine conventions exactly:
+
+- **X+** is right, **X-** is left.
+- **Y+** is up, **Y-** is down.
+- **Rotation** is in degrees; **positive is clockwise**, negative is counter-clockwise (same as `SetSpriteLocalRotation`).
+- **Z+** is toward the viewer (foreground), **Z-** is away (background) — same as `SetSpriteOrder`.
+  World-space draws are depth-tested against sprites, tilemaps and everything else in the scene, so Z gives you
+  correct per-pixel occlusion for free.
+- **Pivot** `px, py` is normalized `0..1`, and **`py` is measured from the top** — identical to `SetSpritePivot`.
+  The default pivot is `0.5, 0.5` (centre), so `x, y` is the centre of the quad unless you change it.
+- **UV** `u, v, uw, vh` is normalized `0..1` in exactly the same space as `SetSpriteRegion` divided by the texture size:
+  `v = 0` is the **top** of the image and the image lands upright, identical to a sprite.
+  Passing `sx, sy, sw, sh` instead lets you specify the source rectangle **in pixels**.
+  `Draw.Mesh` is different on purpose — there each vertex carries a raw sampling coordinate, so `v = 0` samples
+  the top row of the image and you decide which vertex it belongs to.
+
+### Spaces
+
+```lua
+Draw.SetSpace("world")   -- default: world units, depth-tested, moves with the camera
+Draw.SetSpace("screen")  -- screen pixels, origin at the BOTTOM-LEFT, no depth test, painter order
+local space = Draw.GetSpace()
+```
+
+`world` geometry is rendered together with the scene (after particles, before fog of war and widgets), so it is affected by
+post-processing and participates in the depth buffer.
+`screen` geometry ignores the camera and the depth buffer and is drawn in submission order.
+
+### Draw state
+
+The draw state is global and persists between calls, so you set it once and submit many primitives.
+
+```lua
+Draw.SetTexture("Content/Textures/wall.png")  -- default texture for later calls; nil = white
+Draw.SetColor(1, 1, 1, 1)                     -- default tint
+Draw.SetZ(0)                                  -- default depth
+Draw.SetPivot(0.5, 0.5)                       -- default pivot (py measured from the top)
+Draw.SetBlend("masked")                       -- "masked" | "additive" | "translucent" | "opaque"
+Draw.SetShading("unlit")                      -- "unlit" (default) | "lit"
+Draw.SetAlphaClip(0.5)                        -- alpha cutout threshold used by "masked"
+Draw.SetTarget(nil)                           -- nil = screen, or a RenderTarget name
+
+Draw.GetTexture(); Draw.GetColor(); Draw.GetZ(); Draw.GetPivot()
+Draw.GetBlend(); Draw.GetShading(); Draw.GetAlphaClip(); Draw.GetTarget()
+
+Draw.Push()   -- save the whole draw state (max depth 64)
+Draw.Pop()    -- restore it
+Draw.Reset()  -- back to defaults and clear the state stack
+```
+
+### Drawing primitives
+
+```lua
+-- One quad, fully specified. Any field may be omitted.
+Draw.Quad{
+    x = 100, y = 200,      -- pivot point (centre by default)
+    w = 64,  h = 64,       -- size in world/screen units
+    z = 0,                 -- depth (Z+ = front)
+    rot = 0,               -- degrees, clockwise positive
+    px = 0.5, py = 0.5,    -- pivot, py from the top
+    u = 0, v = 0, uw = 1, vh = 1,       -- normalized UV rect
+    -- or a pixel source rect instead of u/v/uw/vh:
+    -- sx = 0, sy = 0, sw = 16, sh = 16,
+    r = 1, g = 1, b = 1, a = 1,         -- tint
+    texture = "Content/Textures/x.png", -- per-quad texture override
+}
+
+-- Solid untextured rectangle. x, y is the BOTTOM-LEFT corner.
+Draw.Rect(x, y, w, h, r, g, b, a, z)
+
+-- Textured sprite; w/h default to the texture size, pivot comes from the draw state.
+Draw.Sprite("Content/Textures/hero.png", x, y, w, h, rotation, z)
+
+-- Textured quad using a pixel source rectangle from the texture.
+Draw.Region("Content/Textures/atlas.png", x, y, w, h, sx, sy, sw, sh, rotation, z)
+
+-- Line drawn as a rotated quad.
+Draw.Line(x1, y1, x2, y2, thickness, r, g, b, a, z)
+```
+
+### Bulk submission
+
+```lua
+-- Array of quad tables. Returns how many were submitted.
+local n = Draw.Quads("Content/Textures/wall.png", {
+    { x = 0, y = 0, w = 1, h = 100 },
+    { x = 1, y = 0, w = 1, h = 120 },
+})
+
+-- Same, using the texture from Draw.SetTexture:
+Draw.Quads(quadList)
+```
+
+`Draw.QuadsPacked` is the fastest path: a **flat array of numbers**, 14 per quad, in this exact order:
+
+```
+x, y, w, h, z, rot, u, v, uw, vh, r, g, b, a
+```
+
+```lua
+local data = {}
+local i = 0
+for col = 0, 319 do
+    local h = ColumnHeight(col)
+    data[i+1]  = col        -- x
+    data[i+2]  = 180        -- y (centre)
+    data[i+3]  = 1          -- w
+    data[i+4]  = h          -- h
+    data[i+5]  = 0          -- z
+    data[i+6]  = 0          -- rot
+    data[i+7]  = TexU(col)  -- u
+    data[i+8]  = 0          -- v
+    data[i+9]  = 1 / 64     -- uw (one texel column of a 64 px texture)
+    data[i+10] = 1          -- vh
+    data[i+11] = 1; data[i+12] = 1; data[i+13] = 1; data[i+14] = 1  -- rgba
+    i = i + 14
+end
+Draw.QuadsPacked("Content/Textures/wall.png", data)   -- 320 columns, one Lua call
+```
+
+An optional third argument limits how many quads are read: `Draw.QuadsPacked(path, data, count)`.
+
+### Meshes
+
+`Draw.Mesh` submits an arbitrary triangle mesh with per-vertex UVs — this is what lets you build perspective trapezoids,
+Mode-7 style floors, warped roads and free-form deformations without leaving 2D.
+
+```lua
+Draw.Mesh(texturePath, positions, uvs, indices, options)
+```
+
+- `positions` — flat array `{x1, y1, x2, y2, ...}` (at least 3 vertices, at most 65535).
+- `uvs` — flat array `{u1, v1, u2, v2, ...}` with the same vertex count. Optional; omitted means all zero.
+- `indices` — flat array of **1-based** vertex indices, a multiple of 3. Optional; omitted builds a triangle fan.
+- `options` — optional table: `{ r, g, b, a, z, blend, shading, alphaClip }`.
+
+```lua
+-- A textured trapezoid: wide at the bottom, narrow at the top (a road segment).
+Draw.Mesh("Content/Textures/road.png",
+    { -100, 0,  100, 0,  40, 60,  -40, 60 },   -- positions
+    {    0, 1,    1, 1,   1, 0,     0, 0 },    -- uvs
+    { 1, 2, 3,  1, 3, 4 },                     -- indices (1-based)
+    { z = -10 })
+```
+
+Consecutive meshes that share the same texture and state are batched into a single draw call.
+
+### Budgets and statistics
+
+```lua
+Draw.GetViewportSize()     -- { width, height } of the surface Draw renders into,
+                           -- in the same units screen space uses. Use this for HUD
+                           -- layout rather than the window resolution.
+Draw.GetQuadCount()        -- quads submitted this frame
+Draw.GetCommandCount()     -- batched commands this frame
+Draw.GetMeshVertexCount()  -- mesh vertices submitted this frame
+Draw.DidOverflow()         -- true if a budget was exceeded and geometry was dropped
+
+Draw.SetMaxQuads(200000)        -- per-frame quad budget (default 200000)
+Draw.SetMaxMeshVertices(400000) -- per-frame mesh vertex budget (default 400000)
+Draw.GetMaxQuads(); Draw.GetMaxMeshVertices()
+
+Draw.Clear()  -- drop everything submitted so far this frame
+```
+
+The list is cleared automatically at the start of every frame, and whenever the scene is torn down.
+
+### Texture — script-created textures
+
+Textures created here are registered under their name, so **every API that takes a texture path accepts the name**:
+`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, `Draw.SetTexture`, widgets, and so on.
+
+```lua
+Texture.Create("minimap", 256, 256, {
+    r = 0, g = 0, b = 0, a = 0,   -- initial fill colour
+    filter = "nearest",           -- "nearest" (default) | "linear"
+    wrap = "clamp",               -- "clamp" (default) | "repeat"
+})
+
+Texture.Exists("minimap")
+Texture.GetSize("minimap")            -- returns { width, height }
+Texture.Destroy("minimap")
+Texture.GetCount()
+
+Texture.Fill("minimap", 0, 0, 0, 1)                    -- fill the whole texture
+Texture.SetPixel("minimap", x, y, r, g, b, a)          -- one pixel, components 0..1
+Texture.SetPixels("minimap", x, y, w, h, floats)       -- RGBA floats 0..1, w*h*4 values
+Texture.SetPixelBytes("minimap", x, y, w, h, bytes)    -- RGBA bytes 0..255, w*h*4 values
+
+Texture.SetFilter("minimap", "linear")
+Texture.SetWrap("minimap", "repeat")
+Texture.GenerateMipmaps("minimap")
+```
+
+`SetPixels` and `SetPixelBytes` expect the region row by row, 4 components per pixel, starting at `x, y`.
+This is the classic software-renderer path: build a pixel buffer in Lua, upload it once, draw it as a single quad.
+
+### RenderTarget — offscreen rendering
+
+A render target is a texture you can draw into. It is registered by name too, so it can be sampled by sprites and materials.
+
+```lua
+RenderTarget.Create("mirror", 512, 512, { filter = "linear", wrap = "clamp" })
+RenderTarget.Exists("mirror")
+RenderTarget.GetSize("mirror")
+RenderTarget.Destroy("mirror")
+
+RenderTarget.Clear("mirror", r, g, b, a, clearDepth)   -- clearDepth defaults to true
+RenderTarget.CaptureScene("mirror")                    -- copy this frame's rendered scene into it
+RenderTarget.ReadPixels("mirror", x, y, w, h)          -- flat array of RGBA bytes (slow, stalls the GPU)
+
+-- Route immediate-mode geometry into the target:
+Draw.SetTarget("mirror")
+Draw.Rect(0, 0, 512, 512, 0, 0, 0, 1)
+Draw.SetTarget(nil)
+```
+
+Render-target geometry is rendered **before** the main scene each frame, so a target you fill this frame can already be
+sampled by sprites and materials in the same frame. In screen space the target's own pixel rectangle is used
+(origin bottom-left); in world space the current camera projection is stretched over the target.
+
+The depth buffer of a render target is **not** cleared automatically — call `RenderTarget.Clear` each frame if you draw
+depth-tested world-space geometry into it.
+
+### Complete example — Wolfenstein-style textured columns
+
+```lua
+local COLUMNS = 320
+local WALL_TEX = "Content/Textures/wall.png"
+
+function OnUpdate(dt)
+    local px, py = GetPlayerPos()
+    local angle  = GetPlayerAngle()
+
+    local data = {}
+    local i = 0
+    for col = 0, COLUMNS - 1 do
+        local rayAngle = angle + (col / COLUMNS - 0.5) * 60
+        local dist, texU = CastRay(px, py, rayAngle)   -- your own DDA, in pure Lua
+        local height = 12000 / math.max(dist, 0.1)
+        local shade  = math.max(0.2, 1 - dist / 20)
+
+        data[i+1]  = col; data[i+2] = 180
+        data[i+3]  = 1;   data[i+4] = height
+        data[i+5]  = -dist            -- Z: farther walls sit further back
+        data[i+6]  = 0
+        data[i+7]  = texU; data[i+8] = 0
+        data[i+9]  = 1 / 64; data[i+10] = 1
+        data[i+11] = shade; data[i+12] = shade; data[i+13] = shade; data[i+14] = 1
+        i = i + 14
+    end
+
+    Draw.SetSpace("screen")
+    Draw.SetBlend("opaque")
+    Draw.QuadsPacked(WALL_TEX, data)
 end
 ```
 

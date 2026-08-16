@@ -2,6 +2,8 @@
 
 ## Full documentation in English
 
+### Actual for B-0.8.3 Version
+
 > **IceBox Engine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
 > that live inside your project's `Content/` folder and are managed through the
@@ -1376,7 +1378,46 @@ secondary pins (`Min`/`Max`, `Alpha`, `Exp`) are adapted to it.
 | **Screen UV** | — | `UV` (Vector2) | The pixel's normalized screen coordinate. |
 | **Pixel Size** | — | `Size` (Vector2), `Width`, `Height` | The render target's size in pixels — for one-pixel offsets, outlines and screen-space kernels. |
 | **Scene Color** | `UV` (Vector2) | `RGB`, `R`, `G`, `B`, `A` | Samples what has already been rendered behind this surface. The basis of glass, distortion and post-process materials. |
-| **Custom Expression** | `Input0`, `Input1` | `Result` | Inline shader code written on the node (`return input0;` by default), compiled into a function. The escape hatch for anything the palette does not cover. |
+| **Custom Expression** | `Input0`..`Input7` (configurable) | `Result` (float/vec2/vec3/vec4) | A full GLSL statement block written on the node. The escape hatch for anything the palette does not cover — see **Custom Expression** below. |
+
+
+##### Custom Expression
+
+The **Custom Expression** node drops raw GLSL into the generated shader. It is the escape hatch for effects the node palette
+cannot express — loops, iterative sampling, per-pixel raymarching, custom filtering.
+
+| Setting | Meaning |
+| --- | --- |
+| **Output type** | GLSL type of the node's `Result` pin and of the `output` variable: `float`, `vec2`, `vec3` or `vec4`. |
+| **Input count** | How many input pins the node exposes, `0` to `8`. They are named `input0`, `input1`, ... in the code. |
+| **input0..inputN** | The GLSL type of each input pin. Values arriving from links are converted to that type automatically. |
+| **GLSL Code** | The statement block itself, up to 8191 characters. |
+
+Inside the code block:
+
+* each input is a local variable named `input0`, `input1`, ... of the type you selected for that pin;
+* a variable named `output` is pre-declared with the chosen output type and zero-initialised;
+* **assign your result to `output`**;
+* the block has its own scope, so local variables, `for`/`while` loops and `if` branches are all allowed and cannot
+  collide with the rest of the generated shader;
+* uniforms of the material are in scope — `uTime`, `uCameraPosition`, `uScreenSize`, any `uParam_<Name>` from a Scalar or
+  Vector Parameter node, and any `uTexture<N>` created by a Texture Sample node.
+
+```glsl
+// output type = float, 2 inputs (vec2, float)
+float acc = 0.0;
+for (int i = 0; i < 16; i++) {
+    vec2 p = input0 + vec2(float(i)) * 0.01;
+    acc += texture(uTexture0, p).r;
+}
+output = acc / 16.0 * input1;
+```
+
+> **Legacy nodes.** Code that has no `output` identifier is still treated as a single expression, with an optional leading
+> `return`, exactly as before. Existing materials written as `return input0;` keep working unchanged.
+
+> Because the code is inlined verbatim, a GLSL syntax error surfaces as a material compile error with the shader log — check
+> the Material Editor's error banner.
 
 ##### Parameters
 

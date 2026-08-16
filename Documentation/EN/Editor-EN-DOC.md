@@ -2,6 +2,8 @@
 
 ## Full documentation in English
 
+### Actual for B-0.8.3 Version
+
 > **IceBox Engine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
 > tune the world, run your game in-place, and ship it.
@@ -128,7 +130,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame          Beta 0.7.1 │
+│                             │ Remote Preview │ MyNewGame          Beta 0.8.3 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -454,8 +456,8 @@ This button is **not present on macOS builds**.
 
 * The **project name** (e.g. `MyNewGame`) is shown after a separator — it is the
   `Name` field of the project's `.iceproject` manifest.
-* The **engine version** (e.g. `Beta 0.7.1`) is right-aligned at the far end of the
-  bar. It is read from `Config/Updater.json` (`B-0.7.1` → `Beta 0.7.1`), falling
+* The **engine version** (e.g. `Beta 0.8.3`) is right-aligned at the far end of the
+  bar. It is read from `Config/Updater.json` (`B-0.8.3` → `Beta 0.8.3`), falling
   back to the version the editor was compiled with.
 
 Any **toolbar buttons registered by plugins** appear between the Remote Preview
@@ -1193,9 +1195,18 @@ macOS**.
 
 **How it works.** The editor runs a small TCP server that binds to **localhost
 only**, and a companion Android app connects to it through `adb reverse`. While Play
-mode runs, the editor sends JPEG frames plus game audio to the device, and the
+mode runs, the editor sends JPEG frames, game audio and haptics to the device, and the
 device sends touch, accelerometer and gyroscope events back into the engine's input
 system. Nothing is streamed in edit mode — enter Play mode to see a picture.
+
+**Haptics.** While a device is connected, `PlayHaptic`, `PlayHapticPreset`,
+`PlayHapticPattern` and `StopHaptic` are routed to the phone's own vibration motor
+instead of the desktop, and `IsHapticSupported()` reports `true` so the usual
+`if IsHapticSupported() then …` guard in game code does not skip them. Strength,
+presets and looping waveforms all cross the wire, so mobile vibration can be tuned
+from the editor without a full build. The routing is torn down — with a stop command
+sent first — the moment the device disconnects or Play mode ends, and the local
+backend takes over again.
 
 The panel shows:
 
@@ -1208,7 +1219,8 @@ The panel shows:
 * **Start Server** / **Stop Server**.
 * When running: the `adb reverse tcp:<port> tcp:<port>` command, and a one-click
   **Deploy to Device** button.
-* When connected: the device's live **Stream FPS** and **Bandwidth**.
+* When connected: the device's live **Stream FPS**, **Bandwidth**, and — only while frames are
+  actually being skipped — an amber **Dropped** counter.
 
 **Deploy to Device** does the whole set-up in one step, reporting progress inline:
 
