@@ -439,7 +439,17 @@ Full list of libraries and their licenses: **[THIRD_PARTY_NOTICES.txt](THIRD_PAR
 **IceBox Engine** is proprietary software.  
 All rights reserved by **IceBoxCrew Studio** © 2026.
 
-See [LICENSE.txt](LICENSE.txt) for details.
+What that means for you:
+
+- **Everything you make with it is yours.** Your games, code, art, scripts, plugins and mods belong to you. We claim no ownership of them and assert no rights in them.
+- **You keep all of your revenue.** No royalties, no revenue share, no per-title fee, no reporting. One payment, and that is the whole price.
+- **Every future update is free.** All of them, across major versions too — no paid upgrade, no edition to buy again later.
+- **No forced credit.** No splash screen, no watermark, no logo in anything you build. Credit us if you want to — you are welcome to, and never required to.
+- **Your players need nothing from us.** No key, no account. A packaged game contains no license check at all and never contacts us.
+- **You may write, publish and sell plugins and mods.** Native C++ plugins, Lua and Python scripts, visual scripts, templates — yours to sell.
+- **What you may not do is resell the engine itself,** modified or not, or present it as your own engine. That is the one thing the license exists to protect.
+
+Full terms, including license keys and activation, updates, warranty and liability: **[LICENSE.txt](LICENSE.txt)**
 
 ---
 
