@@ -131,7 +131,7 @@ IceBox Engine состоит из нескольких компонентов:
 |-|-|
 | **Компилятор** | Visual Studio 2026+ (MSVC — рабочая нагрузка «Разработка классических приложений на C++») на Windows, последняя версия GCC / Clang на Linux или Apple Clang (Xcode 15+) на macOS |
 | **Инструменты сборки** | CMake 4.3+ и Ninja (Xcode для iOS) |
-| **Менеджер пакетов** | [vcpkg](https://github.com/microsoft/vcpkg) |
+| **Менеджер пакетов** | [vcpkg](https://github.com/microsoft/vcpkg) — нужен **полный** клон (поверхностный `--depth 1` не разрешит коммит `builtin-baseline`, закреплённый в `vcpkg.json`) и достаточно свежий, чтобы этот коммит в нём был. Давно склонированному vcpkg нужен `git pull` **и** повторный запуск `bootstrap-vcpkg` — без бутстрапа остаётся старый бинарник, который падает с `document schema version 2 is not supported` |
 | **Опционально** | NSIS (установщики игр под Windows), `dpkg-deb` (пакеты `.deb` под Linux), ImageMagick (более качественная конвертация иконок) |
 
 ### Для сборки игр (Tools → Build Game)
@@ -142,7 +142,7 @@ IceBox Engine состоит из нескольких компонентов:
 | 🐧 **Linux** | WSL2 (если собирается из Windows) или нативный GCC/Clang + Ninja |
 | 🍎 **macOS** | macOS-хост с Xcode 15+ Command Line Tools, Python 3.12+ **с заголовками разработчика** (Homebrew — системный Python 3.9 слишком стар), vcpkg с триплетами `arm64-osx` / `x64-osx`. Сборка цели x86_64 (Intel) **на хосте Apple Silicon** дополнительно требует Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — потому что `configure` CPython и `FindPython` из CMake запускают только что собранные x86_64-бинарники |
 | 📱 **iOS** | macOS-хост с Xcode 15+ (полная IDE, не только CLI tools), vcpkg с триплетом `arm64-ios`, аккаунт Apple Developer нужен **только** для деплоя на устройство (для компиляции не нужен) |
-| 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(скачивается автоматически)* |
+| 🤖 **Android** | Android SDK 37+, NDK 29+, Java JDK 25+, Gradle 9.7.0 *(скачивается автоматически)* |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — плюс Node.js 24+, если собираете модель памяти `wasm64` |
 
 ---
@@ -204,7 +204,7 @@ sudo apt update && sudo apt install -y \
 # 2. CMake 4.3+ — именно его требует cmake_minimum_required сборки игры. Debian и Ubuntu,
 #    включая обычные образы WSL2, до сих пор кладут в репозиторий версию постарше,
 #    поэтому сначала проверьте `cmake --version` и пропустите шаг, если apt уже дал 4.3+.
-ICE_CMAKE_VERSION=4.3.3
+ICE_CMAKE_VERSION=4.4.2
 curl -fsSLO https://github.com/Kitware/CMake/releases/download/v$ICE_CMAKE_VERSION/cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz
 sudo tar -xzf cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz -C /opt
 sudo ln -sf /opt/cmake-$ICE_CMAKE_VERSION-linux-x86_64/bin/{cmake,cpack,ctest} /usr/local/bin/
@@ -357,7 +357,7 @@ set ANDROID_HOME=C:\Users\%USERNAME%\AppData\Local\Android\Sdk
 set ANDROID_NDK_ROOT=%ANDROID_HOME%\ndk\29.0.14206865
 set JAVA_HOME=C:\Program Files\Java\jdk-25
 
-# Gradle 9.4.0 скачивается автоматически скриптом сборки, если не установлен.
+# Gradle 9.7.0 скачивается автоматически скриптом сборки, если не установлен.
 ```
 
 ### Инструменты сборки Android (Linux / WSL2)
@@ -370,17 +370,17 @@ export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64
 # 2. Установить Android SDK command-line tools
 mkdir -p ~/Android/Sdk/cmdline-tools
 cd ~/Android/Sdk/cmdline-tools
-curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip
+curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
 unzip -q tools.zip && rm -rf latest && mv cmdline-tools latest && rm tools.zip
 
 # 3. Установить компоненты SDK и NDK 29
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865
 
-# Gradle 9.4.0 скачивается автоматически скриптом сборки, если не установлен.
+# Gradle 9.7.0 скачивается автоматически скриптом сборки, если не установлен.
 
 # 4. (Опционально) Сохранить переменные окружения
 echo 'export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64' >> ~/.bashrc
@@ -409,10 +409,10 @@ brew install --cask android-commandlinetools    # даёт `sdkmanager`
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 sdkmanager --sdk_root="$ANDROID_HOME" \
-    "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+    "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
-# Gradle 9.4.0 скачивается скриптом сборки автоматически, если не установлен.
+# Gradle 9.7.0 скачивается скриптом сборки автоматически, если не установлен.
 
 # 4. (Опционально) Сохранить переменные окружения
 {

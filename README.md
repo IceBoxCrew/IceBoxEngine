@@ -131,7 +131,7 @@ Building a game runs the native toolchain of the target platform on your machine
 |-|-|
 | **Compiler** | Visual Studio 2026+ (MSVC — the "Desktop development with C++" workload) on Windows, latest GCC / Clang on Linux, or Apple Clang (Xcode 15+) on macOS |
 | **Build tools** | CMake 4.3+ and Ninja (Xcode on iOS) |
-| **Package manager** | [vcpkg](https://github.com/microsoft/vcpkg) |
+| **Package manager** | [vcpkg](https://github.com/microsoft/vcpkg) — a **full** clone (a `--depth 1` clone cannot resolve the `builtin-baseline` commit pinned in `vcpkg.json`), recent enough to contain that commit. An existing clone from before it was pinned needs `git pull` **and** a re-run of `bootstrap-vcpkg` — pulling alone leaves the old `vcpkg` binary behind, which then fails with `document schema version 2 is not supported` |
 | **Optional** | NSIS (Windows game installers), `dpkg-deb` (Linux `.deb` packages), ImageMagick (higher-quality icon conversion) |
 
 ### To build games (Tools → Build Game)
@@ -142,7 +142,7 @@ Building a game runs the native toolchain of the target platform on your machine
 | 🐧 **Linux** | WSL2 (if building from Windows) or native GCC/Clang + Ninja |
 | 🍎 **macOS** | macOS host with Xcode 15+ Command Line Tools, Python 3.12+ **with development headers** (Homebrew — the bundled system Python 3.9 is too old), vcpkg with `arm64-osx` / `x64-osx` triplets. Building the x86_64 (Intel) target **on an Apple Silicon host** additionally needs Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — because CPython's `configure` and CMake's `FindPython` execute freshly built x86_64 binaries |
 | 📱 **iOS** | macOS host with Xcode 15+ (full IDE, not just CLI tools), vcpkg with `arm64-ios` triplet, Apple Developer account **only** for on-device deployment (compiling needs no account) |
-| 🤖 **Android** | Android SDK 36+, NDK 29+, Java JDK 25+, Gradle 9.4.0 *(auto-downloaded)* |
+| 🤖 **Android** | Android SDK 37+, NDK 29+, Java JDK 25+, Gradle 9.7.0 *(auto-downloaded)* |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — plus Node.js 24+ if you build the `wasm64` memory model |
 
 ---
@@ -205,7 +205,7 @@ sudo apt update && sudo apt install -y \
 # 2. CMake 4.3+ — what the game build's cmake_minimum_required asks for. Debian and
 #    Ubuntu, the usual WSL2 images included, still package an older one, so check
 #    `cmake --version` first and skip this step if apt already gave you 4.3+.
-ICE_CMAKE_VERSION=4.3.3
+ICE_CMAKE_VERSION=4.4.2
 curl -fsSLO https://github.com/Kitware/CMake/releases/download/v$ICE_CMAKE_VERSION/cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz
 sudo tar -xzf cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz -C /opt
 sudo ln -sf /opt/cmake-$ICE_CMAKE_VERSION-linux-x86_64/bin/{cmake,cpack,ctest} /usr/local/bin/
@@ -357,7 +357,7 @@ set ANDROID_HOME=C:\Users\%USERNAME%\AppData\Local\Android\Sdk
 set ANDROID_NDK_ROOT=%ANDROID_HOME%\ndk\29.0.14206865
 set JAVA_HOME=C:\Program Files\Java\jdk-25
 
-# Gradle 9.4.0 is downloaded automatically by the build script if not installed.
+# Gradle 9.7.0 is downloaded automatically by the build script if not installed.
 ```
 
 ### Android build tools (Linux / WSL2)
@@ -370,17 +370,17 @@ export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64
 # 2. Install Android SDK command-line tools
 mkdir -p ~/Android/Sdk/cmdline-tools
 cd ~/Android/Sdk/cmdline-tools
-curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip
+curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
 unzip -q tools.zip && rm -rf latest && mv cmdline-tools latest && rm tools.zip
 
 # 3. Install SDK components & NDK 29
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865
 
-# Gradle 9.4.0 is downloaded automatically by the build script if not installed.
+# Gradle 9.7.0 is downloaded automatically by the build script if not installed.
 
 # 4. (Optional) Persist environment variables
 echo 'export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64' >> ~/.bashrc
@@ -409,10 +409,10 @@ brew install --cask android-commandlinetools    # provides `sdkmanager`
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 sdkmanager --sdk_root="$ANDROID_HOME" \
-    "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+    "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
-# Gradle 9.4.0 is downloaded automatically by the build script if not installed.
+# Gradle 9.7.0 is downloaded automatically by the build script if not installed.
 
 # 4. (Optional) Persist environment variables
 {
