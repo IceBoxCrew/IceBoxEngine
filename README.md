@@ -517,6 +517,19 @@ Full list of libraries and their licenses: **[THIRD_PARTY_NOTICES.txt](THIRD_PAR
 
 ---
 
+## 🤝 Code of Conduct
+
+The engine's source is closed, but the repository, the issues, the discussions and the mailbox are open — and the same rules hold for everyone in them, us included.
+
+- **Criticism is not misconduct.** A bad review, an argument that a design decision is wrong, a complaint about the price — we do not hide, lock or ban over any of it.
+- **Behavior is.** Harassment, threats, doxxing, slurs, pile-ons and spam are acted on, at whatever level fits.
+- **Your license is never a lever.** No sanction here revokes a Key, ends a license, stops your updates or touches a game you have shipped.
+- **Report it by email** — [iceboxcrew057@gmail.com](mailto:iceboxcrew057@gmail.com) with `CONDUCT` in the subject. English or Russian.
+
+Who it covers, where it applies, how reports are handled and what enforcement looks like: **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**
+
+---
+
 ## 📬 Contact
 
 | | |
