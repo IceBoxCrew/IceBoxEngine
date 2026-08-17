@@ -1039,6 +1039,10 @@ runtime (with fallbacks).
   build links it and `Ads.*` goes live; without it those calls stay no-ops and the build
   log says so. An empty AdMob App ID combined with a linked SDK fails configure on
   purpose, because the SDK aborts at launch when `GADApplicationIdentifier` is absent.
+  `fetch_googlemobileads.sh` vendors SDK 13.7.0 by default, and that line needs **Xcode
+  26.2**; the engine itself still builds on Xcode 15+, so the higher floor only applies
+  when the ads SDK is linked. `--version=X.Y.Z` (or `ICE_ADMOB_VERSION`) vendors an older
+  SDK — 11.x is the last line that builds on Xcode 15.
 * The `.app` bundle is fully self-contained: `game.json` (start scene, name, version,
   orientation, crash-report URL), `Content/`, `Config/` (with the render backend pinned to
   MoltenVK), enabled `Plugins/` and `Mods/` are staged **before** code signing, so the

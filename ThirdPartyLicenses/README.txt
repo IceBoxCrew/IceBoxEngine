@@ -77,7 +77,7 @@ ANGLE.txt                 ANGLE                        BSD-3-Clause         vcpk
 
 -- Vendored in-tree or bundled as assets (not from vcpkg) --
 
-ethers-js.txt             ethers.js v6.16.0            MIT                  vendored: Tools/BuildSystem/BuildGame/Templates/Web/ethers.umd.min.js (embedded into the page of Web builds with Web3)
+ethers-js.txt             ethers.js v6.17.0            MIT                  vendored: Tools/BuildSystem/BuildGame/Templates/Web/ethers.umd.min.js (embedded into the page of Web builds with Web3)
 miniaudio.txt             miniaudio                    Unlicense OR MIT-0   vendored: Source/Engine/ThirdLibrary/miniaudio.h
 ImGuiColorTextEdit.txt    ImGuiColorTextEdit           MIT                  vendored: Source/Engine/ThirdLibrary/ImGuiColorTextEdit
 MoltenVK.txt              MoltenVK                     Apache-2.0           vendored: fetched by Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh (macOS/iOS)
@@ -150,8 +150,12 @@ NOTES
   external patent-encumbered encoder (no x264/x265/fdk-aac). The engine only ever
   PRODUCES royalty-free output (VP9 via libvpx, Opus, Vorbis). The editor's media
   importer additionally uses FFmpeg's standard built-in decoders to read the
-  source video/audio that a developer chooses to import. See THIRD_PARTY_NOTICES.txt
-  section 7.
+  source video/audio that a developer chooses to import. The shipped libraries are not
+  an unmodified upstream build: they carry the patch set of the vcpkg "ffmpeg" port,
+  three patches of which touch FFmpeg's own sources. Those patches and the build recipe
+  ship inside the engine under Tools/BuildSystem/Utilities/vcpkg-overlay-ports/ffmpeg/,
+  and THIRD_PARTY_NOTICES.txt section 7 states where anyone holding only a game can
+  obtain the complete corresponding source.
 - Cooked video uses the royalty-free VP9 video codec (libvpx, which carries the
   WebM patent grant) with Opus audio in a WebM container; see libvpx.txt. No
   patent-encumbered codec is produced by the engine.

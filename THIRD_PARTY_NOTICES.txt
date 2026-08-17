@@ -60,7 +60,7 @@ Used by:
 - Expat (XML parser; bundled inside the embedded Python runtime via the pyexpat module) - https://github.com/libexpat/libexpat/blob/master/expat/COPYING
 - libffi (Foreign function interface; bundled inside the embedded Python runtime, used by ctypes) - https://github.com/libffi/libffi/blob/master/LICENSE
 - SPIRV-Headers (Khronos SPIR-V header files; bundled inside shaderc, SPIRV-Tools and SPIRV-Cross) - https://github.com/KhronosGroup/SPIRV-Headers/blob/main/LICENSE
-- ethers.js v6.16.0 (Ethereum/EVM JavaScript library; embedded verbatim into the page of Web builds made with the Web3 option, so those builds fetch no script at runtime) - https://github.com/ethers-io/ethers.js/blob/main/LICENSE.md
+- ethers.js v6.17.0 (Ethereum/EVM JavaScript library; embedded verbatim into the page of Web builds made with the Web3 option, so those builds fetch no script at runtime) - https://github.com/ethers-io/ethers.js/blob/main/LICENSE.md
 - Emscripten (LLVM-to-WebAssembly toolchain; dual-licensed MIT OR University of Illinois/NCSA, used here under MIT. Web builds link its JavaScript glue and its system libraries, including the musl-derived C library and the C++ runtime, into the .wasm and .js of the packaged game. It bundles musl libc and portions of Node.js, both MIT. Full text in ThirdPartyLicenses/Emscripten.txt) - https://github.com/emscripten-core/emscripten/blob/main/LICENSE
 
 Copyright (c) The respective authors of these libraries.
@@ -233,10 +233,9 @@ You should have received a copy of the GNU Lesser General Public License
 along with FFmpeg; if not, see <https://www.gnu.org/licenses/>.
 
 In accordance with the LGPL-2.1, the complete corresponding source code of the
-FFmpeg version used by IceBox Engine is available from the official FFmpeg
-project at https://ffmpeg.org/download.html. FFmpeg is dynamically linked and
-shipped as separate shared libraries (avcodec / avdevice / avfilter / avformat /
-avutil / swresample / swscale, as *.dll / libav*.so* / libsw*.so* /
+FFmpeg build shipped here is available as set out below. FFmpeg is dynamically
+linked and shipped as separate shared libraries (avcodec / avdevice / avfilter /
+avformat / avutil / swresample / swscale, as *.dll / libav*.so* / libsw*.so* /
 libav*.dylib / libsw*.dylib) alongside IceBox Engine and any Product built with
 it, so the end user can replace them with modified versions without relinking.
 Depending on the target platform and toolchain, a build ships either the complete
@@ -244,6 +243,31 @@ set or the subset its binaries link against; either way every FFmpeg library tha
 is present is a separate replaceable shared library. FFmpeg is included only on
 Windows, Linux, macOS and Android; it is not included in iOS or Web (WebAssembly)
 builds.
+
+The shipped libraries are NOT an unmodified upstream build. They are compiled from
+the official FFmpeg 9.0.1 release - available from the FFmpeg project at
+https://ffmpeg.org/download.html and https://github.com/FFmpeg/FFmpeg - with the
+patch set of the vcpkg "ffmpeg" port applied on top of it. Three of those patches
+modify FFmpeg's own C and assembly sources: x86 assembly under libavcodec and
+libavfilter, an added av_stream_get_first_dts accessor in libavformat, and a
+libswscale linkage fix. The remaining patches adjust only FFmpeg's configure
+script, its build system and its command-line tools. That patch set originates
+from the Microsoft vcpkg registry (https://github.com/microsoft/vcpkg); IceBoxCrew
+Studio adds to it a single build-configuration change, which selects the correct
+target when compiling for ARM64 MinGW-w64. The patches and the complete build
+recipe travel verbatim inside every IceBox Engine installation, in
+Tools/BuildSystem/Utilities/vcpkg-overlay-ports/ffmpeg/; the vcpkg.json and
+portfile.cmake in that same directory record the exact upstream version and the
+full list of patches actually applied, and govern in case this notice is ever out
+of date.
+
+If you received a Product built with IceBox Engine rather than the engine itself,
+and therefore do not have that directory, IceBoxCrew Studio will provide the
+complete corresponding source code of the FFmpeg build contained in that Product -
+the upstream release together with the applied patches and the build recipe - to
+any third party who asks, for no more than the cost of performing the
+distribution, for three years after that Product was distributed. Requests go to
+iceboxcrew057@gmail.com.
 
 The full text of the license can be found at:
 https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html

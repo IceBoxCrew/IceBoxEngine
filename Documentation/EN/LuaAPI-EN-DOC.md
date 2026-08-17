@@ -18135,6 +18135,11 @@ Supports **banner**, **interstitial** (full-screen between screens), and **rewar
 > **Build requirement — iOS:** the Google Mobile Ads SDK is not redistributed with the engine,
 > so download it from Google once per machine and put `GoogleMobileAds.xcframework` into
 > `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder.
+> `Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh` does that for you and defaults to
+> SDK 13.7.0, which Google builds with **Xcode 26.2** — the engine itself still configures on
+> Xcode 15+, so this raised floor applies only to iOS builds that actually link the ads SDK.
+> Pass `--version=X.Y.Z` (or set `ICE_ADMOB_VERSION`) to vendor an older SDK if your Xcode is
+> older; 11.x is the last line that builds on Xcode 15.
 >
 > Then enable **Ads & Attribution** in Build Game → iOS and fill in the **AdMob App ID**.
 > CMake finds `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework`, defines

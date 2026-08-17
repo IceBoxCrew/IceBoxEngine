@@ -18166,7 +18166,12 @@ end
 > **Требование при сборке — iOS:** Google Mobile Ads SDK не распространяется вместе с движком,
 > поэтому один раз на машину скачайте его у Google и положите
 > `GoogleMobileAds.xcframework` в `Tools/BuildSystem/Vendor/GoogleMobileAds/` внутри папки
-> движка.
+> движка. Это делает за вас `Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh`, который
+> по умолчанию берёт SDK 13.7.0, а его Google собирает **Xcode 26.2** — сам движок по-прежнему
+> конфигурируется на Xcode 15+, поэтому поднятая планка касается только тех сборок под iOS,
+> которые действительно линкуют рекламный SDK. Если Xcode старее, передайте `--version=X.Y.Z`
+> (или задайте `ICE_ADMOB_VERSION`) и положите SDK постарше: 11.x — последняя линейка,
+> собирающаяся на Xcode 15.
 >
 > Затем включите **Ads & Attribution** в Build Game → iOS и заполните **Идентификатор приложения Рекламы в приложении**. CMake
 > найдёт `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework`, определит
