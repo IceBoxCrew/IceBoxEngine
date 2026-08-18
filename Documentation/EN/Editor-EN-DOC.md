@@ -1035,7 +1035,7 @@ Global rendering defaults (a level can override these in
 * **Lighting Mode** (Unlit / Lit).
 * **Render Backend** — the list depends on the platform and the build: OpenGL 4.6 /
   OpenGL 3.3 (/ Vulkan when compiled in) on Windows and Linux, Metal (ANGLE) /
-  Metal (MoltenVK) on Apple.
+  Metal (MoltenVK) on macOS.
 * When **Lit**: **Ambient** color & intensity; **2D Shadows** (enable, ray quality,
   softness, intensity, bias, PCF samples, directional length and depth fade,
   colliders-block-shadows); **Ray Tracing** (when supported); **Directional Light**

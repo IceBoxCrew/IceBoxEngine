@@ -73,7 +73,7 @@ SQLite.txt                SQLite                       Public Domain        vcpk
 SPIRV-Headers.txt         SPIRV-Headers                MIT (Khronos)        vcpkg: spirv-headers (inside shaderc/SPIRV-*)
 EGL-Registry.txt          EGL-Registry                 Apache-2.0 / SGI-B   vcpkg: egl-registry  (GL/EGL loader generation)
 OpenGL-Registry.txt       OpenGL-Registry              Apache-2.0 / SGI-B   vcpkg: opengl-registry (GL loader generation)
-ANGLE.txt                 ANGLE                        BSD-3-Clause         vcpkg: angle        (macOS / iOS GLES backend)
+ANGLE.txt                 ANGLE                        BSD-3-Clause         vcpkg: angle        (macOS GLES backend)
 
 -- Vendored in-tree or bundled as assets (not from vcpkg) --
 
@@ -171,8 +171,9 @@ NOTES
   have obliged every developer shipping a game to also hand their players the object
   code of that game so the library could be relinked, which the Apache-2.0 licence of
   SheenBidi does not require. See THIRD_PARTY_NOTICES.txt section 6.
-- ANGLE and MoltenVK ship only in macOS/iOS builds; they are listed here so
-  this attribution set is complete across all six target platforms.
+- ANGLE ships only in macOS builds and MoltenVK only in macOS and iOS builds
+  (iOS renders solely through MoltenVK); they are listed here so this attribution
+  set is complete across all six target platforms.
 - enkiTS is statically linked into Windows, Linux, macOS, iOS and Android builds,
   where it runs the multithreaded Box2D solver. Web builds do not link it, because
   Emscripten defaults to a single-threaded runtime; there Box2D falls back to its

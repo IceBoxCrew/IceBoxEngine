@@ -10915,7 +10915,7 @@ end
 
 ### Renderer / Graphics API
 
-> Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS/iOS → Metal via ANGLE; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
+> Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS → Metal via ANGLE or MoltenVK, whichever the build was made with; iOS → Metal via MoltenVK; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
 >
 > Accepted names are case- and spacing-insensitive: `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal`. The Vulkan backend negotiates **1.4 → 1.3 → 1.2 → 1.1** at runtime and falls back to OpenGL (desktop) / OpenGL ES (Android) when no compatible device is available. On Web, `WebGPU` falls back to `WebGL 2.0` at startup when the browser does not support WebGPU.
 
@@ -11092,7 +11092,7 @@ What the 6 platforms can report:
 | Windows  | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
 | Linux    | x64, x86, arm64 | `"x64"`, `"x86"`, `"arm64"` |
 | macOS    | arm64 (Apple Silicon), x64 (Intel) | `"arm64"`, `"x64"` |
-| iOS      | arm64 (device and simulator); x64 only on an Intel-Mac simulator | `"arm64"`, `"x64"` |
+| iOS      | arm64 (device and simulator) | `"arm64"` |
 | Android  | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | `"arm64"`, `"arm32"`, `"x64"`, `"x86"` |
 | Web      | wasm32, wasm64 (`-sMEMORY64` build) | `"wasm32"`, `"wasm64"` |
 

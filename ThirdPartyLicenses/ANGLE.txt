@@ -1,5 +1,5 @@
 ANGLE - Almost Native Graphics Layer Engine
-OpenGL ES -> Metal/D3D/Vulkan translator, used as the GLES backend on macOS and iOS.
+OpenGL ES -> Metal/D3D/Vulkan translator, used as the GLES backend on macOS.
 https://chromium.googlesource.com/angle/angle
 
 Copyright 2018 The ANGLE Project Authors. All rights reserved.

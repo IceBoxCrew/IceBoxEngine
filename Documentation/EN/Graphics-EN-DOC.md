@@ -184,8 +184,9 @@ renderer is chosen per platform in **Build Game…** (see
 
 * **Vulkan / MoltenVK** — if Vulkan was not compiled in, or a pre-flight device probe
   finds no usable device, the engine falls back to OpenGL 4.6 (to Metal/ANGLE on
-  Apple) *before* creating the window. On iOS the probe is treated as advisory,
-  because Metal is guaranteed there. MoltenVK itself is searched for in the app
+  macOS) *before* creating the window. iOS is the exception: it renders only through
+  MoltenVK, so the probe is treated as advisory there — Metal is guaranteed — and no
+  fallback backend exists. MoltenVK itself is searched for in the app
   bundle, the `Frameworks` directory, `@rpath`, and finally the SDL default loader.
 * **WebGPU** — if the device is not ready, the engine logs a warning and drops to
   WebGL 2.0.
