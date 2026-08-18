@@ -103,7 +103,7 @@ IceBox Engine consists of several components:
 
 | | |
 |-|-|
-| **OS** | iOS 14.0+ (iPhone & iPad, arm64) |
+| **OS** | iOS 15.0+ (iPhone & iPad, arm64) |
 | **GPU** | Metal (rendered via MoltenVK) |
 
 ### Runtime — Android
