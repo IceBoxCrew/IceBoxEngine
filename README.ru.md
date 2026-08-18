@@ -298,8 +298,6 @@ mv ~/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64 ~/llvm-mingw
 
 # 2. Добавить в PATH только для этой сессии и собрать arm64-игру
 export PATH="$HOME/llvm-mingw/bin:$PATH"
-aarch64-w64-mingw32-g++ --version
-Tools/BuildSystem/BuildGame/build_windows.sh --arch arm64 --release
 ```
 
 > Добавляйте llvm-mingw в `PATH` **только в той сессии, где собираете arm64-игру**, и не
