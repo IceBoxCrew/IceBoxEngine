@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии B-0.8.3
+### Актуальная для версии B-0.8.4
 
 > **IceBox Engine** интегрирует **Python** через библиотеку **pybind11** для скриптинга редактора.
 > Python API позволяет автоматизировать работу в редакторе, управлять сценами, сущностями,
@@ -1334,12 +1334,12 @@ print(comps)  # ['Transform', 'SpriteRenderer', 'Rigidbody']
 types = editor.get_component_types()
 # ['Transform', 'SpriteRenderer', 'Camera', 'Rigidbody', 'Collider',
 #  'Flipbook', 'Audio', 'Animator', 'Skeleton', 'Tilemap', 'FX',
-#  'Widget', 'PointLight', 'SpotLight', 'PointMarker', 'Script', 'AI', 'Joint',
+#  'Widget', 'PointLight', 'SpotLight', 'PointMarker', 'Decal', 'Script', 'AI', 'Joint',
 #  'Destructible', 'ClassComponent', 'Stencil', 'GameplayTag', 'Interface',
 #  'Replication', 'Hierarchy']
 ```
 
-> 25 типов. См. [матрицу поддержки добавления/удаления](#матрица-поддержки-добавленияудаления) — `Transform` и `Hierarchy` есть в этом списке, но их нельзя добавить или удалить.
+> 26 типов. См. [матрицу поддержки добавления/удаления](#матрица-поддержки-добавленияудаления) — `Transform` и `Hierarchy` есть в этом списке, но их нельзя добавить или удалить.
 
 ---
 
@@ -1489,7 +1489,7 @@ if editor.has_component(uuid, 'Rigidbody'):
     print('Есть физическое тело')
 ```
 
-**Поддерживаемые типы**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
+**Поддерживаемые типы**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
 
 > ℹ️ `PointLight` и `SpotLight` — две грани одного светового компонента, поэтому сущность с любым из них вернёт `True` для `has_component` по обоим. Чтобы понять, какие именно источники света на ней есть, используйте `get_instance_count(uuid, 'PointLight')` / `get_instance_count(uuid, 'SpotLight')`.
 
@@ -1772,8 +1772,8 @@ spot = editor.get_component(uuid, 'SpotLight')
 ```python
 sc = editor.get_component(uuid, 'Script')
 # {
-#     'file_name': 'PlayerScript',
-#     'class_path': 'Content/Scripts/PlayerScript.lua',
+#     'file_name': 'CL_Player',
+#     'class_path': 'Content/Classes/CL_Player.ice_class',
 #     'override_class_defaults': False,
 #     'override_lua_script': False,
 #     'lua_script_override': '',
@@ -1875,6 +1875,17 @@ pm = editor.get_component(uuid, 'PointMarker')
 #     'color': (1.0, 0.0, 0.0),
 #     'shape': 0,    # 0 = Circle, 1 = Square, ...
 #     'size': 10.0,
+#     'visible': True
+# }
+```
+
+**Пример для Decal:**
+```python
+dc = editor.get_component(uuid, 'Decal')
+# {
+#     'instance_count': 1,
+#     'decal_path': 'Content/Decals/DC_Crack.ice_decal',
+#     'color': (1.0, 1.0, 1.0, 1.0),
 #     'visible': True
 # }
 ```
@@ -2541,7 +2552,7 @@ for p in panels:
 
 **Панели редакторов ассетов** — открываются через `open_asset`, по имени их можно только *закрыть*:
 
-`TilesetEditor`, `TilemapEditor`, `ClassEditor`, `TextureSettings`, `SpriteEditor`, `FlipbookEditor`, `SkeletonEditor`, `SoundSettings`, `SpritesheetSlicer`, `AnimationEditor`, `MaterialEditor`, `MaterialInstanceEditor`, `MaterialFunctionEditor`, `MPCEditor`, `FXEditor`, `FontEditor`, `WidgetEditor`, `ViewEditor`, `CinemaEditor`, `Localization`, `AIEditor`, `VideoPlayer`
+`TilesetEditor`, `TilemapEditor`, `ClassEditor`, `LuaScriptEditor`, `TextureSettings`, `SpriteEditor`, `FlipbookEditor`, `SkeletonEditor`, `SoundSettings`, `SpritesheetSlicer`, `AnimationEditor`, `MaterialEditor`, `MaterialInstanceEditor`, `MaterialFunctionEditor`, `MPCEditor`, `FXEditor`, `FontEditor`, `WidgetEditor`, `ViewEditor`, `CinemaEditor`, `Localization`, `AIEditor`, `VideoPlayer`
 
 #### `editor.set_panel_visible(panel_name, visible)`
 
@@ -2728,7 +2739,7 @@ new_uuids = editor.paste_entities()
 
 Некоторые компоненты поддерживают несколько экземпляров (инстансов) на одной сущности. Например, SpriteRenderer может иметь несколько слоёв спрайтов, PointLight — несколько источников света.
 
-**Мульти-инстансные компоненты**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Tilemap`, `Joint`, `ClassComponent`
+**Мульти-инстансные компоненты**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent`
 
 #### `editor.get_instance_count(uuid, component_type)` → `int`
 
@@ -2959,6 +2970,27 @@ marker_data = editor.get_instance(uuid, 'PointMarker', 0)
 #     'visible': True,
 #     'render_in_game': False,
 #     'position': (0.0, 0.0, 0.0)
+# }
+```
+
+**Decal:**
+```python
+decal_data = editor.get_instance(uuid, 'Decal', 0)
+# {
+#     'name': 'Graffiti',
+#     'decal_path': 'Content/Decals/DC_Graffiti.ice_decal',
+#     'color': (1.0, 1.0, 1.0, 1.0),
+#     'size_override': (0.0, 0.0),     # 0 — размер берётся из ассета декали
+#     'variant_index': -1,             # -1 — вариант текстуры выбирается автоматически
+#     'use_sort_order_override': False,
+#     'sort_order': 0,
+#     'flip_x': False,
+#     'flip_y': False,
+#     'visible': True,
+#     'render_in_game': True,
+#     'position': (0.0, 0.0, 0.0),
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0
 # }
 ```
 
@@ -4679,6 +4711,7 @@ icebox.log.error('Критическая ошибка!')
 | `PointLight` | ✅ | Точечный свет. Цвет, интенсивность, радиус, затухание, тени. |
 | `SpotLight` | ✅ | Прожектор. Цвет, направление, углы конуса, тени. |
 | `PointMarker` | ✅ | Маркер-точка (в редакторе). Цвет, форма, размер. |
+| `Decal` | ✅ | Размещённые декали. Путь к ассету декали, оттенок, переопределение размера, вариант текстуры, порядок сортировки, отражение. |
 | `Script` | ❌ | Lua-скрипт. Имя файла и путь к классу. |
 | `AI` | ❌ | Поведение ИИ. Путь к AI-ассету, скорость и режим движения, радиусы обнаружения/атаки, настройки восприятия, патрульный маршрут. |
 | `Joint` | ✅ | Физические соединения. Тип, якоря, пружины, моторы, ограничения, силы разрушения. |
@@ -4792,6 +4825,11 @@ icebox.log.error('Критическая ошибка!')
 | `arrow_head_size` | PointMarker | Размер наконечника стрелки (форма Arrow) |
 | `arrow_direction` | PointMarker | Направление стрелки в градусах (форма Arrow) |
 | `line_end_offset` | PointMarker | Смещение конца линии `(x, y)` (форма Line) |
+| `decal_path` | Decal | Путь к ассету `.ice_decal`, который рисует инстанс |
+| `size_override` | Decal | Размер в пикселях `(w, h)`; `(0, 0)` — размер берётся из ассета декали |
+| `variant_index` | Decal | Индекс варианта текстуры; `-1` выбирает автоматически |
+| `use_sort_order_override` | Decal | Использовать `sort_order` инстанса вместо значения из ассета декали |
+| `sort_order` | Decal | Порядок отрисовки среди декалей; большее значение рисуется поверх |
 | `cookie_texture` | PointLight, SpotLight | Путь к текстуре-маске света (cookie/гобо) |
 | `cookie_intensity` | PointLight, SpotLight | Интенсивность маски света |
 | `cookie_rotation` | PointLight, SpotLight | Поворот маски света в градусах |
@@ -4830,6 +4868,7 @@ icebox.log.error('Критическая ошибка!')
 | MaterialInstance | `.ice_matinst` | Инстанс материала |
 | MaterialFunction | `.ice_matfunc` | Функция материала |
 | MaterialCollection | `.ice_mpc` | Коллекция параметров материала |
+| Decal | `.ice_decal` | Декаль (дырки от пуль, брызги крови, следы копоти) |
 | Sound | `.ice_sound` | Звуковой ассет (сайдкар для аудиофайлов) |
 | FX | `.ice_fx` | Система частиц |
 | Widget | `.ice_widget` | UI-виджет |

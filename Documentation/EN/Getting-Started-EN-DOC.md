@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > This is the **first stop** for anyone who has just installed **IceBox Engine**.
 > Before you ever open the editor you meet two small companion applications, and
@@ -90,14 +90,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-0.8.3-Release-Windows-x64-Setup.exe
-IceBoxEngine-0.8.3-Release-Windows-x86-Setup.exe
-IceBoxEngine-0.8.3-Release-Windows-arm64-Setup.exe
-IceBoxEngine-0.8.3-Release-Linux-x64-Setup.deb
-IceBoxEngine-0.8.3-Release-Linux-x86-Setup.deb
-IceBoxEngine-0.8.3-Release-Linux-arm64-Setup.deb
-IceBoxEngine-0.8.3-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-0.8.3-Release-macOS-x64-Setup.pkg
+IceBoxEngine-0.8.4-Release-Windows-x64-Setup.exe
+IceBoxEngine-0.8.4-Release-Windows-x86-Setup.exe
+IceBoxEngine-0.8.4-Release-Windows-arm64-Setup.exe
+IceBoxEngine-0.8.4-Release-Linux-x64-Setup.deb
+IceBoxEngine-0.8.4-Release-Linux-x86-Setup.deb
+IceBoxEngine-0.8.4-Release-Linux-arm64-Setup.deb
+IceBoxEngine-0.8.4-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-0.8.4-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -204,10 +204,13 @@ languages (Arabic, Hebrew), and both install the engine's **crash reporter** —
 previous run crashed, its pending report is picked up at startup.
 
 They also pick their graphics backend the same way the editor does: the
-`Rendering.RenderBackend` value in `Config/Engine.json` selects **Vulkan**
-(or MoltenVK on macOS), and anything else means OpenGL. If Vulkan fails to
-initialise, the window is recreated on OpenGL; an OpenGL 4.6 context falls back to
-3.3; macOS runs GLES 3.0 through ANGLE. You never have to configure this by hand —
+`Rendering.RenderBackend` value in `Config/Engine.json` selects **Direct3D 12**
+(Windows), **Metal** (macOS, the default there) or **Vulkan** (or MoltenVK on macOS),
+and anything else means OpenGL. If
+Direct3D 12 fails to initialise, the window is recreated on Vulkan and then on OpenGL;
+if Metal fails to initialise, the window is recreated on MoltenVK and then on ANGLE;
+if Vulkan fails to initialise, the window is recreated on OpenGL; an OpenGL 4.6 context
+falls back to 3.3; macOS runs GLES 3.0 through ANGLE. You never have to configure this by hand —
 it is only worth knowing if a machine has unusual drivers.
 
 > The launcher and the updater stay **independent programs**. The launcher's
@@ -221,7 +224,7 @@ it is only worth knowing if a machine has unusual drivers.
 Both apps speak the same version format:
 
 ```
-<prefix>-<major>.<minor>.<patch>      e.g.  B-0.8.3
+<prefix>-<major>.<minor>.<patch>      e.g.  B-0.8.4
 ```
 
 The short prefix marks the **maturity stage**; the launcher and editor expand it
@@ -231,13 +234,13 @@ into a friendly name for display:
 | :----: | ----------------- | ------- | :--------: |
 | `P`  | Prototype   | `P-0.1.0`  | lowest |
 | `A`  | Alpha       | `A-0.3.0`  | ↓ |
-| `B`  | Beta        | `B-0.8.3`  | ↓ |
+| `B`  | Beta        | `B-0.8.4`  | ↓ |
 | `PR` | Pre-Release | `PR-0.9.0` | ↓ |
 | `R`  | Release     | `R-1.0.0`  | highest |
 
 When comparing two versions, the **stage is weighed first** (a `R-` build always
 outranks any `B-` build, regardless of numbers), and only then the numeric
-`major.minor.patch`. So `B-0.8.3` is *newer* than `B-0.6.9`, and `R-1.0.0` is newer
+`major.minor.patch`. So `B-0.8.4` is *newer* than `B-0.6.9`, and `R-1.0.0` is newer
 than `PR-9.9.9`. A tag carrying an unrecognized prefix sorts **below** `P`, and a
 tag with no prefix at all is read as `0.0.0` at the Prototype level — so a malformed
 release tag can never look newer than a real one.
@@ -245,14 +248,14 @@ release tag can never look newer than a real one.
 `Config/Updater.json` → `currentVersion` is the single source of truth for the
 version, and far more than the updater reads it:
 
-* the launcher shows it under the logo (e.g. **Beta 0.8.3**) and on its **About**
+* the launcher shows it under the logo (e.g. **Beta 0.8.4**) and on its **About**
   page, and the editor displays it too;
 * every IceBox program also carries it as a compiled-in fallback, so the version
   still displays correctly if the file is missing or unreadable;
 * the updater uses it as the baseline for every comparison
   ([4.5](#45-where-the-version-is-recorded)).
 
-> Projects record only the **numeric part** (`0.8.3`) in their `.iceproject`
+> Projects record only the **numeric part** (`0.8.4`) in their `.iceproject`
 > manifest, and the launcher's *engine version mismatch* marker compares just those
 > numbers — it does not care whether a project was last saved by a Beta or a
 > Release build of the same `major.minor.patch`.
@@ -375,7 +378,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 │   🧊 logo   │                                              │
 │ IceBox      │                                              │
 │ Engine™     │            Active tab content                │
-│ Beta 0.8.3  │   (My Projects / New Project / Plugins &     │
+│ Beta 0.8.4  │   (My Projects / New Project / Plugins &     │
 │ ─────────── │    Mods / Settings / About)                  │
 │ My Projects │                                              │
 │ New Project │                                              │
@@ -519,7 +522,7 @@ selected project (and *Select a project to see details* when nothing is selected
 * **Path**, **Last Modified**, **Last Launched** (or *Never*);
 * **Created with Engine** — the version recorded in the manifest, or
   *Unknown (legacy project)*, followed by an amber
-  **Engine version mismatch (`0.6.9` -> `0.8.3`)** line when they differ;
+  **Engine version mismatch (`0.6.9` -> `0.8.4`)** line when they differ;
 * **License** — the display name of the license chosen at creation;
 * **Scripting Mode** — *Code Scripting* or *Visual Scripting*;
 * **Plugins** and **Mods** — resolved to the packages' display names and versions
@@ -646,7 +649,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "0.8.3",
+    "EngineVersion": "0.8.4",
     "StartScene": "",
     "ScriptingMode": "Code",
     "Description": "…",

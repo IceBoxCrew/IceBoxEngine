@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** is extensible in two complementary ways:
 >

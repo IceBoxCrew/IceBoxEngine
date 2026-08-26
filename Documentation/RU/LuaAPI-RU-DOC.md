@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии B-0.8.3
+### Актуальная для версии B-0.8.4
 
 > **IceBox Engine** использует **Lua** через библиотеку **sol2** для скриптинга игровой логики.
 > Скрипты встраиваются в файлы `.ice_class` (классы объектов), `.icemap` (скрипт уровня),
@@ -38,7 +38,7 @@
    - [Модули и require](#модули-и-require)
    - [Итераторы и обобщённый for](#итераторы-и-обобщённый-for)
    - [Сборщик мусора](#сборщик-мусора)
-   - [Стандартные библиотеки coroutine/io/os (если доступны)](#стандартные-библиотеки-coroutineioos-если-доступны)
+   - [Стандартные библиотеки](#стандартные-библиотеки)
 3. [Жизненный цикл скриптов](#3-жизненный-цикл-скриптов)
 4. [Transform — Позиция, масштаб, поворот](#4-transform--позиция-масштаб-поворот)
 5. [Physics — Физика (Box2D)](#5-physics--физика-box2d)
@@ -109,6 +109,7 @@
 59. [Matchmaking — Подбор игроков](#59-matchmaking--подбор-игроков)
 60. [Console — Консоль разработчика и система команд](#60-console--консоль-разработчика-и-система-команд)
 61. [Draw — Немедленная отрисовка (Draw / Texture / RenderTarget)](#61-draw--немедленная-отрисовка-draw--texture--rendertarget)
+62. [Decal — Дырки от пуль, брызги крови, следы копоти](#62-decal--дырки-от-пуль-брызги-крови-следы-копоти)
 
 ---
 
@@ -175,6 +176,13 @@ IceBox предлагает два способа создавать игров�
 | **Функции сущности (Entity)** | Только внутри скрипта конкретной сущности | `SetPosition(x, y, z)`, `GetVelocity()` |
 
 > **Важно:** Функции сущности (Entity-bound) работают с «самим собой» — то есть с объектом, к которому привязан скрипт. Например, `SetPosition(100, 200, 0)` сдвинет именно ту сущность, в чьём скрипте написана эта строка.
+
+> **Под капотом:** функции сущности привязываются к окружению скрипта **при первом обращении**,
+> группами API, поэтому сущность платит только за те группы, которые действительно использует.
+> Для обычного кода это незаметно — `SetPosition(...)`, `_ENV.SetPosition` и
+> `Interfaces.Call(id, "SetPosition", …)` работают ровно как раньше. Разница видна только при
+> инспекции самого окружения: `pairs(_ENV)` и `rawget(_ENV, "SetPosition")` увидят функцию
+> сущности только после того, как скрипт её использовал.
 
 ### Наследование классов
 
@@ -2275,8 +2283,13 @@ local empty = next(t) == nil
 
 Lua поддерживает разбиение кода на модули. Модуль — это обычный файл `.lua`, который возвращает таблицу.
 
+В редакторе модуль — это **полноценный ассет**: создаётся в браузере контента через
+**Прочее ▸ Создать Lua-скрипт (.lua)**, а двойной клик открывает **Редактор
+Lua-скриптов** (см. [Ассеты](Assets-RU-DOC.md#420-скрипт-lua-и-текст-txt)). Новый скрипт
+сразу содержит заготовку модуля ниже.
+
 ```lua
--- content/Utils/Math.lua
+-- Content/Utils/Math.lua
 local M = {}
 
 function M.Clamp(v, min, max)
@@ -2287,12 +2300,32 @@ return M
 ```
 
 ```lua
--- В другом файле
-local Math = require("content.Utils.Math")
+-- В другом файле (скрипт класса, уровня или виджета)
+local Math = require("Content.Utils.Math")
 local hp = Math.Clamp(150, 0, 100)  -- 100
 ```
 
-> Путь в `require` задаётся через точки, не через слеши. Доступность `require` зависит от сборки движка.
+> Путь в `require` задаётся через точки, не через слеши, и отсчитывается от **корня
+> проекта**: `Content/Utils/Math.lua` превращается в `require("Content.Utils.Math")`.
+>
+> Модули читаются через виртуальную файловую систему движка, поэтому один и тот же
+> `require` работает в редакторе, в сборке с россыпью `Content/`, в сборке, упакованной
+> в `Content.icepak`, и из ассетов APK на Android. Если переместить модуль в браузере
+> контента, на старом месте останется редиректор — `require` пойдёт по нему, и прежний
+> путь продолжит работать.
+>
+> `require` доступен в **скриптах классов**, в **скрипте уровня**, в **скриптах
+> виджетов** и в **модах**.
+>
+> Модуль выполняется **один раз на каждое Lua-состояние**, результат кэшируется в
+> `package.loaded`. Скрипты классов, скрипт уровня и моды работают в одном состоянии;
+> **скрипты виджетов — в отдельном**, поэтому модуль, подключённый с обеих сторон,
+> получает по экземпляру на состояние: код общий, данные внутри модуля — нет. Для обмена
+> состоянием между виджетами и сущностями используйте события или данные уровня.
+>
+> Редактор сбрасывает кэш проектных модулей обоих состояний при каждом нажатии **Play**,
+> так что правки, сделанные в Редакторе Lua-скриптов, применяются со следующего запуска
+> без перезапуска редактора.
 
 ---
 
@@ -2330,9 +2363,23 @@ collectgarbage("restart")   -- включить GC обратно
 
 ---
 
-### Стандартные библиотеки coroutine/io/os (если доступны)
+### Стандартные библиотеки
 
-В обычном Lua есть библиотеки `coroutine`, `io`, `os`, `package`. В некоторых движках они могут быть отключены.
+IceBox открывает ровно этот набор стандартных библиотек Lua, причём в **обоих** состояниях
+(скрипты сущностей/уровня/модов и скрипты виджетов):
+
+| Библиотека | Доступна | Примечание |
+| ---------- | -------- | ---------- |
+| `base` | ✅ | `print` перенаправлен в лог движка; лучше использовать `Print`. |
+| `string` | ✅ | Lua-паттерны, `string.format`, … |
+| `table` | ✅ | `table.insert`, `table.sort`, … |
+| `math` | ✅ | См. также хелперы движка `Math.*`. |
+| `coroutine` | ✅ | См. также `StartCoroutine` / `WaitSeconds` ниже. |
+| `utf8` | ✅ | `utf8.len`, `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.offset`, `utf8.charpattern`. |
+| `package` | ✅ | `require` — см. [Модули и require](#модули-и-require). |
+| `os` | ❌ | Вместе с ней шли бы `os.execute` / `os.remove` / `os.exit`. Используйте API движка: `GetUnixTime`, `GetDateTable`, `FormatDate`. |
+| `io` | ❌ | Используйте `WriteFile` / `ReadFile` / `PersistentTable` / `SaveGameState` — они пишут только внутрь папки сейвов. |
+| `debug` | ❌ | Движок ставит собственный обработчик ошибок, поэтому **каждая ошибка рантайма и так приходит с полным стектрейсом**; а `debug.sethook` конфликтовал бы со встроенным отладчиком Lua. |
 
 ```lua
 -- coroutine: базовый пример
@@ -2347,18 +2394,20 @@ coroutine.resume(co)  -- Шаг 2
 ```
 
 ```lua
--- os: базовые утилиты времени
-local now = os.time()
-local t = os.date("%Y-%m-%d", now)
+-- utf8: текст не из одних латинских букв
+local text = "Привет"
+Print(#text)            -- 12 — байты
+Print(utf8.len(text))   -- 6  — символы
+
+for position, codepoint in utf8.codes(text) do
+    Print(position, codepoint, utf8.char(codepoint))
+end
 ```
 
 ```lua
--- io: чтение файла (если доступно)
-local f = io.open("data.txt", "r")
-if f then
-    local text = f:read("*a")
-    f:close()
-end
+-- реальные дата и время (вместо os.time / os.date)
+local now = GetUnixTime()
+local today = FormatDate("%Y-%m-%d", now)
 ```
 
 ---
@@ -4972,7 +5021,7 @@ Interfaces.CallOnAll("OnGamePaused", true)
 
 -- Рефлексия
 Interfaces.HasFunction(entityId, "TakeDamage")   -- true если в env есть такая функция
-local fns = Interfaces.ListFunctions(entityId)   -- все функции-значения в env
+local fns = Interfaces.ListFunctions(entityId)   -- функции, объявленные самим скриптом
 
 -- ---------- Переменные другой сущности (чтение/запись её скрипт-глобалов) ----------
 -- Аналог Interfaces.Call для переменных: достучаться до переменной в env другой живой сущности
@@ -7318,15 +7367,17 @@ SetCollidersBlockShadows(true)
 local cb = GetCollidersBlockShadows()
 ```
 
-### Трассировка лучей (только Vulkan)
+### Трассировка лучей (только Vulkan / Direct3D 12 / Metal)
 
 ```lua
 -- 2D-глобальное освещение с трассировкой лучей в реальном времени (мягкий
 -- непрямой свет, растекание цвета, ray-traced ambient occlusion). Работает
--- ТОЛЬКО на устройствах Vulkan с аппаратной трассировкой лучей; на любом другом
+-- ТОЛЬКО на устройствах Vulkan с аппаратной трассировкой лучей, на адаптерах
+-- Direct3D 12 с DirectX Raytracing 1.1 и на устройствах Metal, которые
+-- сообщают supportsRaytracing (ray query MSL 2.4); на любом другом
 -- бэкенде/устройстве вызовы запоминаются, но не дают визуального эффекта
 -- (фича ведёт себя так, будто её нет).
-local supported = IsRaytracingSupported()   -- true только на Vulkan с RT
+local supported = IsRaytracingSupported()   -- true только на Vulkan / D3D12 / Metal с RT
 
 SetRaytracingEnabled(true)
 local on = IsRaytracingEnabled()
@@ -7988,6 +8039,48 @@ local edt = GetEntityDeltaTime(entityId)  -- dt * entityTimeScale
 local fps = GetFPS()
 local frameTime = GetFrameTime()  -- В миллисекундах
 ```
+
+### Реальные дата и время
+
+`GetTime` и соседние функции измеряют **игровое** время. Эти функции читают **системные часы** —
+они нужны для ежедневных наград, «сколько прошло с прошлой сессии», меток времени в сейвах и
+подобного. Они заменяют `os.time` / `os.date`, которых нет (см.
+[Стандартные библиотеки](#стандартные-библиотеки)).
+
+```lua
+local now = GetUnixTime()      -- секунды с 1970-01-01 UTC
+local nowMs = GetUnixTimeMs()  -- то же в миллисекундах
+
+-- Разложено по полям (по умолчанию местное время, true — UTC)
+local d = GetDateTable()
+Print(d.year, d.month, d.day, d.hour, d.min, d.sec)
+Print(d.wday, d.yday, d.isdst)   -- wday: 1 = воскресенье, yday: 1..366
+
+local utc = GetDateTable(now, true)
+
+-- Форматирование в стиле strftime
+FormatDate("%Y-%m-%d %H:%M:%S")        -- → "2026-08-21 22:10:35"
+FormatDate("%d.%m.%Y", savedTimestamp) -- отформатировать сохранённую метку
+FormatDate("%H:%M", now, true)         -- UTC
+
+-- Ежедневная награда
+local lastClaim = tonumber(ReadFile("lastClaim.txt") or "0")
+if GetSecondsSince(lastClaim) >= 24 * 60 * 60 then
+    GiveDailyReward()
+    WriteFile("lastClaim.txt", tostring(GetUnixTime()))
+end
+```
+
+| Функция | Возвращает |
+| ------- | ---------- |
+| `GetUnixTime()` | Секунды с начала эпохи Unix (целое). |
+| `GetUnixTimeMs()` | Миллисекунды с начала эпохи Unix (целое). |
+| `GetDateTable([unixTime] [, utc])` | Таблицу `{ year, month, day, hour, min, sec, wday, yday, isdst }`. `month` — 1..12, `wday` — 1..7 начиная с воскресенья, `yday` — 1..366. По умолчанию — текущее местное время. |
+| `FormatDate(format [, unixTime] [, utc])` | Строку в формате `strftime` (не длиннее 255 символов, иначе `""`). |
+| `GetSecondsSince(unixTime)` | Сколько секунд прошло с указанной метки времени. |
+
+> Системные часы игрок может перевести, поэтому не полагайтесь на них как на единственную
+> защиту наград по времени в игре, у которой есть сервер.
 
 ### Таймеры (простые утилиты)
 
@@ -10871,9 +10964,9 @@ Settings.LIGHTING_UNLIT  -- false
 
 ### Масштабирование (FSR / NIS)
 
-> Рендерит сцену во внутреннем разрешении ниже выходного и восстанавливает её до полного в самом конце кадра, **после** постобработки. **Только Vulkan и только на совместимой видеокарте** — ровно как трассировка лучей. На любом другом бэкенде или неподдерживаемом устройстве настройка сохраняется, но не действует, и кадр масштабируется обычной линейной фильтрацией.
+> Рендерит сцену во внутреннем разрешении ниже выходного и восстанавливает её до полного в самом конце кадра, **после** постобработки. **Только Vulkan, Direct3D 12 и Metal и только на совместимой видеокарте** — ровно как трассировка лучей. На любом другом бэкенде или неподдерживаемом устройстве настройка сохраняется, но не действует, и кадр масштабируется обычной линейной фильтрацией.
 >
-> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (пространственный апсемплинг с адаптацией к границам) и затем RCAS (устойчивое контрастно-адаптивное повышение резкости). Работает на **любой** видеокарте с Vulkan.
+> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (пространственный апсемплинг с адаптацией к границам) и затем RCAS (устойчивое контрастно-адаптивное повышение резкости). Работает на **любой** видеокарте с Vulkan, Direct3D 12 или Metal.
 > - **`"nis"`** — NVIDIA Image Scaling: направленное масштабирование по структурному тензору с адаптивной нерезкой маской, за один проход. Требует видеокарту **NVIDIA**.
 >
 > Пресет качества задаёт внутреннее разрешение рендера как долю от выходного и **перемножается** с `SetRenderScale()` и режимами SSAA, поэтому оставьте `RenderScale` равным `1.0`, чтобы разрешением управлял только пресет. По умолчанию — `"off"`.
@@ -10930,16 +11023,18 @@ end
 
 ### Рендерер / Графический API
 
-> Узнать активный графический бэкенд или запросить другой. `GetRenderer()` работает на **любой платформе** и возвращает используемый сейчас рендерер. `SetRenderer(name)` записывает выбранный бэкенд в `Config/Engine.json` → `Rendering.RenderBackend` и **применяется при следующем запуске** — бэкенд выбирается один раз при старте, когда создаются окно и графический контекст, поэтому переключение «на лету» не выполняется. На платформах, где бэкенд задан сборкой (Web → WebGPU или WebGL 2.0, выбирается при сборке с автоматическим откатом к WebGL 2.0, если браузер не поддерживает WebGPU; macOS → Metal через ANGLE или MoltenVK — тот, с которым сделана сборка; iOS → Metal через MoltenVK; Android → тот бэкенд, с которым собран APK), значение всё равно сохраняется, но активный рендерер остаётся тем, что предоставляет платформа; бэкенд, не вкомпилированный в сборку, аккуратно откатывается при старте.
+> Узнать активный графический бэкенд или запросить другой. `GetRenderer()` работает на **любой платформе** и возвращает используемый сейчас рендерер. `SetRenderer(name)` записывает выбранный бэкенд в `Config/Engine.json` → `Rendering.RenderBackend` и **применяется при следующем запуске** — бэкенд выбирается один раз при старте, когда создаются окно и графический контекст, поэтому переключение «на лету» не выполняется. На платформах, где бэкенд задан сборкой (Web → WebGPU или WebGL 2.0, выбирается при сборке с автоматическим откатом к WebGL 2.0, если браузер не поддерживает WebGPU; macOS → нативный Metal, Metal через ANGLE или Metal через MoltenVK — тот, с которым сделана сборка; iOS → нативный Metal или Metal через MoltenVK; Android → тот бэкенд, с которым собран APK), значение всё равно сохраняется, но активный рендерер остаётся тем, что предоставляет платформа; бэкенд, не вкомпилированный в сборку, аккуратно откатывается при старте.
 >
-> Имена принимаются без учёта регистра и пробелов: `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal`. Бэкенд Vulkan в рантайме согласует версию **1.4 → 1.3 → 1.2 → 1.1** и откатывается к OpenGL (десктоп) / OpenGL ES (Android), если совместимого устройства нет. На Web `WebGPU` при старте откатывается к `WebGL 2.0`, если браузер не поддерживает WebGPU.
+> Имена принимаются без учёта регистра и пробелов: `Direct3D 12` (а также `D3D12`, `DirectX 12`, `DX12`), `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal` (нативный, а также `MetalNative`), `Metal (ANGLE)` (а также `MetalANGLE`, `ANGLE`) и `Metal (MoltenVK)` (а также `MetalMoltenVK`, `MoltenVK`). Бэкенд Vulkan в рантайме согласует версию **1.4 → 1.3 → 1.2 → 1.1** и откатывается к OpenGL (десктоп) / OpenGL ES (Android), если совместимого устройства нет. `Direct3D 12` доступен только на Windows и требует feature level 11_0; если подходящего адаптера нет, он откатывается по цепочке **Vulkan → OpenGL 4.6 → OpenGL 3.3**, а на других платформах значение сохраняется, но активным остаётся бэкенд самой платформы. `Metal` доступен только на macOS/iOS и требует устройства Metal, способного создать очередь команд; если такого нет, он откатывается по цепочке **Metal (MoltenVK) → Metal (ANGLE)** на macOS и до **Metal (MoltenVK)** на iOS. На Web `WebGPU` при старте откатывается к `WebGL 2.0`, если браузер не поддерживает WebGPU.
 
 ```lua
 -- Узнать активный рендерер (любая платформа)
-local renderer = Settings.GetRenderer()    -- напр. "Vulkan", "OpenGL 4.6", "OpenGL ES 3.2", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
+local renderer = Settings.GetRenderer()    -- напр. "Metal", "Direct3D 12", "Vulkan", "OpenGL 4.6", "OpenGL ES 3.2", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
 
 -- Запросить рендерер; сохраняется в конфиг, применяется при следующем запуске. Возвращает true при успехе.
 local ok = Settings.SetRenderer("Vulkan")
+Settings.SetRenderer("Direct3D 12")         -- только Windows, с откатом к Vulkan/OpenGL
+Settings.SetRenderer("Metal")               -- только macOS/iOS, нативный Metal, с откатом к MoltenVK/ANGLE
 Settings.SetRenderer("OpenGL 4.6")          -- явный OpenGL на десктопе
 ```
 
@@ -11170,6 +11265,15 @@ local brightness = Settings.GetBrightness()
 Settings.SetSaturation(1.0)       -- 0.0 .. 3.0
 local saturation = Settings.GetSaturation()
 
+-- Линза поля зрения
+Settings.SetFOVEnabled(true)
+local fovOn = Settings.IsFOVEnabled()
+Settings.SetFOV(105)              -- 60 .. 120 градусов, 90 = нейтрально
+local fov = Settings.GetFOV()
+Settings.FOV_MIN                  -- 60
+Settings.FOV_MAX                  -- 120
+Settings.FOV_NEUTRAL              -- 90
+
 -- Фильтры дальтонизма
 Settings.COLORBLIND_OFF
 Settings.COLORBLIND_PROTANOPIA
@@ -11197,6 +11301,43 @@ local fp = Settings.GetDyslexiaFontPath()
 шрифт редактора подключается как резерв для недостающих глифов. Если файл не
 найден, в лог выводится одно предупреждение, и обычные шрифты продолжают
 работать.
+
+### Поле зрения (линза спецвозможностей)
+
+`SetFOV` — это **линза**, а не фрустум камеры. Движок рендерит через
+`glm::ortho` и не имеет перспективной проекции нигде, поэтому расширять здесь
+нечего: отсечение, освещение, физика, пересчёт экран↔мир и то, до чего игрок
+может дотянуться, остаются нетронутыми. Слайдер управляет экранным искажением
+линзы — одним полноэкранным проходом в конце цепочки пост-обработки.
+
+`90` — нейтральное значение. Больше `90` — кадр выгибается наружу (широкий
+угол, бочкообразное искажение); меньше `90` — вгибается внутрь (телеобъектив,
+подушкообразное). Значения ограничиваются диапазоном `[60, 120]`. Искажение
+скорректировано по соотношению сторон, поэтому одно и то же значение выглядит
+одинаково на 16:9, 21:9 и портретной мобиле, а окно выборки масштабируется так,
+что кадр остаётся полностью заполненным — без замыленных краёв и чёрных полос
+при любом угле.
+
+Проход сам включает путь пост-обработки, ровно как цветовой проход
+спецвозможностей, поэтому работает на уровне без объёма пост-обработки, во
+вьюпорте редактора, в режиме Play и в собранной игре, на всех рендер-бэкендах.
+Пока `FOVEnabled` выключен (или угол нейтральный), проход полностью
+пропускается и ничего не стоит.
+
+Два момента, которые стоит знать:
+
+- Элементы виджетов композитятся **после** пост-обработки, если они не помечены
+  как *Post Processed*, поэтому HUD по умолчанию не искажается.
+- Это экранное искажение, поэтому координаты мыши и касаний не перепроецируются.
+  На больших углах курсор и выбранная мировая точка расходятся у углов кадра —
+  так же, как у пост-эффектов `HeatHaze` и `Underwater`.
+
+```lua
+Settings.SetAccessibilityEnabled(true)
+Settings.SetFOVEnabled(true)
+Settings.SetFOV(Settings.FOV_NEUTRAL + 20)   -- 110, широкий угол
+Settings.SetFOV(Settings.FOV_NEUTRAL)        -- обратно в нейтраль
+```
 
 ### Синтез речи (TTS)
 
@@ -11309,7 +11450,7 @@ local path = Settings.GetSettingsPath()  -- Абсолютный путь к Gam
 Примечания:
 - Пресет всегда включает VSync.
 - HDR10 включается только на топовом уровне с дисплеем 1440p+ на десктопном
-  бэкенде Vulkan / Metal (MoltenVK) — только они умеют отдавать настоящий
+  бэкенде Vulkan / Direct3D 12 / Metal / Metal (MoltenVK) — только они умеют отдавать настоящий
   HDR10 (ST.2084) swapchain. Если дисплей не поддерживает HDR10, рендер
   тихо остаётся в SDR.
 - На мобильных платформах и в вебе пресеты MSAA/SSAA понижаются до FXAA
@@ -11378,6 +11519,12 @@ VSync** (`SDL_GL_SetSwapInterval(-1)`) и тихо откатывается к �
 VSync, с откатом к `FIFO`), при выключенном VSync предпочитается `IMMEDIATE`
 вместо `MAILBOX` ради минимальной задержки. Переключение режима автоматически
 пересоздаёт свапчейн.
+
+Direct3D 12 работает так же: цикл кадра ждёт самый свежий из всех фенсов кадров
+в полёте, а не только фенс начинаемого кадра, а презентация идёт с интервалом
+синхронизации 1 при включённом VSync либо с интервалом 0 и флагом
+`DXGI_PRESENT_ALLOW_TEARING` (если адаптер и дисплей разрешают tearing) при
+выключенном.
 
 В веб-сборках (WebGL2 / WebGPU) темпом кадров управляет браузер и блокирующие
 ожидания запрещены, поэтому там эта настройка не имеет эффекта.
@@ -13358,9 +13505,13 @@ local path = GetAdditionalTilesetPath(0)
 
 -- Кодирование/декодирование тайлов для мультитайлсетов
 local encoded = EncodeTile(1, 5)        -- tilesetIndex=1, tileId=5
-local decoded = DecodeTile(encoded)     -- → {tilesetIndex, tileId}
+local rotated = EncodeTile(1, 5, 1)     -- + шаг поворота 1 (90° по часовой)
+local rotated = EncodeTile(1, 5, 1, 0)  -- instance 0 (определяет 4 или 6 шагов)
+local decoded = DecodeTile(encoded)     -- → {tilesetIndex, tileId, rotation}
 local isEncoded = IsEncodedTile(value)  -- true/false
 ```
+
+> Тайлмап может ссылаться максимум на **128 тайлсэтов** (1 основной + 127 дополнительных).
 
 ### Пути тайлсетов и управление в рантайме
 
@@ -13469,7 +13620,13 @@ StampPattern(10, 10, room, 0, 0, false)  -- писать -1 тоже (очист
 RotateRect(x, y, w, h, 1)
 RotateRect(x, y, 8, 8, -1, 0, 0)
 
--- Зеркальное отражение прямоугольника на месте
+-- Необязательный 8-й аргумент дополнительно проворачивает каждый отдельный тайл, чтобы
+-- область повернулась целиком (по умолчанию false — ячейки только переставляются,
+-- ориентация тайлов не трогается). На гексах игнорируется: шага в 90° там нет.
+RotateRect(x, y, 8, 8, 1, 0, 0, true)
+
+-- Зеркальное отражение прямоугольника на месте. Поворот тайлов не трогается
+-- (зеркального состояния у тайла нет — только поворот).
 FlipRect(x, y, w, h, "x")  -- по горизонтали (лево ↔ право)
 FlipRect(x, y, w, h, "y")  -- по вертикали (верх ↔ низ)
 ```
@@ -13498,16 +13655,20 @@ SetTileAt(x, y, autoTile[mask])
 
 ### Итерация и поиск
 
+> Ошибка внутри колбэка `IterateLayer` / `IterateNonEmpty` останавливает обход и попадает в лог;
+> остальной скрипт продолжает работать.
+
 ```lua
--- Обход каждой ячейки (включая пустые) — координаты в Lua-Y
-IterateLayer(function(x, y, tileId)
-    if tileId == 5 then SetTileAt(x, y, 7) end
+-- Обход каждой ячейки (включая пустые) — координаты в Lua-Y.
+-- tileId — «сырое» значение (вместе с битами поворота); поворот приходит отдельным аргументом.
+IterateLayer(function(x, y, tileId, rotation)
+    if StripTileRotation(tileId) == 5 then SetTileAt(x, y, 7) end
 end)
 IterateLayer(callback, layerIdx, instanceIdx)
 
 -- Обход только непустых ячеек (учитывает chunking: пропускает пустые чанки → очень быстро на разреженных картах)
-IterateNonEmpty(function(x, y, tileId)
-    print(x, y, tileId)
+IterateNonEmpty(function(x, y, tileId, rotation)
+    print(x, y, tileId, rotation)
 end, layerIdx, instanceIdx)
 
 -- Подсчёт ячеек с конкретным tileId. layerIdx опущен/-1 → подсчёт по всем слоям.
@@ -13515,10 +13676,74 @@ local n = CountTiles(1)
 local n = CountTiles(1, 0)        -- только слой 0
 local n = CountTiles(1, 0, 0)     -- слой 0, инстанс 0
 
--- Поиск всех ячеек с указанным tileId (возвращает массив {x, y} в Lua-Y)
+-- Поиск всех ячеек с указанным tileId (возвращает массив {x, y, rotation} в Lua-Y)
 local cells = FindTile(1)
-for _, c in ipairs(cells) do print(c.x, c.y) end
+for _, c in ipairs(cells) do print(c.x, c.y, c.rotation) end
 ```
+
+### Поворот тайлов
+
+Каждый поставленный тайл хранит **шаг поворота** прямо внутри своего значения в сетке,
+поэтому одной графикой тайла можно закрыть все четыре угла (или все шесть ориентаций
+на гексах) вместо того, чтобы рисовать отдельный тайл под каждое направление. Поворот
+применяется ко **всему**, что есть у тайла: спрайт (или кадр флипбука), физический
+коллайдер, источник 2D-тени, отпечаток в нав-сетке и осколки при разрушении
+поворачиваются вместе с ним.
+
+* **Ортогональные / изометрические** карты используют **4 шага** по 90°.
+* **Гексагональные** карты используют **6 шагов** по 60°.
+* Шаг `0` — неповёрнутый тайл; положительные шаги поворачивают **по часовой стрелке**,
+  по конвенции движка (`X+` вправо, `Y+` вверх, поворот по часовой — положительный):
+  шаг `1` на ортогональной карте — это ровно `Transform.Rotation += 90` для одного тайла.
+* Коллайдеры поворачиваются внутри собственного единичного квадрата тайла (того самого,
+  который показывает редактор коллайдеров тайлсэта), поэтому коллайдер, обведённый по
+  графике, остаётся приклеенным к графике. Тайл с обычным коллайдером на всю клетку
+  (или с отпечатком ячейки на изометрии/гексах) поворот не меняет — такие формы
+  симметричны относительно поворота.
+
+В редакторе тайлмапа: **Q** поворачивает кисть против часовой стрелки, **E** — по часовой,
+а **Ctrl+Q / Ctrl+E** поворачивают уже стоящий под курсором тайл.
+
+```lua
+-- Сколько шагов доступно на этой карте: 4 (орто/изометрия) или 6 (гексы)
+local steps = GetTileRotationStepCount()
+local steps = GetTileRotationStepCount(0)          -- instance 0
+
+-- Перевести число шагов в градусы для активной проекции
+local deg = GetTileRotationDegrees(1)              -- 90 на орто, 60 на гексах
+
+-- Поворот тайла по координатам сетки
+local rot = GetTileRotation(tileX, tileY)          -- 0 .. steps-1
+local rot = GetTileRotation(tileX, tileY, 0, 0)    -- слой 0, instance 0
+
+-- Задать абсолютный поворот (коллайдер тайла пересобирается)
+SetTileRotation(tileX, tileY, 2)
+SetTileRotation(tileX, tileY, 2, 0, 0)             -- слой 0, instance 0
+
+-- Повернуть на дельту, возвращает получившийся шаг (коллайдер пересобирается)
+local newRot = RotateTile(tileX, tileY, 1)         -- на шаг по часовой (E)
+local newRot = RotateTile(tileX, tileY, -1)        -- на шаг против часовой (Q)
+
+-- Повернуть все непустые тайлы в прямоугольнике, возвращает число изменённых
+local n = RotateRegionTiles(x, y, w, h, 1)         -- на шаг по часовой
+local n = RotateRegionTiles(x, y, w, h, -1, 0, 0)  -- против часовой, слой 0, instance 0
+
+-- Чистые хелперы над «сырыми» значениями тайлов (без доступа к карте)
+local r  = GetTileValueRotation(value)             -- поворот, записанный в значении
+local id = StripTileRotation(value)                -- значение без битов поворота
+local v  = SetTileValueRotation(value, 3)          -- абсолютный поворот значения
+local v  = RotateTileValue(value, 1)               -- относительный поворот значения
+```
+
+> **Round-trip безопасен:** `GetTileAt` / `GetTileGrid` возвращают полное значение тайла
+> вместе с поворотом, поэтому если подать это значение обратно в `SetTileAt`,
+> `SetTileGrid`, `StampPattern`, `CopyRect`, `BlitFromArray` или в буфер обмена — поворот
+> сохранится. Если сравниваете значения тайлов вручную, используйте
+> `StripTileRotation(value)`, чтобы сравнивать «личность» тайла независимо от ориентации.
+>
+> `CountTiles`, `FindTile`, `FloodFill` и `GetNeighborMask4/8` уже сравнивают по личности
+> тайла (поворот игнорируется) — передайте в `CountTiles` / `FindTile` значение, в котором
+> биты поворота выставлены, если нужно точное совпадение по ориентации.
 
 ### Коллайдеры тайлов
 
@@ -15142,6 +15367,22 @@ Network.StopMasterServer()
 > Обнаруженные серверы исчезают автоматически через несколько секунд после остановки анонса,
 > поэтому список в браузере остаётся актуальным без ручной очистки.
 
+> **Android 17 (API 37) и разрешение на локальную сеть.** В сборке с **Target SDK 37 и выше**
+> Android закрывает все LAN-сокеты, пока не выдано `ACCESS_LOCAL_NETWORK`: бродкаст-маяк,
+> сканирование и `Network.Connect` на адрес в локальной сети падают, а интернет-серверы и
+> loopback продолжают работать. Включите **Локальная сеть (LAN)** в Build Game → Android
+> (CLI: `--enable-local-network`), чтобы разрешение попало в манифест, и запросите его перед
+> началом поиска:
+>
+> ```lua
+> if not Permissions.Has(Permissions.ACCESS_LOCAL_NETWORK) then
+>     Permissions.Request(Permissions.ACCESS_LOCAL_NETWORK)
+> end
+> ```
+>
+> На Android 16 и старше, а также в сборках с target API 36 и ниже `Permissions.Has()` уже
+> возвращает `true`, поэтому один и тот же код корректен везде.
+
 ### NetworkProfiler — сетевой профилировщик рантайма (только Debug)
 
 `NetworkProfiler` — глобальная Lua-таблица, регистрируемая движком для анализа реального сетевого трафика. Движок инструментирует все пути отправки/приёма (ENet на десктопе, WebSocket на Web) и агрегирует статистику по типам сообщений со сглаженными (EWMA) скоростями и кольцевой историей на 120 секунд.
@@ -16579,6 +16820,12 @@ local name = Coalesce(customName, defaultName, "Unknown")
 > **Тип:** Глобальные функции (namespace `String`)
 >
 > Расширенная библиотека строк (из `DataUtilsLua`). Включает всё, что есть в `Str.*`, плюс дополнительные функции: `TrimLeft`, `TrimRight`, `IsEmpty`, `IsBlank`, `ReplaceFirst`, `Reverse`, `Find`, `Count`, `CharAt`, `ToNumber`, `Byte`, `Char`, `Join`. Для лёгкого варианта см. [`Str.*` в секции 1](#str--строковые-утилиты).
+>
+> ⚠️ **Байты против символов.** `Length`, `Sub`, `CharAt`, `Reverse`, `PadLeft`, `PadRight`,
+> `Upper` и `Lower` работают с **байтами** и безопасны только для латиницы. На русском,
+> украинском, арабском, иврите, хинди, японском и китайском они посчитают неверно и могут
+> разрезать символ пополам. Для любого текста, который видит игрок, используйте функции
+> `String.Utf8*` ниже (или стандартную библиотеку `utf8`).
 
 ```lua
 -- Разделить строку
@@ -16630,6 +16877,41 @@ local ch = String.Char(65)          -- → "A"
 -- Объединение массива в строку
 String.Join({"a", "b", "c"}, ", ")  -- → "a, b, c"
 ```
+
+#### UTF-8-варианты
+
+То же самое, что функции выше, но считают **символы (кодпоинты)**, а не байты — используйте
+их для любого текста, который видит игрок.
+
+```lua
+local text = "Привет"
+
+String.Utf8Length(text)          -- → 6   (String.Length даст 12)
+String.Utf8Sub(text, 1, 3)       -- → "При"
+String.Utf8Sub(text, -3)         -- → "вет"  (отрицательные индексы — с конца)
+String.Utf8CharAt(text, 2)       -- → "р"
+String.Utf8Reverse(text)         -- → "тевирП"
+String.Utf8IsValid(text)         -- → true
+
+-- Обрезать имя под поле интерфейса; суффикс по умолчанию — "..."
+String.Utf8Truncate("Длинное имя игрока", 10)        -- → "Длинное..."
+String.Utf8Truncate("Длинное имя игрока", 10, "…")   -- → "Длинное и…"
+
+-- Кодпоинты туда и обратно
+local points = String.Utf8Codepoints("ok")       -- → { 111, 107 }
+local back = String.Utf8FromCodepoints(points)   -- → "ok"
+```
+
+| Функция | Возвращает |
+| ------- | ---------- |
+| `String.Utf8Length(s)` | Количество символов. |
+| `String.Utf8Sub(s, from [, to])` | Подстроку по индексам символов, с 1; отрицательные индексы отсчитываются с конца; `to` по умолчанию `-1`. |
+| `String.Utf8CharAt(s, index)` | Один символ по индексу с 1 (`""`, если вне диапазона). |
+| `String.Utf8Reverse(s)` | Строку, развёрнутую по символам. |
+| `String.Utf8Truncate(s, maxChars [, suffix])` | `s`, укороченную до `maxChars` символов **вместе** с суффиксом (по умолчанию `"..."`); если строка и так помещается, возвращает её без изменений. |
+| `String.Utf8IsValid(s)` | `false`, если байты не являются корректным UTF-8. |
+| `String.Utf8Codepoints(s)` | Массив номеров кодпоинтов. |
+| `String.Utf8FromCodepoints(t)` | Собирает строку из массива кодпоинтов. |
 
 ### Flow Control — Управление потоком выполнения
 
@@ -20611,6 +20893,7 @@ end
 | `Permissions.BLUETOOTH_SCAN` | `"android.permission.BLUETOOTH_SCAN"` |
 | `Permissions.BLUETOOTH_ADVERTISE` | `"android.permission.BLUETOOTH_ADVERTISE"` |
 | `Permissions.NEARBY_WIFI_DEVICES` | `"android.permission.NEARBY_WIFI_DEVICES"` |
+| `Permissions.ACCESS_LOCAL_NETWORK` | `"android.permission.ACCESS_LOCAL_NETWORK"` |
 
 #### Контакты и аккаунты
 
@@ -20751,9 +21034,9 @@ end
 
 > Вы также можете передать любую строку разрешения Android напрямую: `Permissions.Request("android.permission.VIBRATE")`
 
-> **Normal vs Dangerous vs Special разрешения:** «normal»-разрешения (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `VIBRATE`, `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `FOREGROUND_SERVICE*`, `USE_EXACT_ALARM`, `RUN_USER_INITIATED_JOBS`, `RECEIVE_BOOT_COMPLETED`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `EXPAND_STATUS_BAR`, `SET_WALLPAPER`, `SET_WALLPAPER_HINTS`, `KILL_BACKGROUND_PROCESSES`, `REORDER_TASKS`, `USE_FULL_SCREEN_INTENT`, `ACCESS_LOCATION_EXTRA_COMMANDS`, `RECEIVE_WAP_PUSH`, `AD_ID`, `QUERY_ALL_PACKAGES`, `DETECT_SCREEN_CAPTURE`, `DETECT_SCREEN_RECORDING`) выдаются автоматически при установке — `Permissions.Has()` всегда возвращает `true`, а `Permissions.Request()` ничего не делает. «Dangerous»-разрешения (камера, микрофон, местоположение, контакты, календарь, body-сенсоры, телефон, SMS, современное хранилище медиа, `BLUETOOTH_CONNECT/SCAN/ADVERTISE`, `NEARBY_WIFI_DEVICES`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`, `ACCESS_MEDIA_LOCATION`) требуют разрешения от пользователя через `Permissions.Request()`. «Special»-разрешения (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`, `WRITE_SETTINGS`, `REQUEST_INSTALL_PACKAGES`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `ACCESS_NOTIFICATION_POLICY`, `ACCESS_BACKGROUND_LOCATION`) требуют перехода пользователя в системные настройки — стандартным диалогом разрешения их не выдать; используйте парные геттеры из раздела **53.9** (или просто вызывайте `Permissions.Has()` / `Permissions.Request()` с константой — они прозрачно понимают «special»-разрешения).
+> **Normal vs Dangerous vs Special разрешения:** «normal»-разрешения (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `VIBRATE`, `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `FOREGROUND_SERVICE*`, `USE_EXACT_ALARM`, `RUN_USER_INITIATED_JOBS`, `RECEIVE_BOOT_COMPLETED`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `EXPAND_STATUS_BAR`, `SET_WALLPAPER`, `SET_WALLPAPER_HINTS`, `KILL_BACKGROUND_PROCESSES`, `REORDER_TASKS`, `USE_FULL_SCREEN_INTENT`, `ACCESS_LOCATION_EXTRA_COMMANDS`, `RECEIVE_WAP_PUSH`, `AD_ID`, `QUERY_ALL_PACKAGES`, `DETECT_SCREEN_CAPTURE`, `DETECT_SCREEN_RECORDING`) выдаются автоматически при установке — `Permissions.Has()` всегда возвращает `true`, а `Permissions.Request()` ничего не делает. «Dangerous»-разрешения (камера, микрофон, местоположение, контакты, календарь, body-сенсоры, телефон, SMS, современное хранилище медиа, `BLUETOOTH_CONNECT/SCAN/ADVERTISE`, `NEARBY_WIFI_DEVICES`, `ACCESS_LOCAL_NETWORK`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`, `ACCESS_MEDIA_LOCATION`) требуют разрешения от пользователя через `Permissions.Request()`. «Special»-разрешения (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`, `WRITE_SETTINGS`, `REQUEST_INSTALL_PACKAGES`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `ACCESS_NOTIFICATION_POLICY`, `ACCESS_BACKGROUND_LOCATION`) требуют перехода пользователя в системные настройки — стандартным диалогом разрешения их не выдать; используйте парные геттеры из раздела **53.9** (или просто вызывайте `Permissions.Has()` / `Permissions.Request()` с константой — они прозрачно понимают «special»-разрешения).
 
-> **Заметки по версиям API:** `BLUETOOTH_CONNECT/SCAN/ADVERTISE` действуют на Android 12+ (API 31+); на старых версиях автоматически используются `BLUETOOTH` и `BLUETOOTH_ADMIN` (объявлены в манифесте с `maxSdkVersion="30"`). `POST_NOTIFICATIONS` и `READ_MEDIA_*` действуют на Android 13+ (API 33+). `NEARBY_WIFI_DEVICES` действует на Android 13+. `READ_MEDIA_VISUAL_USER_SELECTED` действует на Android 14+ (API 34+). `BODY_SENSORS_BACKGROUND` действует на Android 13+. `USE_EXACT_ALARM` действует на Android 13+ (API 33+) — для приложений-будильников и календарей; для остальных используйте `SCHEDULE_EXACT_ALARM`. Гранулярные `FOREGROUND_SERVICE_*` обязательны на Android 14+ (API 34+). `RUN_USER_INITIATED_JOBS`, `DETECT_SCREEN_CAPTURE` и `DETECT_SCREEN_RECORDING` действуют на Android 14+ / 15+. `USE_FULL_SCREEN_INTENT` автоматически выдаётся только приложениям категорий «вызов» / «будильник» на Android 14+; остальным пользователь должен включить его вручную в per-app экране разрешений. На более низких SDK константы существуют, но `Permissions.Has()` либо вернёт `true` автоматически (разрешение неявное), либо `false` (фича недоступна на этой версии платформы).
+> **Заметки по версиям API:** `BLUETOOTH_CONNECT/SCAN/ADVERTISE` действуют на Android 12+ (API 31+); на старых версиях автоматически используются `BLUETOOTH` и `BLUETOOTH_ADMIN` (объявлены в манифесте с `maxSdkVersion="30"`). `POST_NOTIFICATIONS` и `READ_MEDIA_*` действуют на Android 13+ (API 33+). `NEARBY_WIFI_DEVICES` действует на Android 13+. `ACCESS_LOCAL_NETWORK` действует на Android 17+ (API 37+) и только для сборок с **Target SDK 37 и выше** — именно им Android закрывает доступ к адресам локальной сети, пока разрешение не выдано, поэтому включите **Локальная сеть (LAN)** в Build Game → Android (или передайте `--enable-local-network`), чтобы оно попало в манифест. На более старых версиях и в сборках с target 36 и ниже `Permissions.Has()` возвращает `true`, потому что там доступ к локальной сети неявный. `READ_MEDIA_VISUAL_USER_SELECTED` действует на Android 14+ (API 34+). `BODY_SENSORS_BACKGROUND` действует на Android 13+. `USE_EXACT_ALARM` действует на Android 13+ (API 33+) — для приложений-будильников и календарей; для остальных используйте `SCHEDULE_EXACT_ALARM`. Гранулярные `FOREGROUND_SERVICE_*` обязательны на Android 14+ (API 34+). `RUN_USER_INITIATED_JOBS`, `DETECT_SCREEN_CAPTURE` и `DETECT_SCREEN_RECORDING` действуют на Android 14+ / 15+. `USE_FULL_SCREEN_INTENT` автоматически выдаётся только приложениям категорий «вызов» / «будильник» на Android 14+; остальным пользователь должен включить его вручную в per-app экране разрешений. На более низких SDK константы существуют, но `Permissions.Has()` либо вернёт `true` автоматически (разрешение неявное), либо `false` (фича недоступна на этой версии платформы).
 
 ---
 
@@ -23069,6 +23352,212 @@ function OnUpdate(dt)
     Draw.SetSpace("screen")
     Draw.SetBlend("opaque")
     Draw.QuadsPacked(WALL_TEX, data)
+end
+```
+
+---
+
+## 62. Decal — Дырки от пуль, брызги крови, следы копоти
+
+> **Тип:** Глобальный (`Decal.*`) + привязанный к сущности (доступ к `DecalComponent`).
+>
+> Декали — это следы на поверхностях, которые игра оставляет во время игры: дырки от пуль, брызги крови,
+> копоть, отпечатки ног, трещины. Описываются ассетом `.ice_decal`, спавнятся из скрипта, а всем остальным
+> занимается движок — временем жизни, появлением и затуханием, сортировкой, бюджетом и пулом.
+
+### Ассет `.ice_decal`
+
+Создаётся в Content Browser (**Материалы → Создать декаль**) либо правым кликом по текстуре — **Создать декаль**.
+Двойной клик открывает редактор декалей. Ассет хранит:
+
+| Группа | За что отвечает |
+| ------ | --------------- |
+| Варианты текстур | Одна или несколько текстур с весами. При каждом спавне выбирается случайная — именно это делает десять дырок от пуль непохожими друг на друга. |
+| Материал | Необязательный материал с **Доменом = Декаль** (или его экземпляр материала). Заменяет обычную отрисовку текстурой. |
+| Внешний вид | Размер, разброс размера, опорная точка, оттенок, разброс оттенка, режим освещения, режим смешивания, отсечение по альфе. |
+| Поворот | Фиксированный, случайный или по нормали поверхности попадания; случайное отражение по горизонтали и вертикали. |
+| Время жизни | Время жизни, появление, затухание и лимит экземпляров на ассет. |
+| Размещение | Смещение по Z, порядок сортировки, смещение по нормали, следование за поверхностью, обрезка по поверхности. |
+
+### Спавн
+
+```lua
+-- Простейший вариант: поставить декаль в мировых координатах
+local h = Decal.Spawn("Content/Decals/DC_BulletHole.ice_decal", x, y)
+
+-- Из результата трассировки, с выравниванием по нормали поверхности
+local hit = LineTrace(fromX, fromY, toX, toY, true)
+if hit.hit then
+    Decal.SpawnOnHit("Content/Decals/DC_BulletHole.ice_decal",
+                     hit.x, hit.y, hit.normalX, hit.normalY)
+end
+
+-- С привязкой к сущности: декаль двигается и вращается вместе с ней
+Decal.SpawnAttached("Content/Decals/DC_Blood.ice_decal", enemyId, hit.x, hit.y)
+
+-- С привязкой И обрезкой по границам спрайта, чтобы кровь не свисала за края персонажа
+Decal.SpawnOnSprite("Content/Decals/DC_Blood.ice_decal", enemyId, 0, hit.x, hit.y)
+```
+
+Все функции спавна возвращают **хэндл** (число). `0` означает, что спавн не удался: ассет не найден,
+бюджет исчерпан, либо у декали нет ни текстуры, ни материала.
+
+### Параметры спавна
+
+Последним аргументом каждая функция спавна принимает необязательную таблицу. Всё, что не указано,
+берётся из ассета.
+
+```lua
+Decal.Spawn("Content/Decals/DC_Scorch.ice_decal", x, y, {
+    rotation   = 45,        -- явный угол в градусах, перекрывает режим поворота из ассета
+    normalX    = 0,         -- нормаль поверхности, нужна режимам «по нормали»
+    normalY    = 1,
+    sizeX      = 64,        -- явный размер в пикселях (оба значения должны быть > 0)
+    sizeY      = 64,
+    scale      = 1.5,       -- множитель поверх итогового размера
+    r = 1, g = 0.2, b = 0.2, a = 1,   -- переопределение оттенка
+    lifetime   = 8.0,       -- секунды, 0 = навсегда
+    fadeIn     = 0.1,
+    fadeOut    = 1.5,
+    z          = 2.0,       -- глубина поверхности; Z-смещение из ассета добавляется сверху
+    sortOrder  = 10,        -- порядок отрисовки среди декалей
+    variant    = 2,         -- принудительный вариант текстуры вместо случайного
+    seed       = 1337,      -- фиксированный сид: одинаковые вариант, размер, поворот и оттенок
+    clipX      = wallX,     -- прямоугольник обрезки в мировых координатах
+    clipY      = wallY,
+    clipHalfW  = 128,
+    clipHalfH  = 16,
+    clipRotation = 0,
+    clip       = true,      -- false — передать прямоугольник, но оставить обрезку выключенной
+})
+```
+
+Обрезка работает только если в ассете включена **Обрезка по поверхности**. `Decal.SpawnOnSprite`
+заполняет прямоугольник обрезки сам, по границам спрайта.
+
+### Управление созданными декалями
+
+```lua
+Decal.IsAlive(h)                  -- false, когда декаль исчезла или была удалена
+Decal.Destroy(h)                  -- удалить немедленно
+Decal.FadeOut(h, 0.5)             -- затухание за 0.5 с, затем удаление
+
+Decal.Clear()                     -- удалить все рантайм-декали
+Decal.ClearByAsset("Content/Decals/DC_Blood.ice_decal")
+Decal.ClearInRadius(x, y, 200)    -- возвращает, сколько было удалено
+Decal.ClearAttachedTo(entityId)
+
+Decal.Preload("Content/Decals/DC_BulletHole.ice_decal")   -- прогрузить текстуры до первого выстрела
+```
+
+### Чтение и изменение живой декали
+
+```lua
+Decal.SetPosition(h, x, y)        local p = Decal.GetPosition(h)   -- {x, y}
+Decal.SetZ(h, 3)                  local z = Decal.GetZ(h)
+Decal.SetRotation(h, 90)          local r = Decal.GetRotation(h)
+Decal.SetSize(h, 48, 48)          local s = Decal.GetSize(h)       -- {x, y}
+Decal.SetColor(h, 1, 0, 0, 0.8)   local c = Decal.GetColor(h)      -- {r, g, b, a}
+Decal.SetVisible(h, false)        local v = Decal.IsVisible(h)
+Decal.SetSortOrder(h, 5)          local o = Decal.GetSortOrder(h)
+Decal.SetLifetime(h, 20)          local l = Decal.GetLifetime(h)
+
+local age  = Decal.GetAge(h)      -- секунд с момента спавна
+local fade = Decal.GetFade(h)     -- текущий коэффициент затухания, 0..1
+```
+
+Для привязанной декали `SetPosition` и `SetRotation` работают в пространстве сущности, за которой она следует.
+
+### Бюджет и глобальные переключатели
+
+```lua
+Decal.SetBudget(512)     -- максимум живых декалей; при превышении самые старые начинают гаснуть
+local budget = Decal.GetBudget()
+local count  = Decal.GetCount()
+
+Decal.SetEnabled(false)  -- перестать принимать новые спавны, например на минимальном пресете качества
+local on = Decal.IsEnabled()
+```
+
+Бюджет — мягкий лимит: при его превышении самые старые декали начинают затухать, а не исчезают рывком.
+Жёсткий предел в две величины бюджета удаляет их сразу, поэтому неудачный цикл спавна не сможет расти
+бесконечно. Лимит **Максимум экземпляров** в ассете работает так же, но в рамках одного `.ice_decal`.
+
+### DecalComponent (привязан к сущности)
+
+Компонент `Декаль` хранит декали, расставленные вручную в редакторе классов, — граффити, трещины, пятна,
+которые являются частью уровня. Они рисуются и в редакторе, и в игре, и не имеют времени жизни.
+
+```lua
+local n = GetDecalCount()
+local i = FindDecalIndex("Graffiti")
+
+SetDecalAsset("Content/Decals/DC_Crack.ice_decal", i)
+local path = GetDecalAsset(i)
+
+SetDecalPosition(x, y, z, i)      local p = GetDecalPosition(i)    -- {x, y, z}
+SetDecalRotation(30, i)           local r = GetDecalRotation(i)
+SetDecalScale(2, 2, i)            local s = GetDecalScale(i)
+SetDecalSize(128, 64, i)          local sz = GetDecalSize(i)       -- переопределение размера, 0 = из ассета
+SetDecalColor(1, 1, 1, 0.5, i)    local c = GetDecalColor(i)
+SetDecalVisible(true, i)          local v = IsDecalVisible(i)
+SetDecalFlip(true, false, i)
+SetDecalSortOrder(3, i)           local o = GetDecalSortOrder(i)
+SetDecalVariant(1, i)
+local name = GetDecalName(i)
+
+-- Создать рантайм-декаль в позиции этой сущности
+local h = SpawnDecalAtSelf("Content/Decals/DC_Blood.ice_decal", { lifetime = 6 })
+```
+
+Аргумент индекса везде необязателен и по умолчанию равен `0`.
+`HasDecal(entityId)`, `AddComponent("Decal")` и `AddEntityComponent(entityId, "Decal")` работают через
+обычный API компонентов (раздел 31).
+
+### Материалы декалей
+
+Поставьте материалу **Домен = Декаль** в редакторе материалов — и его можно назначить ассету декали.
+Такой материал видит текстуру декали как свою текстуру сущности, поэтому весь граф нодов — семплы текстур,
+параметры, функции материалов, коллекции параметров — работает точно так же, как в материале поверхности.
+
+Нод **Данные декали** отдаёт состояние отрисовываемой декали:
+
+| Выход | Значение |
+| ----- | -------- |
+| Fade | Текущий коэффициент затухания 0..1 от появления, затухания и бюджета |
+| Normalized Age | Возраст, делённый на время жизни, 0..1 (0 при бесконечном времени жизни) |
+| Age | Секунд с момента спавна |
+| Lifetime | Время жизни декали в секундах |
+| Random | Случайное значение 0..1 для этой декали, постоянное всю её жизнь |
+
+Заведите `Random` на сдвиг оттенка — и каждое пятно будет чуть отличаться; заведите `Normalized Age`
+в лерп между свежей и подсохшей кровью — и пятно будет темнеть со временем.
+
+### Полный пример — реакция на попадание в шутере
+
+```lua
+local DECAL_HOLE  = "Content/Decals/DC_BulletHole.ice_decal"
+local DECAL_BLOOD = "Content/Decals/DC_Blood.ice_decal"
+
+function OnStart()
+    Decal.Preload(DECAL_HOLE)
+    Decal.Preload(DECAL_BLOOD)
+    Decal.SetBudget(384)
+end
+
+function Shoot(fromX, fromY, dirX, dirY)
+    local hit = LineTrace(fromX, fromY, fromX + dirX * 2000, fromY + dirY * 2000, true)
+    if not hit.hit then return end
+
+    if hit.tag == "Enemy" and hit.entityId then
+        Decal.SpawnOnSprite(DECAL_BLOOD, hit.entityId, 0, hit.x, hit.y, {
+            lifetime = 12, fadeOut = 3, scale = 1.2
+        })
+    else
+        Decal.SpawnOnHit(DECAL_HOLE, hit.x, hit.y, hit.normalX, hit.normalY, {
+            lifetime = 30, fadeOut = 2
+        })
+    end
 end
 ```
 

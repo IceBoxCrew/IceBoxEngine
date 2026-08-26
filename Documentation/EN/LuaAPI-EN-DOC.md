@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -38,7 +38,7 @@
    - [Modules and require](#modules-and-require)
    - [Iterators and generic for](#iterators-and-generic-for)
    - [Garbage collector](#garbage-collector)
-   - [Standard libraries coroutine/io/os (if available)](#standard-libraries-coroutineioos-if-available)
+   - [Standard libraries](#standard-libraries)
 3. [Script lifecycle](#3-script-lifecycle)
 4. [Transform — Position, Scale, Rotation](#4-transform--position-scale-rotation)
 5. [Physics — Physics (Box2D)](#5-physics--physics-box2d)
@@ -109,6 +109,7 @@
 59. [Matchmaking — Player Matchmaking](#59-matchmaking--player-matchmaking)
 60. [Console — Developer Console & Command System](#60-console--developer-console--command-system)
 61. [Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)](#61-draw--immediate-mode-rendering-draw--texture--rendertarget)
+62. [Decal — Bullet Holes, Blood Splatter, Scorch Marks](#62-decal--bullet-holes-blood-splatter-scorch-marks)
 
 ---
 
@@ -175,6 +176,13 @@ The chosen mode is stored as `"ScriptingMode": "Code"` or `"Visual"` in the proj
 | **Entity functions** | Only inside the script of a specific entity | `SetPosition(x, y, z)`, `GetVelocity()` |
 
 > **Important:** Entity-bound functions work with “self” — the object the script is attached to. For example, `SetPosition(100, 200, 0)` moves the entity whose script contains that line.
+
+> **Under the hood:** entity functions are attached to a script's environment **on first use**, one
+> API group at a time, so an entity only pays for the groups it actually touches. Normal code never
+> notices — `SetPosition(...)`, `_ENV.SetPosition` and `Interfaces.Call(id, "SetPosition", …)` all
+> behave exactly as before. The difference is visible only when you inspect the environment itself:
+> `pairs(_ENV)` and `rawget(_ENV, "SetPosition")` see an entity function only after the script has
+> used it.
 
 ### Class inheritance
 
@@ -2275,8 +2283,13 @@ local empty = next(t) == nil
 
 Lua supports splitting code into modules. A module is a regular `.lua` file that returns a table.
 
+In the editor a module is a **first-class asset**: create it with the Content Browser's
+**Other ▸ Create Lua Script (.lua)** and double-click it to open the **Lua Script Editor**
+(see [Assets](Assets-EN-DOC.md#420-script-lua--text-txt)). New scripts already contain the
+module skeleton below.
+
 ```lua
--- content/Utils/Math.lua
+-- Content/Utils/Math.lua
 local M = {}
 
 function M.Clamp(v, min, max)
@@ -2287,12 +2300,32 @@ return M
 ```
 
 ```lua
--- In another file
-local Math = require("content.Utils.Math")
+-- In another file (class script, level script or widget script)
+local Math = require("Content.Utils.Math")
 local hp = Math.Clamp(150, 0, 100)  -- 100
 ```
 
-> The path in `require` uses dots, not slashes. Availability of `require` depends on the engine build.
+> The path in `require` uses dots, not slashes, and is resolved from the **project root**,
+> so `Content/Utils/Math.lua` becomes `require("Content.Utils.Math")`.
+>
+> Modules are read through the engine's virtual file system, so the same `require` works
+> in the editor, in a build that ships a loose `Content/` folder, in a build packed into
+> `Content.icepak`, and from the APK assets on Android. Moving a module in the Content
+> Browser leaves a redirector behind, and `require` follows it, so the old module path
+> keeps working.
+>
+> `require` is available in **class scripts**, the **level script**, **widget scripts**
+> and **mods**.
+>
+> A module runs **once per Lua state** and its result is cached in `package.loaded`.
+> Class scripts, the level script and mods share one state; **widget scripts run in their
+> own state**, so a module required from both sides gets one instance per state — the code
+> is shared, the data inside the module is not. Use events or level data to pass state
+> between widgets and entities.
+>
+> The editor drops the cached project modules of both states every time you press
+> **Play**, so edits made in the Lua Script Editor take effect on the next run without
+> restarting the editor.
 
 ---
 
@@ -2330,9 +2363,23 @@ collectgarbage("restart")   -- Resume GC
 
 ---
 
-### Standard libraries coroutine/io/os (if available)
+### Standard libraries
 
-In standard Lua there are libraries `coroutine`, `io`, `os`, `package`. In some engine builds they may be disabled.
+IceBox opens exactly these Lua standard libraries, in **both** script states (entity/level/mod
+scripts and widget scripts):
+
+| Library | Available | Notes |
+| ------- | --------- | ----- |
+| `base` | ✅ | `print` is redirected to the engine log; prefer `Print`. |
+| `string` | ✅ | Lua patterns, `string.format`, … |
+| `table` | ✅ | `table.insert`, `table.sort`, … |
+| `math` | ✅ | See also the engine `Math.*` helpers. |
+| `coroutine` | ✅ | See also `StartCoroutine` / `WaitSeconds` below. |
+| `utf8` | ✅ | `utf8.len`, `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.offset`, `utf8.charpattern`. |
+| `package` | ✅ | `require` — see [Modules and require](#modules-and-require). |
+| `os` | ❌ | It also exposes `os.execute` / `os.remove` / `os.exit`. Use the engine date/time API instead: `GetUnixTime`, `GetDateTable`, `FormatDate`. |
+| `io` | ❌ | Use the sandboxed `WriteFile` / `ReadFile` / `PersistentTable` / `SaveGameState` instead — they write only inside the save folder. |
+| `debug` | ❌ | The engine installs its own error handler, so **every runtime error already carries a full stack traceback**; `debug.sethook` would collide with the built-in Lua debugger. |
 
 ```lua
 -- coroutine: basic example
@@ -2347,18 +2394,20 @@ coroutine.resume(co)  -- Step 2
 ```
 
 ```lua
--- os: basic time utilities
-local now = os.time()
-local t = os.date("%Y-%m-%d", now)
+-- utf8: text that is not plain ASCII
+local text = "Привет"
+Print(#text)            -- 12 — bytes
+Print(utf8.len(text))   -- 6  — characters
+
+for position, codepoint in utf8.codes(text) do
+    Print(position, codepoint, utf8.char(codepoint))
+end
 ```
 
 ```lua
--- io: file read (if available)
-local f = io.open("data.txt", "r")
-if f then
-    local text = f:read("*a")
-    f:close()
-end
+-- real date and time (instead of os.time / os.date)
+local now = GetUnixTime()
+local today = FormatDate("%Y-%m-%d", now)
 ```
 
 ---
@@ -4972,7 +5021,7 @@ Interfaces.CallOnAll("OnGamePaused", true)
 
 -- Reflection helpers
 Interfaces.HasFunction(entityId, "TakeDamage")     -- true if entity env has that function
-local fns = Interfaces.ListFunctions(entityId)     -- every function-valued entry on env
+local fns = Interfaces.ListFunctions(entityId)     -- the functions the script itself defines
 
 -- ---------- Cross-entity variables (read/write another entity's script globals) ----------
 -- The variable counterpart to Interfaces.Call: reach a variable that lives in another
@@ -7312,14 +7361,16 @@ SetCollidersBlockShadows(true)
 local cb = GetCollidersBlockShadows()
 ```
 
-### Ray Tracing (Vulkan only)
+### Ray Tracing (Vulkan / Direct3D 12 / Metal only)
 
 ```lua
 -- Real-time 2D ray-traced global illumination (soft indirect light, color
 -- bleeding, ray-traced ambient occlusion). Works ONLY on Vulkan devices with
--- hardware ray tracing support; on any other backend/device the calls are
+-- hardware ray tracing support, on Direct3D 12 adapters with DirectX
+-- Raytracing 1.1, and on Metal devices that report supportsRaytracing
+-- (MSL 2.4 ray queries); on any other backend/device the calls are
 -- remembered but produce no visual effect (the feature behaves as if absent).
-local supported = IsRaytracingSupported()   -- true only on RT-capable Vulkan
+local supported = IsRaytracingSupported()   -- true only on RT-capable Vulkan / D3D12 / Metal
 
 SetRaytracingEnabled(true)
 local on = IsRaytracingEnabled()
@@ -7981,6 +8032,48 @@ local edt = GetEntityDeltaTime(entityId)  -- dt * entityTimeScale
 local fps = GetFPS()
 local frameTime = GetFrameTime()  -- In milliseconds
 ```
+
+### Real date and time
+
+`GetTime` and friends measure **game** time. These functions read the **system clock** — use
+them for daily rewards, "time since the last session", save timestamps and similar features.
+They replace `os.time` / `os.date`, which are not available (see
+[Standard libraries](#standard-libraries)).
+
+```lua
+local now = GetUnixTime()      -- seconds since 1970-01-01 UTC
+local nowMs = GetUnixTimeMs()  -- the same in milliseconds
+
+-- Broken down into fields (local time by default, pass true for UTC)
+local d = GetDateTable()
+Print(d.year, d.month, d.day, d.hour, d.min, d.sec)
+Print(d.wday, d.yday, d.isdst)   -- wday: 1 = Sunday, yday: 1..366
+
+local utc = GetDateTable(now, true)
+
+-- strftime formatting
+FormatDate("%Y-%m-%d %H:%M:%S")        -- → "2026-08-21 22:10:35"
+FormatDate("%d.%m.%Y", savedTimestamp) -- format a stored timestamp
+FormatDate("%H:%M", now, true)         -- UTC
+
+-- Daily reward
+local lastClaim = tonumber(ReadFile("lastClaim.txt") or "0")
+if GetSecondsSince(lastClaim) >= 24 * 60 * 60 then
+    GiveDailyReward()
+    WriteFile("lastClaim.txt", tostring(GetUnixTime()))
+end
+```
+
+| Function | Returns |
+| -------- | ------- |
+| `GetUnixTime()` | Seconds since the Unix epoch (integer). |
+| `GetUnixTimeMs()` | Milliseconds since the Unix epoch (integer). |
+| `GetDateTable([unixTime] [, utc])` | Table `{ year, month, day, hour, min, sec, wday, yday, isdst }`. `month` is 1..12, `wday` is 1..7 starting at Sunday, `yday` is 1..366. Defaults to now, local time. |
+| `FormatDate(format [, unixTime] [, utc])` | `strftime`-formatted string (max 255 characters, `""` on overflow). |
+| `GetSecondsSince(unixTime)` | How many seconds have passed since the given timestamp. |
+
+> The system clock can be changed by the player, so never use it as the only protection for
+> timed rewards in a game that has a server.
 
 ### Timers (simple utilities)
 
@@ -10856,9 +10949,9 @@ Settings.LIGHTING_UNLIT  -- false
 
 ### Upscaling (FSR / NIS)
 
-> Renders the scene at a lower internal resolution and reconstructs it to the output resolution at the very end of the frame, **after** post-processing. **Vulkan only, and only on a compatible GPU** — exactly like ray tracing. On any other backend or an unsupported device the setting is still stored, but it has no effect and the frame falls back to the plain linear filter.
+> Renders the scene at a lower internal resolution and reconstructs it to the output resolution at the very end of the frame, **after** post-processing. **Vulkan, Direct3D 12 and Metal only, and only on a compatible GPU** — exactly like ray tracing. On any other backend or an unsupported device the setting is still stored, but it has no effect and the frame falls back to the plain linear filter.
 >
-> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive spatial upsampling) followed by RCAS (robust contrast-adaptive sharpening). Runs on **any** Vulkan GPU.
+> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive spatial upsampling) followed by RCAS (robust contrast-adaptive sharpening). Runs on **any** Vulkan, Direct3D 12 or Metal GPU.
 > - **`"nis"`** — NVIDIA Image Scaling: structure-tensor directional scaling with an edge-adaptive unsharp mask, in a single pass. Requires an **NVIDIA** GPU.
 >
 > The quality preset sets the internal render resolution as a fraction of the output resolution and **multiplies** with `SetRenderScale()` and the SSAA modes, so leave `RenderScale` at `1.0` to let the preset drive the resolution on its own. Defaults to `"off"`.
@@ -10915,16 +11008,18 @@ end
 
 ### Renderer / Graphics API
 
-> Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS → Metal via ANGLE or MoltenVK, whichever the build was made with; iOS → Metal via MoltenVK; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
+> Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS → native Metal, Metal via ANGLE or Metal via MoltenVK, whichever the build was made with; iOS → native Metal or Metal via MoltenVK; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
 >
-> Accepted names are case- and spacing-insensitive: `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal`. The Vulkan backend negotiates **1.4 → 1.3 → 1.2 → 1.1** at runtime and falls back to OpenGL (desktop) / OpenGL ES (Android) when no compatible device is available. On Web, `WebGPU` falls back to `WebGL 2.0` at startup when the browser does not support WebGPU.
+> Accepted names are case- and spacing-insensitive: `Direct3D 12` (also `D3D12`, `DirectX 12`, `DX12`), `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal` (native, also `MetalNative`), `Metal (ANGLE)` (also `MetalANGLE`, `ANGLE`) and `Metal (MoltenVK)` (also `MetalMoltenVK`, `MoltenVK`). The Vulkan backend negotiates **1.4 → 1.3 → 1.2 → 1.1** at runtime and falls back to OpenGL (desktop) / OpenGL ES (Android) when no compatible device is available. `Direct3D 12` is Windows-only and needs feature level 11_0; when no usable adapter is present it falls back to **Vulkan → OpenGL 4.6 → OpenGL 3.3**, and on non-Windows platforms the value is persisted but the platform's own backend stays active. `Metal` is macOS/iOS-only and needs a Metal device that can create a command queue; when none is present it falls back to **Metal (MoltenVK) → Metal (ANGLE)** on macOS and to **Metal (MoltenVK)** on iOS. On Web, `WebGPU` falls back to `WebGL 2.0` at startup when the browser does not support WebGPU.
 
 ```lua
 -- Read the active renderer (all platforms)
-local renderer = Settings.GetRenderer()    -- e.g. "Vulkan", "OpenGL 4.6", "OpenGL ES 3.2", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
+local renderer = Settings.GetRenderer()    -- e.g. "Metal", "Direct3D 12", "Vulkan", "OpenGL 4.6", "OpenGL ES 3.2", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
 
 -- Request a renderer; persisted to config, applied on next launch. Returns true on success.
 local ok = Settings.SetRenderer("Vulkan")
+Settings.SetRenderer("Direct3D 12")         -- Windows-only, falls back to Vulkan/OpenGL
+Settings.SetRenderer("Metal")               -- macOS/iOS-only native Metal, falls back to MoltenVK/ANGLE
 Settings.SetRenderer("OpenGL 4.6")          -- explicit OpenGL on desktop
 ```
 
@@ -11155,6 +11250,15 @@ local brightness = Settings.GetBrightness()
 Settings.SetSaturation(1.0)       -- 0.0 .. 3.0
 local saturation = Settings.GetSaturation()
 
+-- Field of View lens
+Settings.SetFOVEnabled(true)
+local fovOn = Settings.IsFOVEnabled()
+Settings.SetFOV(105)              -- 60 .. 120 degrees, 90 = neutral
+local fov = Settings.GetFOV()
+Settings.FOV_MIN                  -- 60
+Settings.FOV_MAX                  -- 120
+Settings.FOV_NEUTRAL              -- 90
+
 -- Colorblind filters
 Settings.COLORBLIND_OFF
 Settings.COLORBLIND_PROTANOPIA
@@ -11181,6 +11285,41 @@ fonts, elements without a font, tooltips and dropdowns — and the editor rebuil
 its UI font with the dyslexia font as primary and the regular editor font merged
 in as a glyph fallback. If the file cannot be found, a single warning is logged
 and the regular fonts keep working.
+
+### Field of View (accessibility lens)
+
+`SetFOV` is a **lens**, not a camera frustum. The engine renders through
+`glm::ortho` and has no perspective projection anywhere, so there is no frustum
+angle to widen: culling, lighting, physics, screen-to-world math and what the
+player can reach are all untouched. What the slider drives is a screen-space lens
+warp applied as one full-screen pass at the end of the post-process chain.
+
+`90` is neutral. Above `90` the frame bulges outward (wide angle, barrel
+distortion); below `90` it pinches inward (telephoto, pincushion). Values are
+clamped to `[60, 120]`. The warp is aspect-corrected, so the same value looks the
+same at 16:9, 21:9 and portrait mobile, and the sampling window is scaled so the
+frame stays completely filled — no smeared edges, no black bars, at any angle.
+
+The pass activates the post-process path on its own, exactly like the colour
+accessibility pass, so it applies in a level with no post-process volume, in the
+editor viewport, in Play mode and in the packaged game, on every render backend.
+While `FOVEnabled` is off (or the angle is neutral) the pass is skipped entirely
+and costs nothing.
+
+Two things worth knowing:
+
+- Widget elements are composited **after** post-processing unless they are marked
+  *Post Processed*, so the HUD stays undistorted by default.
+- It is a screen-space warp, so mouse and touch coordinates are not re-projected.
+  At high angles the cursor and the picked world point drift apart near the frame
+  corners — the same behaviour as the `HeatHaze` and `Underwater` post effects.
+
+```lua
+Settings.SetAccessibilityEnabled(true)
+Settings.SetFOVEnabled(true)
+Settings.SetFOV(Settings.FOV_NEUTRAL + 20)   -- 110, wide angle
+Settings.SetFOV(Settings.FOV_NEUTRAL)        -- back to neutral
+```
 
 ### Text-to-Speech (TTS)
 
@@ -11292,8 +11431,8 @@ and the FPS limit:
 Notes:
 - VSync is always enabled by the preset.
 - HDR10 is only enabled on the high-end tier with a 1440p+ display on a
-  desktop Vulkan / Metal (MoltenVK) backend — the only backends that can
-  deliver a real HDR10 (ST.2084) swapchain. If the display turns out not to
+  desktop Vulkan / Direct3D 12 / Metal / Metal (MoltenVK) backend — the only
+  backends that can deliver a real HDR10 (ST.2084) swapchain. If the display turns out not to
   support HDR10, the renderer silently stays in SDR.
 - On mobile and web, MSAA/SSAA presets are downgraded to FXAA (those windows
   are created without multisample buffers) and HDR10 stays off.
@@ -11361,6 +11500,16 @@ follows the setting — with VSync on it prefers `FIFO_RELAXED` (the Vulkan
 equivalent of adaptive VSync, falling back to `FIFO`), with VSync off it
 prefers `IMMEDIATE` over `MAILBOX` for the lowest possible latency.
 Toggling the mode recreates the swapchain automatically.
+
+Direct3D 12 works the same way: the frame loop waits for the newest of all
+in-flight frame fences instead of only the one belonging to the frame being
+started, and presentation uses sync interval 1 with VSync on, or sync
+interval 0 with `DXGI_PRESENT_ALLOW_TEARING` (when the adapter and the
+display allow tearing) with VSync off.
+
+Metal works the same way: the frame pacing semaphore is drained down to a
+single frame in flight, and the `CAMetalLayer` toggles `displaySyncEnabled`
+together with a smaller maximum drawable count so the CPU cannot queue ahead.
 
 In web builds (WebGL2 / WebGPU) the browser drives frame pacing and blocking
 waits are not allowed, so this setting has no effect there.
@@ -13335,9 +13484,13 @@ local path = GetAdditionalTilesetPath(0)
 
 -- Encode/decode tiles for multi-tilesets
 local encoded = EncodeTile(1, 5)        -- tilesetIndex=1, tileId=5
-local decoded = DecodeTile(encoded)     -- → {tilesetIndex, tileId}
+local rotated = EncodeTile(1, 5, 1)     -- + rotation step 1 (90° clockwise)
+local rotated = EncodeTile(1, 5, 1, 0)  -- instance 0 (decides 4 or 6 steps)
+local decoded = DecodeTile(encoded)     -- → {tilesetIndex, tileId, rotation}
 local isEncoded = IsEncodedTile(value)  -- true/false
 ```
+
+> A tilemap can reference up to **128 tilesets** (1 primary + 127 additional).
 
 ### Tileset paths and management (runtime)
 
@@ -13446,7 +13599,13 @@ StampPattern(10, 10, room, 0, 0, false)  -- write -1 too (clear cells)
 RotateRect(x, y, w, h, 1)
 RotateRect(x, y, 8, 8, -1, 0, 0)
 
--- Mirror a rectangular region in place
+-- The optional 8th argument also spins each individual tile so the region rotates as a
+-- whole (default false — cells are only moved, tile orientation is left untouched).
+-- Ignored on hexagonal maps, where 90° steps do not exist.
+RotateRect(x, y, 8, 8, 1, 0, 0, true)
+
+-- Mirror a rectangular region in place. Tile rotation is left untouched (there is no
+-- mirrored tile state — only rotation).
 FlipRect(x, y, w, h, "x")  -- horizontal flip (left ↔ right)
 FlipRect(x, y, w, h, "y")  -- vertical flip (top ↔ bottom)
 ```
@@ -13475,16 +13634,20 @@ SetTileAt(x, y, autoTile[mask])
 
 ### Iteration and search
 
+> An error inside an `IterateLayer` / `IterateNonEmpty` callback stops the iteration and is written
+> to the log; the rest of the script keeps running.
+
 ```lua
--- Iterate every cell (including empty) — coordinates are in Lua-Y
-IterateLayer(function(x, y, tileId)
-    if tileId == 5 then SetTileAt(x, y, 7) end
+-- Iterate every cell (including empty) — coordinates are in Lua-Y.
+-- tileId is the raw value (rotation bits included); rotation is passed separately.
+IterateLayer(function(x, y, tileId, rotation)
+    if StripTileRotation(tileId) == 5 then SetTileAt(x, y, 7) end
 end)
 IterateLayer(callback, layerIdx, instanceIdx)
 
 -- Iterate only non-empty cells (chunking-aware: skips empty chunks → very fast on sparse maps)
-IterateNonEmpty(function(x, y, tileId)
-    print(x, y, tileId)
+IterateNonEmpty(function(x, y, tileId, rotation)
+    print(x, y, tileId, rotation)
 end, layerIdx, instanceIdx)
 
 -- Count cells with a specific tile id. layerIdx omitted/-1 → count across all layers.
@@ -13492,10 +13655,72 @@ local n = CountTiles(1)
 local n = CountTiles(1, 0)        -- layer 0 only
 local n = CountTiles(1, 0, 0)     -- layer 0, instance 0
 
--- Find every cell with the given tile id (returns array of {x, y} in Lua-Y)
+-- Find every cell with the given tile id (returns array of {x, y, rotation} in Lua-Y)
 local cells = FindTile(1)
-for _, c in ipairs(cells) do print(c.x, c.y) end
+for _, c in ipairs(cells) do print(c.x, c.y, c.rotation) end
 ```
+
+### Tile rotation
+
+Every placed tile carries a **rotation step** stored inside its grid value, so one tile
+graphic can be used for all four corners (or all six hex orientations) instead of drawing
+a separate tile per direction. The rotation applies to *everything* the tile owns: the
+sprite (or flipbook frame), the physics collider, the 2D shadow caster, the nav-grid
+footprint and the destruction fragments all rotate together.
+
+* **Orthogonal / isometric** maps use **4 steps** of 90°.
+* **Hexagonal** maps use **6 steps** of 60°.
+* Step `0` is the unrotated tile; positive steps rotate **clockwise**, following the
+  engine convention (`X+` right, `Y+` up, rotation clockwise-positive) — a rotation step
+  of `1` on an orthogonal map is exactly `Transform.Rotation += 90` for that one tile.
+* Colliders are rotated inside the tile's own unit square (the same square the Tileset
+  collider editor shows), so a collider drawn over the art stays glued to the art.
+  A tile that uses the plain full-tile collider (or the cell footprint on isometric /
+  hexagonal maps) is unaffected by rotation, because those shapes are rotation-symmetric.
+
+In the Tilemap editor: **Q** rotates the brush counter-clockwise, **E** clockwise, and
+**Ctrl+Q / Ctrl+E** rotate the tile already under the cursor.
+
+```lua
+-- Steps available for this map: 4 (orthogonal/isometric) or 6 (hexagonal)
+local steps = GetTileRotationStepCount()
+local steps = GetTileRotationStepCount(0)          -- instance 0
+
+-- Convert a step count into degrees for the active projection
+local deg = GetTileRotationDegrees(1)              -- 90 on ortho, 60 on hex
+
+-- Rotation of the tile at grid coordinates
+local rot = GetTileRotation(tileX, tileY)          -- 0 .. steps-1
+local rot = GetTileRotation(tileX, tileY, 0, 0)    -- layer 0, instance 0
+
+-- Set an absolute rotation (rebuilds that tile's collider)
+SetTileRotation(tileX, tileY, 2)
+SetTileRotation(tileX, tileY, 2, 0, 0)             -- layer 0, instance 0
+
+-- Rotate by a delta, returns the resulting step (rebuilds that tile's collider)
+local newRot = RotateTile(tileX, tileY, 1)         -- one step clockwise (E)
+local newRot = RotateTile(tileX, tileY, -1)        -- one step counter-clockwise (Q)
+
+-- Rotate every non-empty tile in a rectangle, returns how many changed
+local n = RotateRegionTiles(x, y, w, h, 1)         -- one step clockwise
+local n = RotateRegionTiles(x, y, w, h, -1, 0, 0)  -- CCW, layer 0, instance 0
+
+-- Pure helpers on raw tile values (no map access)
+local r  = GetTileValueRotation(value)             -- rotation stored in a tile value
+local id = StripTileRotation(value)                -- value without the rotation bits
+local v  = SetTileValueRotation(value, 3)          -- absolute rotation on a value
+local v  = RotateTileValue(value, 1)               -- relative rotation on a value
+```
+
+> **Round-trips are safe:** `GetTileAt` / `GetTileGrid` return the full tile value including
+> its rotation, so feeding that value straight back into `SetTileAt`, `SetTileGrid`,
+> `StampPattern`, `CopyRect`, `BlitFromArray` or the clipboard preserves the rotation.
+> When you compare tile values yourself, use `StripTileRotation(value)` to compare tile
+> identity regardless of orientation.
+>
+> `CountTiles`, `FindTile`, `FloodFill` and `GetNeighborMask4/8` already match on tile
+> identity (rotation is ignored) — pass a value that *has* rotation bits set to
+> `CountTiles` / `FindTile` when you want an orientation-exact match.
 
 ### Tile colliders
 
@@ -15116,6 +15341,22 @@ Network.StopMasterServer()
 > Discovered servers expire automatically a few seconds after they stop advertising, so the
 > browser list stays current without manual cleanup.
 
+> **Android 17 (API 37) and the local network permission.** In a build whose **Target SDK is
+> 37 or higher**, Android refuses every LAN socket until `ACCESS_LOCAL_NETWORK` is granted:
+> the broadcast beacon, the discovery scan and `Network.Connect` to a LAN address all fail,
+> while internet servers and loopback keep working. Enable **Local Network (LAN)** in
+> Build Game → Android (CLI: `--enable-local-network`) so the manifest declares it, then ask
+> for it before you start discovering:
+>
+> ```lua
+> if not Permissions.Has(Permissions.ACCESS_LOCAL_NETWORK) then
+>     Permissions.Request(Permissions.ACCESS_LOCAL_NETWORK)
+> end
+> ```
+>
+> `Permissions.Has()` already returns `true` on Android 16 and older and in builds that
+> target API 36 or lower, so the same code is correct everywhere.
+
 ### NetworkProfiler — runtime network profiler (debug only)
 
 `NetworkProfiler` is a global Lua table registered by the engine for inspecting real network traffic. The engine instruments every send/receive path (ENet on desktop, WebSocket on Web) and aggregates traffic statistics per message type with EWMA-smoothed rates and a 120-second rolling history.
@@ -16549,6 +16790,12 @@ local name = Coalesce(customName, defaultName, "Unknown")
 > **Type:** Global functions (namespace `String`)
 >
 > Extended string library (from `DataUtilsLua`). Includes everything `Str.*` has plus additional functions: `TrimLeft`, `TrimRight`, `IsEmpty`, `IsBlank`, `ReplaceFirst`, `Reverse`, `Find`, `Count`, `CharAt`, `ToNumber`, `Byte`, `Char`, `Join`. For a quick-reference lightweight variant, see [`Str.*` in Section 1](#str--string-utilities).
+>
+> ⚠️ **Bytes vs characters.** `Length`, `Sub`, `CharAt`, `Reverse`, `PadLeft`, `PadRight`, `Upper`
+> and `Lower` work on **bytes** and are safe for ASCII only. On Russian, Ukrainian, Arabic,
+> Hebrew, Hindi, Japanese or Chinese text they will count wrong and can cut a character in half.
+> For anything the player can see, use the `String.Utf8*` functions below (or the `utf8`
+> standard library).
 
 ```lua
 -- Split string
@@ -16600,6 +16847,41 @@ local ch = String.Char(65)          -- → "A"
 -- Join array into string
 String.Join({"a", "b", "c"}, ", ")  -- → "a, b, c"
 ```
+
+#### UTF-8 aware variants
+
+Same idea as the functions above, but they count **characters (codepoints)**, not bytes — use
+these for any text the player sees.
+
+```lua
+local text = "Привет"
+
+String.Utf8Length(text)          -- → 6   (String.Length gives 12)
+String.Utf8Sub(text, 1, 3)       -- → "При"
+String.Utf8Sub(text, -3)         -- → "вет"  (negative indices count from the end)
+String.Utf8CharAt(text, 2)       -- → "р"
+String.Utf8Reverse(text)         -- → "тевирП"
+String.Utf8IsValid(text)         -- → true
+
+-- Cut a name to fit a UI field; the suffix defaults to "..."
+String.Utf8Truncate("Длинное имя игрока", 10)        -- → "Длинное..."
+String.Utf8Truncate("Длинное имя игрока", 10, "…")   -- → "Длинное и…"
+
+-- Codepoints back and forth
+local points = String.Utf8Codepoints("ok")       -- → { 111, 107 }
+local back = String.Utf8FromCodepoints(points)   -- → "ok"
+```
+
+| Function | Returns |
+| -------- | ------- |
+| `String.Utf8Length(s)` | Number of characters. |
+| `String.Utf8Sub(s, from [, to])` | Substring by character index, 1-based; negative indices count from the end; `to` defaults to `-1`. |
+| `String.Utf8CharAt(s, index)` | One character at a 1-based index (`""` when out of range). |
+| `String.Utf8Reverse(s)` | The string reversed by characters. |
+| `String.Utf8Truncate(s, maxChars [, suffix])` | `s` shortened to `maxChars` characters **including** the suffix (default `"..."`); returns `s` unchanged when it already fits. |
+| `String.Utf8IsValid(s)` | `false` if the bytes are not valid UTF-8. |
+| `String.Utf8Codepoints(s)` | Array of codepoint numbers. |
+| `String.Utf8FromCodepoints(t)` | Builds a string from an array of codepoints. |
 
 ### Flow Control — execution flow utilities
 
@@ -20574,6 +20856,7 @@ All permissions declared by the engine in `AndroidManifest.xml` are exposed as L
 | `Permissions.BLUETOOTH_SCAN` | `"android.permission.BLUETOOTH_SCAN"` |
 | `Permissions.BLUETOOTH_ADVERTISE` | `"android.permission.BLUETOOTH_ADVERTISE"` |
 | `Permissions.NEARBY_WIFI_DEVICES` | `"android.permission.NEARBY_WIFI_DEVICES"` |
+| `Permissions.ACCESS_LOCAL_NETWORK` | `"android.permission.ACCESS_LOCAL_NETWORK"` |
 
 #### Contacts & Accounts
 
@@ -20714,9 +20997,9 @@ All permissions declared by the engine in `AndroidManifest.xml` are exposed as L
 
 > You can also pass any Android permission string directly: `Permissions.Request("android.permission.VIBRATE")`
 
-> **Normal vs Dangerous vs Special permissions:** "normal" permissions (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `VIBRATE`, `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `FOREGROUND_SERVICE*`, `USE_EXACT_ALARM`, `RUN_USER_INITIATED_JOBS`, `RECEIVE_BOOT_COMPLETED`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `EXPAND_STATUS_BAR`, `SET_WALLPAPER`, `SET_WALLPAPER_HINTS`, `KILL_BACKGROUND_PROCESSES`, `REORDER_TASKS`, `USE_FULL_SCREEN_INTENT`, `ACCESS_LOCATION_EXTRA_COMMANDS`, `RECEIVE_WAP_PUSH`, `AD_ID`, `QUERY_ALL_PACKAGES`, `DETECT_SCREEN_CAPTURE`, `DETECT_SCREEN_RECORDING`) are granted automatically at install — `Permissions.Has()` always returns `true` and `Permissions.Request()` is a no-op. "Dangerous" permissions (camera, mic, location, contacts, calendar, body sensors, phone, SMS, modern media storage, `BLUETOOTH_CONNECT/SCAN/ADVERTISE`, `NEARBY_WIFI_DEVICES`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`, `ACCESS_MEDIA_LOCATION`) require runtime grant from the user via `Permissions.Request()`. "Special" permissions (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`, `WRITE_SETTINGS`, `REQUEST_INSTALL_PACKAGES`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `ACCESS_NOTIFICATION_POLICY`, `ACCESS_BACKGROUND_LOCATION`) require navigating the user to a system settings screen — they cannot be granted via the standard permission dialog; use the matching accessors from section **53.9** (or just call `Permissions.Has()` / `Permissions.Request()` with the constant — they understand special permissions transparently).
+> **Normal vs Dangerous vs Special permissions:** "normal" permissions (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `VIBRATE`, `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `FOREGROUND_SERVICE*`, `USE_EXACT_ALARM`, `RUN_USER_INITIATED_JOBS`, `RECEIVE_BOOT_COMPLETED`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `EXPAND_STATUS_BAR`, `SET_WALLPAPER`, `SET_WALLPAPER_HINTS`, `KILL_BACKGROUND_PROCESSES`, `REORDER_TASKS`, `USE_FULL_SCREEN_INTENT`, `ACCESS_LOCATION_EXTRA_COMMANDS`, `RECEIVE_WAP_PUSH`, `AD_ID`, `QUERY_ALL_PACKAGES`, `DETECT_SCREEN_CAPTURE`, `DETECT_SCREEN_RECORDING`) are granted automatically at install — `Permissions.Has()` always returns `true` and `Permissions.Request()` is a no-op. "Dangerous" permissions (camera, mic, location, contacts, calendar, body sensors, phone, SMS, modern media storage, `BLUETOOTH_CONNECT/SCAN/ADVERTISE`, `NEARBY_WIFI_DEVICES`, `ACCESS_LOCAL_NETWORK`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`, `ACCESS_MEDIA_LOCATION`) require runtime grant from the user via `Permissions.Request()`. "Special" permissions (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`, `WRITE_SETTINGS`, `REQUEST_INSTALL_PACKAGES`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `ACCESS_NOTIFICATION_POLICY`, `ACCESS_BACKGROUND_LOCATION`) require navigating the user to a system settings screen — they cannot be granted via the standard permission dialog; use the matching accessors from section **53.9** (or just call `Permissions.Has()` / `Permissions.Request()` with the constant — they understand special permissions transparently).
 
-> **API level notes:** `BLUETOOTH_CONNECT/SCAN/ADVERTISE` apply on Android 12+ (API 31+); on older versions, `BLUETOOTH` and `BLUETOOTH_ADMIN` are used automatically (declared in the manifest with `maxSdkVersion="30"`). `POST_NOTIFICATIONS` and `READ_MEDIA_*` apply on Android 13+ (API 33+). `NEARBY_WIFI_DEVICES` applies on Android 13+. `READ_MEDIA_VISUAL_USER_SELECTED` applies on Android 14+ (API 34+). `BODY_SENSORS_BACKGROUND` applies on Android 13+. `USE_EXACT_ALARM` applies on Android 13+ (API 33+) — for calendar/alarm-clock category apps; otherwise use `SCHEDULE_EXACT_ALARM`. `FOREGROUND_SERVICE_*` type-specific permissions are required on Android 14+ (API 34+). `RUN_USER_INITIATED_JOBS`, `DETECT_SCREEN_CAPTURE` and `DETECT_SCREEN_RECORDING` apply on Android 14+ / 15+. `USE_FULL_SCREEN_INTENT` is automatically granted only for call / alarm category apps on Android 14+; for other apps the user must enable it manually under the per-app permission screen. On lower SDK levels the constants exist but `Permissions.Has()` will report `true` automatically (the permission is implicit) or `false` (unavailable platform feature).
+> **API level notes:** `BLUETOOTH_CONNECT/SCAN/ADVERTISE` apply on Android 12+ (API 31+); on older versions, `BLUETOOTH` and `BLUETOOTH_ADMIN` are used automatically (declared in the manifest with `maxSdkVersion="30"`). `POST_NOTIFICATIONS` and `READ_MEDIA_*` apply on Android 13+ (API 33+). `NEARBY_WIFI_DEVICES` applies on Android 13+. `ACCESS_LOCAL_NETWORK` applies on Android 17+ (API 37+) and only to builds whose **Target SDK is 37 or higher** — those are the builds Android stops from reaching LAN addresses until the permission is granted, so tick **Local Network (LAN)** in Build Game → Android (or pass `--enable-local-network`) to have it declared. On anything older, or in a build that targets 36 or lower, `Permissions.Has()` reports `true` because local network access is implicit there. `READ_MEDIA_VISUAL_USER_SELECTED` applies on Android 14+ (API 34+). `BODY_SENSORS_BACKGROUND` applies on Android 13+. `USE_EXACT_ALARM` applies on Android 13+ (API 33+) — for calendar/alarm-clock category apps; otherwise use `SCHEDULE_EXACT_ALARM`. `FOREGROUND_SERVICE_*` type-specific permissions are required on Android 14+ (API 34+). `RUN_USER_INITIATED_JOBS`, `DETECT_SCREEN_CAPTURE` and `DETECT_SCREEN_RECORDING` apply on Android 14+ / 15+. `USE_FULL_SCREEN_INTENT` is automatically granted only for call / alarm category apps on Android 14+; for other apps the user must enable it manually under the per-app permission screen. On lower SDK levels the constants exist but `Permissions.Has()` will report `true` automatically (the permission is implicit) or `false` (unavailable platform feature).
 
 ---
 
@@ -23030,6 +23313,210 @@ function OnUpdate(dt)
     Draw.SetSpace("screen")
     Draw.SetBlend("opaque")
     Draw.QuadsPacked(WALL_TEX, data)
+end
+```
+
+---
+
+## 62. Decal — Bullet Holes, Blood Splatter, Scorch Marks
+
+> **Type:** Global (`Decal.*`) + Entity-bound (`DecalComponent` accessors).
+>
+> Decals are surface marks the game leaves behind at runtime: bullet holes, blood splatter, scorch marks,
+> footprints, cracks. They are described by a `.ice_decal` asset, spawned from script, and managed by the
+> engine — lifetime, fade in / fade out, sorting, budget and pooling are all handled for you.
+
+### The `.ice_decal` asset
+
+Create it in the Content Browser (**Materials → Create Decal**), or right-click a texture and pick **Create Decal**.
+Double-click to open the Decal Editor. An asset holds:
+
+| Group | What it controls |
+| ----- | ---------------- |
+| Texture Variants | One or more textures with weights. A random one is picked per spawn — this is what makes ten bullet holes look different. |
+| Material | Optional material with **Domain = Decal** (or a material instance of one). Replaces the plain textured draw. |
+| Appearance | Size, size variance, pivot, tint, tint variance, shading mode, blend mode, alpha clip. |
+| Rotation | Fixed, random, or aligned to the surface normal of the hit; random horizontal / vertical flip. |
+| Lifetime | Lifetime, fade in, fade out, and the per-asset instance limit. |
+| Placement | Z offset, sort order, normal offset, follow receiver, clip to receiver. |
+
+### Spawning
+
+```lua
+-- Simplest form: place a decal in world space
+local h = Decal.Spawn("Content/Decals/DC_BulletHole.ice_decal", x, y)
+
+-- From a trace hit, aligned to the surface normal
+local hit = LineTrace(fromX, fromY, toX, toY, true)
+if hit.hit then
+    Decal.SpawnOnHit("Content/Decals/DC_BulletHole.ice_decal",
+                     hit.x, hit.y, hit.normalX, hit.normalY)
+end
+
+-- Attached to an entity: the decal moves and rotates with it
+Decal.SpawnAttached("Content/Decals/DC_Blood.ice_decal", enemyId, hit.x, hit.y)
+
+-- Attached AND clipped to a sprite's bounds, so blood never hangs off the character
+Decal.SpawnOnSprite("Content/Decals/DC_Blood.ice_decal", enemyId, 0, hit.x, hit.y)
+```
+
+All spawn functions return a **handle** (a number). `0` means the spawn failed — a missing asset, an empty
+budget, or a decal with no texture and no material.
+
+### Spawn options
+
+Every spawn function takes an optional table as the last argument. Anything you leave out comes from the asset.
+
+```lua
+Decal.Spawn("Content/Decals/DC_Scorch.ice_decal", x, y, {
+    rotation   = 45,        -- explicit angle in degrees, overrides the asset rotation mode
+    normalX    = 0,         -- surface normal, used by the Align To Normal rotation modes
+    normalY    = 1,
+    sizeX      = 64,        -- explicit size in pixels (both must be > 0 to take effect)
+    sizeY      = 64,
+    scale      = 1.5,       -- multiplier applied on top of the resolved size
+    r = 1, g = 0.2, b = 0.2, a = 1,   -- tint override
+    lifetime   = 8.0,       -- seconds, 0 = forever
+    fadeIn     = 0.1,
+    fadeOut    = 1.5,
+    z          = 2.0,       -- depth of the surface; the asset Z offset is added on top
+    sortOrder  = 10,        -- draw order among decals
+    variant    = 2,         -- force a texture variant instead of picking at random
+    seed       = 1337,      -- fixed seed: same variant, size, rotation and tint every time
+    clipX      = wallX,     -- clip rectangle in world space
+    clipY      = wallY,
+    clipHalfW  = 128,
+    clipHalfH  = 16,
+    clipRotation = 0,
+    clip       = true,      -- set false to pass a rectangle but keep clipping off
+})
+```
+
+Clipping only takes effect when the asset has **Clip To Receiver** enabled. `Decal.SpawnOnSprite` fills the
+clip rectangle for you from the sprite's own bounds.
+
+### Managing spawned decals
+
+```lua
+Decal.IsAlive(h)                  -- false once it expired or was destroyed
+Decal.Destroy(h)                  -- remove immediately
+Decal.FadeOut(h, 0.5)             -- fade out over 0.5 s, then remove
+
+Decal.Clear()                     -- remove every runtime decal
+Decal.ClearByAsset("Content/Decals/DC_Blood.ice_decal")
+Decal.ClearInRadius(x, y, 200)    -- returns how many were removed
+Decal.ClearAttachedTo(entityId)
+
+Decal.Preload("Content/Decals/DC_BulletHole.ice_decal")   -- load textures ahead of the first shot
+```
+
+### Reading and changing a live decal
+
+```lua
+Decal.SetPosition(h, x, y)        local p = Decal.GetPosition(h)   -- {x, y}
+Decal.SetZ(h, 3)                  local z = Decal.GetZ(h)
+Decal.SetRotation(h, 90)          local r = Decal.GetRotation(h)
+Decal.SetSize(h, 48, 48)          local s = Decal.GetSize(h)       -- {x, y}
+Decal.SetColor(h, 1, 0, 0, 0.8)   local c = Decal.GetColor(h)      -- {r, g, b, a}
+Decal.SetVisible(h, false)        local v = Decal.IsVisible(h)
+Decal.SetSortOrder(h, 5)          local o = Decal.GetSortOrder(h)
+Decal.SetLifetime(h, 20)          local l = Decal.GetLifetime(h)
+
+local age  = Decal.GetAge(h)      -- seconds since spawn
+local fade = Decal.GetFade(h)     -- current fade factor, 0..1
+```
+
+For an attached decal, `SetPosition` and `SetRotation` work in the space of the entity it follows.
+
+### Budget and global switches
+
+```lua
+Decal.SetBudget(512)     -- max live decals; the oldest fade out when it is exceeded
+local budget = Decal.GetBudget()
+local count  = Decal.GetCount()
+
+Decal.SetEnabled(false)  -- stop accepting new spawns, e.g. on the lowest quality preset
+local on = Decal.IsEnabled()
+```
+
+The budget is a soft cap: exceeding it starts fading the oldest decals instead of popping them. A hard cap of
+twice the budget removes them outright, so a runaway spawn loop can never grow without bound. A per-asset
+**Max Instances** limit works the same way, scoped to one `.ice_decal`.
+
+### DecalComponent (Entity-bound)
+
+A `Decal` component holds decals placed by hand in the Class Editor — graffiti, cracks, stains that are part
+of the level. They render in both the editor and play mode and have no lifetime.
+
+```lua
+local n = GetDecalCount()
+local i = FindDecalIndex("Graffiti")
+
+SetDecalAsset("Content/Decals/DC_Crack.ice_decal", i)
+local path = GetDecalAsset(i)
+
+SetDecalPosition(x, y, z, i)      local p = GetDecalPosition(i)    -- {x, y, z}
+SetDecalRotation(30, i)           local r = GetDecalRotation(i)
+SetDecalScale(2, 2, i)            local s = GetDecalScale(i)
+SetDecalSize(128, 64, i)          local sz = GetDecalSize(i)       -- size override, 0 = from asset
+SetDecalColor(1, 1, 1, 0.5, i)    local c = GetDecalColor(i)
+SetDecalVisible(true, i)          local v = IsDecalVisible(i)
+SetDecalFlip(true, false, i)
+SetDecalSortOrder(3, i)           local o = GetDecalSortOrder(i)
+SetDecalVariant(1, i)
+local name = GetDecalName(i)
+
+-- Spawn a runtime decal at this entity's position
+local h = SpawnDecalAtSelf("Content/Decals/DC_Blood.ice_decal", { lifetime = 6 })
+```
+
+The index argument is optional everywhere and defaults to `0`.
+`HasDecal(entityId)`, `AddComponent("Decal")` and `AddEntityComponent(entityId, "Decal")` work through the usual component API (section 31).
+
+### Decal materials
+
+Give a material **Domain = Decal** in the Material Editor and it becomes assignable to a decal asset. Such a
+material sees the decal texture as its entity texture, so the whole node graph — texture samples, parameters,
+material functions, parameter collections — works exactly as it does for a surface material.
+
+The **Decal Data** node exposes the state of the decal being drawn:
+
+| Output | Meaning |
+| ------ | ------- |
+| Fade | Current fade factor, 0..1, from fade in / fade out and the budget |
+| Normalized Age | Age divided by lifetime, 0..1 (0 when the lifetime is infinite) |
+| Age | Seconds since spawn |
+| Lifetime | The decal's lifetime in seconds |
+| Random | Per-decal random value, 0..1, stable for the life of that decal |
+
+Drive `Random` into a hue shift to make every splatter slightly different, or `Normalized Age` into a
+lerp between fresh and dried blood.
+
+### Complete example — a shooter's impact reaction
+
+```lua
+local DECAL_HOLE  = "Content/Decals/DC_BulletHole.ice_decal"
+local DECAL_BLOOD = "Content/Decals/DC_Blood.ice_decal"
+
+function OnStart()
+    Decal.Preload(DECAL_HOLE)
+    Decal.Preload(DECAL_BLOOD)
+    Decal.SetBudget(384)
+end
+
+function Shoot(fromX, fromY, dirX, dirY)
+    local hit = LineTrace(fromX, fromY, fromX + dirX * 2000, fromY + dirY * 2000, true)
+    if not hit.hit then return end
+
+    if hit.tag == "Enemy" and hit.entityId then
+        Decal.SpawnOnSprite(DECAL_BLOOD, hit.entityId, 0, hit.x, hit.y, {
+            lifetime = 12, fadeOut = 3, scale = 1.2
+        })
+    else
+        Decal.SpawnOnHit(DECAL_HOLE, hit.x, hit.y, hit.normalX, hit.normalY, {
+            lifetime = 30, fadeOut = 2
+        })
+    end
 end
 ```
 

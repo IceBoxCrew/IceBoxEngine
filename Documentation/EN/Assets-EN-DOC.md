@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
@@ -84,6 +84,7 @@
    - 4.18 [Localization (`.ice_localization`)](#418-localization-ice_localization)
    - 4.19 [Level (`.icemap`)](#419-level-icemap)
    - 4.20 [Script (`.lua`) & Text (`.txt`)](#420-script-lua--text-txt)
+   - 4.21 [Decal (`.ice_decal`)](#421-decal-ice_decal)
 5. [Importers](#5-importers)
    - 5.1 [Aseprite importer](#51-aseprite-importer)
    - 5.2 [GIF importer](#52-gif-importer)
@@ -351,7 +352,7 @@ filters:
 `Levels`, `Classes`, `Views`, `Cinemas`, `Sprites`, `Flipbooks`, `Animations`,
 `Skeletons`, `Tilesets`, `Tilemaps`, `Materials` (material / instance / function /
 collection), `FX`, `Widgets`, `Textures`, `Audio`, `Fonts`, `Localization`, `AI`,
-`Video`, `Text`.
+`Video`, `Scripts`, `Text`.
 
 The **All** button at the top of the panel clears every filter at once; it is highlighted
 green while no filter is active.
@@ -449,10 +450,12 @@ are created in the current folder:
   * **Create Material Parameter Collection** (`.ice_mpc`)
   * **Create Material Function** (`.ice_matfunc`)
   * **Create Material Instance** (`.ice_matinst`)
+  * **Create Decal** (`.ice_decal`)
 * **UI ▸**
   * **Create Interface Widget** (`.ice_widget`)
   * **Create Localization** (`.ice_localization`)
 * **Other ▸**
+  * **Create Lua Script** (`.lua`)
   * **Create Text Note** (`.txt`)
 * **Fix Up Redirectors (n)** — collapse and clean up the redirector registry. The
   number in the label is how many redirectors exist right now; the entry is disabled when
@@ -481,6 +484,7 @@ New assets get a **type prefix and a unique default name** (`SP_NewSprite`,
 | **Create Child Class** | classes | Make a subclass that inherits the parent class (and a stub script that calls back into it). |
 | **Create Child Widget** | widgets | Make a widget that inherits the parent's canvas settings and elements. |
 | **Create Material Instance (.ice_matinst)** | materials | Make a `.ice_matinst` parented to the material. |
+| **Create Decal (.ice_decal)** | textures | Make a `.ice_decal` (`DC_<name>`) that already uses the image as its first texture variant. |
 | **Create Flipbook from Sprite(s)** | one or more sprites selected | Build a `.ice_flipbook` from the selected sprites, ordered by file name. |
 | **Bulk Edit via Property Matrix** | 2+ assets of the same kind | Open the [Property Matrix](#314-bulk-editing--property-matrix). |
 | **Rename** | a single item | Rename, moving the sidecar and fixing references. |
@@ -512,6 +516,7 @@ the whole selection.
 | `.ice_matinst` | **Material Instance Editor** |
 | `.ice_matfunc` | **Material Function Editor** |
 | `.ice_mpc` | **MPC Editor** |
+| `.ice_decal` | **Decal Editor** |
 | `.ice_fx` | **FX Editor** |
 | `.ice_widget` | **Widget Editor** |
 | `.ice_view` | **View Editor** |
@@ -519,6 +524,7 @@ the whole selection.
 | `.ice_ai` | **AI Editor** |
 | `.ice_class` | **Class Editor** |
 | `.ice_localization` | **Localization Creator** |
+| `.lua` | **Lua Script Editor** |
 | `.txt` | **Text Note editor** |
 | `.icemap` | Opens the **level** in the main Viewport |
 
@@ -1183,7 +1189,8 @@ several projections.
 | **Dimensions** | `Width`, `Height`, `TileSize`. |
 | **Projection** | `Orthogonal`, `Isometric`, or `Hexagonal` (with cell width/height, hex side length, stagger axis & index). |
 | **Layers** | Multiple `MapLayer`s, each with name, visibility, lock, and a tile grid. |
-| **Tilesets** | A primary tileset plus additional tilesets; tile IDs are encoded with the tileset index so one map can mix tilesets. |
+| **Tilesets** | A primary tileset plus up to 127 additional tilesets; tile IDs are encoded with the tileset index so one map can mix tilesets. |
+| **Tile rotation** | Every painted cell stores a rotation step alongside the tile ID — 4 steps of 90° on orthogonal/isometric maps, 6 steps of 60° on hexagonal ones. The sprite, the collider, the shadow caster, the nav-grid footprint and the destruction fragments all rotate together, so one corner tile covers every orientation. |
 | **Animated tiles** | Placeholder tiles that play a flipbook, each with a speed multiplier, its own **per-frame colliders**, and the same full set of physics, event, shadow and destructible-fragment settings a static tile has. |
 | **Chunking** | Optional chunked storage with a configurable chunk size and per-chunk "empty" flags for fast culling of large maps. |
 | **Show Coordinates** | Editor overlay for grid coordinates. |
@@ -1200,10 +1207,22 @@ several projections.
   | **Alt + Right-click** | **Eyedropper** — pick the tile (or animated tile) under the cursor as the active one. |
   | **Shift + Right-drag** | **Select a rectangle** and capture it as a **stamp**. |
   | **Shift + Left-drag** | **Stamp** the captured block, with a preview under the cursor. |
+  | **`Q` / `E`** | **Rotate the brush** one step counter-clockwise / clockwise. |
+  | **`Ctrl+Q` / `Ctrl+E`** | **Rotate the tile already under the cursor** in place. |
   | **Middle-drag / scroll** | Pan / zoom the canvas. |
 
-  The cell under the cursor is outlined, and there is a separate editor zoom for the
-  palette.
+  The cell under the cursor is outlined and shows a translucent **ghost of the tile about
+  to be placed**, already rotated, so you can dial in the orientation before you click.
+  There is a separate editor zoom for the palette.
+* **Tile Rotation** — the sidebar shows the current brush rotation in degrees plus the step
+  index, with **CCW / CW / Reset** buttons next to the `Q` / `E` shortcuts. Rotation is a
+  property of the *placed cell*, not of the tileset, so the same tile can sit at several
+  orientations across the map. Everything the tile owns rotates with it: the sprite (or
+  flipbook frame), its collider polygon, its shadow caster, its nav-grid footprint and the
+  fragments it shatters into. A
+  tile using the plain full-tile collider is unchanged by rotation, so box merging and
+  chunking keep working exactly as before. The eyedropper also picks up the rotation of
+  the sampled cell.
 * **Layers** — **+ Add Layer**, **Rename**, **Remove**, **Move Up / Down**, plus per-layer
   visibility and lock toggles. Painting always targets the selected layer, and locked
   layers are skipped.
@@ -1229,7 +1248,7 @@ A **material** is a **node-graph shader**. You build the look by wiring nodes in
 **Material Output**; the graph is compiled to a runtime shader.
 
 * **Shading Mode** (`Lit`/`Unlit`), **Blend Mode** (`Masked`/`Additive`/`Translucent`/
-  `Opaque`), **Domain** (`Surface` or `PostProcess`), and **Alpha Clip Threshold**.
+  `Opaque`), **Domain** (`Surface`, `PostProcess` or `Decal`), and **Alpha Clip Threshold**.
 * **Nodes & links** are stored with stable IDs and editor positions.
 
 The node palette is extensive. The **Add Node** menu groups it into nine sub-menus:
@@ -1378,6 +1397,7 @@ secondary pins (`Min`/`Max`, `Alpha`, `Exp`) are adapted to it.
 | **Screen UV** | — | `UV` (Vector2) | The pixel's normalized screen coordinate. |
 | **Pixel Size** | — | `Size` (Vector2), `Width`, `Height` | The render target's size in pixels — for one-pixel offsets, outlines and screen-space kernels. |
 | **Scene Color** | `UV` (Vector2) | `RGB`, `R`, `G`, `B`, `A` | Samples what has already been rendered behind this surface. The basis of glass, distortion and post-process materials. |
+| **Decal Data** | — | `Fade`, `Normalized Age`, `Age`, `Lifetime`, `Random` | Live state of the decal being drawn: its fade factor, age in seconds, age divided by lifetime, its lifetime, and a stable per-decal random value. Meaningful in a `Decal` domain material; elsewhere it reads as neutral. |
 | **Custom Expression** | `Input0`..`Input7` (configurable) | `Result` (float/vec2/vec3/vec4) | A full GLSL statement block written on the node. The escape hatch for anything the palette does not cover — see **Custom Expression** below. |
 
 
@@ -1461,7 +1481,9 @@ breaks the overrides that referenced the old name.
 * **Settings** — Shading Mode, Blend Mode, Alpha Clip Threshold, and **Domain**. Switching
   the domain to `PostProcess` turns the material into one you can plug into a
   [View](#414-view--post-process-volume-ice_view)'s custom post-process stack, and the panel
-  says so.
+  says so. Switching it to `Decal` makes the material assignable to a
+  [Decal](#421-decal-ice_decal) asset; a decal material uses the same Material Output pins as
+  a surface one, and additionally gets the **Decal Data** node.
 
 ### 4.9 Material Instance (`.ice_matinst`)
 
@@ -1969,7 +1991,7 @@ The Class Editor is a mini-scene with:
 * **A components panel** to add and configure components — Transform, Sprite Renderer,
   Collider (box/sphere/capsule), Tilemap Renderer, Flipbook, Audio, FX, Widget,
   Rigidbody (with ragdoll settings), Animator, Skeleton, Camera, Light (point/spot),
-  Point Marker, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync), and
+  Point Marker, Decal, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync), and
   nested **Class Components** (compose other classes).
 * **Multiple instances per component.** Most visual and physical components are lists —
   a class can hold several sprites, colliders, lights, audio sources or joints at once.
@@ -2004,7 +2026,7 @@ The Class Editor is a mini-scene with:
 | **Lighting** | Point Light, Spot Light. |
 | **Collisions** | Rigidbody, Box Collider, Sphere Collider, Capsule Collider, Joint, Destructible. |
 | **Audio & Effects** | Audio, FX. |
-| **UI** | Widget, Point Marker. |
+| **UI** | Widget, Point Marker, Decal. |
 | **Logic** | AI Brain, Class Component. |
 
 **Stencil Mask** and **Replication** are always available on the entity rather than added
@@ -2266,6 +2288,20 @@ properties.
 | **Line End Offset** | Line only — the end point relative to the entity. |
 | **Visible** / **Render In Game** | Editor visibility, and whether it also draws in Play mode (off by default). |
 
+**Decal** — decals placed by hand as part of the level: graffiti, cracks, stains. Runtime
+marks (bullet holes, blood) are spawned from script instead — see
+[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62.
+
+| Property | Meaning |
+| -------- | ------- |
+| **Decal Asset** | The `.ice_decal` this instance renders. |
+| **Color** | Tint multiplied into the decal asset color; alpha scales opacity. |
+| **Size Override** | Size in pixels; zero keeps the size from the decal asset. |
+| **Variant** | Texture variant index; `-1` picks one automatically from the asset's weights. |
+| **Override Sort Order** / **Sort Order** | Use an explicit draw order instead of the asset's. |
+| **Flip X / Flip Y** | Mirror the decal. |
+| **Visible** / **Render In Game** | Editor visibility, and whether it also draws in Play mode. |
+
 ##### Logic
 
 **AI Brain** *(single)*
@@ -2361,14 +2397,71 @@ tilemaps, materials, classes, widgets, etc.).
 
 ### 4.20 Script (`.lua`) & Text (`.txt`)
 
-* **`.lua`** — a Lua script file. The Content Browser shows it (badge `LU`) and you can
-  move, rename and delete it here like any other asset, but scripts are normally written in
-  the Class or Widget editor's script tab, and the **Lua language and engine API are
-  documented separately** in [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md).
+* **`.lua`** — a standalone Lua script (badge `LU`), creatable via **Other ▸ Create Lua
+  Script**. New scripts start as a module skeleton (`local M = {} … return M`) so they can be
+  pulled into class, level and widget scripts with `require`. Double-clicking one opens the
+  **Lua Script Editor** — the same Lua code editor the Class Editor uses, on its own and
+  nothing else: syntax highlighting, **Save** (`Ctrl+S`), **Compile** with an inline
+  `OK`/`Error` badge (the failing line is marked and the message shown as a tooltip), a
+  cursor read-out, and the shared Lua helpers — undo/redo, search & replace, go-to-line,
+  the function navigator, snippet templates, autocomplete and optional auto-compile.
+  Scripts move, rename and delete like any other asset (references inside them are fixed up
+  and a redirector is left behind), they are syntax-checked by **Compile Scripts**
+  (`Ctrl+R`), and they can be stepped through in the **Lua Script Debugger**. The **Lua
+  language and engine API are documented separately** in
+  [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md).
 * **`.txt`** — a plain text note (badge `NT`), creatable via **Other ▸ Text Note**.
   Double-clicking one opens the **Text Note editor**: a syntax-neutral code editor with a
   *File ▸ Save* (`Ctrl+S`) and an *Edit* menu (undo/redo, copy/cut/paste, select all).
   Useful for design notes, TODO lists and small data files.
+
+---
+
+### 4.21 Decal (`.ice_decal`)
+
+**Editor:** Decal Editor
+
+A **decal** is a mark the game leaves on a surface at runtime: a bullet hole, a blood
+splatter, a scorch mark, a footprint, a crack. One `.ice_decal` asset describes how that
+mark looks and behaves, and the engine's decal system takes care of everything else —
+random variation, lifetime, fade in / fade out, sorting, culling, pooling and budget.
+
+Create one from **Materials ▸ Create Decal**, or right-click a texture and pick
+**Create Decal** to get an asset already pointing at it. Double-clicking opens the
+**Decal Editor**: a live preview on the left, the settings on the right.
+
+**Texture Variants** — the list of images the decal can use. Each row has a texture, a
+**weight** (relative chance of being picked) and an optional **source rect** for pulling a
+sub-image out of an atlas. A random variant is chosen on every spawn, which is what keeps
+ten bullet holes on the same wall from looking identical. Leave a single variant for a
+mark that always looks the same.
+
+**Material** — an optional material whose **Domain** is **Decal** (or a material instance
+of one). When set, it replaces the plain textured draw and the decal texture becomes the
+material's entity texture, so the whole node graph works: texture samples, scalar / vector
+/ texture parameters, material functions and parameter collections. The **Decal Data** node
+additionally exposes the live state of the decal — fade, age, normalized age, lifetime and a
+stable per-decal random value.
+
+**Appearance** — size (zero takes it from the texture), size variance and whether that
+variance keeps the aspect ratio, pivot, tint, tint variance, shading mode (Lit / Unlit),
+blend mode and the alpha clip threshold used by Masked blending.
+
+**Rotation** — Fixed, Random (between a min and a max), Align To Normal, or Align To Normal
+with a random 180° flip. Random horizontal and vertical mirroring can be enabled on top.
+
+**Lifetime** — how long a decal lives (zero = forever), how long it takes to fade in and
+fade out, and **Max Instances**: a per-asset cap that starts fading the oldest decal of this
+kind once it is exceeded.
+
+**Placement** — the Z offset that lifts the decal in front of its surface, the sort order
+among decals, an offset along the hit normal, **Follow Receiver** (attach to the entity that
+was hit so the decal moves with it) and **Clip To Receiver** (cut the decal to the bounds of
+the surface it was placed on, so blood never hangs off the edge of a character).
+
+Decals are spawned from script with the `Decal.*` API, and can also be **placed by hand**
+with the **Decal** component in the Class Editor. See
+[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62 for the scripting side.
 
 ---
 
@@ -2456,6 +2549,7 @@ manifests and installers are documented in
 | `.ice_matinst` | Material Instance | `MI` | Material Instance Editor |
 | `.ice_matfunc` | Material Function | `MF` | Material Function Editor |
 | `.ice_mpc` | Material Parameter Collection | `MC` | MPC Editor |
+| `.ice_decal` | Decal | `DC` | Decal Editor |
 | `.ice_fx` | FX / Particle System | `FX` | FX Editor |
 | `.ice_widget` | Widget / UI | `WI` | Widget Editor |
 | `.ice_localization` | Localization | `LC` | Localization Creator |
@@ -2463,7 +2557,7 @@ manifests and installers are documented in
 | `.wav` `.mp3` `.ogg` `.flac` | Audio | `AU` | Sound Settings |
 | `.mp4` `.avi` `.mkv` `.mov` `.webm` | Video | `VD` | Video Player |
 | `.ttf` `.otf` | Font | `FT` | Font Editor |
-| `.lua` | Script | `LU` | (see Lua API doc) |
+| `.lua` | Script | `LU` | Lua Script Editor |
 | `.txt` | Text note | `NT` | Text Note editor |
 
 Assets registered by **plugins** appear here too, with the badge, color and name the
@@ -2506,7 +2600,8 @@ with a number appended if the name is taken (`SP_NewSprite1`, `SP_NewSprite2`, �
 | Tilemap | `TM_NewTilemap` | Text Note | `NT_NewNote` |
 | Flipbook | `FB_NewFlipbook` | View | `VW_NewView` |
 | Animation | `AN_NewAnimation` | Skeleton | `SK_NewSkeleton` |
-| FX | `FX_NewFX` | | |
+| FX | `FX_NewFX` | Lua Script | `LU_NewScript` |
+| Decal | `DC_NewDecal` | | |
 
 Assets created **from another asset** ([3.8](#38-the-item-context-menu)) derive their name
 from the source, dropping the source's prefix first:
@@ -2517,6 +2612,7 @@ from the source, dropping the source's prefix first:
 | **Create Tileset (.ice_ts)** on `T_Cave.png` | `TS_T_Cave.ice_ts` |
 | **Create Tilemap (.ice_tm)** on `TS_Cave.ice_ts` | `TM_Cave.ice_tm` |
 | **Create Material Instance (.ice_matinst)** on `M_Char.ice_material` | `MI_Char.ice_matinst` |
+| **Create Decal (.ice_decal)** on `T_Hole.png` | `DC_T_Hole.ice_decal` |
 | **Create Child Class** on `CL_Enemy.ice_class` | `CL_Enemy_Child.ice_class` |
 | **Create Child Widget** on `WG_Menu.ice_widget` | `WG_Menu_Child.ice_widget` (child widgets use the `WG_` prefix, and only an existing `WG_` is stripped) |
 | **Create Flipbook from Sprite(s)** (first is `SP_Run_0`) | `FB_Run_0.ice_flipbook` |

@@ -2,12 +2,13 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** renders 2D worlds through a modern, backend-agnostic graphics
-> pipeline: a thin **RHI** (Render Hardware Interface) sits over **nine** renderers —
-> OpenGL 4.6, OpenGL 3.3, OpenGL ES 3.2, WebGL 2.0, Vulkan, Metal (ANGLE), Metal
-> (MoltenVK), WebGPU, plus a **Null** renderer for headless servers — across **six**
+> pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
+> OpenGL 4.6, OpenGL 3.3, OpenGL ES 3.2, WebGL 2.0, Vulkan, Direct3D 12, Metal,
+> Metal (ANGLE), Metal (MoltenVK), WebGPU, plus a **Null** renderer for headless servers —
+> across **six**
 > platforms; a **render graph** schedules the frame in validated passes; a
 > heavily-optimized **2D batch renderer** draws the scene; a **screen-space
 > post-processing** stack finishes the image; a **2D lighting** system with
@@ -101,7 +102,7 @@ IceBox is a **2D** engine, but its renderer is built like a modern 3D one:
 
 | Principle | What it means |
 | --------- | ------------- |
-| **Backend-agnostic** | All rendering goes through an **RHI** so the same engine runs on OpenGL, OpenGL ES, WebGL, Vulkan, WebGPU and Metal without per-feature branching in game code. |
+| **Backend-agnostic** | All rendering goes through an **RHI** so the same engine runs on OpenGL, OpenGL ES, WebGL, Vulkan, Direct3D 12, WebGPU and native Metal without per-feature branching in game code. |
 | **Pass-based** | A **render graph** declares passes and the resources they read/write; it validates, (re)orders and profiles them every frame. |
 | **Batched & GPU-driven** | The 2D renderer batches thousands of sprites per draw and can push culling, sorting and draw generation onto the GPU. |
 | **Forward-lit, G-buffer-assisted** | Lights and 2D shadows are evaluated **in the sprite shaders** (forward), while a thin **G-buffer** (normal/roughness/metallic + AO/emissive + depth) is written alongside so screen-space effects — SSR, GI, godrays, volumetric fog — have the data they need. The G-buffer attachments are only bound when an active effect actually needs them. |
@@ -137,7 +138,7 @@ with two halves:
 * **Context** — issues commands (bind, draw, clear, blit, dispatch compute, set
   state, read pixels, …).
 
-Game and engine code never call OpenGL/Vulkan/etc. directly; they call the RHI,
+Game and engine code never call OpenGL/Vulkan/Direct3D/Metal/etc. directly; they call the RHI,
 which dispatches to the active backend. The backend is chosen at startup, and on
 initialization the device's driver string is recorded into the **crash reporter**,
 so a crash report always names the renderer, GPU and driver that produced it.
@@ -149,7 +150,7 @@ total VRAM. Every optional renderer path is gated on one of these capabilities.
 
 ### 2.2 Backends & platforms
 
-The RHI has **four** implementation families and **nine** concrete backends
+The RHI has **six** implementation families and **eleven** concrete backends
 (`RenderBackend`), covering every shipping platform:
 
 | Family | Backend | Reported as | Shader dialect |
@@ -161,6 +162,8 @@ The RHI has **four** implementation families and **nine** concrete backends
 | **GL** | `MetalANGLE` | Metal (ANGLE / OpenGL ES 3.0) | `#version 300 es` |
 | **VK** | `Vulkan` | Vulkan 1.4 (1.1 minimum) | GLSL → SPIR-V |
 | **VK** | `MetalMoltenVK` | Metal (MoltenVK / Vulkan 1.x) | GLSL → SPIR-V |
+| **D3D12** | `D3D12` | Direct3D 12 (feature level 11_0 minimum) | GLSL → SPIR-V → HLSL → DXIL (SM 6.x) or DXBC (SM 5.1) |
+| **Metal** | `Metal` | Metal (native) | GLSL → SPIR-V → MSL (2.3–3.0) |
 | **WGPU** | `WebGPU` | WebGPU | GLSL → WGSL |
 | **Null** | `Null` | Null (headless) | — |
 
@@ -168,12 +171,12 @@ The **six** target platforms and the renderers each one offers:
 
 | Platform | Selectable renderers | Default |
 | -------- | -------------------- | ------- |
-| **Windows** | OpenGL 4.6, OpenGL 3.3, Vulkan | OpenGL 4.6 |
+| **Windows** | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 | OpenGL 4.6 |
 | **Linux** | OpenGL 4.6, OpenGL 3.3, Vulkan | OpenGL 4.6 |
 | **Android** | OpenGL ES 3.2, Vulkan | OpenGL ES 3.2 |
 | **Web** | Auto / WebGPU / WebGL 2.0 | Auto (WebGPU when the browser exposes it, else WebGL 2.0) |
-| **macOS** | Metal (ANGLE over GLES) or Metal (MoltenVK over Vulkan) | Metal (ANGLE) |
-| **iOS** | Metal (MoltenVK) — the only option | Metal (MoltenVK) |
+| **macOS** | Metal (native), Metal (ANGLE over GLES) or Metal (MoltenVK over Vulkan) | **Metal (native)** |
+| **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | **Metal (native)** |
 
 The editor's active backend is chosen in
 [Preferences → Rendering](Editor-EN-DOC.md#105-rendering); the build target's
@@ -188,6 +191,22 @@ renderer is chosen per platform in **Build Game…** (see
   MoltenVK, so the probe is treated as advisory there — Metal is guaranteed — and no
   fallback backend exists. MoltenVK itself is searched for in the app
   bundle, the `Frameworks` directory, `@rpath`, and finally the SDL default loader.
+* **Direct3D 12** (Windows only) — if Direct3D 12 was not compiled in, or the pre-flight
+  adapter probe finds no hardware device with feature level 11_0, the engine switches to
+  **Vulkan** (when Vulkan itself probes clean) and otherwise to **OpenGL 4.6**, *before*
+  the window is created. If device or swapchain creation still fails after the window
+  exists, the window is destroyed and recreated for the fallback backend, and the new
+  choice is written back to `Config/Engine.json` so the next launch starts on it
+  directly.
+* **Metal** (macOS / iOS) — if the native Metal backend was not compiled in, or the
+  pre-flight device probe finds no Metal device that can create a command queue, the
+  engine switches to **Metal (MoltenVK)** (when Vulkan itself probes clean) and, on
+  macOS, otherwise to **Metal (ANGLE)**, *before* the window is created. If device or
+  layer creation still fails after the window exists, the window is destroyed and
+  recreated for the fallback backend and the new choice is written back to
+  `Config/Engine.json`, so the next launch starts on it directly. The ANGLE and
+  MoltenVK translation layers are untouched by the native backend and remain fully
+  selectable.
 * **WebGPU** — if the device is not ready, the engine logs a warning and drops to
   WebGL 2.0.
 * **Editor viewport** — selecting a GLES/WebGL backend inside the editor on a non-Apple
@@ -214,11 +233,13 @@ Backend differences the renderer compensates for automatically:
 
 | Difference | Backends affected | How it is handled |
 | ---------- | ----------------- | ----------------- |
-| **Framebuffer origin** | Vulkan, MoltenVK, WebGPU are top-left; GL family is bottom-left | The V coordinate of full-screen blits is flipped through `FramebufferTopV()` / `FramebufferBottomV()`. |
-| **Explicit UBO binding** | Only GL 4.6, Vulkan, MoltenVK and WebGPU support `layout(binding=…)` on uniform blocks | Other backends bind the light UBO by block index at link time. |
+| **Framebuffer origin** | Vulkan, MoltenVK, Direct3D 12, Metal and WebGPU are top-left; GL family is bottom-left | The V coordinate of full-screen blits is flipped through `FramebufferTopV()` / `FramebufferBottomV()`. |
+| **Clip-space depth** | Vulkan, MoltenVK, Direct3D 12 and Metal use 0…1 depth; GL uses −1…1 | The vertex shader is wrapped at compile time so `gl_Position.z` is remapped once, keeping every projection matrix in the engine GL-style. |
+| **Explicit UBO binding** | Only GL 4.6, Vulkan, MoltenVK, Direct3D 12, Metal and WebGPU support `layout(binding=…)` on uniform blocks | Other backends bind the light UBO by block index at link time. |
 | **Dynamic texture indexing** | WebGL 2.0, GLES 3.2, GL 3.3, Metal/ANGLE and WebGPU cannot index a sampler array with a varying | A generated branched `switch` samples the right slot instead. |
 | **Direct State Access** | GL 4.6 only | `RHIContextGL` is constructed in DSA mode on 4.6 and classic bind-then-modify mode elsewhere. |
 | **HDR float targets** | Native GLES/WebGL need `EXT_color_buffer_float` | Scene and ping-pong targets drop to `RGBA8` when it is missing. |
+| **Sampler LOD bias** | Metal samplers have no LOD-bias parameter | A positive per-texture LOD bias is applied through the sampler's LOD minimum; a negative bias is clamped to 0 and logged once at startup. Every other backend applies it natively. |
 
 ### 2.3 RHI capabilities
 
@@ -235,7 +256,7 @@ The RHI exposes a modern feature set so the renderer can be GPU-driven:
 | **Queries & sync** | Timestamp and time-elapsed queries (GPU timing) and fence sync objects (buffer streaming and the low-latency mode). |
 | **Framebuffers** | Up to four color attachments plus depth/stencil, renderbuffers for **MSAA** storage, draw-buffer and read-buffer selection, blits (color/depth, nearest/linear) and attachment **invalidation**. |
 | **Shaders** | Vertex+fragment and compute program creation, uniform and uniform-block introspection, plus optional **program-binary** get/create for the on-disk shader cache. |
-| **Ray tracing** | `BuildRaytracingScene()` builds a bottom/top-level acceleration structure from a triangle soup; implemented by the Vulkan backend, a no-op elsewhere. |
+| **Ray tracing** | `BuildRaytracingScene()` builds a bottom/top-level acceleration structure from a triangle soup; implemented by the Vulkan, Direct3D 12 and Metal backends, a no-op elsewhere. |
 
 The Vulkan backend enables what the device offers on top of core 1.1: dynamic
 rendering, synchronization2, timeline semaphores, buffer device address, descriptor
@@ -245,6 +266,40 @@ for [ray-traced GI](#8-ray-traced-global-illumination). It also carries a
 `VK_KHR_portability_subset` path for MoltenVK. Internally it keeps a pipeline cache, a
 descriptor allocator, a deferred deletion queue and a render-pass cache so state changes
 do not stall the frame.
+
+The **Direct3D 12** backend is the Windows-native peer of the Vulkan one and exposes the
+same feature set. It picks the highest-performance hardware adapter through
+`IDXGIFactory6`, runs a flip-model swapchain with tearing support, and reports its
+capabilities from `D3D12_FEATURE_D3D12_OPTIONS*`: resource-binding tier, highest shader
+model, **DirectX Raytracing 1.1** (`D3D12_RAYTRACING_TIER_1_1` + shader model 6.5) for
+[ray-traced GI](#8-ray-traced-global-illumination), HDR10 output detection through
+`IDXGIOutput6`, and FSR/NIS upscaling support. Internally it keeps a pipeline-state
+cache, CPU descriptor heaps for RTV/DSV/SRV plus a per-frame shader-visible descriptor
+ring and a content-hashed sampler heap, a deferred deletion queue that retires every
+resource only after the frame that used it has finished on the GPU, and a recycling
+upload-buffer pool. Storage buffers that a shader writes are promoted to a device-local
+resource on first UAV use, so compute output, GPU culling, GPU sorting and
+`ExecuteIndirect` draws all behave exactly as they do on Vulkan.
+
+The **Metal** backend is the Apple-native peer of the Vulkan and Direct3D 12 ones and
+exposes the same feature set on **macOS and iOS**. It renders straight into a
+`CAMetalLayer` attached to the SDL window — no ANGLE, no MoltenVK, no translation layer
+in between — picking the highest-performance `MTLDevice` on multi-GPU Macs and falling
+back to the system default device elsewhere. Capabilities are read from the GPU family
+(`MTLGPUFamilyApple1…9` / `MTLGPUFamilyMac2`): maximum texture size, argument limits,
+border-colour clamping, BC/ASTC/ETC compressed-texture support, unified memory, and
+**hardware ray tracing** (`MTLDevice.supportsRaytracing` + MSL 2.4) for
+[ray-traced GI](#8-ray-traced-global-illumination), where the engine builds a primitive
+and an instance `MTLAccelerationStructure` per frame slot and binds the top-level one to
+the compute encoder. Internally it keeps a render/compute pipeline-state cache and a
+separate depth-stencil-state cache, a deferred deletion queue that retires every
+resource only after the frame that used it has finished on the GPU, a recycling
+upload-buffer pool, a triple-buffered staging ring for texture uploads, and a per-frame
+uniform ring buffer. MSAA is resolved by Metal itself through the render pass's
+`resolveTexture`, so multisampled targets never round-trip through memory, and buffers
+use shared storage on unified-memory devices and managed storage (with explicit
+`didModifyRange` flushes) on discrete Macs. Compute output, GPU culling, GPU sorting and
+indirect draws all behave exactly as they do on Vulkan and Direct3D 12.
 
 ### 2.4 The shader pipeline & caches
 
@@ -259,12 +314,28 @@ startup:
   128 lights in the UBO), `MAX_LIGHTS_ACTIVE` (the configured **Max Point Lights**) and
   `MAX_PCF_HALF_SAMPLES` (4).
 * **Swappable function bodies** — texture sampling has four variants (GL 4.6 array
-  indexing, bindless handles, Vulkan, and generated branched GLES sampling), and the
+  indexing, bindless handles, SPIR-V backends (Vulkan / MoltenVK / Direct3D 12 / Metal),
+  and generated branched GLES sampling), and the
   lighting function has UBO-binding and no-UBO-binding variants. Fragment shaders that
   participate in the G-buffer append the extra `GBufferNormal` / `GBufferMaterial`
   outputs.
 * **Vulkan / MoltenVK** compile that GLSL to **SPIR-V** with `shaderc` and reflect it
   with **SPIRV-Cross** to build descriptor layouts automatically.
+* **Direct3D 12** reuses exactly the same GLSL → SPIR-V step and the same SPIRV-Cross
+  reflection, then cross-compiles the SPIR-V to **HLSL** and compiles that to **DXIL**
+  with `dxcompiler.dll` (shader model 6.0, or 6.5 when the adapter supports inline ray
+  tracing). If the DirectX Shader Compiler is not present next to the executable, it
+  falls back to the always-available FXC path (`d3dcompiler`, shader model 5.1) — the
+  renderer still works, only hardware ray tracing stays disabled. Reflection drives an
+  automatically generated **root signature**: one descriptor table per register space for
+  CBV/SRV/UAV and one for samplers.
+* **Metal** reuses exactly the same GLSL → SPIR-V step and the same SPIRV-Cross
+  reflection, then cross-compiles the SPIR-V to **Metal Shading Language** and compiles
+  that with `newLibraryWithSource:` into an `MTLLibrary` (MSL 3.0 on macOS 13 / iOS 16,
+  MSL 2.4 on macOS 12 / iOS 15, MSL 2.3 below that). Reflection assigns every uniform
+  block, storage buffer, texture and sampler an explicit MSL argument index that is
+  shared by the vertex, fragment and compute stages, so a single binding table drives
+  all of them; vertex streams live in a reserved slot range above the resource slots.
 * **WebGPU** cross-compiles the same GLSL to **WGSL**.
 
 Three caches keep the cost off the startup path:
@@ -274,6 +345,8 @@ Three caches keep the cost off the startup path:
 | **ShaderCache** | Linked **program binaries**, keyed by a 128-bit FNV-1a hash of the shader source and tagged with a driver fingerprint so a GPU-driver update invalidates the whole cache automatically. Hit/miss counts are tracked. | `Saved/Cache/Shaders` |
 | **SPIR-V cache** | Compiled SPIR-V modules keyed by source + stage, so the `shaderc` compile only happens once per shader per machine. | Alongside the shader cache |
 | **Vulkan pipeline cache** | Driver-side pipeline objects, so pipeline creation for a known state combination is near-free. | In-process, per Vulkan device |
+| **Direct3D 12 bytecode cache** | Compiled DXIL/DXBC blobs keyed by the generated HLSL, entry point and target profile, so the SPIR-V → HLSL → DXC/FXC chain runs once per shader per machine. Pipeline-state objects are then cached in-process by their full state key. | Alongside the shader cache |
+| **Metal MSL cache** | Generated Metal Shading Language, keyed by the whole program (both stages plus the resolved argument-index assignment and the MSL version), so the SPIR-V → MSL translation runs once per shader per machine. Render, compute and depth-stencil states are then cached in-process by their full state key. | Alongside the shader cache |
 
 **Project Prewarm** ([Preferences → Engine](Editor-EN-DOC.md#101-engine)) walks the
 project up-front and warms sprites, flipbooks, skeletons, materials, material
@@ -353,8 +426,9 @@ because the scene graph already wrote it.
 A single rendered frame proceeds roughly as:
 
 1. **Wait on the low-latency fence** from the previous frame (when **Low Latency Mode**
-   is on), then **begin frame** on the active backend — Vulkan and WebGPU acquire a
-   swapchain image and bail out cleanly if the window has zero area; GL binds the
+   is on), then **begin frame** on the active backend — Vulkan, Direct3D 12, Metal and
+   WebGPU acquire a swapchain image (Metal takes the next `CAMetalDrawable`) and bail out
+   cleanly if the window has zero area; GL binds the
    default framebuffer. The pass profiler and the transient resource pool start their
    frame here.
 2. **Resolve render size.** Apply **Render Scale** (clamped to 0.25×–4× at this point)
@@ -613,13 +687,19 @@ stencil buffer is part of the depth/stencil attachment and is cleared with the f
 A **material** in IceBox is a **node graph** that compiles to a runtime shader. You
 build the look by wiring nodes (texture samples, math, generators, parameters,
 material-function calls, custom expressions) into a **Material Output**, choosing a
-**Shading Mode** (Lit/Unlit), **Blend Mode**, **Domain** (Surface or PostProcess)
+**Shading Mode** (Lit/Unlit), **Blend Mode**, **Domain** (Surface, PostProcess or Decal)
 and alpha-clip threshold.
 
 * **Surface** materials are applied to sprites/meshes through the batch renderer
   (Section [4.5](#45-meshes-blur--special-draws)).
 * **PostProcess** materials are inserted into the post-process stack (Section
   [9.2](#92-the-effect-stack)).
+* **Decal** materials are assigned to a `.ice_decal` asset and drawn by the decal pass
+  over the surfaces underneath. They compile exactly like a surface material — the decal
+  texture arrives as the entity texture — and gain the **Decal Data** node, which exposes
+  the drawn decal's fade, age, normalized age, lifetime and a stable per-decal random
+  value. The pass runs right after sprites, inside the same batch, so decals depth-sort
+  and light like any other 2D geometry.
 * **Material Instances** cheaply override an exposed parameter set; **Material
   Functions** are reusable sub-graphs; **Material Parameter Collections (MPC)** are
   global parameter bags many materials can read at once.
@@ -904,8 +984,11 @@ Quality settings trade cost for fidelity:
 | **Shadow rays** | Toggle ray-traced occlusion for the analytic lighting path. |
 
 > GI is a higher-end feature. It requires a Vulkan device with hardware ray
-> tracing (`VK_KHR_ray_query` + acceleration structures); everywhere else the setting
-> is shown as unsupported and the scene falls back to direct lighting + shadows.
+> tracing (`VK_KHR_ray_query` + acceleration structures), a Direct3D 12 adapter with
+> **DirectX Raytracing 1.1** (inline ray tracing, shader model 6.5), or a Metal device
+> that reports `supportsRaytracing` with MSL 2.4 ray queries (Apple silicon, macOS 12+ /
+> iOS 15+); everywhere else the setting is shown as unsupported and the scene falls back
+> to direct lighting + shadows.
 
 > **Two different things are called "GI".** The system above (`Raytracer2D`) is the
 > *world* GI: it is a rendering setting, needs hardware ray tracing, and lights the
@@ -970,7 +1053,7 @@ configured per volume:
 | **Screen-space GI/AO/SSR** | **Ambient Occlusion (SSAO)** (intensity, radius), **Screen-Space Reflections (SSR)** (intensity, max distance, max steps, thickness, roughness cutoff, edge fade), **Godrays** (samples, decay, weight, exposure, screen-space light position), **Global Illumination** (radiance cascades: cascade count, base ray count, max distance, intensity — with a compute path where available), procedural **Sky** (texture, time of day, intensity, horizon offset — drawn *before* the scene). |
 | **Stylize** | **Heat Haze** (intensity, speed, scale, top/bottom mask), **Underwater** (tint + intensity, distortion + speed + scale, caustics + scale + speed). |
 | **Custom** | **Custom post-process materials** (materials with `Domain = PostProcess`), each with a strength, an enable flag and a **Before**/**After** placement in the chain. A material that fails to compile is remembered so it is not retried every frame. |
-| **Accessibility** | A final accessibility pass (gamma/contrast/brightness/saturation, colorblind correction — Protanopia / Deuteranopia / Tritanopia / Achromatopsia with strength) driven by [Preferences → Accessibility](Editor-EN-DOC.md#108-accessibility). It activates the post-process path on its own, so accessibility settings apply even in a level with no volume. |
+| **Accessibility** | A final pair of accessibility passes driven by [Preferences → Accessibility](Editor-EN-DOC.md#108-accessibility): **Field of View** (a screen-space lens warp — barrel above 90°, pincushion below, aspect-corrected, with automatic scale compensation so the frame stays filled) followed by the colour pass (gamma/contrast/brightness/saturation, colorblind correction — Protanopia / Deuteranopia / Tritanopia / Achromatopsia with strength). Either one activates the post-process path on its own, so accessibility settings apply even in a level with no volume. |
 | **Anti-aliasing** | **FXAA** as a post pass (MSAA/SSAA are handled at raster time — Section [10](#10-image-quality-aa-hdr--scaling)). |
 
 ### 9.3 Effect order
@@ -988,7 +1071,7 @@ FXAA never softens the HDR10 tonemap (it runs after it):
 7. **Heat Haze** → **Underwater** → **Motion Blur**.
 8. **Lens Sharpen** → **CAS**.
 9. **Color Grading** → **LUT** → **Chromatic Aberration** → **Vignette** → **Film Grain**.
-10. **Accessibility**.
+10. **Field of View** lens warp → **Accessibility** colour pass.
 11. **Custom materials** marked *After*.
 12. **Final composite** — passthrough, or the **HDR10** PQ tonemap when HDR10 output is live.
 13. **FXAA**.
@@ -1039,15 +1122,15 @@ scale does not blur the interface.
 
 Render the scene at a lower internal resolution and reconstruct it to the output
 resolution at the very end of the frame — after post-processing, before the UI. Like
-[ray tracing](#8-ray-traced-global-illumination) this is **Vulkan-only and gated on the
-GPU**: the capability is probed once at device creation, and on any other backend or an
+[ray tracing](#8-ray-traced-global-illumination) this is **Vulkan / Direct3D 12 / Metal
+only and gated on the GPU**: the capability is probed once at device creation, and on any other backend or an
 unsupported device the setting is stored but does nothing, leaving the normal linear
 blit in place. Defaults to **Off**.
 
 | Upscaler | How it works | Requires |
 | -------- | ------------ | -------- |
-| **FSR** | AMD FidelityFX Super Resolution 1.0 — **EASU**, a 12-tap edge-adaptive spatial upsample that fits an anisotropic elliptical filter to the local gradient, then **RCAS**, robust contrast-adaptive sharpening with a noise-aware limiter that cannot overshoot the local ring. Two passes. | Vulkan + any GPU that can sample and render `RGBA8` with linear filtering |
-| **NIS** | NVIDIA Image Scaling — directional scaling driven by the local structure tensor (eigen-decomposed to get edge direction and coherence), with the reconstruction kernel stretched along the edge, plus an edge-adaptive unsharp mask clamped against the local 2×2 range to suppress ringing. One pass. | Vulkan + an **NVIDIA** GPU |
+| **FSR** | AMD FidelityFX Super Resolution 1.0 — **EASU**, a 12-tap edge-adaptive spatial upsample that fits an anisotropic elliptical filter to the local gradient, then **RCAS**, robust contrast-adaptive sharpening with a noise-aware limiter that cannot overshoot the local ring. Two passes. | Vulkan or Direct3D 12 + any GPU that can sample and render `RGBA8` with linear filtering |
+| **NIS** | NVIDIA Image Scaling — directional scaling driven by the local structure tensor (eigen-decomposed to get edge direction and coherence), with the reconstruction kernel stretched along the edge, plus an edge-adaptive unsharp mask clamped against the local 2×2 range to suppress ringing. One pass. | Vulkan or Direct3D 12 + an **NVIDIA** GPU |
 
 **Quality presets** set the internal render resolution as a fraction of the output:
 Ultra Performance 33 %, Performance 50 %, Balanced 59 %, Quality 67 %, Ultra Quality
@@ -1070,9 +1153,14 @@ profiler as `Upscale.FSR.EASU` / `Upscale.FSR.RCAS` / `Upscale.NIS`.
 ### 10.3 HDR10 output
 
 HDR10 (ST.2084 PQ / Rec.2020) output with configurable **paper-white** and
-**max-luminance** nits. Real HDR signalling is delivered by the **Vulkan** backend in a
-standalone build: the swapchain is created with the HDR10 colour space when the surface
-offers it, the final target switches to `RGB10_A2`, HDR metadata is published to the
+**max-luminance** nits. Real HDR signalling is delivered by the **Vulkan**,
+**Direct3D 12** and **Metal** backends in a standalone build: the swapchain is created
+with the HDR10 colour space when the surface offers it
+(`VK_COLOR_SPACE_HDR10_ST2084_EXT`, `DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020` via
+`IDXGISwapChain3::SetColorSpace1`, or a `CAMetalLayer` with
+`wantsExtendedDynamicRangeContent`, the `ITUR_2100_PQ` colour space and `CAEDRMetadata`
+on a display that reports EDR headroom), the
+final target switches to `RGB10_A2`, HDR metadata is published to the
 display, and the last post-process step becomes the PQ tonemap instead of a
 passthrough. In the editor viewport and on other backends (OpenGL / WebGPU / GLES) the
 request is ignored and the image stays correct SDR rather than emitting a washed-out PQ
@@ -1082,7 +1170,9 @@ tonemapped twice.
 ### 10.4 Pacing: VSync, low latency & adaptive quality
 
 * **VSync** — present synchronized to the display; the Vulkan swapchain picks its
-  present mode accordingly.
+  present mode accordingly, the Direct3D 12 swapchain switches between a sync
+  interval of 1 and tear-allowed immediate presentation, and the Metal layer toggles
+  `displaySyncEnabled` and its maximum drawable count.
 * **Low Latency Mode** — a fence is enqueued at the end of each frame and waited on at
   the start of the next, keeping the CPU from running ahead of the GPU. It trades a
   little throughput for noticeably lower input latency.
@@ -1375,6 +1465,8 @@ and takes effect on restart ([13.1](#131-the-simulation-loop)).
 | WebGL 2.0 | GL | Web |
 | Metal (ANGLE) | GL→Metal | macOS |
 | Vulkan | VK | Windows, Linux, Android |
+| Direct3D 12 | D3D12 | Windows |
+| Metal | Metal (native) | macOS, iOS |
 | Metal (MoltenVK) | VK→Metal | macOS, iOS |
 | WebGPU | WGPU | Web |
 | Null (headless) | Null | Dedicated servers on every platform |
@@ -1383,12 +1475,12 @@ and takes effect on restart ([13.1](#131-the-simulation-loop)).
 
 | Platform | Renderers |
 | -------- | --------- |
-| Windows | OpenGL 4.6, OpenGL 3.3, Vulkan |
+| Windows | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 |
 | Linux | OpenGL 4.6, OpenGL 3.3, Vulkan |
 | Android | OpenGL ES 3.2, Vulkan |
 | Web | Auto, WebGPU, WebGL 2.0 |
-| macOS | Metal (ANGLE), Metal (MoltenVK) |
-| iOS | Metal (MoltenVK) |
+| macOS | Metal, Metal (ANGLE), Metal (MoltenVK) |
+| iOS | Metal, Metal (MoltenVK) |
 
 Any of the six can additionally run **headless** on the Null renderer via `--headless`.
 
@@ -1488,7 +1580,9 @@ is exact.
 
 **Ray tracing / GI is greyed out or missing.**
 The world ray-traced GI requires a **Vulkan** device with hardware ray tracing
-(`VK_KHR_ray_query` + acceleration structures). On any other backend or on hardware
+(`VK_KHR_ray_query` + acceleration structures), a **Direct3D 12** adapter with DirectX
+Raytracing 1.1 and a shader-model-6.5 compiler, or a **Metal** device that reports
+`supportsRaytracing` with MSL 2.4 ray queries. On any other backend or on hardware
 without it, the setting reads as unsupported and the scene uses direct lighting + 2D
 shadows. The separate **Global Illumination** effect in a post-process volume
 (radiance cascades) has no such requirement — see [Section 8](#8-ray-traced-global-illumination).
@@ -1532,8 +1626,8 @@ must be marked infinite/unbounded). If two volumes overlap, the higher **Priorit
 wins and the **Blend Radius** controls the crossfade.
 
 **HDR10 is on but the picture looks the same (or washed out).**
-Real HDR10 signalling needs the **Vulkan** backend in a standalone build, on an HDR
-display with HDR enabled in the OS. Everywhere else — including the editor viewport —
+Real HDR10 signalling needs the **Vulkan**, **Direct3D 12** or **Metal** backend in a
+standalone build, on an HDR/EDR display with HDR enabled in the OS. Everywhere else — including the editor viewport —
 the request is deliberately ignored and a correct SDR image is shown instead of a
 washed-out PQ signal. See [10.3](#103-hdr10-output).
 

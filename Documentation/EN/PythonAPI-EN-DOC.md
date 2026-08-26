@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
@@ -1334,12 +1334,12 @@ Returns list of **all** supported component types in the engine.
 types = editor.get_component_types()
 # ['Transform', 'SpriteRenderer', 'Camera', 'Rigidbody', 'Collider',
 #  'Flipbook', 'Audio', 'Animator', 'Skeleton', 'Tilemap', 'FX',
-#  'Widget', 'PointLight', 'SpotLight', 'PointMarker', 'Script', 'AI', 'Joint',
+#  'Widget', 'PointLight', 'SpotLight', 'PointMarker', 'Decal', 'Script', 'AI', 'Joint',
 #  'Destructible', 'ClassComponent', 'Stencil', 'GameplayTag', 'Interface',
 #  'Replication', 'Hierarchy']
 ```
 
-> 25 types. See the [add / remove support matrix](#add--remove-support-matrix) — `Transform` and `Hierarchy` are in this list but cannot be added or removed.
+> 26 types. See the [add / remove support matrix](#add--remove-support-matrix) — `Transform` and `Hierarchy` are in this list but cannot be added or removed.
 
 ---
 
@@ -1489,7 +1489,7 @@ if editor.has_component(uuid, 'Rigidbody'):
     print('Has physics body')
 ```
 
-**Supported types**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
+**Supported types**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
 
 > ℹ️ `PointLight` and `SpotLight` are two faces of one underlying light component, so an entity carrying either will report `True` for `has_component` on both. Use `get_instance_count(uuid, 'PointLight')` / `get_instance_count(uuid, 'SpotLight')` to tell which kind of lights it actually holds.
 
@@ -1772,8 +1772,8 @@ spot = editor.get_component(uuid, 'SpotLight')
 ```python
 sc = editor.get_component(uuid, 'Script')
 # {
-#     'file_name': 'PlayerScript',
-#     'class_path': 'Content/Scripts/PlayerScript.lua',
+#     'file_name': 'CL_Player',
+#     'class_path': 'Content/Classes/CL_Player.ice_class',
 #     'override_class_defaults': False,
 #     'override_lua_script': False,
 #     'lua_script_override': '',
@@ -1875,6 +1875,17 @@ pm = editor.get_component(uuid, 'PointMarker')
 #     'color': (1.0, 0.0, 0.0),
 #     'shape': 0,    # 0 = Circle, 1 = Square, ...
 #     'size': 10.0,
+#     'visible': True
+# }
+```
+
+**Example for Decal:**
+```python
+dc = editor.get_component(uuid, 'Decal')
+# {
+#     'instance_count': 1,
+#     'decal_path': 'Content/Decals/DC_Crack.ice_decal',
+#     'color': (1.0, 1.0, 1.0, 1.0),
 #     'visible': True
 # }
 ```
@@ -2541,7 +2552,7 @@ for p in panels:
 
 **Asset editor panels** — opened by `open_asset`, and can only be *closed* by name:
 
-`TilesetEditor`, `TilemapEditor`, `ClassEditor`, `TextureSettings`, `SpriteEditor`, `FlipbookEditor`, `SkeletonEditor`, `SoundSettings`, `SpritesheetSlicer`, `AnimationEditor`, `MaterialEditor`, `MaterialInstanceEditor`, `MaterialFunctionEditor`, `MPCEditor`, `FXEditor`, `FontEditor`, `WidgetEditor`, `ViewEditor`, `CinemaEditor`, `Localization`, `AIEditor`, `VideoPlayer`
+`TilesetEditor`, `TilemapEditor`, `ClassEditor`, `LuaScriptEditor`, `TextureSettings`, `SpriteEditor`, `FlipbookEditor`, `SkeletonEditor`, `SoundSettings`, `SpritesheetSlicer`, `AnimationEditor`, `MaterialEditor`, `MaterialInstanceEditor`, `MaterialFunctionEditor`, `MPCEditor`, `FXEditor`, `FontEditor`, `WidgetEditor`, `ViewEditor`, `CinemaEditor`, `Localization`, `AIEditor`, `VideoPlayer`
 
 #### `editor.set_panel_visible(panel_name, visible)`
 
@@ -2728,7 +2739,7 @@ Cuts current selection to clipboard.
 
 Some components support multiple instances on one entity. For example, SpriteRenderer can have multiple sprite layers, PointLight — multiple light sources.
 
-**Multi-instance components**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Tilemap`, `Joint`, `ClassComponent`
+**Multi-instance components**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent`
 
 #### `editor.get_instance_count(uuid, component_type)` → `int`
 
@@ -2959,6 +2970,27 @@ marker_data = editor.get_instance(uuid, 'PointMarker', 0)
 #     'visible': True,
 #     'render_in_game': False,
 #     'position': (0.0, 0.0, 0.0)
+# }
+```
+
+**Decal:**
+```python
+decal_data = editor.get_instance(uuid, 'Decal', 0)
+# {
+#     'name': 'Graffiti',
+#     'decal_path': 'Content/Decals/DC_Graffiti.ice_decal',
+#     'color': (1.0, 1.0, 1.0, 1.0),
+#     'size_override': (0.0, 0.0),     # 0 = take the size from the decal asset
+#     'variant_index': -1,             # -1 = pick a texture variant automatically
+#     'use_sort_order_override': False,
+#     'sort_order': 0,
+#     'flip_x': False,
+#     'flip_y': False,
+#     'visible': True,
+#     'render_in_game': True,
+#     'position': (0.0, 0.0, 0.0),
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0
 # }
 ```
 
@@ -4679,6 +4711,7 @@ icebox.log.error('Critical error!')
 | `PointLight` | ✅ | Point light. Color, intensity, radius, falloff, shadows. |
 | `SpotLight` | ✅ | Spotlight. Color, direction, cone angles, shadows. |
 | `PointMarker` | ✅ | Point marker (editor). Color, shape, size. |
+| `Decal` | ✅ | Placed decals. Decal asset path, tint, size override, texture variant, sort order, flip. |
 | `Script` | ❌ | Lua script. File name and class path. |
 | `AI` | ❌ | AI behaviour. AI asset path, move speed, movement mode, detection/attack radius, perception settings, patrol route. |
 | `Joint` | ✅ | Physics joints. Type, anchors, springs, motors, limits, break forces. |
@@ -4792,6 +4825,11 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | `arrow_head_size` | PointMarker | Arrow head size (Arrow shape) |
 | `arrow_direction` | PointMarker | Arrow direction in degrees (Arrow shape) |
 | `line_end_offset` | PointMarker | Line end offset `(x, y)` (Line shape) |
+| `decal_path` | Decal | Path to the `.ice_decal` asset the instance renders |
+| `size_override` | Decal | Size in pixels `(w, h)`; `(0, 0)` takes the size from the decal asset |
+| `variant_index` | Decal | Texture variant index; `-1` picks one automatically |
+| `use_sort_order_override` | Decal | Use the instance `sort_order` instead of the one from the decal asset |
+| `sort_order` | Decal | Draw order among decals; higher values draw on top |
 | `cookie_texture` | PointLight, SpotLight | Light cookie (gobo) texture path |
 | `cookie_intensity` | PointLight, SpotLight | Light cookie intensity |
 | `cookie_rotation` | PointLight, SpotLight | Light cookie rotation in degrees |
@@ -4830,6 +4868,7 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | MaterialInstance | `.ice_matinst` | Material instance |
 | MaterialFunction | `.ice_matfunc` | Material function |
 | MaterialCollection | `.ice_mpc` | Material parameter collection |
+| Decal | `.ice_decal` | Decal (bullet holes, blood splatter, scorch marks) |
 | Sound | `.ice_sound` | Sound asset (sidecar for audio files) |
 | FX | `.ice_fx` | FX system |
 | Widget | `.ice_widget` | UI widget |

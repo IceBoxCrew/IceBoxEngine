@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > **IceBox Engine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -130,7 +130,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame          Beta 0.8.3 │
+│                             │ Remote Preview │ MyNewGame          Beta 0.8.4 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -456,8 +456,8 @@ This button is **not present on macOS builds**.
 
 * The **project name** (e.g. `MyNewGame`) is shown after a separator — it is the
   `Name` field of the project's `.iceproject` manifest.
-* The **engine version** (e.g. `Beta 0.8.3`) is right-aligned at the far end of the
-  bar. It is read from `Config/Updater.json` (`B-0.8.3` → `Beta 0.8.3`), falling
+* The **engine version** (e.g. `Beta 0.8.4`) is right-aligned at the far end of the
+  bar. It is read from `Config/Updater.json` (`B-0.8.4` → `Beta 0.8.4`), falling
   back to the version the editor was compiled with.
 
 Any **toolbar buttons registered by plugins** appear between the Remote Preview
@@ -962,7 +962,8 @@ Window and top-level performance:
   (NVIDIA Image Scaling), with a quality preset (Ultra Performance 33 % / Performance
   50 % / Balanced 59 % / Quality 67 % / Ultra Quality 77 % / Native 100 %), a
   **Sharpening** toggle and its 0–1 strength. Off by default. Like ray tracing this is
-  **Vulkan-only and gated on the GPU** — NIS additionally requires an NVIDIA card — and
+  **Vulkan / Direct3D 12 / Metal only and gated on the GPU** — NIS additionally requires
+  an NVIDIA card — and
   the section shows why it is unavailable when it is. The preset multiplies with Render
   Scale and the SSAA modes, and the panel prints the resulting internal resolution. See
   [Graphics → Upscaling](Graphics-EN-DOC.md#102-upscaling-fsr--nis).
@@ -1034,8 +1035,11 @@ Global rendering defaults (a level can override these in
 
 * **Lighting Mode** (Unlit / Lit).
 * **Render Backend** — the list depends on the platform and the build: OpenGL 4.6 /
-  OpenGL 3.3 (/ Vulkan when compiled in) on Windows and Linux, Metal (ANGLE) /
-  Metal (MoltenVK) on macOS.
+  OpenGL 3.3 (/ Vulkan when compiled in, / Direct3D 12 on Windows when compiled in) on
+  Windows and Linux, and Metal (native, the default) / Metal (ANGLE) / Metal (MoltenVK)
+  on macOS. The choice is written to
+  `Config/Engine.json` and applied on the next editor start, with an automatic fallback
+  chain when the selected backend is not available on the machine.
 * When **Lit**: **Ambient** color & intensity; **2D Shadows** (enable, ray quality,
   softness, intensity, bias, PCF samples, directional length and depth fade,
   colliders-block-shadows); **Ray Tracing** (when supported); **Directional Light**
@@ -1081,12 +1085,29 @@ The global mixer:
 ### 10.8 Accessibility
 
 A broad accessibility suite (master **Accessibility Enabled** toggle, then):
-Gamma, Contrast, Brightness, Saturation; **Colorblind** mode (Protanopia /
+Gamma, Contrast, Brightness, Saturation; **Field of View (Lens)** with its angle
+slider; **Colorblind** mode (Protanopia /
 Deuteranopia / Tritanopia / Achromatopsia) with strength; a
 **Dyslexia-Friendly Font**; **Text-to-Speech** (enable, rate, volume, pitch);
 **Game Speed** (0.25×–2×, applied to gameplay delta time); and **Force Mono Audio**.
 These settings are exposed to games so they can honor the player's accessibility
 choices.
+
+**Field of View** is a lens, not a camera frustum. The 2D camera stays
+orthographic, so culling, lighting, physics and screen-to-world math are all
+untouched — the slider drives a screen-space lens warp instead. `90°` is neutral,
+above `90°` the frame bulges outward (wide angle, barrel distortion), below `90°`
+it pinches inward (telephoto, pincushion); the range is `60°–120°`. The warp is
+aspect-corrected, so the same value looks the same at 16:9, 21:9 and portrait
+mobile, and the frame is kept completely filled — no smeared edges, no black bars.
+It runs as one full-screen pass at the end of the post-process chain on every
+render backend, activates the post-process path on its own (so it works in a level
+with no post-process volume) and is skipped entirely while the toggle is off.
+Widget elements are composited after post-processing unless marked
+*Post Processed*, so the HUD is not distorted. Being a screen-space warp, mouse
+coordinates are not re-projected: at high angles the cursor and the picked world
+point drift apart near the frame corners, exactly like the Heat Haze and
+Underwater post effects.
 
 The **Dyslexia Font Path** points at a `.ttf`/`.otf` inside the project's
 `Content/` folder (picked via the asset picker; stored Content-relative, but
@@ -1340,6 +1361,16 @@ is saved inside the `.icemap`.
 * Pressing `Ctrl+S` while the Level Script window is focused **during Play mode**
   hot-reloads the script into the running game instead of saving the level.
 
+**Lua scripts.** A standalone `.lua` asset opens in the **Lua Script Editor** — the
+same Lua code editor the Class Editor hosts, on its own: **Save** (`Ctrl+S` while the
+window is focused), **Compile** with an inline `OK`/`Error` badge (the failing line is
+marked and the message shown as a tooltip), a cursor read-out, and the shared Lua
+helpers — undo/redo, search & replace, go-to-line, the function navigator, snippet
+templates, autocomplete and optional auto-compile. Each script gets its own dockable
+window; closing one with unsaved edits asks Save / Don't Save / Cancel. Create scripts
+from the Content Browser's **Other ▸ Create Lua Script** (see
+[Assets](Assets-EN-DOC.md)).
+
 **Text notes.** Plain `.txt` notes open in a small built-in text editor titled
 `Text Note: <name>`, with File → Save (`Ctrl+S`) and Edit → Undo / Redo / Copy /
 Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
@@ -1417,6 +1448,8 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `LMB` / `RMB` | Paint / erase |
 | `Alt+LMB` / `Alt+RMB` | Fill / pick |
 | `Shift+RMB` / `Shift+LMB` | Select region / stamp |
+| `Q` / `E` | Rotate the brush counter-clockwise / clockwise |
+| `Ctrl+Q` / `Ctrl+E` | Rotate the tile under the cursor counter-clockwise / clockwise |
 | `Ctrl+S` | Save tilemap |
 
 ---

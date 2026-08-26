@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.3 Version
+### Actual for B-0.8.4 Version
 
 > This document covers two production-critical workflows of **IceBox Engine**:
 >
@@ -452,7 +452,8 @@ rather than the whole system's.
 ### 4.5 GPU tab
 
 * A status line naming the **active backend's GPU timer** (e.g. OpenGL timer queries,
-  Vulkan timestamps) and whether it is available.
+  Vulkan timestamps, Direct3D 12 timestamp queries, Metal counter sampling) and whether
+  it is available.
 * **GPU frame time** with the equivalent GPU-bound FPS, plus **draw calls** and **quads**.
 * **GPU temperature** with its source and, with graphs on, a temperature graph.
 * A **VRAM** block (tracked / total, peak, allocation count) with a progress bar.
@@ -782,7 +783,7 @@ Collect output → your chosen output folder
         ├─ [optional] Pack Content → Content.icepak (zstd, optionally split)
         ├─ [macOS] re-codesign, then .dmg / .pkg / notarize
         ├─ [optional] Generate game_manifest.json (SHA-256 of every file)
-        └─ [optional] Create installer (NSIS / .deb)
+        └─ [optional] Create installer (NSIS .exe / .msi / .deb)
 ```
 
 The dialog itself does not compile code — it gathers settings, runs the appropriate
@@ -882,7 +883,10 @@ runtime (with fallbacks).
 
 * **Output:** `.exe` executable with DLLs.
 * **Graphics API:** **OpenGL 4.6** (default), **OpenGL 3.3** (compatible with GPUs from
-  ~2010+), or **Vulkan** (falls back to OpenGL 4.6/3.3 if unavailable).
+  ~2010+), **Vulkan** (falls back to OpenGL 4.6/3.3 if unavailable), or **Direct3D 12**
+  (Windows-only; falls back to Vulkan, then OpenGL 4.6, then OpenGL 3.3 if unavailable).
+  Direct3D 12 supports the same high-end features as Vulkan — ray-traced GI (DXR 1.1),
+  FSR/NIS upscaling and a real HDR10 swapchain.
 * **Architecture:** **x64** (default), **x86** (32-bit, for maximum compatibility with
   older systems) or **arm64** (Windows on ARM). A 64-bit editor builds all three; a 32-bit
   editor is locked to **x86** and the selector is disabled, because a 32-bit toolchain
@@ -891,7 +895,8 @@ runtime (with fallbacks).
   machine produces it; a Windows on ARM device is only needed to run the result. KTX2
   texture cooking is unavailable for arm64 (no Basis Universal port) and falls back to
   WebP automatically.
-* Supports the **Distribution** options (manifest, pack content, installer) — see
+* Supports the **Distribution** options (manifest, pack content, installer), including
+  an **NSIS `.exe`** installer and an **`.msi`** Windows Installer package — see
   [Section 10](#10-distribution-manifest-packing--installers).
 
 ### 8.2 Linux
@@ -914,11 +919,19 @@ runtime (with fallbacks).
   `x86_64` (64-bit emulators), or `x86` (32-bit legacy emulators).
 * **Graphics API:** **OpenGL ES 3.2** or **Vulkan** (falls back to GLES 3.2/3.0).
 * **Orientation:** Landscape / Portrait / Auto.
-* **Package Name** (e.g. `com.studio.game`), **Min SDK** / **Target SDK** (24–36; Min is
+* **Package Name** (e.g. `com.studio.game`), **Min SDK** / **Target SDK** (24–37; Min is
   clamped so it never exceeds Target), **Version Code** / **Version Name**, **Publisher**.
+  API 37 is Android 17, the newest level the engine ships support for; the build scripts
+  reject anything outside that range so a typo fails immediately instead of half-way through
+  Gradle. `compileSdk` follows Target SDK automatically and never drops below 37.
 * **Services** (toggles, wired into the Android template): **Ads** (AdMob App ID),
   **In-App Purchases**, **Play Games** (App ID), **Consent**, **In-App Review**,
-  **Notifications**, **Bluetooth**, **Firebase**, **Saved Games**.
+  **Notifications**, **Bluetooth**, **Local Network (LAN)**, **Firebase**, **Saved Games**.
+  **Local Network (LAN)** declares `ACCESS_LOCAL_NETWORK`. From **Target SDK 37** on Android
+  blocks LAN sockets without it, so `Network.DiscoverServers()`, the LAN beacon and every
+  connection to a LAN address stop working — internet and loopback traffic are unaffected.
+  Leave it off for a game that only talks to the internet; turn it on for LAN multiplayer and
+  request it at runtime with `Permissions.Request(Permissions.ACCESS_LOCAL_NETWORK)`.
   Enabling **Ads** without a valid AdMob App ID (`ca-app-pub-…~…`) fails the build on
   purpose — the SDK reads it from the manifest at process start and serves nothing without
   it, so the APK would build clean and never show an ad.
@@ -981,8 +994,11 @@ runtime (with fallbacks).
 ### 8.5 macOS
 
 * **Output:** `.app` bundle (built on a Mac with Xcode).
-* **Graphics API:** **Metal via ANGLE** (OpenGL ES 3.0 translated to Metal) or
-  **Metal via MoltenVK** (Vulkan on Metal).
+* **Graphics API:** **Metal** (the native Metal renderer — the default), **Metal via
+  ANGLE** (OpenGL ES 3.0 translated to Metal) or **Metal via MoltenVK** (Vulkan on
+  Metal). Native Metal supports the same high-end features as Vulkan and Direct3D 12 —
+  ray-traced GI, FSR/NIS upscaling and a real HDR10 (EDR) layer — and falls back to
+  MoltenVK and then ANGLE if the device or the layer cannot be created.
 * **Architecture:** **x86_64** (Intel) or **arm64** (Apple Silicon).
 * **Deployment Target** (clamped to the engine minimum), **Bundle ID**, app **Category**.
 * **Signing:** codesign identity, **Hardened Runtime**, **Notarize** (+ keychain notary
@@ -1000,7 +1016,9 @@ runtime (with fallbacks).
 ### 8.6 iOS
 
 * **Output:** signed **`.ipa`** (via Xcode) or unsigned `.app` bundle.
-* **Graphics API:** Metal via MoltenVK (Vulkan on Metal).
+* **Graphics API:** **Metal** (the native Metal renderer — the default) or **Metal via
+  MoltenVK** (Vulkan on Metal). Native Metal falls back to MoltenVK if the device
+  cannot be created.
 * **Bundle ID**, **Development Team**, **Code-Sign Identity**, **Provisioning Profile**,
   **Deployment Target** (clamped to the engine minimum).
 * **Destination:** Device (`iphoneos`) or Simulator (`iphonesimulator`).
@@ -1145,44 +1163,164 @@ content.
 **Create Installer** (Windows/Linux) produces a proper installer with uninstaller and
 system registration, using **Homepage** and **Contact Email** metadata. The best icon
 found in the output folder (`.ico` > `.png` > `.bmp` > `.jpg`) and the project's
-`LICENSE.txt` are passed to the script automatically:
+`LICENSE.txt` are passed to the script automatically. A multi-frame `.ico` is reduced to
+its largest frame; with neither ImageMagick nor python3-Pillow installed the icon is shipped
+unconverted and the log says so:
 
-* **Windows** — an **NSIS** `.exe` installer (requires NSIS installed). Invokes
-  `create_game_installer_windows.bat` (`.sh` on non-Windows hosts).
-* **Linux** — a **`.deb`** package (requires `dpkg-deb`; on Windows hosts this runs via
-  WSL). Invokes `create_game_installer_linux.*`. The game lands in `/opt/<Game Name>`,
-  with a launcher on `PATH` as `/usr/bin/<package-name>`, a menu entry in
-  `/usr/share/applications`, a 256×256 icon in the hicolor theme and the license as
-  `/usr/share/doc/<package-name>/copyright`. The package name is the game name reduced
+* **Windows** — an **NSIS `.exe`** installer, an **`.msi`** Windows Installer package, or
+  **both**, picked with the **Windows Package Format** dropdown that appears under the
+  checkbox. Either way it invokes `create_game_installer_windows.bat` (`.sh` on non-Windows
+  hosts).
+* **Linux** — a **`.deb`** package, an **`.AppImage`**, or **both**, picked with the
+  **Linux Package Format** dropdown that appears under the checkbox. Either way it invokes
+  `create_game_installer_linux.*` (on Windows hosts that runs through WSL).
+
+**Windows Package Format** is remembered in `Config/Editor.json` as
+`BuildSettings.WindowsPackageFormat` (`0` = `.exe`, `1` = `.msi`, `2` = both) and reaches
+the script as `--format exe|msi|both`.
+
+* **`.exe`** (needs NSIS, with CPack's NSIS generator as a fallback) — the classic setup
+  wizard: welcome, license, destination folder, a component list (core files, desktop
+  shortcut, Start-menu shortcuts), progress, and a *Launch* checkbox at the end. It installs
+  into `C:\Games\<Game Name>`, writes `HKLM\Software\<Game Name>` plus an Add/Remove
+  Programs entry, and its uninstaller deletes the whole install folder.
+* **`.msi`** (needs the **WiX Toolset**) — a real Windows Installer package, the format
+  managed deployment expects: `msiexec /i <package> /qn` installs it unattended,
+  Group Policy and Intune can push it, `winget` and Chocolatey can wrap it, and Windows
+  itself provides repair, modify and rollback. It installs **per-machine** into
+  `%ProgramFiles%\<Game Name>` (`%ProgramFiles(x86)%` for an x86 build), offers the same
+  three feature checkboxes, writes the same `HKLM\Software\<Game Name>` values the NSIS
+  installer does, and registers an Add/Remove Programs entry carrying your icon, publisher,
+  homepage and contact. Its dialogs come from WiX's *Mondo* dialog set (welcome, license,
+  setup type, feature tree with a folder browser, progress, finish with a *Launch*
+  checkbox), and it elevates itself through UAC, so it never has to be started "as
+  administrator".
+
+**What is worth knowing about the `.msi`:**
+
+* Its **UpgradeCode** is derived from the game name and the target architecture, so a new
+  build of the same game **upgrades** the previous install in place instead of stacking a
+  second copy — while the x86, x64 and arm64 builds of the same game stay independent
+  products that can live side by side. Re-installing the *same* version upgrades cleanly
+  too, so repeated test installs never pile up.
+* The **product version** Windows Installer compares is the first three numbers of your
+  **Version Name** (`v1.2.3-beta` becomes `1.2.3`), clamped to MSI's own
+  `255.255.65535` ceiling. A fourth field is ignored by MSI, so bump one of the first three
+  for an upgrade to be recognised.
+* **Empty folders** in the build output are recreated by the installer, and uninstall
+  removes exactly what was installed — files a player created next to the game (saves,
+  screenshots) survive, whereas the NSIS uninstaller deletes the entire folder.
+* Its component GUIDs are **deterministic**, derived from the same UpgradeCode, so two
+  builds of the same game produce packages Windows Installer can reason about instead of
+  a fresh set of unrelated components every time.
+* Its **code page** follows the product name. A name that fits Latin-1 keeps the usual
+  `1252`; anything else — Cyrillic, Greek, Polish, Japanese — makes the step pick the ANSI
+  code page that can carry it, because Windows Installer summary information cannot be
+  stored as UTF-8. The log names the code page whenever it is not `1252`.
+* The two shortcut components deliberately key off `HKLM`, because a per-machine install
+  puts its shortcuts on the **All Users** desktop and Start menu. `ICE38`, `ICE43` and
+  `ICE57` flag that pattern anyway — they assume those folders are per-user — so the WiX 3
+  path suppresses exactly those three, together with `ICE61`, which only fires because
+  re-installing the same version is deliberately allowed.
+
+**The MSI step finds its own toolchain.** It looks for WiX in this order: `$ICE_WIX`, `wix`
+on `PATH`, the per-user .NET tools folder, the engine's own cache, and finally a **WiX 3**
+installation (`%WIX%`, `PATH`, `C:\Program Files (x86)\WiX Toolset v3.*` — that path uses
+`heat` to harvest and `candle`/`light` to build). If none of them is there and the .NET SDK
+is installed, **WiX 5** is fetched once into `%LOCALAPPDATA%\IceBoxEngine\wix`
+(`~/.cache/IceBoxEngine/wix` on Unix) and reused by every later build. WiX 6 and newer are
+used when they are **already** installed and their Open Source Maintenance Fee EULA has been
+accepted; the engine never installs those itself, and it skips a WiX 6/7 whose EULA is still
+unaccepted rather than failing deep inside the build. WiX's UI and utility extensions are
+added to the per-user extension cache the same way — if they cannot be fetched, the package
+still builds, it just falls back to the plain Windows Installer progress UI and drops the
+*Launch* checkbox.
+
+| Variable | Effect |
+| -------- | ------ |
+| `ICE_WIX` | Path to `wix.exe` (WiX 4+) or to a WiX 3 `bin` folder, used instead of searching. |
+| `ICE_WIX_NO_DOWNLOAD=1` | Never download anything. Packaging then needs a WiX already on the machine. |
+| `ICE_STAGING_ROOT` | Where WiX stages its intermediates and cabinets, for when `%TEMP%` is too small. |
+
+**Linux Package Format** is remembered in `Config/Editor.json` as
+`BuildSettings.LinuxPackageFormat` (`0` = `.deb`, `1` = `.AppImage`, `2` = both) and reaches
+the script as `--format deb|appimage|both`.
+
+* **`.deb`** (needs `dpkg-deb`, with CPack's DEB generator as a fallback) — the game lands
+  in `/opt/<Game Name>`, with a launcher on `PATH` as `/usr/bin/<package-name>`, a menu
+  entry in `/usr/share/applications`, a 256×256 icon in the hicolor theme and the license
+  as `/usr/share/doc/<package-name>/copyright`. The package name is the game name reduced
   to a Debian-legal form (lowercase, `a-z0-9+.-`), and the control version is the build
   version with any leading `v` stripped. Removing the package also clears `/opt/<Game Name>`,
   so save files written next to the game do not survive an uninstall.
+* **`.AppImage`** — one portable, self-contained file that runs on any reasonably modern
+  distribution without being installed: the player only has to make it executable. Inside
+  it is an AppDir whose `AppRun` `cd`s into the payload and starts the game exactly the way
+  the `.deb` launcher does, next to a `.desktop` entry and a 256×256 icon so desktop
+  integrators (AppImageLauncher, `appimaged`) can add a menu entry. An AppImage is mounted
+  **read-only**, so the runtime falls back to `~/.local/share/IceBoxEngine/game/` for saves,
+  config and user `Mods/`/`Plugins/` — the same place a `.deb` installed under `/opt` uses.
+  An icon is mandatory for an AppImage, so a build without one gets the engine's default
+  logo instead of failing.
 
-The installer is written **next to** the output folder — `<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.exe`
-or `…-Linux-<arch>-Setup.deb`, that is the output folder's own name plus `-Setup.exe` /
-`-Setup.deb` — and, once it exists, the staged build folder is **deleted**, because the
-installer now contains everything. If the installer step fails, the loose build is left in
-place and the log says so.
+The package is written **next to** the output folder — the output folder's own name plus
+`-Setup.exe`, `-Setup.msi`, `-Setup.deb` or `.AppImage`:
 
-**Size limits are checked before packing.** A **Windows** installer cannot exceed **2 GB**,
-and no single file inside it may reach 2 GB either. The script measures your game folder
-first, picks the compression mode that fits, and — if no mode could work — refuses up front
-and names the file that is too large, instead of failing deep inside the packing step.
+```text
+<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.exe
+<Output>/<Name>-<version>-<Config>-Windows-<arch>-Setup.msi
+<Output>/<Name>-<version>-<Config>-Linux-<arch>-Setup.deb
+<Output>/<Name>-<version>-<Config>-Linux-<arch>.AppImage
+```
 
-**`.deb` packages** have no such ceiling, but they are staged through a temporary copy, so
-the script checks that the staging filesystem has room: `/tmp` is a RAM-backed `tmpfs` on
-many distributions and is easy to fill with a large game. Set **`ICE_STAGING_ROOT`** to point
-staging somewhere else. When you build a `.deb` **from a Windows host** (through WSL),
-staging deliberately lands on the WSL filesystem rather than on `C:`, because a mounted
-Windows drive cannot carry the POSIX permission bits a package needs — so `ICE_STAGING_ROOT`
-must name a Linux-native directory in that case, not a path under `/mnt/`:
+Once **every** requested package exists, the staged build folder is **deleted**, because the
+packages now contain everything. If any of them fails — including one half of *both* — the
+loose build is kept, the log names the file that was not produced, and whatever did get
+built stays where it is.
+
+**Size limits are checked before packing.** A **Windows** installer — `.exe` and `.msi`
+alike — cannot exceed **2 GB**, and no single file inside it may reach 2 GB either. The
+script measures your game folder first, picks the compression mode that fits, and — if no
+mode could work — refuses up front and names the file that is too large, instead of failing
+deep inside the packing step.
+
+**Linux packages** have no such ceiling, but both formats are staged through a temporary
+copy, so the script checks that the staging filesystem has room: `/tmp` is a RAM-backed
+`tmpfs` on many distributions and is easy to fill with a large game. Set
+**`ICE_STAGING_ROOT`** to point staging somewhere else. When you package **from a Windows
+host** (through WSL), staging deliberately lands on the WSL filesystem rather than on `C:`,
+because a mounted Windows drive cannot carry the POSIX permission bits a package needs — so
+`ICE_STAGING_ROOT` must name a Linux-native directory in that case, not a path under
+`/mnt/`:
 
 ```bash
 export ICE_STAGING_ROOT=$HOME/.cache/icebox-stage
 ```
 
-Either way the staged tree is given package-correct ownership and permissions, so a `.deb`
-built from Windows is as correct as one built on Linux.
+Either way the staged tree is given package-correct ownership and permissions, so a package
+built from Windows is as correct as one built on Linux. Choosing **both** stages the payload
+twice, one format after the other, and frees each staging tree as soon as its package is
+written, so peak disk use stays at roughly one copy.
+
+**AppImage packing needs a packer, and finds one on its own.** The script looks for
+`appimagetool` in this order: `$ICE_APPIMAGETOOL`, `appimagetool` on `PATH`,
+`Tools/BuildSystem/BuildGame/Templates/Linux/appimagetool-<host-arch>.AppImage`, then the
+per-user cache. If none is there it packs with **`mksquashfs`** (`squashfs-tools`) plus an
+AppImage type-2 runtime resolved the same way — `$ICE_APPIMAGE_RUNTIME`, the
+`Templates/Linux/runtime-<target-arch>` file, then the cache. Anything still missing is
+downloaded once into `~/.cache/IceBoxEngine/appimage/` and reused by every later build, and
+if one packer fails the other is tried before the step gives up:
+
+| Variable | Effect |
+| -------- | ------ |
+| `ICE_APPIMAGETOOL` | Absolute path to an `appimagetool` binary or AppImage to use instead of searching. |
+| `ICE_APPIMAGE_RUNTIME` | Absolute path to an AppImage type-2 runtime for the **target** architecture. |
+| `ICE_APPIMAGE_NO_DOWNLOAD=1` | Never download anything. Packaging then works fully offline, provided the tools sit in `Templates/Linux/`, in the cache, or on `PATH`. |
+| `ICE_APPIMAGE_COMP` | squashfs compression (`gzip`, `zstd`, `xz`, `lzo`, `lz4`). Left unset, `appimagetool` keeps its own default and the `mksquashfs` path uses `gzip`, which every AppImage runtime ever shipped can read; `zstd` is smaller and faster to decompress where the tooling supports it. Ignored when the chosen packer cannot do it, in which case the first supported compressor is used. |
+
+Cross-architecture packing works too: `appimagetool` runs as a host binary while the
+runtime that gets embedded is the one for the **target** arch (`x86_64`, `i686`, `aarch64`),
+so an x64 machine can produce an arm64 `.AppImage`.
 
 **macOS** has its own two options in the macOS section, applied after the bundle is
 re-signed:
@@ -1258,8 +1396,8 @@ The dialog invokes scripts in `Tools/BuildSystem/BuildGame/`. Each platform has 
 | `build_web.bat` / `.sh` | Web (Emscripten) |
 | `build_macos.bat`* / `.sh` | macOS (*`.bat` is a stub) |
 | `build_ios.bat`* / `.sh` | iOS (*`.bat` is a stub) |
-| `create_game_installer_windows.*` | NSIS installer |
-| `create_game_installer_linux.*` | `.deb` installer |
+| `create_game_installer_windows.*` | NSIS `.exe` installer and/or `.msi` package |
+| `create_game_installer_linux.*` | `.deb` package and/or `.AppImage` |
 | `create_game_installer_macos.sh` | macOS `.pkg` installer |
 | `generate_keystore.bat` / `.sh` | Android release keystore (`keytool`) |
 
@@ -1270,7 +1408,7 @@ The scripts accept a consistent flag set assembled by the dialog. Common flags:
 | `--debug` / `--release` | Build configuration. |
 | `--game-name "<name>"` | Product name. |
 | `--icon "<path>"` | App icon (converted as needed). |
-| `--backend <api>` | `OpenGL46`, `OpenGL33`, `Vulkan`, `OpenGLES32`, `WebGL2`, `MetalANGLE`, `MetalMoltenVK`. |
+| `--backend <api>` | `OpenGL46`, `OpenGL33`, `Vulkan`, `D3D12` (Windows), `OpenGLES32`, `WebGL2`, `Metal` (macOS / iOS), `MetalANGLE` (macOS), `MetalMoltenVK`. |
 | `--arch <arch>` | `x64`/`x86`/`arm64` (Windows, Linux), `x86_64`/`arm64` (macOS), or `wasm32`/`wasm64` (Web). |
 | `--wasm64` / `--no-wasm64` | Web only: switch the memory model between Wasm64 (`-sMEMORY64`) and the default Wasm32. Same effect as `--arch wasm64` / `--arch wasm32`. |
 | `--version "<v>"` / `--version-code <n>` | Version string / integer. |
@@ -1289,12 +1427,17 @@ Plus platform-specific flags:
   `--target-sdk`, `--version-name`, `--permissions`, `--deep-link-scheme`,
   `--enable-ads`/`--admob-app-id`, `--enable-iap`, `--enable-play-games`/`--play-games-app-id`,
   `--enable-consent`, `--enable-review`, `--enable-notifications`, `--enable-bluetooth`,
-  `--enable-firebase`, `--enable-saved-games`, `--keystore`, `--key-alias`,
+  `--enable-local-network`, `--enable-firebase`, `--enable-saved-games`, `--keystore`,
+  `--key-alias`,
   `--keystore-password`/`--keystore-pass-file`, `--key-password`/`--key-pass-file`.
 * **Web** — `--renderer` (`auto`/`webgpu`/`webgl2`), `--web3`/`--no-web3`,
   `--main-loop`/`--no-main-loop`, `--pthreads`/`--no-pthreads`.
 * **macOS** — `--deployment-target`, `--bundle-id`, `--category`, `--codesign-identity`,
   `--hardened-runtime`, `--entitlements`, `--notarize`, `--notary-profile`, `--dmg`.
+* **Installer scripts** — `--game-dir`, `--game-name`, `--game-exe`, `--version`, `--arch`,
+  `--config`, `--publisher`, `--homepage`, `--contact-email`, `--icon`, `--license`, plus
+  `--format exe|msi|both` on `create_game_installer_windows.*` and
+  `--format deb|appimage|both` on `create_game_installer_linux.*`.
 * **iOS** — `--bundle-id`, `--team`, `--code-sign-identity`, `--provisioning-profile`,
   `--deployment-target`, `--destination`, `--export-method`, `--no-ipa`, `--orientation`,
   `--requires-fullscreen`, `--entitlements`, `--app-icon`, `--launch-screen`,
@@ -1345,6 +1488,8 @@ The render backend is patched into the build's `Config/Engine.json` as
 | `4` | Metal via ANGLE | macOS |
 | `5` | Vulkan | Windows / Linux / Android |
 | `6` | Metal via MoltenVK | macOS / iOS |
+| `9` | Direct3D 12 | Windows |
+| `10` | Metal (native) | macOS / iOS |
 
 > The build scripts can also be run **manually** from a terminal with these flags, which
 > is handy for CI. If the engine root is read-only, builds fall back to a per-user cache
@@ -1372,7 +1517,7 @@ and the folder name — written `<Base>` below — is the same on every platform
 
 | Platform | Output subfolder | What lands inside |
 | -------- | ---------------- | ----------------- |
-| Windows | `<GameName>-<version>-<Config>-Windows-<arch>` | `<GameName>.exe` (installer `<Base>-Setup.exe` goes one level up) |
+| Windows | `<GameName>-<version>-<Config>-Windows-<arch>` | `<GameName>.exe` (installer `<Base>-Setup.exe` and/or `<Base>-Setup.msi` goes one level up) |
 | Linux | `<GameName>-<version>-<Config>-Linux-<arch>` | `<GameName>` (installer `<Base>-Setup.deb` goes one level up) |
 | macOS | `<GameName>-<version>-<Config>-macOS-<arch>` | `<GameName>.app`, plus `<Base>.dmg` and `<Base>-Installer.pkg` |
 | iOS | `<GameName>-<version>-<Config>-iOS-arm64` (`…-iOS-Simulator-arm64` for the simulator) | `<Base>.app`, or `<Base>.ipa` when creating an IPA |
@@ -1401,8 +1546,8 @@ You build with the native toolchain for each target. Install these on the build 
 
 | Platform | Required tools |
 | -------- | -------------- |
-| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). NSIS for installers. **From a Linux host** the same target is a MinGW cross-compile instead: `mingw-w64 g++-mingw-w64` covers x64 and x86, while **arm64 needs [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** on your `PATH` — no distribution packages an `aarch64-w64-mingw32` compiler. |
-| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` installers. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3, so check `cmake --version` and install a newer build from [cmake.org](https://cmake.org/download/) if apt gave you an older one. |
+| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). **NSIS** for `.exe` installers and the **WiX Toolset** for `.msi` packages — a missing WiX is downloaded and cached automatically unless `ICE_WIX_NO_DOWNLOAD=1`. **From a Linux host** the same target is a MinGW cross-compile instead: `mingw-w64 g++-mingw-w64` covers x64 and x86, while **arm64 needs [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** on your `PATH` — no distribution packages an `aarch64-w64-mingw32` compiler. |
+| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` packages; `appimagetool` or `squashfs-tools` for `.AppImage` — whichever is missing is downloaded and cached automatically unless `ICE_APPIMAGE_NO_DOWNLOAD=1`. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3, so check `cmake --version` and install a newer build from [cmake.org](https://cmake.org/download/) if apt gave you an older one. |
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |
 | **macOS / iOS** | A **macOS** host with **Xcode** (and command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization) and vcpkg. iOS additionally needs a development team / signing assets for device builds & IPAs. |
@@ -1455,12 +1600,12 @@ an incompatible build. The Lua side of this is
 
 | Platform | Output | Renderer options | Architectures |
 | -------- | ------ | ---------------- | ------------- |
-| **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
+| **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan / Direct3D 12 | x64, x86, arm64 |
 | **Linux** | ELF binary | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
 | **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64, x86 |
 | **Web** | `.html`+`.wasm`+data | WebGPU / WebGL 2.0 (Auto) | wasm32, wasm64 |
-| **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
-| **iOS** | `.ipa` / `.app` | Metal (MoltenVK) | arm64 |
+| **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal / Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
+| **iOS** | `.ipa` / `.app` | Metal / Metal (MoltenVK) | arm64 |
 
 ### Cook formats
 
@@ -1478,7 +1623,7 @@ an incompatible build. The Lua side of this is
 | ------ | ------ |
 | Generate Manifest | `game_manifest.json` (SHA-256 per file) |
 | Pack Content | `Content.icepak` (zstd 1–22, optional split) |
-| Create Installer | NSIS `.exe` (Win) / `.deb` (Linux) |
+| Create Installer | NSIS `.exe`, `.msi` or both (Win) / `.deb`, `.AppImage` or both (Linux) |
 | Include Plugins / Include Mods | *(all platforms)* Whether enabled `Plugins/` and `Mods/` are packaged at all |
 | macOS distribution | `.dmg` (drag-install) and/or `.pkg` installer, optionally notarized |
 
@@ -1514,7 +1659,22 @@ incremental and much faster.
 **Where did my build go?**
 Into `<Output Path>/<Game Name>/`. The intermediate build is under `out/gamebuild/…` (or
 the per-user `GameBuilds` cache if the engine folder is read-only). If you enabled
-**Create Installer**, that folder is gone on purpose — the installer sits one level up.
+**Create Installer**, that folder is gone on purpose — the `.exe`, `.msi`, `.deb` or
+`.AppImage` sits one level up.
+
+**The MSI step says it cannot find a WiX toolset.**
+It needs the WiX Toolset, and installs **WiX 5** into a per-user cache on its own unless
+`ICE_WIX_NO_DOWNLOAD=1` is set or the .NET SDK is missing.
+`dotnet tool install --global wix --version 5.*` covers it, and so does a WiX 3.14
+installation. Point `ICE_WIX` at a `wix.exe` or at a WiX 3 `bin` folder to use one that
+lives somewhere else. A WiX 6 or 7 already on the machine is only used once its Open Source
+Maintenance Fee EULA has been accepted — until then the step skips it and looks further.
+
+**The AppImage step says it cannot find a packer.**
+It needs `appimagetool` or `mksquashfs`, and downloads whichever is missing unless
+`ICE_APPIMAGE_NO_DOWNLOAD=1` is set. `sudo apt install squashfs-tools` is enough, and so is
+`sudo apt install curl` on its own — that lets the build fetch `appimagetool` itself. On a
+Windows host install it **inside the WSL distribution**, not on Windows.
 
 **WebP/KTX2/VP9 options are greyed out or forced to PassThrough.**
 Those formats aren't supported by every runtime: WebP is unavailable on iOS/Web, VP9 on
