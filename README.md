@@ -38,7 +38,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 
 ## ✨ Features
 
-- **Rendering** — Data-driven 2D renderer with a node-based **material editor** (instances & functions), post-processing / **FX**, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Metal (via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
+- **Rendering** — Data-driven 2D renderer with a node-based **material editor** (instances & functions), **decals** (bullet holes, blood splatter, scorch marks), post-processing / **FX**, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, native Metal (plus Metal via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
 - **Scenes & ECS** — Entity-Component-System core (EnTT), level outliner, reusable entity classes, and a property/world editor.
 - **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D, with a multithreaded solver (enkiTS) on desktop and mobile.
 - **Sprites & Tilemaps** — Sprite editor, spritesheet slicer, flipbook animation, and dedicated tilemap / tileset editors.
@@ -96,7 +96,7 @@ IceBox Engine consists of several components:
 | **OS** | Windows 10+ (x64/x86/arm64), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86/arm64) or macOS 11.0+ (Apple Silicon or Intel) |
 | **CPU** | Dual-core processor |
 | **RAM** | 4 GB |
-| **GPU** | OpenGL 3.3/4.6 or Vulkan 1.1-1.4 compatible (Windows / Linux) or Metal-capable GPU (macOS, via ANGLE or MoltenVK), 512 MB VRAM |
+| **GPU** | OpenGL 3.3/4.6, Vulkan 1.1-1.4 or Direct3D 12 (feature level 11_0) compatible (Windows / Linux) or Metal-capable GPU (macOS — native Metal, ANGLE or MoltenVK), 512 MB VRAM |
 | **Disk** | 10-20 GB free space |
 
 ### Runtime — iOS
@@ -104,7 +104,7 @@ IceBox Engine consists of several components:
 | | |
 |-|-|
 | **OS** | iOS 15.0+ (iPhone & iPad, arm64) |
-| **GPU** | Metal (rendered via MoltenVK) |
+| **GPU** | Metal (native Metal renderer, or rendered via MoltenVK) |
 
 ### Runtime — Android
 
@@ -189,7 +189,7 @@ set VCPKG_ROOT=C:\dev\vcpkg
 ```bash
 # 1. Install all system dependencies (one command)
 sudo apt update && sudo apt install -y \
-    build-essential cmake ninja-build git curl zip unzip tar pkg-config nasm xdg-utils \
+    build-essential cmake ninja-build git curl zip unzip tar pkg-config nasm xdg-utils squashfs-tools \
     autoconf autoconf-archive automake libtool \
     python3-dev python3-venv \
     rsync gdb nsis imagemagick \
@@ -375,7 +375,7 @@ unzip -q tools.zip && rm -rf latest && mv cmdline-tools latest && rm tools.zip
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
+sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865
 
 # Gradle 9.7.0 is downloaded automatically by the build script if not installed.
@@ -407,7 +407,7 @@ brew install --cask android-commandlinetools    # provides `sdkmanager`
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 sdkmanager --sdk_root="$ANDROID_HOME" \
-    "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
+    "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
 # Gradle 9.7.0 is downloaded automatically by the build script if not installed.

@@ -38,7 +38,7 @@ IceBox Engine — это кроссплатформенный 2D игровой 
 
 ## ✨ Возможности
 
-- **Рендеринг** — Data-driven 2D-рендерер с нодовым **редактором материалов** (инстансы и функции), пост-обработкой / **FX** и мультибэкендовым RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Metal (via ANGLE & MoltenVK), WebGL 2.0 и WebGPU.
+- **Рендеринг** — Data-driven 2D-рендерер с нодовым **редактором материалов** (инстансы и функции), **декалями** (дырки от пуль, брызги крови, следы копоти), пост-обработкой / **FX** и мультибэкендовым RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, нативным Metal (плюс Metal через ANGLE и MoltenVK), WebGL 2.0 и WebGPU.
 - **Сцены и ECS** — Ядро на основе Entity-Component-System (EnTT), аутлайнер уровней, переиспользуемые классы сущностей и редактор свойств/мира.
 - **2D-физика** — Твёрдые тела, коллайдеры и сочленения на базе Box2D с многопоточным решателем (enkiTS) на десктопе и мобильных.
 - **Спрайты и тайлмапы** — Редактор спрайтов, слайсер спрайт-листов, флипбук-анимация и отдельные редакторы тайлмапов / тайлсетов.
@@ -96,7 +96,7 @@ IceBox Engine состоит из нескольких компонентов:
 | **ОС** | Windows 10+ (x64/x86/arm64), Linux — Ubuntu 22.04+ / Debian 12+ (x64/x86/arm64) или macOS 11.0+ (Apple Silicon или Intel) |
 | **CPU** | Двухъядерный процессор |
 | **RAM** | 4 ГБ |
-| **GPU** | Совместимая с OpenGL 3.3/4.6 или Vulkan 1.1-1.4 (Windows / Linux) или GPU с поддержкой Metal (macOS, через ANGLE или MoltenVK), 512 МБ видеопамяти |
+| **GPU** | Совместимая с OpenGL 3.3/4.6, Vulkan 1.1-1.4 или Direct3D 12 (feature level 11_0) (Windows / Linux) или GPU с поддержкой Metal (macOS — нативный Metal, ANGLE или MoltenVK), 512 МБ видеопамяти |
 | **Диск** | 10-20 ГБ свободного места |
 
 ### Runtime — iOS
@@ -104,7 +104,7 @@ IceBox Engine состоит из нескольких компонентов:
 | | |
 |-|-|
 | **ОС** | iOS 15.0+ (iPhone и iPad, arm64) |
-| **GPU** | Metal (рендеринг через MoltenVK) |
+| **GPU** | Metal (нативный рендерер Metal, либо рендеринг через MoltenVK) |
 
 ### Runtime — Android
 
@@ -188,7 +188,7 @@ set VCPKG_ROOT=C:\dev\vcpkg
 ```bash
 # 1. Установить все системные зависимости (одной командой)
 sudo apt update && sudo apt install -y \
-    build-essential cmake ninja-build git curl zip unzip tar pkg-config nasm xdg-utils \
+    build-essential cmake ninja-build git curl zip unzip tar pkg-config nasm xdg-utils squashfs-tools \
     autoconf autoconf-archive automake libtool \
     python3-dev python3-venv \
     rsync gdb nsis imagemagick \
@@ -375,7 +375,7 @@ unzip -q tools.zip && rm -rf latest && mv cmdline-tools latest && rm tools.zip
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
+sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865
 
 # Gradle 9.7.0 скачивается автоматически скриптом сборки, если не установлен.
@@ -407,7 +407,7 @@ brew install --cask android-commandlinetools    # даёт `sdkmanager`
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 sdkmanager --sdk_root="$ANDROID_HOME" \
-    "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865"
+    "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865"
 export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/29.0.14206865"
 
 # Gradle 9.7.0 скачивается скриптом сборки автоматически, если не установлен.
