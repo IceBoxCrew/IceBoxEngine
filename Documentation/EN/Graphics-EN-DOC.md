@@ -169,14 +169,42 @@ The RHI has **six** implementation families and **eleven** concrete backends
 
 The **six** target platforms and the renderers each one offers:
 
-| Platform | Selectable renderers | Default |
-| -------- | -------------------- | ------- |
-| **Windows** | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 | OpenGL 4.6 |
-| **Linux** | OpenGL 4.6, OpenGL 3.3, Vulkan | OpenGL 4.6 |
-| **Android** | OpenGL ES 3.2, Vulkan | OpenGL ES 3.2 |
-| **Web** | Auto / WebGPU / WebGL 2.0 | Auto (WebGPU when the browser exposes it, else WebGL 2.0) |
-| **macOS** | Metal (native), Metal (ANGLE over GLES) or Metal (MoltenVK over Vulkan) | **Metal (native)** |
-| **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | **Metal (native)** |
+| Platform | Selectable renderers | Fallback chain (highest → lowest) |
+| -------- | -------------------- | -------------------------------- |
+| **Windows** | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 | Direct3D 12 → Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
+| **Linux** | OpenGL 4.6, OpenGL 3.3, Vulkan | Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
+| **Android** | OpenGL ES 3.2, Vulkan | Vulkan 1.1-1.4 → OpenGL ES 3.2 → OpenGL ES 3.0 |
+| **Web** | WebGPU or WebGL 2.0 | WebGPU → WebGL 2.0 |
+| **macOS** | Metal (native), Metal (ANGLE over GLES) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) → Metal (ANGLE) |
+| **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) |
+
+Every chain runs top-down: the entry that is asked for is tried first, and each failure
+steps exactly one rung down, never sideways and never back up.
+
+**First-run auto-probe.** The Launcher, the Updater and the Editor do not start on a
+hard-coded default. The first time one of them runs against a configuration that has no
+resolved renderer yet, it walks the chain above from the top and probes each candidate
+without creating a window — DXGI adapter enumeration plus `D3D12CreateDevice` for
+Direct3D 12, a throwaway instance plus the device baseline check for Vulkan, and device
+plus command-queue creation for Metal. The first candidate that answers is the one the
+tool runs on, and it is written to `Config/Engine.json` as `Rendering.RenderBackend`
+together with `Rendering.RenderBackendAutoProbed: true`, so every later start goes
+straight to it. The Launcher and the Updater write into the install folder's
+`Config/Engine.json` when it is writable and into the per-user one
+(`%APPDATA%\IceBoxEngine\Config\Engine.json` / `~/.config/IceBoxEngine/Config/Engine.json`)
+when it is not; both are read back in that order, so a value placed in the install
+folder by hand always wins. The same probe runs when a **new project is created**, so the project's
+`Config/Engine.json` already names the best renderer that machine has before the editor
+opens it for the first time. Picking a renderer by hand in
+[Preferences → Rendering](Editor-EN-DOC.md#105-rendering), in `Settings.SetRenderer()`
+or in the build dialog replaces that recorded value and is never probed over again.
+The Launcher and the Updater show the renderer they ended up on — and the GPU behind
+it — in their **Settings** tab; the editor shows the same two lines under
+**Preferences → Rendering**, next to the renderer it will use after the next restart.
+
+Games never auto-probe: a build starts on the renderer the build dialog wrote into its
+`Config/Engine.json` and falls back from there, and `Settings.SetRenderer()` can still
+move it anywhere along the chain at runtime (applied on the next launch).
 
 The editor's active backend is chosen in
 [Preferences → Rendering](Editor-EN-DOC.md#105-rendering); the build target's
@@ -1473,14 +1501,14 @@ and takes effect on restart ([13.1](#131-the-simulation-loop)).
 
 ### 14.2 Platforms & selectable renderers
 
-| Platform | Renderers |
-| -------- | --------- |
-| Windows | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 |
-| Linux | OpenGL 4.6, OpenGL 3.3, Vulkan |
-| Android | OpenGL ES 3.2, Vulkan |
-| Web | Auto, WebGPU, WebGL 2.0 |
-| macOS | Metal, Metal (ANGLE), Metal (MoltenVK) |
-| iOS | Metal, Metal (MoltenVK) |
+| Platform | Renderers | Fallback chain (highest → lowest) |
+| -------- | --------- | -------------------------------- |
+| Windows | OpenGL 4.6, OpenGL 3.3, Vulkan, Direct3D 12 | Direct3D 12 → Vulkan → OpenGL 4.6 → OpenGL 3.3 |
+| Linux | OpenGL 4.6, OpenGL 3.3, Vulkan | Vulkan → OpenGL 4.6 → OpenGL 3.3 |
+| Android | OpenGL ES 3.2, Vulkan | Vulkan → OpenGL ES 3.2 → OpenGL ES 3.0 |
+| Web | WebGPU, WebGL 2.0 | WebGPU → WebGL 2.0 |
+| macOS | Metal, Metal (ANGLE), Metal (MoltenVK) | Metal → Metal (MoltenVK) → Metal (ANGLE) |
+| iOS | Metal, Metal (MoltenVK) | Metal → Metal (MoltenVK) |
 
 Any of the six can additionally run **headless** on the Null renderer via `--headless`.
 

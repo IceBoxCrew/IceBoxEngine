@@ -981,8 +981,11 @@ Hitches · Trace History.** Вкладка **Engine** присутствует �
 ### 8.4 Web
 
 * **Вывод:** `.html` + `.wasm` + файлы данных (Emscripten).
-* **Рендерер:** **Auto (WebGPU → WebGL 2.0)**, **WebGPU** (Chrome/Edge 113+, Safari 18+)
-  или **WebGL 2.0** (максимальная совместимость). Шейдеры транслируются в **WGSL** в
+* **Рендерер:** **WebGPU** (Chrome/Edge 113+, Safari 18+), который сам откатывается
+  к WebGL 2.0, если браузер его не поддерживает, или **WebGL 2.0** (стартовать сразу
+  на нём, максимальная совместимость). Оба бэкенда вкомпилированы в любую
+  веб-сборку — выбор лишь определяет, какой страница пробует первым, и не стоит
+  ни одного лишнего предсобранного ядра. Шейдеры транслируются в **WGSL** в
   браузере при загрузке.
 * **Модель памяти:** **wasm32** (по умолчанию, 32-битные указатели, работает везде,
   куча ограничена 2 ГБ — столько Emscripten ставит в `MAXIMUM_MEMORY` по умолчанию) или
@@ -1472,7 +1475,7 @@ x64 может собрать `.AppImage` под arm64.
   `--enable-local-network`, `--enable-firebase`, `--enable-saved-games`, `--keystore`,
   `--key-alias`,
   `--keystore-password`/`--keystore-pass-file`, `--key-password`/`--key-pass-file`.
-* **Web** — `--renderer` (`auto`/`webgpu`/`webgl2`), `--web3`/`--no-web3`,
+* **Web** — `--renderer` (`webgpu`/`webgl2`), `--web3`/`--no-web3`,
   `--main-loop`/`--no-main-loop`, `--pthreads`/`--no-pthreads`.
 * **macOS** — `--deployment-target`, `--bundle-id`, `--category`, `--codesign-identity`,
   `--hardened-runtime`, `--entitlements`, `--notarize`, `--notary-profile`, `--dmg`.
@@ -1648,7 +1651,7 @@ Android, `.app`/`.ipa` для iOS, весь набор Web-файлов, `.dmg`/
 | **Windows** | `.exe` + DLL | OpenGL 4.6 / 3.3 / Vulkan / Direct3D 12 | x64, x86, arm64 |
 | **Linux** | ELF-бинарник | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
 | **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64, x86 |
-| **Web** | `.html`+`.wasm`+данные | WebGPU / WebGL 2.0 (Auto) | wasm32, wasm64 |
+| **Web** | `.html`+`.wasm`+данные | WebGPU (откат к WebGL 2.0) / WebGL 2.0 | wasm32, wasm64 |
 | **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal / Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
 | **iOS** | `.ipa` / `.app` | Metal / Metal (MoltenVK) | arm64 |
 

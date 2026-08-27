@@ -954,9 +954,11 @@ runtime (with fallbacks).
 ### 8.4 Web
 
 * **Output:** `.html` + `.wasm` + data files (Emscripten).
-* **Renderer:** **Auto (WebGPU → WebGL 2.0)**, **WebGPU** (Chrome/Edge 113+, Safari 18+),
-  or **WebGL 2.0** (maximum compatibility). Shaders are translated to **WGSL** in the
-  browser at load time.
+* **Renderer:** **WebGPU** (Chrome/Edge 113+, Safari 18+), which falls back to WebGL 2.0
+  on its own when the browser has no WebGPU, or **WebGL 2.0** (start there straight away,
+  maximum compatibility). Both backends are compiled into every web build - the choice only
+  decides which one the page tries first, and it costs no extra pre-built core. Shaders are
+  translated to **WGSL** in the browser at load time.
 * **Memory model:** **wasm32** (default, 32-bit pointers, runs everywhere, heap capped at
   the 2 GB Emscripten defaults `MAXIMUM_MEMORY` to) or **wasm64** (Emscripten `-sMEMORY64`,
   64-bit pointers, 4 GB heap ceiling for large worlds — raise it with
@@ -1430,7 +1432,7 @@ Plus platform-specific flags:
   `--enable-local-network`, `--enable-firebase`, `--enable-saved-games`, `--keystore`,
   `--key-alias`,
   `--keystore-password`/`--keystore-pass-file`, `--key-password`/`--key-pass-file`.
-* **Web** — `--renderer` (`auto`/`webgpu`/`webgl2`), `--web3`/`--no-web3`,
+* **Web** — `--renderer` (`webgpu`/`webgl2`), `--web3`/`--no-web3`,
   `--main-loop`/`--no-main-loop`, `--pthreads`/`--no-pthreads`.
 * **macOS** — `--deployment-target`, `--bundle-id`, `--category`, `--codesign-identity`,
   `--hardened-runtime`, `--entitlements`, `--notarize`, `--notary-profile`, `--dmg`.
@@ -1603,7 +1605,7 @@ an incompatible build. The Lua side of this is
 | **Windows** | `.exe` + DLLs | OpenGL 4.6 / 3.3 / Vulkan / Direct3D 12 | x64, x86, arm64 |
 | **Linux** | ELF binary | OpenGL 4.6 / 3.3 / Vulkan | x64, x86, arm64 |
 | **Android** | `.apk` / `.aab` | OpenGL ES 3.2 / Vulkan | arm64-v8a, armeabi-v7a, x86_64, x86 |
-| **Web** | `.html`+`.wasm`+data | WebGPU / WebGL 2.0 (Auto) | wasm32, wasm64 |
+| **Web** | `.html`+`.wasm`+data | WebGPU (WebGL 2.0 fallback) / WebGL 2.0 | wasm32, wasm64 |
 | **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal / Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
 | **iOS** | `.ipa` / `.app` | Metal / Metal (MoltenVK) | arm64 |
 

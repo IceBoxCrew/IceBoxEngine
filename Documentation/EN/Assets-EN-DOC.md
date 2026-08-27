@@ -1191,6 +1191,7 @@ several projections.
 | **Layers** | Multiple `MapLayer`s, each with name, visibility, lock, and a tile grid. |
 | **Tilesets** | A primary tileset plus up to 127 additional tilesets; tile IDs are encoded with the tileset index so one map can mix tilesets. |
 | **Tile rotation** | Every painted cell stores a rotation step alongside the tile ID — 4 steps of 90° on orthogonal/isometric maps, 6 steps of 60° on hexagonal ones. The sprite, the collider, the shadow caster, the nav-grid footprint and the destruction fragments all rotate together, so one corner tile covers every orientation. |
+| **Tile span** | A placed tile can cover more than one cell. The block grows **right (`+X`)** and **up (`+Y`)** from the cell that owns it, up to `64 x 64` cells, and the tile art (static **or** flipbook) is stretched over the whole block. The collider, the 2D shadow caster, the nav-grid footprint and the destruction fragments scale with it. Orthogonal maps only. |
 | **Animated tiles** | Placeholder tiles that play a flipbook, each with a speed multiplier, its own **per-frame colliders**, and the same full set of physics, event, shadow and destructible-fragment settings a static tile has. |
 | **Chunking** | Optional chunked storage with a configurable chunk size and per-chunk "empty" flags for fast culling of large maps. |
 | **Show Coordinates** | Editor overlay for grid coordinates. |
@@ -1209,6 +1210,9 @@ several projections.
   | **Shift + Left-drag** | **Stamp** the captured block, with a preview under the cursor. |
   | **`Q` / `E`** | **Rotate the brush** one step counter-clockwise / clockwise. |
   | **`Ctrl+Q` / `Ctrl+E`** | **Rotate the tile already under the cursor** in place. |
+  | **`Shift+D` / `Shift+A`** | **Grow / shrink the tile under the cursor** by one cell to the **right**. |
+  | **`Shift+W` / `Shift+S`** | **Grow / shrink the tile under the cursor** by one cell **upwards**. |
+  | **`Shift+Wheel`** | Grow (up) / shrink (down) the tile under the cursor on **both** axes at once. |
   | **Middle-drag / scroll** | Pan / zoom the canvas. |
 
   The cell under the cursor is outlined and shows a translucent **ghost of the tile about
@@ -1223,6 +1227,24 @@ several projections.
   tile using the plain full-tile collider is unchanged by rotation, so box merging and
   chunking keep working exactly as before. The eyedropper also picks up the rotation of
   the sampled cell.
+* **Tile Span** — a tile does not have to be one cell. The sidebar shows the current brush
+  span (`W x H` and the total cell count) with **Narrower / Wider**, **Shorter / Taller**,
+  **Shrink Both / Grow Both** and **Reset** buttons next to the `Shift+A/D/S/W` and
+  `Shift+Wheel` shortcuts. A block always grows **right** and **up** from its anchor cell —
+  the one you painted — so the cell under your brush never moves. Paint with a `2 x 1` brush
+  and you get a two-cell-wide tile in one click; or place a normal tile, hover it and press
+  `Shift+D` to widen what is already on the map. The tile's texture (or flipbook frame) is
+  **stretched over the whole block**, so a bush drawn two tiles wide stays one flipbook
+  instead of being cut in half. Shrinking only works on an enlarged tile — a plain `1 x 1`
+  tile is already the minimum. Growing over occupied cells overwrites them (`Ctrl+Z` undoes
+  it); growing into the map edge simply stops. Everything the tile owns scales with the
+  block: its collider (default box colliders still merge with their neighbours, custom
+  polygons and chains are stretched across the block), its 2D shadow caster, its nav-grid
+  footprint, particle collision and its destruction fragments — hitting any cell of a
+  destructible block destroys the whole block. Erasing, flood-filling, stamping or
+  eyedroppering any cell of a block treats the block as one tile. Tile span is stored per
+  cell in the `.ice_tm` file and is **orthogonal-only**; on isometric and hexagonal maps the
+  sidebar says so and the shortcuts do nothing.
 * **Layers** — **+ Add Layer**, **Rename**, **Remove**, **Move Up / Down**, plus per-layer
   visibility and lock toggles. Painting always targets the selected layer, and locked
   layers are skipped.

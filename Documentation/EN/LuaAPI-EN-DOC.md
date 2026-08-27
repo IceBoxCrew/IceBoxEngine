@@ -11010,11 +11010,11 @@ end
 
 > Read the active graphics backend or request a different one. `GetRenderer()` works on **every platform** and returns the renderer currently in use. `SetRenderer(name)` writes the requested backend to `Config/Engine.json` → `Rendering.RenderBackend` and **takes effect on the next launch** — the backend is selected once at startup when the window and graphics context are created, so a live in-session switch is not performed. On platforms where the backend is fixed by the build (Web → WebGPU or WebGL 2.0, chosen at build time with automatic WebGL 2.0 fallback when the browser lacks WebGPU; macOS → native Metal, Metal via ANGLE or Metal via MoltenVK, whichever the build was made with; iOS → native Metal or Metal via MoltenVK; Android → the backend the APK was built with), the value is still persisted but the active renderer stays what the platform provides; any backend not compiled into the build gracefully falls back at startup.
 >
-> Accepted names are case- and spacing-insensitive: `Direct3D 12` (also `D3D12`, `DirectX 12`, `DX12`), `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `WebGL 2.0`, `WebGPU`, `Metal` (native, also `MetalNative`), `Metal (ANGLE)` (also `MetalANGLE`, `ANGLE`) and `Metal (MoltenVK)` (also `MetalMoltenVK`, `MoltenVK`). The Vulkan backend negotiates **1.4 → 1.3 → 1.2 → 1.1** at runtime and falls back to OpenGL (desktop) / OpenGL ES (Android) when no compatible device is available. `Direct3D 12` is Windows-only and needs feature level 11_0; when no usable adapter is present it falls back to **Vulkan → OpenGL 4.6 → OpenGL 3.3**, and on non-Windows platforms the value is persisted but the platform's own backend stays active. `Metal` is macOS/iOS-only and needs a Metal device that can create a command queue; when none is present it falls back to **Metal (MoltenVK) → Metal (ANGLE)** on macOS and to **Metal (MoltenVK)** on iOS. On Web, `WebGPU` falls back to `WebGL 2.0` at startup when the browser does not support WebGPU.
+> Accepted names are case- and spacing-insensitive: `Direct3D 12` (also `D3D12`, `DirectX 12`, `DX12`), `Vulkan`, `OpenGL 4.6`, `OpenGL 3.3`, `OpenGL ES 3.2`, `OpenGL ES 3.0` (also `WebGL 2.0` — the same GLSL ES 3.0 feature set, reported as *OpenGL ES 3.0* on Android and as *WebGL 2.0* on Web), `WebGPU`, `Metal` (native, also `MetalNative`), `Metal (ANGLE)` (also `MetalANGLE`, `ANGLE`) and `Metal (MoltenVK)` (also `MetalMoltenVK`, `MoltenVK`). The Vulkan backend negotiates **1.4 → 1.3 → 1.2 → 1.1** at runtime and falls back to OpenGL 4.6 → OpenGL 3.3 (desktop) / OpenGL ES 3.2 → OpenGL ES 3.0 (Android) when no compatible device is available. `Direct3D 12` is Windows-only and needs feature level 11_0; when no usable adapter is present it falls back to **Vulkan → OpenGL 4.6 → OpenGL 3.3**, and on non-Windows platforms the value is persisted but the platform's own backend stays active. `Metal` is macOS/iOS-only and needs a Metal device that can create a command queue; when none is present it falls back to **Metal (MoltenVK) → Metal (ANGLE)** on macOS and to **Metal (MoltenVK)** on iOS. On Web, `WebGPU` falls back to `WebGL 2.0` at startup when the browser does not support WebGPU.
 
 ```lua
 -- Read the active renderer (all platforms)
-local renderer = Settings.GetRenderer()    -- e.g. "Metal", "Direct3D 12", "Vulkan", "OpenGL 4.6", "OpenGL ES 3.2", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
+local renderer = Settings.GetRenderer()    -- e.g. "Metal", "Direct3D 12", "Vulkan", "OpenGL 4.6", "OpenGL 3.3", "OpenGL ES 3.2", "OpenGL ES 3.0", "WebGL 2.0", "WebGPU", "Metal (ANGLE)"
 
 -- Request a renderer; persisted to config, applied on next launch. Returns true on success.
 local ok = Settings.SetRenderer("Vulkan")
@@ -13721,6 +13721,93 @@ local v  = RotateTileValue(value, 1)               -- relative rotation on a val
 > `CountTiles`, `FindTile`, `FloodFill` and `GetNeighborMask4/8` already match on tile
 > identity (rotation is ignored) — pass a value that *has* rotation bits set to
 > `CountTiles` / `FindTile` when you want an orientation-exact match.
+
+### Tile span (multi-cell tiles)
+
+A placed tile can cover **more than one cell**. The block grows **right (`+X`)** and
+**up (`+Y`)** from its *anchor* — the cell that actually holds the tile value — so the
+anchor never moves when the tile is resized. Everything the tile owns scales with the
+block: the sprite (or flipbook frame) is stretched over it, custom collider polygons and
+chains are stretched with it, default box colliders cover the whole footprint (and still
+merge with their neighbours), and the 2D shadow caster, the nav-grid footprint, particle
+collision and the destruction fragments all follow.
+
+* Spans are **orthogonal-only**. On isometric and hexagonal maps every setter returns
+  `false` / `1 x 1` and `SupportsTileSpans()` is `false`.
+* The maximum span is `GetMaxTileSpan()` (`64`) per axis, additionally clamped by the map
+  bounds — a block can never stick out of the map.
+* The cells a block covers are **empty in the grid**, but every per-cell call accepts **any**
+  cell of a block and acts on the whole block: `GetTileAt`, `GetTileGrid`, `GetTileDataName`,
+  `GetTileDataNameGrid`, `IsTileSolid`, `IsTileDestructible`, `SetTileDestructible`,
+  `Get/SetTileFragmentSettings`, `GetTileRotation`, `SetTileRotation`, `RotateTile`,
+  `GetNeighborMask4/8`, the tile-collider helpers, and the span calls below. Writing a tile
+  into a covered cell breaks the block first, so the grid can never end up with two tiles in
+  the same place.
+* `CountTiles`, `FindTile`, `IterateLayer` and `IterateNonEmpty` walk raw grid cells, so a
+  multi-cell tile shows up **once**, at its anchor.
+* A `1 x 1` tile is the minimum — shrinking it does nothing.
+* Growing a block over occupied cells **erases** whatever is there.
+* In the Tilemap editor: **`Shift+D` / `Shift+A`** grow / shrink the tile under the cursor
+  to the right, **`Shift+W` / `Shift+S`** grow / shrink it upwards, and **`Shift+Wheel`**
+  does both axes at once.
+
+```lua
+-- Is this map able to use multi-cell tiles at all?
+local ok = SupportsTileSpans()
+local ok = SupportsTileSpans(0)                    -- instance 0
+local maxSpan = GetMaxTileSpan()                   -- 64
+
+-- Span of the block that owns this cell (any cell of the block works)
+local s = GetTileSpan(tileX, tileY)                -- { w = 2, h = 1 }
+local s = GetTileSpan(tileX, tileY, 0, 0)          -- layer 0, instance 0
+
+-- Anchor (bottom-left cell, in Lua-Y) of the block that owns this cell
+local o = GetTileSpanOrigin(tileX, tileY)          -- { x = 5, y = 3 }
+
+-- Is this cell covered by a neighbouring block rather than owning a tile itself?
+local covered = IsTileSpanCovered(tileX, tileY)
+
+-- Absolute resize (rebuilds that block's collider). Works from any cell of the block.
+local ok = SetTileSpan(tileX, tileY, 2, 1)
+local ok = SetTileSpan(tileX, tileY, 2, 1, 0, 0)   -- layer 0, instance 0
+
+-- Relative resize, returns the resulting span (this is what Shift+D / Shift+W do)
+local s = ExpandTileSpan(tileX, tileY, 1, 0)       -- one cell wider
+local s = ExpandTileSpan(tileX, tileY, -1, -1)     -- one cell narrower and shorter
+print(s.w, s.h)
+
+-- Place a tile and its span in one call (clears whatever the footprint covers)
+SetTileSpanAt(tileX, tileY, tileId, 2, 2)
+SetTileSpanAt(tileX, tileY, tileId, 2, 2, 0, 0)    -- layer 0, instance 0
+
+-- Erase the whole block that owns this cell (all of its cells + its collider)
+EraseTileBlock(tileX, tileY)
+
+-- Every multi-cell tile on a layer (omit layerIndex for all layers)
+for _, b in ipairs(GetTileSpanList()) do
+    print(b.x, b.y, b.w, b.h, b.layer, b.tileId)
+end
+local n = CountSpannedTiles()                      -- how many blocks are larger than 1x1
+local n = CountSpannedTiles(0)                     -- layer 0 only
+
+-- Flatten every block on a layer back to 1 x 1, returns how many were reset
+local reset = ClearAllTileSpans(0)
+```
+
+> **Rotation and span combine.** A rotation step still rotates the quad around the block's
+> **centre**, so square blocks (`2 x 2`, `3 x 3`, …) rotate exactly like single tiles —
+> sprite, collider and shadow all line up. A non-square block rotated by 90° or 270° keeps
+> the cells it occupies and its sprite overhangs them, which is the same thing
+> `Transform.Rotation` does to any non-square sprite; its collider is rotated inside the
+> tile's unit square first and then stretched over the block, so it stays within the
+> occupied cells.
+>
+> `SetTileAt`, `SetTileGrid`, `FillRect`, `FillAll`, `ClearLayer`, `FloodFill`,
+> `StampPattern`, `BlitFromArray`, `CopyRect` and `SetTilesBulk` **remove** any block they
+> overwrite — a block cannot survive being half-painted over — while `RotateRect` and
+> `FlipRect` **flatten** the blocks inside the region to single tiles and then move them, so
+> nothing is lost. Either way a bulk edit can never leave a half-erased block behind. Use
+> `SetTileSpanAt` when you want the tiles you write to stay multi-cell.
 
 ### Tile colliders
 

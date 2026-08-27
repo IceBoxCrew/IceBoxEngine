@@ -203,15 +203,23 @@ high-DPI aware, both mirror their layout automatically for the right-to-left
 languages (Arabic, Hebrew), and both install the engine's **crash reporter** — if a
 previous run crashed, its pending report is picked up at startup.
 
-They also pick their graphics backend the same way the editor does: the
-`Rendering.RenderBackend` value in `Config/Engine.json` selects **Direct3D 12**
-(Windows), **Metal** (macOS, the default there) or **Vulkan** (or MoltenVK on macOS),
-and anything else means OpenGL. If
-Direct3D 12 fails to initialise, the window is recreated on Vulkan and then on OpenGL;
-if Metal fails to initialise, the window is recreated on MoltenVK and then on ANGLE;
-if Vulkan fails to initialise, the window is recreated on OpenGL; an OpenGL 4.6 context
-falls back to 3.3; macOS runs GLES 3.0 through ANGLE. You never have to configure this by hand —
-it is only worth knowing if a machine has unusual drivers.
+They also pick their graphics backend the same way the editor does. On the very first
+run — when `Config/Engine.json` has no `Rendering.RenderBackend` recorded yet — the
+platform chain is probed from the top and the first renderer that answers is written
+back, so every later start goes straight to it:
+
+| Platform | Chain, highest first |
+| -------- | -------------------- |
+| **Windows** | Direct3D 12 → Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
+| **Linux** | Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
+| **macOS** | Metal → Metal (MoltenVK) → Metal (ANGLE) |
+
+From then on the recorded `Rendering.RenderBackend` decides, and every failure steps
+exactly one rung further down the same chain: if Direct3D 12 fails to initialise the
+window is recreated on Vulkan and then on OpenGL; if Metal fails the window is recreated
+on MoltenVK and then on ANGLE; an OpenGL 4.6 context falls back to 3.3. Whatever the
+tools end up on is written back and shown in their **Settings**. You never have to
+configure this by hand — it is only worth knowing if a machine has unusual drivers.
 
 > The launcher and the updater stay **independent programs**. The launcher's
 > **Updater** button is only a shortcut that starts the updater — it never checks,
@@ -635,7 +643,10 @@ Pressing **Create Project** makes the launcher:
 3. Copy the chosen example into `Content/Examples/<Example>/` (the folder name is
    validated first — a catalog entry can never escape `Content/Examples`).
 4. Write `Config/Engine.json` seeding the project's editor language, font name,
-   font size and font color from your current preferences.
+   font size and font color from your current preferences, plus
+   `Rendering.RenderBackend` — probed right there by walking this machine's renderer
+   chain from the top, so the new project opens on the best renderer it has instead of
+   a generic default.
 5. Copy the ticked plugins and mods into `Plugins/` and `Mods/`.
 6. Write `LICENSE.txt` for every license except *None*.
 7. Write the `<Name>.iceproject` manifest.
@@ -816,7 +827,7 @@ applying does not silently wipe packages the manifest never knew about.
 
 ### 3.5 Settings
 
-Launcher **Settings** carry three preferences:
+Launcher **Settings** carry three preferences and one read-only readout:
 
 * **Language** — 14 built-in languages (English, Русский, Українська, 中文,
   العربية, हिन्दी, Español, Português, 日本語, Français, Deutsch, Italiano, Polski,
@@ -830,6 +841,16 @@ Launcher **Settings** carry three preferences:
   Simplified Chinese, Japanese, Arabic, Hebrew and Devanagari ranges, so a single
   face that covers your script is enough.
 * **Theme** — **Dark** or **Light**, applied immediately across the whole launcher.
+* **Active renderer** — read-only: the graphics API the launcher itself is drawing
+  with, and the **GPU** behind it. On its very first run the launcher probes the
+  platform chain from the top — Windows: Direct3D 12 → Vulkan → OpenGL 4.6 →
+  OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 → OpenGL 3.3; macOS: Metal →
+  Metal (MoltenVK) → Metal (ANGLE) — and records the first one that answers in
+  `Config/Engine.json` (the per-user copy when the install folder is read-only), so
+  every later start goes straight to it. The Updater shows
+  the same two lines in its own **Settings** panel and shares the same recorded
+  choice. Full details are in
+  [Graphics → Backends & platforms](Graphics-EN-DOC.md#22-backends--platforms).
 
 **Language** and **Font** are written to the shared editor preferences
 (`Editor.Language`, `Editor.FontName`, `Editor.FontSize`, `Editor.FontColor` in
@@ -1109,7 +1130,7 @@ which is the usual case for a system-wide install.
 | Path | What it holds |
 | ---- | ------------- |
 | `<Name>.iceproject` | The project manifest — name, engine version, scripting mode, description, license, plugin and mod lists. |
-| `Config/Engine.json` | Per-project editor settings, seeded from your preferences at creation. |
+| `Config/Engine.json` | Per-project editor and rendering settings, seeded from your preferences and from the renderer probe at creation. |
 | `Content/`, `Content/Examples/<Example>/` | Project content, including the copied starter example. |
 | `Plugins/`, `Mods/` | Packages copied in by the launcher. |
 | `LICENSE.txt` | Written at creation for every license except *None*. |

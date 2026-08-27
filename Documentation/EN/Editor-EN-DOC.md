@@ -1040,6 +1040,15 @@ Global rendering defaults (a level can override these in
   on macOS. The choice is written to
   `Config/Engine.json` and applied on the next editor start, with an automatic fallback
   chain when the selected backend is not available on the machine.
+* **Active renderer** — read-only: the backend the editor is rendering with *right now*,
+  and the **GPU** behind it. A project that has never recorded a renderer gets one the
+  first time it is opened, by probing the platform chain from the top
+  (Windows: Direct3D 12 → Vulkan → OpenGL 4.6 → OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 →
+  OpenGL 3.3; macOS: Metal → Metal (MoltenVK) → Metal (ANGLE)) — new projects already
+  carry the probe result from the moment the Launcher creates them. When the combo above
+  names something other than the active renderer, a reminder to restart the editor
+  appears under this line. The details are in
+  [Graphics → Backends & platforms](Graphics-EN-DOC.md#22-backends--platforms).
 * When **Lit**: **Ambient** color & intensity; **2D Shadows** (enable, ray quality,
   softness, intensity, bias, PCF samples, directional length and depth fade,
   colliders-block-shadows); **Ray Tracing** (when supported); **Directional Light**
@@ -1276,8 +1285,9 @@ same server and reflects the connection state.
   (Eject), `Shift+F1` toggle cursor.
 * **Viewport** — gizmos (`Q/E/R`), camera (`RMB+WASD`, scroll, `Shift+Scroll`),
   mouse (LMB select, RMB context menu).
-* **Tilemap Editor** — paint/erase/fill/pick, region/stamp and `Ctrl+S` (see the
-  Tilemap Editor in [Assets](Assets-EN-DOC.md)).
+* **Tilemap Editor** — paint/erase/fill/pick, region/stamp, tile rotation
+  (`Q`/`E`, `Ctrl+Q`/`Ctrl+E`), tile span (`Shift+W/A/S/D`, `Shift+Wheel`) and
+  `Ctrl+S` (see the Tilemap Editor in [Assets](Assets-EN-DOC.md)).
 * **Runtime (Debug)** — not shortcuts but the **runtime debug API surface**: the
   `PrintScreen` / `PrintScreenEx` / `RemoveScreenMessage` / `ClearScreenMessages` /
   `DrawWorldText` overlay calls, the `GetDebug…` / `ToggleDebug…` flag helpers,
@@ -1450,6 +1460,9 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `Shift+RMB` / `Shift+LMB` | Select region / stamp |
 | `Q` / `E` | Rotate the brush counter-clockwise / clockwise |
 | `Ctrl+Q` / `Ctrl+E` | Rotate the tile under the cursor counter-clockwise / clockwise |
+| `Shift+D` / `Shift+A` | Grow / shrink the tile under the cursor one cell to the right |
+| `Shift+W` / `Shift+S` | Grow / shrink the tile under the cursor one cell upwards |
+| `Shift+Wheel` | Grow / shrink the tile under the cursor on both axes |
 | `Ctrl+S` | Save tilemap |
 
 ---
