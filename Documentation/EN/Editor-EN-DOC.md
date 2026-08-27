@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for B-0.8.4 Version
+### Actual for PR-0.9.0 Version
 
 > **IceBox Engine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -130,7 +130,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame          Beta 0.8.4 │
+│                             │ Remote Preview │ MyNewGame          Pre-Release 0.9.0 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -456,8 +456,8 @@ This button is **not present on macOS builds**.
 
 * The **project name** (e.g. `MyNewGame`) is shown after a separator — it is the
   `Name` field of the project's `.iceproject` manifest.
-* The **engine version** (e.g. `Beta 0.8.4`) is right-aligned at the far end of the
-  bar. It is read from `Config/Updater.json` (`B-0.8.4` → `Beta 0.8.4`), falling
+* The **engine version** (e.g. `Pre-Release 0.9.0`) is right-aligned at the far end of the
+  bar. It is read from `Config/Updater.json` (`PR-0.9.0` → `Pre-Release 0.9.0`), falling
   back to the version the editor was compiled with.
 
 Any **toolbar buttons registered by plugins** appear between the Remote Preview
