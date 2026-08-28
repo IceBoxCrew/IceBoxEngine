@@ -11631,6 +11631,7 @@ Prewarm.Flipbook("Content/Anims/FB_Explosion.ice_flipbook")
 Prewarm.Skeleton("Content/Skeletons/SK_Hero.ice_skeleton")
 Prewarm.Material("Content/Materials/M_Hologram.ice_material")
 Prewarm.MaterialInstance("Content/Materials/MI_HologramBlue.ice_matinst")
+Prewarm.Decal("Content/Decals/DC_BulletHole.ice_decal")
 Prewarm.FX("Content/FX/FX_Explosion.ice_fx")
 Prewarm.Tilemap("Content/Levels/Forest/TM_Forest.ice_tm")
 Prewarm.Tileset("Content/Tilesets/TS_Grass.ice_ts")
@@ -11642,7 +11643,7 @@ Prewarm.Sound("Content/Audio/sfx_explosion.wav")
 Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- raw image (atlas if it fits, else standalone)
 
 -- Queue an entire folder (recursive). Recognised extensions:
---   .ice_sprite, .ice_flipbook, .ice_skeleton, .ice_material, .ice_matinst,
+--   .ice_sprite, .ice_flipbook, .ice_skeleton, .ice_material, .ice_matinst, .ice_decal,
 --   .ice_fx, .ice_tm, .ice_ts, .ice_widget, .ice_animation, .ice_view,
 --   .ttf, .otf, .ttc, .wav, .ogg, .mp3, .flac,
 --   .png, .jpg, .jpeg, .bmp, .tga

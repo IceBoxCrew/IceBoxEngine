@@ -136,8 +136,8 @@ Every frame the profiler can collect:
 | **CPU** | Process CPU usage (%, exponentially smoothed), physical core count, logical processor count, frequency (GHz). |
 | **Memory** | RAM current / peak / total (MB), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
 | **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#28-temperature-sensors)). |
-| **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
-| **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), audio (playing voices, listeners), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
+| **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
+| **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
 | **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
 | **Hitches** | Automatically captured stall frames with their full scope tree. See [2.5](#25-hitch-detection). |
 
@@ -307,8 +307,8 @@ sections.
 
 * **FPS** (color-coded: green ≥ 60, yellow ≥ 30, red below) and **Frame Time** (ms),
   with a rolling **frame-time graph**.
-* **Total Entities**, plus a live per-type breakdown: sprites, flipbooks, audio, FX,
-  lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, rigidbodies,
+* **Total Entities**, plus a live per-type breakdown: sprites, flipbooks, decals, audio,
+  FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, rigidbodies,
   colliders, sprite collisions, scripts, AI, destructibles, joints.
 * For the **selected entity**: its tag and **UUID**.
 
@@ -326,6 +326,7 @@ sections.
 
 * **Draw calls**, **quad count**, derived **vertex/index** counts.
 * **Active particles** and **active emitters**.
+* **Active decals** — live runtime decals against the decal budget.
 * **Active audio** voices currently playing.
 * **Physics step (ms)** and, when a physics world exists, full **Box2D** counters
   (bodies, shapes, contacts, joints, islands, tree height), the number of physics
@@ -870,6 +871,29 @@ click.
 > grows a *Send via Email* button that does the same through `mailto:`. **Android and
 > iOS** have no mail path: they ask to send only when a Crash Report URL is set, and stay
 > silent otherwise.
+
+---
+
+### 7.4 Verbose start-up diagnostics
+
+The engine logs its start-up diagnostics — graphics device, shading language version, GPU
+family, VRAM, ray-tracing and timestamp-counter support, swapchain and MSAA configuration —
+through a dedicated channel (`ICE_LOG_INIT`). Those lines are **always** written into the
+crash report's *Session log*, so a report coming from a player's machine carries the full
+renderer bring-up, yet they stay **off the console** so ordinary runs are not noisy.
+
+Set the `ICE_LOG_VERBOSITY` environment variable to route them to the console — and to the
+editor's Console panel — as well:
+
+| Value | Console output |
+|---|---|
+| `fatal`, `error`, `warning` (or `0`–`2`) | Quieter than the default: only that severity and above |
+| `display`, `log` (or `3`–`4`) | Default: every ordinary log line, no start-up diagnostics |
+| `verbose`, `veryverbose` (or `5`–`6`) | Everything, plus the start-up diagnostics |
+
+Names are case-insensitive and may contain `_` or `-`. The variable is read once at start-up
+and works on every platform: export it in a terminal, set it in the Xcode scheme for
+macOS/iOS, or pass it through the launch environment on Android.
 
 ---
 

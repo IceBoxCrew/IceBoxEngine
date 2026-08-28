@@ -691,6 +691,7 @@ selections:
 | **Classes** | Component instances by type — colliders, lights, and other repeated instances across the selected classes. |
 | **Widgets** | Canvas settings (size, desired size, scale-with-screen, stretch mode, safe area). |
 | **FX** | Emitter settings across every emitter of every selected effect. |
+| **Decals** | Appearance, rotation, lifetime and placement of the selected decal assets, plus the weight and source rect of every texture variant inside them. |
 
 This is ideal for large, repetitive edits that would be tedious one asset at a time — for
 example switching a hundred pixel-art textures to `Nearest` filtering, or giving every
@@ -2012,8 +2013,8 @@ The Class Editor is a mini-scene with:
   **local** or the **global** transform.
 * **A components panel** to add and configure components — Transform, Sprite Renderer,
   Collider (box/sphere/capsule), Tilemap Renderer, Flipbook, Audio, FX, Widget,
-  Rigidbody (with ragdoll settings), Animator, Skeleton, Camera, Light (point/spot),
-  Point Marker, Decal, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync), and
+  Rigidbody (with ragdoll settings), Animator, Skeleton, Camera, Decal, Light (point/spot),
+  Point Marker, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync), and
   nested **Class Components** (compose other classes).
 * **Multiple instances per component.** Most visual and physical components are lists —
   a class can hold several sprites, colliders, lights, audio sources or joints at once.
@@ -2044,11 +2045,11 @@ The Class Editor is a mini-scene with:
 
 | Menu | Components |
 | ---- | ---------- |
-| **Rendering** | Sprite Renderer, Tilemap Renderer, Animator, Skeleton, Flipbook, Camera. |
+| **Rendering** | Sprite Renderer, Tilemap Renderer, Animator, Skeleton, Flipbook, Decal, Camera. |
 | **Lighting** | Point Light, Spot Light. |
 | **Collisions** | Rigidbody, Box Collider, Sphere Collider, Capsule Collider, Joint, Destructible. |
 | **Audio & Effects** | Audio, FX. |
-| **UI** | Widget, Point Marker, Decal. |
+| **UI** | Widget, Point Marker. |
 | **Logic** | AI Brain, Class Component. |
 
 **Stencil Mask** and **Replication** are always available on the entity rather than added
@@ -2157,6 +2158,20 @@ Instances can be reordered (**move up/down**), and any component header offers
 | **Near Plane / Far Plane** | Z clip planes. |
 | **Player Index** | Split-screen slot (`-1` = not assigned, `0`–`3` = player). |
 | **Viewport Rect** | Viewport rectangle (X, Y, Width, Height) in normalized `0..1` coordinates. |
+
+**Decal** — decals placed by hand as part of the level: graffiti, cracks, stains. Runtime
+marks (bullet holes, blood) are spawned from script instead — see
+[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62.
+
+| Property | Meaning |
+| -------- | ------- |
+| **Decal Asset** | The `.ice_decal` this instance renders. |
+| **Color** | Tint multiplied into the decal asset color; alpha scales opacity. |
+| **Size Override** | Size in pixels; zero keeps the size from the decal asset. |
+| **Variant** | Texture variant index; `-1` picks one automatically from the asset's weights. |
+| **Override Sort Order** / **Sort Order** | Use an explicit draw order instead of the asset's. |
+| **Flip X / Flip Y** | Mirror the decal. |
+| **Visible** / **Render In Game** | Editor visibility, and whether it also draws in Play mode. |
 
 ##### Lighting
 
@@ -2309,20 +2324,6 @@ properties.
 | **Arrow Head Size** / **Arrow Direction** | Arrow only — head size and the direction it points, in degrees. |
 | **Line End Offset** | Line only — the end point relative to the entity. |
 | **Visible** / **Render In Game** | Editor visibility, and whether it also draws in Play mode (off by default). |
-
-**Decal** — decals placed by hand as part of the level: graffiti, cracks, stains. Runtime
-marks (bullet holes, blood) are spawned from script instead — see
-[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62.
-
-| Property | Meaning |
-| -------- | ------- |
-| **Decal Asset** | The `.ice_decal` this instance renders. |
-| **Color** | Tint multiplied into the decal asset color; alpha scales opacity. |
-| **Size Override** | Size in pixels; zero keeps the size from the decal asset. |
-| **Variant** | Texture variant index; `-1` picks one automatically from the asset's weights. |
-| **Override Sort Order** / **Sort Order** | Use an explicit draw order instead of the asset's. |
-| **Flip X / Flip Y** | Mirror the decal. |
-| **Visible** / **Render In Game** | Editor visibility, and whether it also draws in Play mode. |
 
 ##### Logic
 
