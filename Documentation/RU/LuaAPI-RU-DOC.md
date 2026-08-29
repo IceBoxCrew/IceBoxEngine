@@ -5268,6 +5268,10 @@ local sorted = GetSpriteYSort()
 SetSpriteYSortBias(-4)
 local bias = GetSpriteYSortBias()
 
+-- Те же флаги у другой сущности, откуда угодно — скрипт на цели не нужен:
+SetEntitySpriteYSort(entityId, true, -4)
+local otherSorted = GetEntitySpriteYSort(entityId)
+
 -- Имя / путь
 local name = GetSpriteName()
 local path = GetSpritePath()
@@ -5303,6 +5307,22 @@ local zo = GetSpriteShadowZOrder()           -- → float
 -- Опциональный второй аргумент — индекс спрайта (по умолчанию 0).
 SetSpriteShadowZOrder(1, 0)
 ```
+
+#### Где Y-сортировка работает и чего она никогда не трогает
+
+| Контекст | Y-сортировка |
+| -------- | ------------ |
+| Вьюпорт редактора при редактировании | ✅ живой предпросмотр — расставляйте изометрию и сразу видите настоящий порядок |
+| **Play** внутри редактора | ✅ |
+| Отдельная сборка | ✅ |
+
+Сортировка переписывает порядок отрисовки спрайта каждый кадр, но авторская глубина **никогда не теряется**. Именно это
+авторское значение сохраняется в уровень, пишется в класс или префаб, уходит в сетевом спавне, попадает в шаг отмены
+редактора, копируется при дублировании и клонировании и возвращается из `GetSpriteOrder()`. Вызов `SetSpriteOrder()` при
+включённой сортировке меняет эту авторскую базу, а не борется с сортировкой, и `SetSpriteYSort(false)` возвращает её в
+точности. Осколки от `Fracture` наследуют флаг и его смещение, поэтому куски разбитого персонажа продолжают
+сортироваться правильно в полёте.
+
 
 ### Точки привязки (Attach Points)
 
@@ -5547,6 +5567,21 @@ SetFlipbookOrder(5.0)                -- без индекса — устанав
 SetFlipbookOrder(5.0, 1)             -- с индексом — устанавливает Z экземпляра флипбука
 local order = GetFlipbookOrder()     -- опционально: GetFlipbookOrder(index)
 
+-- Автоматическая Y-сортировка — во всём идентична спрайтовой.
+-- Движок каждый кадр выводит порядок отрисовки из мировой Y флипбука, поэтому
+-- анимированный персонаж корректно перемежается со статичным окружением вокруг.
+SetFlipbookYSort(true)               -- включить для флипбука 0
+SetFlipbookYSort(true, -8)           -- включить и сразу задать смещение
+SetFlipbookYSort(true, 0, 1)         -- ... для флипбука с индексом 1
+local sorted = GetFlipbookYSort()
+
+SetFlipbookYSortBias(-4)             -- минус уводит назад, плюс — вперёд
+local fbBias = GetFlipbookYSortBias()
+
+-- Те же флаги у другой сущности, откуда угодно — скрипт на цели не нужен:
+SetEntityFlipbookYSort(entityId, true, -4)
+local otherSorted = GetEntityFlipbookYSort(entityId)
+
 -- Локальная трансформация
 SetFlipbookLocalPosition(5, 0)
 local lp = GetFlipbookLocalPosition()
@@ -5589,6 +5624,45 @@ local fOff = GetFlipbookSocketOffset(1)   -- → {x, y, rotation}
 local fa = GetFlipbookSocketAttach(1)
 local isAttached = IsFlipbookSocketAttached(1)
 ```
+
+#### Билбординг флипбука — анимированные спрайты в псевдо-3D
+
+`Draw.Region` нужен **файл текстуры** и **пиксельный прямоугольник** внутри него. У флипбука и то и другое меняется
+каждый кадр, поэтому `GetFlipbookFrameRegion` отдаёт ровно то, что рендерер использует для текущего кадра.
+`GetSpriteFrameRegion` — идентичный вызов для спрайтов, и он важен, как только регионом спрайта управляет Animator.
+
+```lua
+local f = GetFlipbookFrameRegion()      -- опционально индекс флипбука
+-- f.valid    -- false, пока текстура ещё грузится; остальные поля обнулены
+-- f.texture  -- разрешённый файл текстуры, готов для Draw.Region / Draw.SetTexture
+-- f.x, f.y, f.w, f.h        -- исходный прямоугольник в пикселях
+-- f.width, f.height         -- полный размер текстуры в пикселях
+-- f.pivotX, f.pivotY        -- пивот, который использует рендерер, нормализованный
+
+local s = GetSpriteFrameRegion()        -- та же форма, те же поля
+```
+
+Это замыкает круг для анимированных билбордов в рейкастере: флипбук — это и есть спрайтовая анимация, поэтому
+анимированный враг рисуется точно так же, как статичный, — вы лишь меняете исходный прямоугольник каждый кадр.
+
+```lua
+-- Анимированный билборд врага в рейкаст-виде.
+function DrawEnemy(enemyId, screenX, height, distance)
+    local f = GetFlipbookFrameRegion()
+    if not f or not f.valid then return end
+
+    local shade = math.max(0.2, 1 - distance / 20)
+    Draw.SetSpace("screen")
+    Draw.SetColor(shade, shade, shade, 1)
+    Draw.SetPivot(f.pivotX, f.pivotY)
+    Draw.Region(f.texture, screenX, 180, height * (f.w / f.h), height,
+                f.x, f.y, f.w, f.h, 0, -distance)
+end
+```
+
+> Добавьте `Draw.SetDepthTest(true)` в экранном пространстве — и билборд будет попиксельно перекрываться колоннами стен
+> без ручной сортировки. Флипбук при этом продолжает проигрываться через Animator или сам по себе: то, что вы рисуете
+> его вручную, ничего не меняет в конвейере анимации.
 
 ### Полигон коллизии
 

@@ -5267,6 +5267,10 @@ local sorted = GetSpriteYSort()
 SetSpriteYSortBias(-4)
 local bias = GetSpriteYSortBias()
 
+-- Same flags on another entity, from anywhere - no script needed on the target:
+SetEntitySpriteYSort(entityId, true, -4)
+local otherSorted = GetEntitySpriteYSort(entityId)
+
 -- Name / path
 local name = GetSpriteName()
 local path = GetSpritePath()
@@ -5302,6 +5306,21 @@ local zo = GetSpriteShadowZOrder()          -- → float
 -- Optional second argument selects sprite index (default 0).
 SetSpriteShadowZOrder(1, 0)
 ```
+
+#### Where Y sorting is live, and what it never touches
+
+| Context | Y sorting |
+| ------- | --------- |
+| Editor viewport while editing | ✅ live preview — lay out an isometric scene and see the real order as you drag |
+| **Play** inside the editor | ✅ |
+| Standalone build | ✅ |
+
+The sort rewrites the sprite's draw order every frame, but the depth **you** authored is never lost. That authored value
+is what gets saved to the level, written into a class or prefab, sent in a network spawn, captured by an editor undo
+step, copied by duplicate/clone, and returned by `GetSpriteOrder()`. Calling `SetSpriteOrder()` while the sort is on
+updates that authored base instead of fighting the sort, and `SetSpriteYSort(false)` restores it exactly. Debris from
+`Fracture` inherits the flag and its bias, so the pieces of a shattered character keep sorting correctly as they fly.
+
 
 ### Attach points
 
@@ -5545,6 +5564,21 @@ SetFlipbookOrder(5.0)                -- without index — sets entity Z
 SetFlipbookOrder(5.0, 1)             -- with index — sets flipbook instance Z
 local order = GetFlipbookOrder()     -- optional: GetFlipbookOrder(index)
 
+-- Automatic Y sorting — identical to the sprite version in every respect.
+-- The engine derives the draw order from the flipbook's world Y each frame, so an
+-- animated character interleaves correctly with the static props around it.
+SetFlipbookYSort(true)               -- enable on flipbook 0
+SetFlipbookYSort(true, -8)           -- enable and set the bias in one call
+SetFlipbookYSort(true, 0, 1)         -- ... on flipbook index 1
+local sorted = GetFlipbookYSort()
+
+SetFlipbookYSortBias(-4)             -- negative pushes back, positive pulls forward
+local fbBias = GetFlipbookYSortBias()
+
+-- Same flags on another entity, from anywhere - no script needed on the target:
+SetEntityFlipbookYSort(entityId, true, -4)
+local otherSorted = GetEntityFlipbookYSort(entityId)
+
 -- Local transform
 SetFlipbookLocalPosition(5, 0)
 local lp = GetFlipbookLocalPosition()
@@ -5587,6 +5621,45 @@ local fOff = GetFlipbookSocketOffset(1)   -- → {x, y, rotation}
 local fa = GetFlipbookSocketAttach(1)
 local isAttached = IsFlipbookSocketAttached(1)
 ```
+
+#### Billboarding a flipbook — animated sprites in pseudo-3D
+
+`Draw.Region` needs a **texture file** and a **pixel rectangle** inside it. A flipbook changes both every frame, so
+`GetFlipbookFrameRegion` hands you exactly what the renderer is using for the frame showing right now. `GetSpriteFrameRegion`
+is the identical call for sprites, which matters as soon as an Animator drives the sprite's region.
+
+```lua
+local f = GetFlipbookFrameRegion()      -- optional flipbook index
+-- f.valid    -- false while the texture is still loading; everything else is zeroed
+-- f.texture  -- resolved texture file, ready for Draw.Region / Draw.SetTexture
+-- f.x, f.y, f.w, f.h        -- source rectangle in pixels
+-- f.width, f.height         -- full texture size in pixels
+-- f.pivotX, f.pivotY        -- pivot the renderer uses, normalized
+
+local s = GetSpriteFrameRegion()        -- same shape, same fields
+```
+
+This closes the loop for animated billboards in a raycaster: a flipbook is just a sprite animation, so an animated enemy
+is drawn exactly like a static one — you only swap the source rectangle each frame.
+
+```lua
+-- An animated enemy billboard in a raycast view.
+function DrawEnemy(enemyId, screenX, height, distance)
+    local f = GetFlipbookFrameRegion()
+    if not f or not f.valid then return end
+
+    local shade = math.max(0.2, 1 - distance / 20)
+    Draw.SetSpace("screen")
+    Draw.SetColor(shade, shade, shade, 1)
+    Draw.SetPivot(f.pivotX, f.pivotY)
+    Draw.Region(f.texture, screenX, 180, height * (f.w / f.h), height,
+                f.x, f.y, f.w, f.h, 0, -distance)
+end
+```
+
+> Combine it with `Draw.SetDepthTest(true)` in screen space and the billboard is occluded by wall columns per pixel, with
+> no manual sorting. The flipbook keeps advancing through the Animator or on its own — nothing about the animation
+> pipeline changes just because you draw it yourself.
 
 ### Collision polygon
 
