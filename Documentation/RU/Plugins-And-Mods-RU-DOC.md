@@ -978,12 +978,32 @@ Lua-функции движка; см. доку Lua API.)
 | `Mods.GetCount()` / `Mods.GetEnabledCount()` | Итоговые количества. |
 | `Mods.IsEnabled(name)` / `Mods.IsLoaded(name)` | Булевы значения. |
 | `Mods.SetEnabled(name, enabled)` | Включает/выключает и **сохраняет** `Config/Mods.json`. |
-| `Mods.Refresh()` | Выгружает все моды, пере-сканирует `Mods/`, перечитывает конфиг и загружает включённые. |
+| `Mods.Refresh()` | Выгружает все моды, пере-сканирует `Mods/` и все дополнительные пути поиска, перечитывает конфиг и загружает включённые. |
+| `Mods.AddSearchPath(path)` | Регистрирует дополнительную директорию для поиска модов наряду с `Mods/`. Действует в пределах сессии; возвращает `false` для пути, который не является существующей директорией. |
+| `Mods.GetSearchPaths()` | Массив зарегистрированных дополнительных путей поиска. |
+| `Mods.ClearSearchPaths()` | Сбрасывает все дополнительные пути поиска. |
 
 ```lua
 Mods.SetEnabled("PlatformerCrates", false)
 Mods.Refresh()
 ```
+
+Дополнительные пути поиска — это то, что позволяет модам жить вне папки игры; полезнее всего для элементов
+**Steam Workshop**, которые Steam устанавливает в собственные папки для каждого элемента. При включённом плагине
+Steam передайте эти папки системе модов и пересканируйте — ничего не копируется:
+
+```lua
+Mods.ClearSearchPaths()
+for _, item in ipairs(Storefront.Workshop.GetSubscribed()) do
+    if item.installed and not item.needsUpdate then
+        Mods.AddSearchPath(item.installFolder)
+    end
+end
+Mods.Refresh()
+```
+
+В каждой такой папке должен быть `mod.json` в корне — ровно как в папке внутри `Mods/`. Вновь обнаруженные моды по
+умолчанию выключены — включайте их через `Mods.SetEnabled(name, true)`.
 
 Весь модуль также доступен как ноды **Visual Script** в категории `Mods`. Полный
 справочник см. в [LuaAPI-RU-DOC.md](LuaAPI-RU-DOC.md).

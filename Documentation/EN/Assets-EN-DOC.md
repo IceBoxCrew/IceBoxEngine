@@ -1280,7 +1280,7 @@ The node palette is extensive. The **Add Node** menu groups it into nine sub-men
 | ---- | ----- |
 | **Constants** | Float, Vector2, Color (RGB), Color (RGBA). |
 | **Textures** | Texture Sample. |
-| **Coordinates** | Texture Coordinates, Vertex Color, Camera Position, Panner, Rotator, Tiler. |
+| **Coordinates** | Texture Coordinates, Vertex Color, Camera Position, Camera View, Screen To World, World To Screen, Panner, Rotator, Tiler. |
 | **Math** | Add, Subtract, Multiply, Divide, Lerp, Clamp, One Minus, Power, Abs, Floor, Ceil, Frac, Sign, Step, SmoothStep, Min, Max, Sine, Cosine, Tangent, ATan2, Saturate, Fmod, Sqrt, Round, Remap, If. |
 | **Vector Operations** | Dot Product, Distance, Length, Normalize, Append, Cross Product. |
 | **Make / Break** | Make Float2/3/4, Break Float2/3/4, Component Mask. |
@@ -1343,6 +1343,9 @@ compiled — unreachable nodes are ignored.
 | **Texture Coordinates** | — | `UV` (Vector2) | The interpolated UV of the surface being shaded. |
 | **Vertex Color** | — | `RGB`, `A` | The per-vertex color — for a sprite this is the tint set on the instance. |
 | **Camera Position** | — | `XY` (Vector2), `X`, `Y` | The active camera's world position. |
+| **Camera View** | — | `World Size` (Vector2), `Rotation`, `Zoom` | The slice of world the camera currently covers: its size in world units, its roll in degrees (clockwise positive) and how many world units one rendered pixel spans. |
+| **Screen To World** | `UV` (Vector2) | `XY` (Vector2), `X`, `Y` | Turns a screen coordinate into the world position under it, camera roll included. Leave `UV` unconnected and it resolves to the pixel being shaded. |
+| **World To Screen** | `World` (Vector2) | `UV` (Vector2), `U`, `V` | The inverse — where a world position lands on screen, camera roll included. |
 | **Panner** | `UV`, `Speed X` (`1`), `Speed Y` (`0`) | `UV` (Vector2) | Scrolls UVs with time: `UV + vec2(SpeedX, SpeedY) * Time`. Conveyors, water, scrolling skies. |
 | **Rotator** | `UV`, `Speed` (`1`), `Center` (`0.5,0.5`) | `UV` (Vector2) | Rotates UVs around `Center` at `Speed` radians per second. |
 | **Tiler** | `UV`, `Tiling` (`1,1`), `Offset` (`0,0`) | `UV` (Vector2) | `UV * Tiling + Offset` — repeats or shifts a texture. |
@@ -1443,8 +1446,10 @@ Inside the code block:
 * **assign your result to `output`**;
 * the block has its own scope, so local variables, `for`/`while` loops and `if` branches are all allowed and cannot
   collide with the rest of the generated shader;
-* uniforms of the material are in scope — `uTime`, `uCameraPosition`, `uScreenSize`, any `uParam_<Name>` from a Scalar or
-  Vector Parameter node, and any `uTexture<N>` created by a Texture Sample node.
+* uniforms of the material are in scope — `uTime`, `uCameraPosition`, `uScreenSize`, `uCameraView`, any
+  `uParam_<Name>` from a Scalar or Vector Parameter node, and any `uTexture<N>` created by a Texture Sample node;
+* so are the two generated helpers `IceScreenToWorld(vec2 uv)` and `IceWorldToScreen(vec2 world)` — the same
+  conversion the Screen To World and World To Screen nodes perform, camera roll included.
 
 ```glsl
 // output type = float, 2 inputs (vec2, float)
@@ -1939,9 +1944,9 @@ post-process volumes in the open level, so changes are visible in the viewport a
 A **cinema** is a **timeline-based editor** for cutscenes and scripted camera moves.
 
 * **Duration**, **Frame Rate**, **Loop**, **Playback Rate**, and a starting camera
-  position/zoom.
+  position/zoom/rotation.
 * **Tracks**, each holding **keyframes**, with a name and **mute** / **lock** flags.
-  A keyframe is either a **Camera** key (position + zoom) or a **Lua Callback** key (fire a
+  A keyframe is either a **Camera** key (position + zoom + rotation) or a **Lua Callback** key (fire a
   named function at that time), with an **easing** curve (`Linear`, `EaseIn`, `EaseOut`,
   `EaseInOut`, `Bounce`, `Elastic`) and a duration.
 
@@ -1949,18 +1954,20 @@ A **cinema** is a **timeline-based editor** for cutscenes and scripted camera mo
 
 * **Toolbar** — duration, frame rate, loop, playback rate, **Snap** (snap the playhead and
   keyframes to whole frames), and the timeline zoom.
-* **Start camera** — the position/zoom the shot begins at, with **Capture Start** to take the
+* **Start camera** — the position/zoom/rotation the shot begins at, with **Capture Start** to take the
   current editor camera and **Go To Start** to send the editor camera back there.
 * **Tracks** — **+ Add Track**, **Duplicate Track**, delete, mute and lock. Add keyframes of
   either type, drag them along the timeline, and multi-select to move several at once.
 * **Inspector** — the selected keyframe's time, duration, easing and payload. For a camera
-  key, **Capture Current Camera** writes the *current editor camera* position and zoom into the
-  keyframe — frame the shot in the viewport, then press the button. **Go To** does
+  key, **Capture Current Camera** writes the *current editor camera* position, zoom and rotation into
+  the keyframe — frame the shot in the viewport, then press the button. **Go To** does
   the reverse and moves the editor camera to the stored value.
 * **Preview** — scrub or play the timeline and watch the editor camera follow it.
 
 > Camera positions are stored **relative to the cinema's placement in the level**, so the
-> same cutscene can be reused at different spots in a map.
+> same cutscene can be reused at different spots in a map. Rotation is stored in **degrees**,
+> clockwise positive, and is interpolated directly rather than along the shortest arc — a key at
+> `360` therefore spins the camera a full turn instead of standing still.
 
 ### 4.16 AI / Behavior Tree (`.ice_ai`)
 

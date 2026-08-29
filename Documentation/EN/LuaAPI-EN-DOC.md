@@ -6369,9 +6369,36 @@ What rolls and what does not:
 
 Culling widens automatically to the bounding box of the rolled view, so nothing pops in at the corners.
 
-> **Screen-space post effects.** Camera motion blur and the underwater world-height reference are screen-space
-> approximations that only track camera *translation*; under a rolling camera they stay stable but are not
-> rotation-exact. Everything that affects gameplay — picking, traces, visibility — is exact.
+> **Lighting and shadows need no special handling.** Every light, shadow and ray-traced bounce is computed in **world
+> space** from the geometry's own world position, so a rolled camera simply views the same lighting from a tilted angle
+> — which is what it should do. Point and spot lights, the directional light, light cookies, 2D shadow casting and the
+> 2D ray tracer are all roll-exact by construction, at any angle, with no cost.
+>
+> **Post effects follow the roll too.** Every built-in effect that references the world is exact at every angle:
+>
+> | Effect | Under a rolled camera |
+> | ------ | --------------------- |
+> | Height fog | the fog plane stays level with the **world**, so the fog line tilts with the horizon |
+> | Procedural sky | the horizon-to-zenith gradient follows world up, so the sky tilts with the scene |
+> | Camera motion blur | streaks along the real on-screen direction of travel |
+> | Screen-space reflections | reflections march along the surface normal as it appears on screen |
+> | Ray-traced screen radiance | the bounce samples the frame at the right place |
+>
+> Everything else is roll-immune by construction: bloom, depth of field, colour grading, LUT, film grain, tonemap,
+> ambient occlusion, global illumination, anti-aliasing and sharpening have no world reference; vignette, chromatic
+> aberration and the FOV lens are radial and therefore rotation-invariant; underwater tint, distortion and caustics are
+> pure screen-space. Godrays, volumetric fog and heat haze are positioned by **screen-space** settings you author, so
+> they deliberately stay where you put them on screen.
+>
+> At zero roll every one of these computes exactly what it computed before — the rolled paths are opt-in and cost
+> nothing when unused.
+>
+> **Custom post-process materials can follow the roll too.** Alongside `uCameraPosition` and `uScreenSize` they also
+> receive `uCameraView` — the view's size in world units plus the cosine and sine of the roll — and the material
+> editor exposes it as three nodes under **Coordinates**: **Screen To World**, **World To Screen** and
+> **Camera View**. Feed a screen coordinate through Screen To World and the effect stays anchored to the world at any
+> camera angle; keep working in screen UVs and it stays anchored to the screen. Both remain available, so a material
+> authored before this behaves exactly as it did.
 
 ```lua
 -- A ship game where the world turns around the player
@@ -11131,6 +11158,7 @@ local color = Cinema.GetFadeColor()       -- → {r, g, b, a}
 -- Camera info (while playing)
 local camPos = Cinema.GetCameraPosition()  -- → {x, y, z}
 local camZoom = Cinema.GetCameraZoom()
+local camRot = Cinema.GetCameraRotation()  -- degrees, clockwise positive
 
 -- Camera shake (independent of keyframes)
 Cinema.ShakeCamera(5.0, 10.0, 0.5)  -- intensity, frequency, duration
@@ -11184,6 +11212,7 @@ Cinema.ClearOnFinished("Content/Cinema/intro.ice_cinema")
 | `Cinema.GetFadeColor()` | Get fade color as `{r, g, b, a}` table |
 | `Cinema.GetCameraPosition()` | Get cinematic camera position `{x, y, z}` |
 | `Cinema.GetCameraZoom()` | Get cinematic camera zoom |
+| `Cinema.GetCameraRotation()` | Get cinematic camera roll in degrees (clockwise positive) |
 | `Cinema.ShakeCamera(intensity, frequency, duration)` | Trigger camera shake effect (independent of keyframes) |
 | `Cinema.GetPlayingList()` | Get list of currently playing cinematic paths |
 | `Cinema.OnFinished(path, callback)` | Register a callback for when the cinematic finishes |
@@ -15146,8 +15175,14 @@ local gated = Network.IsReplicaScriptGating()
 
 -- Level replication: host changes the level for everyone at once.
 Network.LoadNetworkLevel("Content/Arena.icemap")
--- Clients auto-load the same level. To customise client-side loading:
+-- Clients auto-load the same level. To customise loading (for example, to route
+-- the transition through a loading screen):
 Network.OnNetworkLevelLoad(function(path) LoadLevel(path) end)
+-- The handler runs on every peer, the host included: when it is registered,
+-- Network.LoadNetworkLevel calls it instead of loading the level directly, so
+-- host and clients take exactly the same code path. Without a handler the host
+-- falls back to a plain LoadLevel(path). The handler is responsible for loading
+-- the level and must not call Network.LoadNetworkLevel again.
 ```
 
 **Model.** Replication is **host-authoritative**: the host simulates everything and
@@ -18508,6 +18543,7 @@ Each element is a table with the following fields:
 | `enabled` | bool | Whether the mod is enabled in the config |
 | `loaded` | bool | Whether the mod is currently loaded and running |
 | `loadOrder` | int | Load priority (lower = earlier) |
+| `folderPath` | string | Absolute path to the mod folder |
 
 #### `Mods.GetCount()` → int
 
@@ -18592,12 +18628,67 @@ end
 
 #### `Mods.Refresh()`
 
-Unloads all mods, rescans the `Mods/` directory, reloads config, and loads enabled mods.
+Unloads all mods, rescans the `Mods/` directory **and every registered extra search path**, reloads config, and
+loads enabled mods.
 
 ```lua
 Mods.Refresh()
 print("Mods refreshed. Found: " .. Mods.GetCount())
 ```
+
+#### `Mods.AddSearchPath(path)` → bool
+
+Registers an **extra directory to scan for mods**, in addition to `Mods/`. The directory is scanned exactly like
+`Mods/`: every immediate subfolder that contains a `mod.json` becomes a mod, with `MOD_DIR` and `ModRequire()`
+resolving against wherever it actually lives. Returns `false` if the path is empty or is not an existing directory.
+
+Search paths are **per session** — they are not written to `Config/Mods.json` and must be re-registered every
+launch, before the scan. Adding one does not rescan by itself; call `Mods.Refresh()` afterwards.
+
+If a mod in an extra path has the same `Name` as one already discovered, the later one is skipped and a warning is
+logged, so a mod under `Mods/` always wins over an external copy of itself.
+
+This is what lets **Steam Workshop** content act as mods without copying anything: Steam installs each subscribed
+item into its own folder, and you hand those folders to the mod system directly.
+
+```lua
+-- Level script or startup manager, with the Steam plugin enabled.
+function MountWorkshopMods()
+    if not Storefront.IsAvailable() then return end
+
+    Mods.ClearSearchPaths()
+
+    local mounted = 0
+    for _, item in ipairs(Storefront.Workshop.GetSubscribed()) do
+        if item.installed and not item.needsUpdate and item.installFolder ~= "" then
+            if Mods.AddSearchPath(item.installFolder) then
+                mounted = mounted + 1
+            end
+        end
+    end
+
+    Mods.Refresh()
+    print("Mounted " .. mounted .. " Workshop item(s); " .. Mods.GetCount() .. " mod(s) total")
+end
+```
+
+Each Workshop item must ship a `mod.json` at the root of its uploaded content folder for the scan to pick it up —
+that is the only requirement the engine puts on it. Newly discovered mods start **disabled** (like any other mod
+missing from `Config/Mods.json`); enable the ones the player wants with `Mods.SetEnabled(name, true)`, which loads
+them immediately while a scene is running and persists the choice.
+
+#### `Mods.GetSearchPaths()` → table
+
+Returns the array of extra search paths currently registered, in the order they will be scanned.
+
+```lua
+for _, path in ipairs(Mods.GetSearchPaths()) do print(path) end
+```
+
+#### `Mods.ClearSearchPaths()`
+
+Removes every extra search path. The next `Mods.Refresh()` then sees only `Mods/`. Call this before re-registering
+Workshop folders so unsubscribed items do not linger.
 
 #### Complete example: in-game mod menu
 
@@ -23693,6 +23784,15 @@ Draw.Pop()    -- restore it
 Draw.Reset()  -- back to defaults and clear the state stack
 ```
 
+> **Lighting immediate-mode geometry.** `Draw.SetShading("lit")` runs your quads and meshes through the same lighting
+> the scene uses — point and spot lights, the directional light, 2D shadows and the ray tracer all apply, because
+> lighting is computed from the geometry's world position. That works in **world space**, which is what you want for a
+> lit pseudo-3D floor or wall.
+>
+> In `screen` space the coordinates you submit are viewport pixels, and the lighting would treat them as world
+> positions, so keep screen-space geometry `unlit` and light the world-space geometry instead.
+
+
 ### Materials on immediate-mode geometry
 
 `Draw.SetMaterial` runs a node-based material — a real fragment shader — over everything you submit afterwards. This is
@@ -23715,10 +23815,22 @@ Draw.ClearMaterial()              -- same thing
 Returns `false` and logs a warning if the name matches neither a loaded dynamic instance nor a material asset, and the
 state is left cleared, so a typo degrades to the default shader instead of drawing nothing.
 
-> **Cost.** A material draw sets up its own shader and flushes immediately — it does not batch with the surrounding
-> geometry. One material over one large mesh is free; one material over ten thousand separate quads is ten thousand draw
-> calls. Group geometry that shares a material, submit it as a mesh where you can, and keep `Draw.SetMaterial(nil)` on
-> for the bulk quads.
+> **Cost.** Quads submitted under one material are batched: every consecutive quad that shares the material, the
+> texture and the rest of the draw state goes out in a **single** draw call, so ten thousand quads under one material
+> cost one draw call, not ten thousand. Changing material, texture, blend mode, space or render target starts a new
+> batch, so group by material rather than interleaving.
+>
+> A `Draw.Mesh` under a material is one draw call per mesh — that is already the natural granularity, but it means a
+> thousand small meshes cost a thousand calls where a thousand quads would cost one. Prefer quads, or merge the geometry
+> into fewer, larger meshes.
+>
+> Material draws still sit outside the ordinary batch: they bind their own shader and flush the geometry queued before
+> them. Interleaving `Draw.SetMaterial(mat)` and `Draw.SetMaterial(nil)` every few primitives therefore costs a flush
+> each time — set the material once, draw everything that uses it, then clear it.
+>
+> A material that samples the scene colour (refraction, heat haze) takes **one** snapshot per batch, so quads in the same
+> batch all refract the scene behind the batch rather than each other. Split them into separate batches if you need one
+> to refract another.
 
 ### Text
 

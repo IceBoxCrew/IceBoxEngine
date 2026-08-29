@@ -962,12 +962,32 @@ Mods can also be inspected and managed at runtime from script through the engine
 | `Mods.GetCount()` / `Mods.GetEnabledCount()` | Totals. |
 | `Mods.IsEnabled(name)` / `Mods.IsLoaded(name)` | Booleans. |
 | `Mods.SetEnabled(name, enabled)` | Enables/disables and **saves** `Config/Mods.json`. |
-| `Mods.Refresh()` | Unloads all mods, re-scans `Mods/`, re-reads the config and re-loads the enabled ones. |
+| `Mods.Refresh()` | Unloads all mods, re-scans `Mods/` plus every extra search path, re-reads the config and re-loads the enabled ones. |
+| `Mods.AddSearchPath(path)` | Registers an extra directory to scan for mods alongside `Mods/`. Session-only; returns `false` for a path that is not an existing directory. |
+| `Mods.GetSearchPaths()` | Array of the extra search paths currently registered. |
+| `Mods.ClearSearchPaths()` | Drops every extra search path. |
 
 ```lua
 Mods.SetEnabled("PlatformerCrates", false)
 Mods.Refresh()
 ```
+
+Extra search paths are what let mods live outside the game folder — most usefully **Steam Workshop** items, which
+Steam installs into its own per-item directories. With the Steam plugin enabled, hand those directories to the mod
+system and rescan; nothing is copied:
+
+```lua
+Mods.ClearSearchPaths()
+for _, item in ipairs(Storefront.Workshop.GetSubscribed()) do
+    if item.installed and not item.needsUpdate then
+        Mods.AddSearchPath(item.installFolder)
+    end
+end
+Mods.Refresh()
+```
+
+Each such folder must contain a `mod.json` at its root, exactly like a folder under `Mods/`. Newly discovered mods
+start disabled — enable them with `Mods.SetEnabled(name, true)`.
 
 The whole module is also available as **Visual Script** nodes under the `Mods` category.
 See [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) for the full reference.
