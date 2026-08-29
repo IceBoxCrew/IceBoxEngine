@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > **IceBox Engine** renders 2D worlds through a modern, backend-agnostic graphics
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
@@ -55,6 +55,7 @@
    - 6.2 [Light types](#62-light-types)
    - 6.3 [Ambient & light cookies](#63-ambient--light-cookies)
    - 6.4 [The light budget & the light UBO](#64-the-light-budget--the-light-ubo)
+   - 6.5 [Where lighting and shadow settings come from](#65-where-lighting-and-shadow-settings-come-from)
 7. [2D shadows](#7-2d-shadows)
    - 7.1 [How ray-cast shadows work](#71-how-ray-cast-shadows-work)
    - 7.2 [Shadow casters](#72-shadow-casters)
@@ -833,6 +834,41 @@ blocks. It is bound at uniform binding point 0 and re-uploaded only when it chan
 
 ---
 
+### 6.5 Where lighting and shadow settings come from
+
+Everything in `Config/Engine.json` → `Rendering` is the **project default** for the whole
+game: lighting mode, ambient, shadows (including **Colliders Block Shadows**, directional
+shadow length and depth fade), ray tracing, the directional light, the clear colour and the
+near/far planes. The editor authors that file through
+[Preferences → Rendering](Editor-EN-DOC.md#105-rendering); the shipped runtime reads it at
+startup on every platform, so the editor viewport, Play mode and the built game all start
+from exactly the same values.
+
+Three layers stack on top of each other, highest wins:
+
+| # | Layer | Source | Scope |
+| - | ----- | ------ | ----- |
+| 1 | **Project defaults** | `Config/Engine.json` → `Rendering` | Every level, every platform |
+| 2 | **Level override** | [World Settings](Editor-EN-DOC.md#8-world-settings) with **Override Enabled** on | The level it is saved in |
+| 3 | **Runtime override** | A [Lua](LuaAPI-EN-DOC.md#133-lighting-and-shadows--global-settings) / Visual Script call such as `SetShadowsEnabled(false)`, `SetCollidersBlockShadows(true)` or `Settings.SetLightingEnabled(false)` | The rest of the session |
+
+A runtime override is tracked **per parameter**: calling `SetShadowsEnabled(false)` pins
+only "shadows enabled" and leaves every other value following the project default or the
+level override. Runtime overrides **survive level transitions** — loading a new level
+re-applies layers 1 and 2 but never resets a value the game has taken control of, so an
+in-game "Shadows: Off" option stays off when the player leaves the main menu for the first
+level. In the editor they are cleared when Play mode ends, so the viewport returns to the
+project settings.
+
+`Settings.Save()` writes the runtime overrides that are active into the player's
+`GameSettings.json` under a `Rendering` block — only the parameters the game actually
+changed, never the whole `Rendering` section. They are re-applied as runtime overrides at
+the next startup (and when Play mode starts in the editor), which is what makes an in-game
+graphics menu persist across launches. `Settings.ResetDefaults()` drops them all and returns
+to the `Engine.json` values.
+
+---
+
 ## 7. 2D shadows
 
 When shadows are enabled and at least one light casts them, the **Shadow2DSystem**
@@ -1478,6 +1514,15 @@ The physics world is created from these settings (global in
 **Physics Worker Threads** is the exception: it is engine-global, lives only in
 [Preferences → Physics](Editor-EN-DOC.md#102-physics), cannot be overridden per level,
 and takes effect on restart ([13.1](#131-the-simulation-loop)).
+
+The values in Preferences are stored in `Config/Engine.json` → `Physics` and are the
+**project defaults** in the same sense as the rendering ones ([6.5](#65-where-lighting-and-shadow-settings-come-from)):
+the shipped runtime reads them at startup on every platform, and they are re-seeded every
+time a level starts. A level that enables **Override Enabled** replaces them for itself
+only — leaving that level no longer leaks its physics into the next one, in the editor or
+in the build. `Config/Engine.json` → `Audio` works the same way for the audio globals
+(gain, Doppler, speed of sound, spatial audio, default attenuation distances) and for the
+starting volumes, which the player's `GameSettings.json` then overrides.
 
 ---
 

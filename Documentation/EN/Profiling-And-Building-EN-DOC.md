@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > This document covers two production-critical workflows of **IceBox Engine**:
 >
@@ -358,13 +358,13 @@ not part of the game). The same flags are readable and writable from Lua by name
 
 **`Tools → Profiler (Tracy)`** opens the panel titled **Profiler** (the "Advanced
 Profiler"). This is the deep performance tool: tabbed views, recording, history, and
-exports. Its **View** menu offers **Show Graphs**, **Show Engine Stats** and
-**Pause Updates** (which freezes the rolling graphs without stopping the engine).
+exports. Its **View** menu offers **Show Graphs**, **Show Engine Stats**,
+**Live Flame Graph**, and the refresh controls **Pause Updates**, **Auto Refresh** and
+**Step** described below.
 
 Tabs: **Overview · CPU · Memory · GPU · Scripts · Counters · Engine · Render Passes ·
 Hitches · Trace History.** The **Engine** tab is only present while *Show Engine Stats* is
-enabled. The **View** menu also has **Live Flame Graph**, which shows the current frame's
-scope tree in the CPU tab.
+enabled. **Live Flame Graph** shows the current frame's scope tree in the CPU tab.
 
 The trace controls sit above the tabs and stay visible on every tab. Next to the
 recording state they show the active **frame budget** (target FPS and the derived
@@ -374,6 +374,41 @@ milliseconds), the live trace's frame count and memory use, and two export butto
   as a Chrome Trace file.
 * **Export Chrome Trace** — writes the most recent recorded trace as a Chrome Trace file.
   (Per-trace export buttons live in the [Trace History tab](#48-trace-history-tab--timeline-frame-diff-trace-compare).)
+
+**Refresh row.** Directly under the trace controls, a **Refresh:** row governs how often
+the panel samples the engine. Everything the panel shows — every number, graph, flame
+graph, thread/scope/counter/script/render-pass table and the hitch list — is rendered from
+one snapshot captured at a single frame, so the whole panel is always internally
+consistent.
+
+* **Auto** (on by default) — capture a new snapshot every frame. This is the classic
+  behavior.
+* **Every N frames** — with *Auto* off, type how many rendered frames to wait between
+  snapshots (1 to 10000). Higher values slow the panel down so the values stop flickering
+  and stay readable; the status text next to the controls shows the resulting rate
+  (`~N updates/sec`). The rolling graphs receive one sample per snapshot, so a large
+  interval also stretches the window of history they cover.
+* **Pause** — freeze the whole panel on the last captured snapshot. The window title gains
+  a `[Paused]` marker and the row shows how long ago the frozen data was captured. Pause
+  overrides *Auto*.
+* **Step** — capture exactly one more snapshot without resuming automatic refresh; enabled
+  whenever the refresh is not continuous (i.e. while paused or on an interval).
+
+Refresh settings only affect what the panel *displays*. The engine, the scope collectors,
+hitch detection and trace recording all keep running at full speed, so a trace recorded
+while the panel is paused is complete. The trace controls themselves (recording state,
+live frame count, frame budget) stay live too, and **Snapshot** / **Export Chrome Trace**
+always export the engine's real last frame and recorded traces — never the frozen view.
+Clearing hitches or resetting the script profiler forces one snapshot so a frozen table
+reflects the action.
+
+**Everything you set in this panel is remembered.** The **View** menu toggles, the refresh
+mode and its interval, *Group by script* on the Scripts tab, *Bar chart* on the Render
+Passes tab, and the *Script profiling* / *Render pass profiling* / *Hitch detection*
+switches together with the hitch threshold are written to `Config/Editor.json` under
+`ProfilerSettings` when the editor closes, and restored on the next start. Transient state
+— filters, zoom levels, the selected trace/frame/hitch and the typed trace name — is not
+persisted.
 
 ### 4.1 Recording traces
 

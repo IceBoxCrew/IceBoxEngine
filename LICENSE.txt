@@ -2,7 +2,7 @@
                      ICEBOX ENGINE - LICENSE AGREEMENT
 ================================================================================
 
-Version:        0.9.0
+Version:        0.9.1
 Effective date: 2026-08-16
 Applies to:     IceBox Engine (editor), IceBox Launcher, IceBox Updater,
                 IceBox Runtime, and everything distributed with them

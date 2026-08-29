@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > This is the **first stop** for anyone who has just installed **IceBox Engine**.
 > Before you ever open the editor you meet two small companion applications, and
@@ -90,14 +90,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-0.9.0-Release-Windows-x64-Setup.exe
-IceBoxEngine-0.9.0-Release-Windows-x86-Setup.exe
-IceBoxEngine-0.9.0-Release-Windows-arm64-Setup.exe
-IceBoxEngine-0.9.0-Release-Linux-x64-Setup.deb
-IceBoxEngine-0.9.0-Release-Linux-x86-Setup.deb
-IceBoxEngine-0.9.0-Release-Linux-arm64-Setup.deb
-IceBoxEngine-0.9.0-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-0.9.0-Release-macOS-x64-Setup.pkg
+IceBoxEngine-0.9.1-Release-Windows-x64-Setup.exe
+IceBoxEngine-0.9.1-Release-Windows-x86-Setup.exe
+IceBoxEngine-0.9.1-Release-Windows-arm64-Setup.exe
+IceBoxEngine-0.9.1-Release-Linux-x64-Setup.deb
+IceBoxEngine-0.9.1-Release-Linux-x86-Setup.deb
+IceBoxEngine-0.9.1-Release-Linux-arm64-Setup.deb
+IceBoxEngine-0.9.1-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-0.9.1-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -232,7 +232,7 @@ configure this by hand — it is only worth knowing if a machine has unusual dri
 Both apps speak the same version format:
 
 ```
-<prefix>-<major>.<minor>.<patch>      e.g.  PR-0.9.0
+<prefix>-<major>.<minor>.<patch>      e.g.  PR-0.9.1
 ```
 
 The short prefix marks the **maturity stage**; the launcher and editor expand it
@@ -243,7 +243,7 @@ into a friendly name for display:
 | `P`  | Prototype   | `P-0.1.0`  | lowest |
 | `A`  | Alpha       | `A-0.3.0`  | ↓ |
 | `B`  | Beta        | `B-0.8.4`  | ↓ |
-| `PR` | Pre-Release | `PR-0.9.0` | ↓ |
+| `PR` | Pre-Release | `PR-0.9.1` | ↓ |
 | `R`  | Release     | `R-1.0.0`  | highest |
 
 When comparing two versions, the **stage is weighed first** (a `R-` build always
@@ -256,14 +256,14 @@ release tag can never look newer than a real one.
 `Config/Updater.json` → `currentVersion` is the single source of truth for the
 version, and far more than the updater reads it:
 
-* the launcher shows it under the logo (e.g. **Pre-Release 0.9.0**) and on its **About**
+* the launcher shows it under the logo (e.g. **Pre-Release 0.9.1**) and on its **About**
   page, and the editor displays it too;
 * every IceBox program also carries it as a compiled-in fallback, so the version
   still displays correctly if the file is missing or unreadable;
 * the updater uses it as the baseline for every comparison
   ([4.5](#45-where-the-version-is-recorded)).
 
-> Projects record only the **numeric part** (`0.9.0`) in their `.iceproject`
+> Projects record only the **numeric part** (`0.9.1`) in their `.iceproject`
 > manifest, and the launcher's *engine version mismatch* marker compares just those
 > numbers — it does not care whether a project was last saved by a Beta or a
 > Release build of the same `major.minor.patch`.
@@ -386,7 +386,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 │   🧊 logo          │                                              │
 │ IceBox            │                                              │
 │ Engine™           │            Active tab content                │
-│ Pre-Release 0.9.0 │   (My Projects / New Project / Plugins &     │
+│ Pre-Release 0.9.1 │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
 │ New Project       │                                              │
@@ -530,7 +530,7 @@ selected project (and *Select a project to see details* when nothing is selected
 * **Path**, **Last Modified**, **Last Launched** (or *Never*);
 * **Created with Engine** — the version recorded in the manifest, or
   *Unknown (legacy project)*, followed by an amber
-  **Engine version mismatch (`0.6.9` -> `0.9.0`)** line when they differ;
+  **Engine version mismatch (`0.6.9` -> `0.9.1`)** line when they differ;
 * **License** — the display name of the license chosen at creation;
 * **Scripting Mode** — *Code Scripting* or *Visual Scripting*;
 * **Plugins** and **Mods** — resolved to the packages' display names and versions
@@ -660,7 +660,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "0.9.0",
+    "EngineVersion": "0.9.1",
     "StartScene": "",
     "ScriptingMode": "Code",
     "Description": "…",

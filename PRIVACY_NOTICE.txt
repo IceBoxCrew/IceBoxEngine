@@ -3,7 +3,7 @@
                  (CRASH REPORTS AND LICENSE ACTIVATION)
 ================================================================================
 
-Version:        0.9.0
+Version:        0.9.1
 Effective date: 2026-08-16
 Applies to:     IceBox Engine Editor, IceBox Launcher, IceBox Updater
 Does NOT apply: to games built with IceBox Engine (see sections 8 and 9)

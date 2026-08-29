@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > **IceBox Engine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -542,6 +542,12 @@ Inside the `Class Editor` there is a built-in Lua script editor for `.ice_class`
 - Tables — one data type replaces arrays, dictionaries, and objects
 - Fast — one of the fastest scripting languages
 - Easy to embed into C/C++ engines
+
+**Which Lua does IceBox run?** The engine embeds **Lua 5.5.1**, bound to C++ through sol2. Everything in the reference
+manual for 5.5 applies, including integer/float subtypes, bitwise operators, `//` integer division, `goto`, the `utf8`
+library and the `<const>` / `<close>` variable attributes — with the sandbox restrictions listed under
+[Standard libraries](#standard-libraries). Native plugins that touch `lua_State*` must link the **same** Lua 5.5 the
+engine links; the plugin build system checks this for you.
 
 ---
 
@@ -4140,6 +4146,76 @@ Webcam.Close()
 
 > **Web note:** browsers gate camera access behind a permission prompt; until the user accepts it, `IsOpen()` may be true but `HasNewFrame()` returns false for several frames.
 
+### Input buffer (frame history, motion inputs)
+
+A ring buffer of past input frames, kept in C++. You decide what a "frame of input" means by packing your own bitmask,
+which keeps the whole thing deterministic and rollback-safe: the buffer never reads live devices, it only stores what
+you hand it.
+
+This is what makes fighting-game inputs practical — quarter-circles, charge moves, double taps, leniency windows and
+input buffering during recovery frames — and it is just as useful for a platformer's jump buffer and coyote time.
+
+```lua
+InputBuffer.SetEnabled(true)         -- off by default; enabling clears the history
+InputBuffer.IsEnabled()
+InputBuffer.SetCapacity(120)         -- frames kept (2..4096, default 120 = 2 s at 60 Hz)
+InputBuffer.GetCapacity()
+
+-- Record exactly one frame. Call it from OnFixedUpdate for a fixed-step game.
+InputBuffer.Push(bits)
+
+InputBuffer.Get(framesAgo)           -- bitmask N frames back (0 = the newest, default 0)
+InputBuffer.GetCount()               -- frames currently stored
+InputBuffer.GetFrame()               -- how many frames have ever been pushed
+InputBuffer.Clear()
+```
+
+Queries, all in frames:
+
+| Call | Meaning |
+| ---- | ------- |
+| `InputBuffer.IsHeld(mask, frames)` | every one of the last `frames` frames had all of `mask` set |
+| `InputBuffer.WasPressed(mask, withinFrames)` | `mask` went from not-set to set inside the window — a **jump buffer** |
+| `InputBuffer.WasReleased(mask, withinFrames)` | `mask` went from set to not-set inside the window |
+| `InputBuffer.MatchSequence(steps, windowFrames)` | the listed masks occurred **in order** inside the window |
+
+`MatchSequence` scans oldest to newest and matches greedily, so intermediate frames and held inputs do not break a
+motion. A step matches when every bit it asks for is present (`bits & step == step`), which means diagonals fall out
+naturally: `DOWN | RIGHT` matches a frame where the player is holding down-right.
+
+```lua
+local LEFT, RIGHT, DOWN, UP = 1, 2, 4, 8
+local PUNCH, KICK = 16, 32
+
+function OnFixedUpdate(dt)
+    local bits = 0
+    if IsKeyPressed("a")     then bits = bits | LEFT  end
+    if IsKeyPressed("d")     then bits = bits | RIGHT end
+    if IsKeyPressed("s")     then bits = bits | DOWN  end
+    if IsKeyPressed("w")     then bits = bits | UP    end
+    if IsKeyPressed("j")     then bits = bits | PUNCH end
+    InputBuffer.Push(bits)
+
+    -- Quarter-circle forward + punch, within the last 16 frames
+    if InputBuffer.MatchSequence({ DOWN, DOWN | RIGHT, RIGHT, PUNCH }, 16) then
+        DoFireball()
+    end
+
+    -- Charge move: hold back for 40 frames, then forward + kick
+    if InputBuffer.IsHeld(LEFT, 40) and InputBuffer.WasPressed(RIGHT | KICK, 6) then
+        DoSonicBoom()
+    end
+
+    -- Jump buffer: the press may have landed up to 6 frames before touching the ground
+    if IsGrounded() and InputBuffer.WasPressed(UP, 6) then
+        Jump()
+    end
+end
+```
+
+> **Rollback.** The buffer holds only what you pushed, so it replays identically. If you roll back, push the same inputs
+> again for the re-simulated frames and every query answers the same way. `InputBuffer.Clear()` on match start.
+
 ### Action System (action bindings)
 
 ```lua
@@ -5178,6 +5254,19 @@ local order = GetSpriteOrder()
 SetSpritePivot(0.5, 0)         -- Center-top
 local piv = GetSpritePivot()    -- → {x, y}
 
+-- Automatic Y sorting: the engine derives the draw order from the sprite's world Y
+-- every frame, so what is lower on screen draws in front. This is the top-down /
+-- isometric depth rule, and it runs in C++ - no per-entity Lua call per frame.
+SetSpriteYSort(true)              -- enable on sprite 0
+SetSpriteYSort(true, -8)          -- enable and set the bias in one call
+SetSpriteYSort(true, 0, 1)        -- ... on sprite index 1
+local sorted = GetSpriteYSort()
+
+-- Bias is added to the computed order: negative pushes back, positive pulls forward.
+-- Use it for a shadow that must stay behind its owner, or a hat that must stay in front.
+SetSpriteYSortBias(-4)
+local bias = GetSpriteYSortBias()
+
 -- Name / path
 local name = GetSpriteName()
 local path = GetSpritePath()
@@ -6177,6 +6266,51 @@ ShakeCamera(5.0, 0.3)           -- intensity, duration (sec)
 StopCameraShake()
 local shaking = IsCameraShaking()
 ```
+
+### Camera roll (rotation)
+
+The camera can roll around the centre of its view. Degrees, **clockwise positive** — the same convention as
+`SetSpriteLocalRotation` and every other rotation in the engine. `0` is the default and costs nothing: with no roll set,
+every view, cull and coordinate conversion takes exactly the same path it always did.
+
+```lua
+SetCameraRotation(15)          -- roll the view 15° clockwise
+local roll = GetCameraRotation()
+RotateCamera(dt * 30)          -- add to the current roll
+
+-- Split-screen / secondary cameras, addressed by entity id:
+SetCameraRotationByEntity(camId, -20)
+local camRoll = GetCameraRotationByEntity(camId)
+```
+
+What rolls and what does not:
+
+| Layer | Rolls with the camera |
+| ----- | --------------------- |
+| Sprites, tilemaps, skeletons, particles, decals, fog of war | ✅ |
+| `Draw` world-space geometry | ✅ |
+| Lighting, 2D shadows, ray tracing | ✅ |
+| `ScreenToWorld`, `WorldToScreen`, `GetMouseWorldPosition`, cursor traces, `IsOnScreen` | ✅ (corrected for the roll) |
+| Widgets and UI | ❌ — the interface always stays upright, which is what you want |
+| `Draw` screen-space geometry | ❌ — screen space is by definition unrotated |
+
+Culling widens automatically to the bounding box of the rolled view, so nothing pops in at the corners.
+
+> **Screen-space post effects.** Camera motion blur and the underwater world-height reference are screen-space
+> approximations that only track camera *translation*; under a rolling camera they stay stable but are not
+> rotation-exact. Everything that affects gameplay — picking, traces, visibility — is exact.
+
+```lua
+-- A ship game where the world turns around the player
+function OnUpdate(dt)
+    local heading = GetPhysicsRotation()
+    SetCameraRotation(heading)          -- the hull stays upright, the sea turns
+end
+```
+
+> `GetCameraWorldBounds()` returns the axis-aligned world box that the rolled view covers, plus `rotation`,
+> `viewWidth` and `viewHeight` for the unrotated view rectangle. `IsOnScreen(x, y, margin)` tests the real rolled
+> rectangle, not its bounding box.
 
 ### Additional
 
@@ -7286,6 +7420,21 @@ specific lights when the entity has multiple PointLights or SpotLights.
 
 > **Type:** Global functions (not bound to entity)
 
+> **Where the starting values come from.** Every setter in this section overrides a
+> **project default** authored in `Config/Engine.json` → `Rendering` (editor:
+> [Preferences → Rendering](Editor-EN-DOC.md#105-rendering)), optionally replaced for one
+> level by [World Settings](Editor-EN-DOC.md#8-world-settings). The runtime reads
+> `Engine.json` at startup on all six platforms, so an untouched game looks the same in the
+> editor viewport, in Play mode and in the shipped build.
+>
+> Calling a setter marks **that one parameter** as game-controlled: it keeps the value you
+> gave it across level loads, while every parameter you did not touch keeps following the
+> project default and the level override. `Settings.Save()` persists the game-controlled
+> parameters to `GameSettings.json` (a `Rendering` block holding only those keys) and they
+> are re-applied at the next startup; `Settings.ResetDefaults()` drops them and returns
+> everything to `Engine.json`. This is what an in-game "Lighting / Shadows" options screen
+> should rely on — no extra preference file of your own is needed.
+
 ### Lighting mode
 
 ```lua
@@ -7435,6 +7584,47 @@ local c = GetClearColor()              -- → {r, g, b}
 ```
 
 > `SetClearColor` enables the scene's World Override (see section 13.4), so the value persists per-level and survives Play/Stop. Use `ResetWorldOverride()` to revert to project defaults.
+
+### Back to the project defaults
+
+Every setter above pins one parameter as game-controlled for the rest of the session.
+These three hand a parameter back, so it follows `Config/Engine.json` → `Rendering` and the
+level's World Override again:
+
+```lua
+-- Hand one parameter back to the project default. Returns false (and logs a warning)
+-- for an unknown name. Takes effect immediately, including the level override if the
+-- current level has one.
+ResetRenderSetting("ShadowsEnabled")
+ResetRenderSetting("CollidersBlockShadows")
+
+-- Hand back everything this session changed - lighting mode, ambient, shadows,
+-- ray tracing and the directional light - without touching resolution, audio or
+-- the other Settings.* values (that is what Settings.ResetDefaults() does).
+ResetAllRenderSettings()
+
+-- True while the game controls this parameter, false while it follows the project
+-- default / level override. Useful for a "using project default" hint in a menu.
+local pinned = IsRenderSettingOverridden("ShadowsEnabled")
+```
+
+The name is the `Config/Engine.json` → `Rendering` key, so both files read the same:
+
+| | | | |
+| --- | --- | --- | --- |
+| `LightingMode` | `AmbientColor` | `AmbientIntensity` | `ShadowsEnabled` |
+| `ShadowRayQuality` | `ShadowSoftness` | `ShadowIntensity` | `ShadowBias` |
+| `ShadowPCFSamples` | `ShadowDirectionalLength` | `ShadowDirectionalDepthFade` | `CollidersBlockShadows` |
+| `RaytracingEnabled` | `RaytracingQuality` | `RaytracingIntensity` | `RaytracingBounce` |
+| `RaytracingMaxBounces` | `RaytracingReflection` | `RaytracingMaxDistance` | `RaytracingDenoise` |
+| `RaytracingShadows` | `RaytracingAOIntensity` | `RaytracingAORadius` | `RaytracingAlbedoResponse` |
+| `RaytracingSkyIntensity` | `RaytracingSharpness` | `RaytracingScreenRadiance` | `DirLightDirX` |
+| `DirLightColor` | `DirLightIntensity` | `DirLightEnabled` | `DirLightCastShadows` |
+
+`ShadowQuality` is accepted as an alias of `ShadowRayQuality` (it is the name of the Lua
+setter), and `DirLightDirY` as an alias of `DirLightDirX` — the light direction is one
+parameter. A reset is not itself persisted: call `Settings.Save()` to drop the parameter
+from `GameSettings.json` too.
 
 ---
 
@@ -8567,9 +8757,15 @@ LoadGameState("slot1.json")
 
 ### Working with files
 
+> `WriteFile` and `ReadFile` are **byte-exact**: the file is opened in binary mode on every platform, so a Lua string
+> round-trips unchanged, embedded zero bytes and all. That makes them a valid transport for compact binary save formats —
+> a `PixelBuffer:ToString()` blob, a packed chunk of world tiles built with `string.pack`, a serialized RNG state — which
+> is what large worlds (sandbox survival, colony sims, grand strategy) want instead of JSON.
+
 ```lua
 -- Write (to save folder)
 WriteFile("notes.txt", "Hello World!")
+WriteFile("world.chunk", chunkBuffer:ToString())   -- binary is safe
 
 -- Read
 local content = ReadFile("notes.txt")  -- nil if it doesn't exist
@@ -9555,6 +9751,69 @@ local isFocused = IsWidgetElementFocused("NameInput")
 local isHovered = IsWidgetElementHovered("PlayButton")
 local isPressed = IsWidgetElementPressed("PlayButton")
 ```
+
+### Drag & drop between UI elements
+
+A drag session is engine state: you start it from a pressed element, the engine tracks the pointer and draws the ghost
+above every widget, and you ask it what is under the cursor when the player lets go. Inventory grids, hotbars, card
+hands, equipment slots and skill bars are all the same four calls.
+
+```lua
+-- Start dragging. The payload is any Lua value - it comes back untouched on drop.
+BeginWidgetDrag("Slot3", { item = "potion", count = 5 }, {
+    icon = "Content/UI/potion.png",   -- ghost sprite drawn under the cursor
+    width = 48, height = 48,
+    offsetX = 0, offsetY = 0,         -- ghost offset from the pointer
+    r = 1, g = 1, b = 1, a = 0.85,    -- ghost tint
+})
+
+IsWidgetDragActive()          -- bool
+GetWidgetDragSource()         -- element the drag started from
+GetWidgetDragPayload()        -- the value you passed in
+GetWidgetDragPosition()       -- { x, y } pointer position in widget space
+GetWidgetDragTarget()         -- element under the cursor right now ("" over the source or nothing)
+SetWidgetDragIcon(path, w, h) -- swap the ghost mid-drag (valid / invalid target feedback)
+
+local target = DropWidgetDrag()   -- ends the drag, returns the element it landed on ("" = nowhere)
+CancelWidgetDrag()                -- ends it with no drop
+```
+
+The engine does not decide what a drop *means* — that is your game's rule. It gives you source, target and payload; you
+move the item.
+
+```lua
+function OnUpdate(dt)
+    if not IsWidgetDragActive() then
+        if IsWidgetElementPressed("Slot3") and IsMousePressed(1) then
+            BeginWidgetDrag("Slot3", inventory[3], { icon = inventory[3].icon })
+        end
+    elseif not IsMousePressed(1) then
+        local target = DropWidgetDrag()
+        if target ~= "" then
+            MoveItem(GetWidgetDragSource(), target, GetWidgetDragPayload())
+        end
+    end
+end
+```
+
+> The ghost is drawn in the same pass as tooltips — above every widget, below nothing. A drag started in one widget can
+> be dropped on an element of another; targets are resolved by the same hit test that drives hover.
+
+### Large lists — off-screen culling
+
+Elements inside a `ScrollView` that fall entirely outside its visible rectangle are skipped before any layout or draw
+work happens, so a list pays for the rows on screen rather than the rows it contains. A ten-thousand-row table costs
+about the same as a twenty-row one.
+
+```lua
+SetWidgetScrollCulling(true)     -- on by default
+IsWidgetScrollCulling()
+GetWidgetCulledCount()           -- elements skipped last frame - useful while tuning
+```
+
+Culling is exact — an element is dropped only when its rectangle lies fully outside the scroll viewport — and is
+disabled automatically for a rotated `ScrollView`, where the axis-aligned test would not be safe. Turn it off only if
+you deliberately rely on off-screen elements running their own per-frame side effects.
 
 ### Gamepad navigation (customizable)
 
@@ -11408,11 +11667,24 @@ Settings.Apply()            -- Apply all current settings to the engine
 Settings.ResetDefaults()    -- Reset all settings to defaults and Apply()
                             --   Defaults: 1920x1080 windowed, VSync on, HDR10 off,
                             --   60 FPS, RenderScale=1.0, Audio=High, AA=Off,
-                            --   AdaptiveQuality off (target 60), Lighting=Lit,
-                            --   all volumes=1.0, not muted.
+                            --   AdaptiveQuality off (target 60),
+                            --   all volumes=1.0, not muted. Lighting, shadows and
+                            --   every other render setting go back to the
+                            --   Config/Engine.json project defaults.
 
 local path = Settings.GetSettingsPath()  -- Absolute path to GameSettings.json
 ```
+
+`GameSettings.json` holds **only what the game changed**, never a copy of
+`Config/Engine.json`. Render settings the game touched through
+[section 13.3](#133-lighting-and-shadows--global-settings) (`SetShadowsEnabled`,
+`SetCollidersBlockShadows`, `SetDirectionalLight`, `Settings.SetLightingEnabled`, …) are
+written into a `Rendering` block containing just those keys, and re-applied on the next
+startup — and when Play mode starts in the editor, so in-editor testing matches the
+shipped game. Anything the game never touched keeps following `Config/Engine.json` →
+`Rendering` and the level's [World Settings](Editor-EN-DOC.md#8-world-settings), which
+means adding a new option to `Engine.json` later reaches players who already have a saved
+`GameSettings.json`.
 
 ### Auto-detect hardware
 
@@ -13421,6 +13693,9 @@ end
 ```
 
 > **Tip (grid games):** `GetTileNeighbors` + `TileDistance` give you ready-made adjacency and range math for turn-based / roguelike / tactics movement on any projection — no need to special-case hexagonal offsets yourself.
+
+> **Y sorting and tilemaps.** Turn `SetSpriteYSort(true)` on for characters and props, and give the ground tilemap a
+> fixed order well behind them. The sprites then interleave with each other correctly while the floor stays flat.
 
 ### Fill and clear
 
@@ -15717,6 +15992,141 @@ local dist = Nav.GetDistance(x1, y1, x2, y2)
 -- Returns 0 = Top-Down, 1 = Side-View, -1 = no grid there.
 local mode = Nav.GetMode(worldX, worldY)
 ```
+
+#### Script-defined grids
+
+`RebuildGrid` derives walkability from tilemaps and scene colliders. When the world is *logical* rather than physical —
+a roguelike dungeon, a colony-sim map, a board game, a strategic province map — you can hand the navigation system your
+own grid instead, and everything above (`FindPath`, `IsWalkable`, `LineOfSight`, flow fields) works on it.
+
+```lua
+-- width, height in cells; cellSize in world units; origin = world position of cell (0,0)'s corner.
+-- blocked is an optional flat array, width*height entries, row-major, 1-based:
+-- true / non-zero = wall, false / 0 / nil = walkable. Omit it for an all-walkable grid.
+local blocked = {}
+for y = 0, H - 1 do
+    for x = 0, W - 1 do
+        blocked[y * W + x + 1] = IsWall(x, y) and 1 or 0
+    end
+end
+Nav.SetGrid(W, H, 32.0, 0.0, 0.0, blocked)     -- → bool; limit 16 000 000 cells
+
+Nav.SetWalkable(gridX, gridY, false)           -- carve or seal one cell (dig a tunnel, close a door)
+Nav.IsWalkableCell(gridX, gridY)               -- read one cell by grid index
+Nav.ClearGrid()                                -- drop the grid and the flow field
+```
+
+> `Nav.SetGrid` replaces the first navigation grid, so call it *after* `Nav.RebuildGrid` if you use both, and call it
+> again whenever your world changes shape in bulk. Single-cell edits are cheaper through `Nav.SetWalkable`.
+
+#### Flow fields (many agents, one target)
+
+`Nav.FindPath` runs a full A* per call, which is the right tool for a handful of agents. When hundreds or thousands of
+units share one destination — a horde converging on the player, a colony hauling to a stockpile, creeps walking a tower-
+defense lane — build the field **once** and let every agent read the gradient in constant time.
+
+```lua
+Nav.BuildFlowField(targetX, targetY)                 -- Dijkstra outward from the target → bool
+Nav.BuildFlowField(targetX, targetY, true, 60.0)     -- diagonal, and stop expanding past cost 60
+Nav.HasFlowField()                                   -- bool
+Nav.ClearFlowField()
+
+Nav.GetFlowCost(worldX, worldY)      -- steps to the target (diagonals cost ~1.41); -1 = unreachable
+Nav.GetFlowDirection(worldX, worldY) -- {x, y} unit step downhill; {0, 0} at the target or off-field
+Nav.GetFlowNextPoint(worldX, worldY) -- world centre of the next cell, or nil
+```
+
+The cost is also a ready-made **influence / threat map**: `GetFlowCost` tells you how far anything is from the target,
+so you can pick cover, flee uphill, or gate spawns by distance without any extra search.
+
+```lua
+-- One field per frame, read by every enemy.
+function OnUpdate(dt)
+    local p = GetPlayerWorldPos()
+    Nav.BuildFlowField(p.x, p.y)
+
+    for _, id in ipairs(FindEntitiesByTag("Enemy")) do
+        local e = GetEntityPosition(id)
+        local dir = Nav.GetFlowDirection(e.x, e.y)
+        if dir.x ~= 0 or dir.y ~= 0 then
+            SetEntityVelocity(id, dir.x * SPEED, dir.y * SPEED)
+        end
+    end
+end
+```
+
+> Rebuild the field when the target moves to another cell or the map changes; a static target needs one build ever.
+> `maxCost` bounds the search, so a field around the player can stay cheap on a very large map.
+
+#### Terrain cost
+
+Walkability answers *can I go here*. Cost answers *how much do I want to*. Roads, mud, shallow water, a guarded corridor,
+difficult terrain in a tactics game — all of it is one number per cell, honoured by `FindPath`, `FindPathAsync` **and**
+the flow field.
+
+```lua
+Nav.SetCost(gridX, gridY, 3.0)                  -- three times as expensive to cross
+Nav.GetCost(gridX, gridY)                       -- → 1.0 when nothing was set
+Nav.SetCostRect(gridX, gridY, w, h, 0.5)        -- a road: half price
+Nav.HasCosts()                                  -- has any cost been set at all?
+Nav.ClearCosts()                                -- back to uniform cost
+```
+
+- The baseline is **1.0**; a cell you never touch stays 1.0 and costs nothing in memory — the cost array is only
+  allocated the first time you write to it.
+- Values are clamped to a small positive minimum, so a cell can be cheap but never free or negative.
+- Costs below 1.0 are fully supported: the A* heuristic is scaled by the cheapest cell in the grid, so paths stay
+  optimal even with discounted roads.
+- `Nav.SetGrid` and `Nav.ClearGrid` drop the costs along with the grid they belonged to.
+
+```lua
+-- Roads are fast, swamp is slow; the same call sites keep working.
+for _, tile in ipairs(roadTiles)  do Nav.SetCost(tile.x, tile.y, 0.5) end
+for _, tile in ipairs(swampTiles) do Nav.SetCost(tile.x, tile.y, 4.0) end
+local path = Nav.FindPath(ax, ay, bx, by)     -- now prefers the road, avoids the swamp
+```
+
+#### Asynchronous paths
+
+`Nav.FindPath` blocks until it finishes. That is fine for one agent and wrong for two hundred with individual
+destinations, where a flow field does not apply. `Nav.FindPathAsync` hands the search to the engine's worker threads and
+calls you back on the main thread when it lands, so the frame never stalls.
+
+```lua
+local id = Nav.FindPathAsync(startX, startY, endX, endY, function(path, ok, requestId)
+    if not ok then return end                  -- unreachable, or no grid
+    for _, p in ipairs(path) do
+        -- p.x, p.y - same shape Nav.FindPath returns
+    end
+end)
+
+Nav.CancelPathAsync(id)        -- the search still finishes, the callback is dropped
+Nav.GetPendingPathCount()      -- searches in flight right now
+```
+
+- The search runs against an immutable **snapshot** of the navigation grid, taken when you call. Editing the grid with
+  `Nav.SetWalkable` or `Nav.SetCost` while searches are in flight is safe — running searches keep the world they
+  started with, and the next request picks up the new one.
+- The snapshot is shared, not copied per request: a hundred requests in the same frame share one copy.
+- Callbacks fire during the script update, one per completed request, so they can safely touch entities and Lua state.
+- The callback receives `(path, ok, requestId)`. `path` is an empty table when `ok` is false.
+- Everything is cleared on level change, so no callback outlives the scene that started it.
+
+```lua
+-- Two hundred units, each with its own destination, without a frame spike.
+for _, unit in ipairs(units) do
+    if unit.needsPath then
+        unit.needsPath = false
+        local from = GetEntityPosition(unit.id)
+        Nav.FindPathAsync(from.x, from.y, unit.goalX, unit.goalY, function(path, ok)
+            if ok then unit.path, unit.step = path, 1 end
+        end)
+    end
+end
+```
+
+> Rule of thumb: **one shared destination → flow field**, **many individual destinations → `FindPathAsync`**,
+> **one agent, right now → `FindPath`**.
 
 > **`IsWalkable` vs `IsSolid`.** `IsWalkable` answers *"can a path go through this cell?"*
 > and reflects the post-processed grid (AgentRadius expansion, side-view stand-on-floor filter).
@@ -19165,7 +19575,7 @@ Both `info` tables carry the full field set from [44.7b](#447b-server-side-recei
 
 ---
 
-### 44.10 Practical example — Clash Royale style shop
+### 44.10 Practical example — a soft-currency shop
 
 ```lua
 local shopProducts = {}
@@ -19358,7 +19768,7 @@ Cleans up Play Games resources and callbacks.
 
 ---
 
-### 45.8 Practical example — Subway Surfers style integration
+### 45.8 Practical example — endless-runner integration
 
 ```lua
 local highScore = 0
@@ -23142,7 +23552,7 @@ end
 > driving the same number of sprite entities would cost several Lua-to-C++ calls each.
 >
 > Typical uses: procedural graphics, custom particles, in-game level editors, minimaps, debug overlays, tile/column renderers,
-> and pseudo-3D techniques (raycasting, Mode-7 style floors, perspective roads) that stay entirely 2D.
+> and pseudo-3D techniques (raycasting, projected ground planes, perspective roads) that stay entirely 2D.
 
 ### Coordinate conventions
 
@@ -23172,7 +23582,18 @@ local space = Draw.GetSpace()
 
 `world` geometry is rendered together with the scene (after particles, before fog of war and widgets), so it is affected by
 post-processing and participates in the depth buffer.
-`screen` geometry ignores the camera and the depth buffer and is drawn in submission order.
+`screen` geometry ignores the camera and is drawn in submission order.
+
+**Depth in screen space.** By default `world` geometry is depth-tested and `screen` geometry is not — that is what
+`Draw.SetDepthTest("auto")` means. `Draw.SetDepthTest(true)` turns the depth buffer on for screen-space geometry too,
+which is exactly what a raycaster or a sector-based pseudo-3D renderer wants: give every column, floor span and sprite
+its real distance in `z` and the GPU sorts them per pixel, with no manual painter ordering and no software z-buffer.
+`Draw.SetDepthTest(false)` forces it off even in world space (useful for an overlay that must never be occluded).
+The setting is part of the draw state, so `Draw.Push` / `Draw.Pop` / `Draw.Reset` save and restore it.
+
+> Screen space uses its own depth range (`-100000 .. 100000`), which is not the same scale as the camera's. Enable
+> screen-space depth for a self-contained pseudo-3D view where **every** primitive goes through `Draw`; do not rely on it
+> to sort script geometry against ordinary scene sprites.
 
 ### Draw state
 
@@ -23187,14 +23608,92 @@ Draw.SetBlend("masked")                       -- "masked" | "additive" | "transl
 Draw.SetShading("unlit")                      -- "unlit" (default) | "lit"
 Draw.SetAlphaClip(0.5)                        -- alpha cutout threshold used by "masked"
 Draw.SetTarget(nil)                           -- nil = screen, or a RenderTarget name
+Draw.SetDepthTest("auto")                     -- "auto" (default) | true / "on" | false / "off"
+Draw.SetMaterial(nil)                         -- nil = none, or a material asset / dynamic instance name
 
 Draw.GetTexture(); Draw.GetColor(); Draw.GetZ(); Draw.GetPivot()
 Draw.GetBlend(); Draw.GetShading(); Draw.GetAlphaClip(); Draw.GetTarget()
+Draw.GetDepthTest(); Draw.GetMaterial()
 
 Draw.Push()   -- save the whole draw state (max depth 64)
 Draw.Pop()    -- restore it
 Draw.Reset()  -- back to defaults and clear the state stack
 ```
+
+### Materials on immediate-mode geometry
+
+`Draw.SetMaterial` runs a node-based material — a real fragment shader — over everything you submit afterwards. This is
+what turns `Draw` from a textured-quad pusher into a programmable surface: distance fog computed per pixel, perspective
+correction, water, heat shimmer, palette swaps, scanlines on one specific mesh rather than the whole screen.
+
+```lua
+-- A material asset, or a dynamic instance created with Material.CreateDynamic:
+Draw.SetMaterial("Content/Materials/Fog.ice_mat")
+
+local dyn = Material.CreateDynamic("Content/Materials/Fog.ice_mat", "GroundFog")
+Material.SetScalar("GroundFog", "Density", 0.4)
+Draw.SetMaterial("GroundFog")     -- parameters stay live: set them any frame
+
+Draw.Mesh(...)                    -- drawn through the material
+Draw.SetMaterial(nil)             -- back to the built-in shader
+Draw.ClearMaterial()              -- same thing
+```
+
+Returns `false` and logs a warning if the name matches neither a loaded dynamic instance nor a material asset, and the
+state is left cleared, so a typo degrades to the default shader instead of drawing nothing.
+
+> **Cost.** A material draw sets up its own shader and flushes immediately — it does not batch with the surrounding
+> geometry. One material over one large mesh is free; one material over ten thousand separate quads is ten thousand draw
+> calls. Group geometry that shares a material, submit it as a mesh where you can, and keep `Draw.SetMaterial(nil)` on
+> for the bulk quads.
+
+### Text
+
+`Draw.Text` puts a string through the engine's own font stack — the same glyph atlas, shaping and bidirectional layout
+the widget system uses, so Arabic, Hebrew, Japanese and Cyrillic all render correctly. It needs no widget asset and no
+entity, which makes it the right tool for HUDs, damage numbers, debug overlays and text-grid games.
+
+```lua
+Draw.Text("Score: 1200", x, y, 24)              -- text, position, pixel size
+Draw.Text("HP", x, y, 18, {
+    r = 1, g = 0.3, b = 0.3, a = 1,             -- colour (defaults to the draw-state colour)
+    align = "center",                            -- "left" (default) | "center" | "right"
+    font = "Content/Fonts/Pixel.ttf",            -- default engine font when omitted
+    z = 10,
+    rtl = false,                                 -- force right-to-left layout
+    lit = false,                                 -- take scene lighting
+})
+
+-- Measure before you place. Returns width, height and the font's line height,
+-- all already scaled to the pixel size you pass in.
+local m = Draw.MeasureText("Score: 1200", 24)
+Draw.Text("Score: 1200", (Draw.GetViewportSize().width - m.width) * 0.5, y, 24)
+
+Draw.GetTextCount()          -- strings submitted this frame
+Draw.SetMaxTexts(20000)      -- per-frame budget (default 20000)
+Draw.GetMaxTexts()
+```
+
+- `x, y` is the **baseline** of the first line, in the current space (`Draw.SetSpace`).
+- In `world` space the text rolls and scales with the camera; in `screen` space it is fixed to the viewport.
+- Text is drawn in submission order and is **not** depth-tested, so it always lands on top of the geometry submitted
+  before it in the same space.
+- One call per line: split on `\n` yourself, using `MeasureText(...).lineHeight` for the step.
+
+```lua
+-- A text-grid renderer: one call per row, whole screen in 50 calls.
+local COLS, ROWS, CELL = 80, 50, 16
+function OnUpdate(dt)
+    Draw.SetSpace("screen")
+    local h = Draw.GetViewportSize().height
+    for row = 0, ROWS - 1 do
+        Draw.Text(RowString(row), 0, h - (row + 1) * CELL, CELL, { font = GRID_FONT })
+    end
+end
+```
+
+> For tens of thousands of individually coloured glyphs, a `Draw.QuadsPacked` call over a font-atlas texture is still
+> faster — one Lua call for the whole screen. `Draw.Text` is the convenient path; the packed-quad path is the extreme one.
 
 ### Drawing primitives
 
@@ -23271,7 +23770,7 @@ An optional third argument limits how many quads are read: `Draw.QuadsPacked(pat
 ### Meshes
 
 `Draw.Mesh` submits an arbitrary triangle mesh with per-vertex UVs — this is what lets you build perspective trapezoids,
-Mode-7 style floors, warped roads and free-form deformations without leaving 2D.
+projected ground planes, warped roads and free-form deformations without leaving 2D.
 
 ```lua
 Draw.Mesh(texturePath, positions, uvs, indices, options)
@@ -23280,7 +23779,35 @@ Draw.Mesh(texturePath, positions, uvs, indices, options)
 - `positions` — flat array `{x1, y1, x2, y2, ...}` (at least 3 vertices, at most 65535).
 - `uvs` — flat array `{u1, v1, u2, v2, ...}` with the same vertex count. Optional; omitted means all zero.
 - `indices` — flat array of **1-based** vertex indices, a multiple of 3. Optional; omitted builds a triangle fan.
-- `options` — optional table: `{ r, g, b, a, z, blend, shading, alphaClip }`.
+- `options` — optional table: `{ r, g, b, a, z, blend, shading, alphaClip, colors, zs }`.
+
+#### Per-vertex colour and depth
+
+`options.colors` and `options.zs` turn a flat mesh into a properly shaded, properly depth-sorted one. This is what makes
+projected ground planes, distance fog, per-distance light falloff and Gouraud shading possible without splitting the
+surface into hundreds of separate draws.
+
+- `colors` — flat array `{r1, g1, b1, a1, r2, ...}`, **4 numbers per vertex**, `0..1`. Multiplied by the mesh tint
+  (`options.r/g/b/a`, or the `Draw.SetColor` state), so leave the tint at white to use the vertex colours as-is.
+- `zs` — flat array `{z1, z2, ...}`, **1 number per vertex**. Overrides `options.z` per vertex, so a single triangle can
+  span near and far and still be occluded correctly per pixel.
+
+Either array is ignored (with a log warning) if it is shorter than the vertex count requires.
+
+```lua
+-- A floor span that fades to black with distance and carries real per-vertex depth.
+Draw.Mesh("Content/Textures/floor.png",
+    { -160, 0,  160, 0,  90, 70,  -90, 70 },       -- positions
+    {    0, 1,    1, 1,   1, 0,     0, 0 },        -- uvs
+    { 1, 2, 3,  1, 3, 4 },                         -- indices
+    {
+        colors = {                                  -- near = bright, far = dark
+            1, 1, 1, 1,   1, 1, 1, 1,
+            0.25, 0.25, 0.3, 1,   0.25, 0.25, 0.3, 1,
+        },
+        zs = { -2, -2, -40, -40 },                  -- near vertices in front, far ones behind
+    })
+```
 
 ```lua
 -- A textured trapezoid: wide at the bottom, narrow at the top (a road segment).
@@ -23333,7 +23860,8 @@ Texture.GetCount()
 Texture.Fill("minimap", 0, 0, 0, 1)                    -- fill the whole texture
 Texture.SetPixel("minimap", x, y, r, g, b, a)          -- one pixel, components 0..1
 Texture.SetPixels("minimap", x, y, w, h, floats)       -- RGBA floats 0..1, w*h*4 values
-Texture.SetPixelBytes("minimap", x, y, w, h, bytes)    -- RGBA bytes 0..255, w*h*4 values
+Texture.SetPixelBytes("minimap", x, y, w, h, source)   -- table | binary string | PixelBuffer
+Texture.SetPixelBuffer("minimap", x, y, buffer)        -- upload a whole PixelBuffer at (x, y)
 
 Texture.SetFilter("minimap", "linear")
 Texture.SetWrap("minimap", "repeat")
@@ -23342,6 +23870,85 @@ Texture.GenerateMipmaps("minimap")
 
 `SetPixels` and `SetPixelBytes` expect the region row by row, 4 components per pixel, starting at `x, y`.
 This is the classic software-renderer path: build a pixel buffer in Lua, upload it once, draw it as a single quad.
+
+`SetPixelBytes` accepts **three** kinds of source, in increasing order of speed:
+
+| Source | When to use |
+| ------ | ----------- |
+| Lua table of numbers `0..255` | Small regions, one-off edits. Every element costs a Lua table lookup. |
+| **Binary string** (`string.char`, `table.concat`, `string.pack`) | Whole frames built in Lua. Uploaded with one memcpy. |
+| **`PixelBuffer`** | Per-frame simulation. No conversion at all — the bytes are already in engine memory. |
+
+### PixelBuffer — native RGBA8 canvas
+
+`PixelBuffer` is a native byte buffer, the pixel-level counterpart to `NoiseBuffer`. Reads and writes go straight to
+C++ memory instead of a Lua table, and uploading it costs one memcpy, so a falling-sand simulation, a software
+rasteriser or a procedural texture can run per frame without the table overhead that would otherwise dominate.
+
+```lua
+local buf = PixelBuffer.new(320, 240)          -- RGBA8, cleared to 0,0,0,0
+                                               -- limit: 67 108 864 pixels, 16384 per side
+
+buf:Width(); buf:Height()
+
+buf:SetPixel(x, y, r, g, b, a)                 -- components 0..255; a defaults to 255
+local r, g, b, a = buf:GetPixel(x, y)          -- four return values, no table allocated
+
+buf:SetValue(x, y, packed)                     -- one 32-bit value: r | g<<8 | b<<16 | a<<24
+local v = buf:GetValue(x, y)                   -- read it back
+
+buf:Swap(x1, y1, x2, y2)                       -- exchange two pixels in place
+buf:Fill(r, g, b, a)                           -- fill everything
+buf:FillRect(x, y, w, h, r, g, b, a)           -- fill a rectangle (clipped)
+buf:Clear()                                    -- all zeros
+buf:Blit(otherBuffer, dstX, dstY)              -- copy another buffer in (clipped)
+buf:CopyFrom(otherBuffer)                      -- exact copy; sizes must match
+
+local blob = buf:ToString()                    -- raw bytes, ready for WriteFile
+buf:FromString(blob)                           -- restore (needs at least as many bytes)
+
+Texture.SetPixelBuffer("canvas", 0, 0, buf)    -- upload; then draw "canvas" as a quad
+```
+
+Out-of-range coordinates are ignored on write and read as zero, so a simulation can walk past the edges safely.
+
+`SetValue` / `GetValue` are the fast path for grid simulations: one number per cell carries both the material id and its
+colour, and `Swap` is the whole move step of a falling-sand cell.
+
+```lua
+-- Falling sand: one PixelBuffer is both the material grid and the framebuffer.
+local W, H = 320, 240
+local sand = PixelBuffer.new(W, H)
+local EMPTY = 0
+
+Texture.Create("sandCanvas", W, H, { filter = "nearest" })
+
+function OnUpdate(dt)
+    for y = 1, H - 1 do                          -- bottom-up so a grain moves one cell per step
+        for x = 0, W - 1 do
+            if sand:GetValue(x, y) ~= EMPTY then
+                if sand:GetValue(x, y - 1) == EMPTY then
+                    sand:Swap(x, y, x, y - 1)
+                elseif sand:GetValue(x - 1, y - 1) == EMPTY then
+                    sand:Swap(x, y, x - 1, y - 1)
+                elseif sand:GetValue(x + 1, y - 1) == EMPTY then
+                    sand:Swap(x, y, x + 1, y - 1)
+                end
+            end
+        end
+    end
+
+    Texture.SetPixelBuffer("sandCanvas", 0, 0, sand)
+
+    Draw.SetSpace("screen")
+    Draw.SetBlend("opaque")
+    Draw.Sprite("sandCanvas", 0, 0, W * 2, H * 2)
+end
+```
+
+> A full-screen cellular automaton is still Lua work: budget roughly a few hundred thousand cell updates per frame at
+> 60 FPS and simulate only the active region (dirty rectangles / chunks that contain moving cells), which is what
+> pixel-simulation games do anyway.
 
 ### RenderTarget — offscreen rendering
 
@@ -23370,7 +23977,7 @@ sampled by sprites and materials in the same frame. In screen space the target's
 The depth buffer of a render target is **not** cleared automatically — call `RenderTarget.Clear` each frame if you draw
 depth-tested world-space geometry into it.
 
-### Complete example — Wolfenstein-style textured columns
+### Complete example — raycast textured columns
 
 ```lua
 local COLUMNS = 320
@@ -23470,7 +24077,7 @@ Decal.Spawn("Content/Decals/DC_Scorch.ice_decal", x, y, {
     z          = 2.0,       -- depth of the surface; the asset Z offset is added on top
     sortOrder  = 10,        -- draw order among decals
     variant    = 2,         -- force a texture variant instead of picking at random
-    seed       = 1337,      -- fixed seed: same variant, size, rotation and tint every time
+    seed       = 1337,      -- fixed seed (any integer): same variant, size, rotation and tint every time
     clipX      = wallX,     -- clip rectangle in world space
     clipY      = wallY,
     clipHalfW  = 128,
@@ -23496,6 +24103,7 @@ Decal.ClearInRadius(x, y, 200)    -- returns how many were removed
 Decal.ClearAttachedTo(entityId)
 
 Decal.Preload("Content/Decals/DC_BulletHole.ice_decal")   -- load textures ahead of the first shot
+Decal.Unload("Content/Decals/DC_BulletHole.ice_decal")    -- drop it from the cache; its live decals are removed
 ```
 
 ### Reading and changing a live decal
@@ -23514,14 +24122,16 @@ local age  = Decal.GetAge(h)      -- seconds since spawn
 local fade = Decal.GetFade(h)     -- current fade factor, 0..1
 ```
 
-For an attached decal, `SetPosition` and `SetRotation` work in the space of the entity it follows.
+For an attached decal, `SetPosition` and `SetRotation` work in the space of the entity it follows, while
+`GetPosition`, `GetZ`, `GetRotation` and `GetSize` always report the final world values.
 
 ### Budget and global switches
 
 ```lua
 Decal.SetBudget(512)     -- max live decals; the oldest fade out when it is exceeded
 local budget = Decal.GetBudget()
-local count  = Decal.GetCount()
+local count  = Decal.GetCount()          -- live decals in total
+local blood  = Decal.GetCount("Content/Decals/DC_Blood.ice_decal")   -- live decals from one asset
 
 Decal.SetEnabled(false)  -- stop accepting new spawns, e.g. on the lowest quality preset
 local on = Decal.IsEnabled()
@@ -23536,6 +24146,11 @@ twice the budget removes them outright, so a runaway spawn loop can never grow w
 A `Decal` component holds decals placed by hand in the Class Editor — graffiti, cracks, stains that are part
 of the level. They render in both the editor and play mode and have no lifetime.
 
+A placed instance still uses the asset's base rotation, size variance, tint variance and random mirroring.
+Those random parts come from a hash of the instance **name** and its index, so they stay identical across
+sessions and every instance of the same asset still looks a little different — rename an instance to reroll
+its variation.
+
 ```lua
 local n = GetDecalCount()
 local i = FindDecalIndex("Graffiti")
@@ -23549,9 +24164,11 @@ SetDecalScale(2, 2, i)            local s = GetDecalScale(i)
 SetDecalSize(128, 64, i)          local sz = GetDecalSize(i)       -- size override, 0 = from asset
 SetDecalColor(1, 1, 1, 0.5, i)    local c = GetDecalColor(i)
 SetDecalVisible(true, i)          local v = IsDecalVisible(i)
-SetDecalFlip(true, false, i)
+SetDecalFlip(true, false, i)      local f = GetDecalFlip(i)        -- {x, y}
 SetDecalSortOrder(3, i)           local o = GetDecalSortOrder(i)
-SetDecalVariant(1, i)
+ClearDecalSortOrder(i)            -- stop overriding, fall back to the asset's sort order
+SetDecalVariant(1, i)             local v = GetDecalVariant(i)
+SetDecalRenderInGame(true, i)     local g = IsDecalRenderInGame(i)
 local name = GetDecalName(i)
 
 -- Spawn a runtime decal at this entity's position

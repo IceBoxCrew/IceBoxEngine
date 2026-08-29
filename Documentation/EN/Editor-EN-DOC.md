@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > **IceBox Engine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -130,7 +130,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame   Pre-Release 0.9.0 │
+│                             │ Remote Preview │ MyNewGame   Pre-Release 0.9.1 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -456,8 +456,8 @@ This button is **not present on macOS builds**.
 
 * The **project name** (e.g. `MyNewGame`) is shown after a separator — it is the
   `Name` field of the project's `.iceproject` manifest.
-* The **engine version** (e.g. `Pre-Release 0.9.0`) is right-aligned at the far end of the
-  bar. It is read from `Config/Updater.json` (`PR-0.9.0` → `Pre-Release 0.9.0`), falling
+* The **engine version** (e.g. `Pre-Release 0.9.1`) is right-aligned at the far end of the
+  bar. It is read from `Config/Updater.json` (`PR-0.9.1` → `Pre-Release 0.9.1`), falling
   back to the version the editor was compiled with.
 
 Any **toolbar buttons registered by plugins** appear between the Remote Preview
@@ -478,7 +478,16 @@ viewport is hovered:
 
 | Input | Action |
 | ----- | ------ |
-| **Right-Mouse + W/A/S/D** | Pan the camera (hold RMB, then use WASD). Pan speed = **Editor Camera Speed** × frame time × current zoom, so panning stays consistent as you zoom out. |
+| **Right-Mouse + W/A/S/D** | Pan the camera (hold RMB, then use WASD). Pan speed = **Editor Camera Speed** × frame time × current zoom, so panning stays consistent as you zoom out. Panning follows the current roll, so W always moves "up the screen". |
+| **Right-Mouse + Q / E** | Roll the viewport camera counter-clockwise / clockwise. Roll speed = 90°/s × (**Editor Camera Speed** ÷ its default), so the same `Left Shift+Scroll` that tunes panning tunes rolling with it. Degrees are clockwise-positive, exactly like `SetCameraRotation` at runtime. |
+| **Right-Mouse + R** | Snap the roll back to zero. |
+
+> While the right mouse button is held the viewport is in camera mode, so `Q` / `E` / `R` roll the camera instead of
+> switching the gizmo. Release RMB and they are gizmo shortcuts again.
+>
+> The roll is view-only editor state: it is not saved to the level, not written to `editor.json`, and it never touches
+> the `Rotation` of any Camera component in the scene. Picking, rectangle selection, gizmos and asset drag-and-drop all
+> follow the rolled view, so everything stays under the cursor where you expect it.
 | **Mouse Wheel** | Zoom in/out, anchored on the cursor — the world point under the pointer stays put. |
 | **Left Shift + Mouse Wheel** | Adjust the editor camera **pan speed** on the fly (clamped between the engine minimum and twice the configured speed). |
 | **F** | Focus the camera on the selected entity (centres it in the viewport). |
@@ -1417,10 +1426,12 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 
 | Shortcut | Action |
 | -------- | ------ |
-| `Q` / `E` / `R` | Translate / Scale / Rotate gizmo (viewport hovered) |
+| `Q` / `E` / `R` | Translate / Scale / Rotate gizmo (viewport hovered, RMB not held) |
 | `RMB + W/A/S/D` | Pan camera |
+| `RMB + Q` / `RMB + E` | Roll the camera counter-clockwise / clockwise |
+| `RMB + R` | Reset the camera roll to zero |
 | `Scroll` | Zoom at the cursor |
-| `Left Shift+Scroll` | Camera pan speed |
+| `Left Shift+Scroll` | Camera pan and roll speed |
 | `RMB` (short) | Context menu |
 | `RMB` (held / dragged) | Pan instead of opening the menu |
 

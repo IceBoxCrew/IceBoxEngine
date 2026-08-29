@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.0 Version
+### Actual for PR-0.9.1 Version
 
 > **IceBox Engine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
@@ -2163,6 +2163,12 @@ Instances can be reordered (**move up/down**), and any component header offers
 marks (bullet holes, blood) are spawned from script instead — see
 [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62.
 
+A placed instance uses the asset's own look, including its base rotation, size variance,
+tint variance and random mirroring. Those random parts are derived from the instance
+**name** and its index, so every placed instance keeps the same variation forever and two
+instances of the same asset still differ. Lifetime and fade are ignored: placed decals do
+not expire.
+
 | Property | Meaning |
 | -------- | ------- |
 | **Decal Asset** | The `.ice_decal` this instance renders. |
@@ -2468,17 +2474,24 @@ stable per-decal random value.
 
 **Appearance** — size (zero takes it from the texture), size variance and whether that
 variance keeps the aspect ratio, pivot, tint, tint variance, shading mode (Lit / Unlit),
-blend mode and the alpha clip threshold used by Masked blending.
+blend mode and the alpha clip threshold used by Masked blending. The **pivot** is the
+anchor inside the decal in normalized image coordinates — `0,0` is the bottom-left corner
+of the image and `1,1` the top-right, the same convention the Sprite Editor uses. The decal
+is positioned and rotated around that anchor, which is why raising the pivot moves the
+image the other way in the preview.
 
 **Rotation** — Fixed, Random (between a min and a max), Align To Normal, or Align To Normal
 with a random 180° flip. Random horizontal and vertical mirroring can be enabled on top.
+Positive angles turn clockwise, matching the rest of the editor. The normal-aligned modes
+need a surface normal, so for hand-placed instances they fall back to the base angle.
 
 **Lifetime** — how long a decal lives (zero = forever), how long it takes to fade in and
 fade out, and **Max Instances**: a per-asset cap that starts fading the oldest decal of this
 kind once it is exceeded.
 
 **Placement** — the Z offset that lifts the decal in front of its surface, the sort order
-among decals, an offset along the hit normal, **Follow Receiver** (attach to the entity that
+among decals (hand-placed and script-spawned decals are sorted together, so the order is
+predictable no matter where a decal came from), an offset along the hit normal, **Follow Receiver** (attach to the entity that
 was hit so the decal moves with it) and **Clip To Receiver** (cut the decal to the bounds of
 the surface it was placed on, so blood never hangs off the edge of a character).
 
