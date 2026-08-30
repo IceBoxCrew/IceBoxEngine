@@ -394,8 +394,13 @@ ICE_PLUGIN_ENTRY(MyPlugin)   // at file scope, after the class definition
 
 * **Dynamic (default)** — on desktop, this exports `CreatePlugin`/`DestroyPlugin` from the
   shared library; the engine `dlopen`/`LoadLibrary`s it and resolves the symbols. The
-  loader takes the **first** `.dll` (Windows) or `.so`/`.dylib` (Unix) it finds in the
-  plugin folder, so keep one library per folder.
+  loader picks the library **named after the plugin**: it matches each `.dll` (Windows) or
+  `.so`/`.dylib` (Unix) in the folder against the manifest `Name` and the folder name, with
+  or without a `lib` prefix. That is what lets a plugin ship its own runtime libraries
+  beside itself — `Steam.dll` is picked over `steam_api64.dll`, `Steam.so` over
+  `libsteam_api.so`. If nothing matches the plugin name the loader falls back to the
+  alphabetically first library and logs a warning, so **name your plugin library after your
+  plugin**.
 * **Static** — on platforms without dynamic loading (**Web**, **iOS**), or when you opt
   in, the engine builds plugins with `ICE_PLUGIN_STATIC_BUILD`. The same macro then
   **registers the plugin in a static registry** at startup, and the engine links it
@@ -412,6 +417,50 @@ manager synthesizes an entry named after the registration so you can enable it i
 
 Your plugin code is identical in all modes — the macro handles the difference, driven by
 the CMake variable `ICE_PLUGIN_BUILD_STATIC`.
+
+#### Early boot — running before the engine exists
+
+Some things have to happen before anything else does. The canonical case is Steam: a build
+must be *relaunched through Steam* if the player started the executable directly, and that
+decision has to be made before a window is created, before the Steam API is initialized,
+before any Lua runs.
+
+For that, a plugin may export a second entry point:
+
+```cpp
+namespace {
+int MyEarlyBoot(const IceBox::PluginEarlyBootContext* ctx) {
+    // ctx->PluginFolderPath, ctx->WorkingDirectory, ctx->Argc / ctx->Argv, ctx->Log
+    return 0;   // 0 = carry on, non-zero = this process must exit immediately
+}
+}
+
+ICE_PLUGIN_ENTRY(MyPlugin)
+ICE_PLUGIN_EARLY_BOOT(MyEarlyBoot)
+```
+
+The **game runtime** — never the editor — calls this on every enabled, non-editor-only
+plugin, in folder-name order, as its very first act after resolving the working directory:
+
+1. Read `Config/Plugins.json` for the enabled set. **No config, no early boot** — nothing
+   runs if nothing is explicitly enabled.
+2. For each enabled plugin, load its library, look up `IcePluginEarlyBoot`, call it, and
+   unload the library again.
+3. If any hook returns non-zero, the process returns from `main` immediately. Nothing is
+   initialized, so there is nothing to tear down.
+
+Constraints worth respecting, because the environment is deliberately bare:
+
+* There is **no engine, no `IPlugin` instance and no Lua** at this point. Only the context
+  struct and whatever your library can do on its own.
+* Your library is loaded and unloaded **around this single call**, so do not start threads
+  or register anything that outlives it.
+* It is not called in the editor, on Web, iOS or Android, or for a plugin marked
+  `EditorOnly`.
+* Log through `ctx->Log(level, message)` — the engine log is already up.
+
+Plugins that do not export the symbol are simply skipped; this is not part of the ABI
+version gate.
 
 ### 3.9 API / ABI versioning
 
