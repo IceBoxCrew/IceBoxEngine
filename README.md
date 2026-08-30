@@ -505,7 +505,7 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Assets & Content Browser](Documentation/EN/Assets-EN-DOC.md) | Every asset type, its editor, sidecars, importers and cooking. |
 | [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all six platforms, installers, DLC, headless servers. |
 | [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
-| [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference. |
+| [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference, opening with a full Lua course for beginners. |
 | [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling. |
 
 Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.

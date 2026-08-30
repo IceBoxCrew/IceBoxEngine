@@ -506,7 +506,7 @@ echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 | [Ассеты и Контент-браузер](Documentation/RU/Assets-RU-DOC.md) | Все типы ассетов, их редакторы, сайдкары, импортеры и запекание. |
 | [Профайлинг и сборка игр](Documentation/RU/Profiling-And-Building-RU-DOC.md) | Профайлеры, статистика, сборка под все шесть платформ, инсталляторы, DLC, headless-серверы. |
 | [Плагины и моды](Documentation/RU/Plugins-And-Mods-RU-DOC.md) | Нативные C++-плагины и Lua/контент-моды. |
-| [Lua API](Documentation/RU/LuaAPI-RU-DOC.md) | Полный справочник по игровому скриптингу. |
+| [Lua API](Documentation/RU/LuaAPI-RU-DOC.md) | Полный справочник по игровому скриптингу, начиная с полного курса Lua для новичков. |
 | [Python API](Documentation/RU/PythonAPI-RU-DOC.md) | Автоматизация редактора и инструментарий. |
 
 Английские версии всех этих документов лежат рядом, в **[`Documentation/EN/`](Documentation/EN)**.
