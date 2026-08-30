@@ -38,20 +38,32 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 
 ## ✨ Features
 
-- **Rendering** — Data-driven 2D renderer with a node-based **material editor** (instances & functions), **decals** (bullet holes, blood splatter, scorch marks), post-processing / **FX**, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, native Metal (plus Metal via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
-- **Scenes & ECS** — Entity-Component-System core (EnTT), level outliner, reusable entity classes, and a property/world editor.
-- **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D, with a multithreaded solver (enkiTS) on desktop and mobile.
-- **Sprites & Tilemaps** — Sprite editor, spritesheet slicer, flipbook animation, and dedicated tilemap / tileset editors.
-- **Animation** — Skeletal animation, flipbooks, and timeline-driven clips.
-- **Text & UI** — In-engine UI widgets and high-quality text via FreeType, HarfBuzz, and SheenBidi (full Unicode shaping with right-to-left support).
-- **Audio** — Mixing and playback with Opus / Vorbis codec support.
+- **Rendering** — Data-driven 2D renderer built on a **render graph**, batching thousands of sprites per draw call with GPU culling and instancing, a node-based **material editor** (instances, functions and shared parameter collections), **decals** (bullet holes, blood splatter, scorch marks), an immediate-mode draw API for procedural geometry, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, native Metal (plus Metal via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
+- **Lighting & shadows** — Point, spot and directional lights with texture **cookies**, real-time 2D shadows ray-cast from colliders or from the traced outline of the artwork itself, and optional hardware **ray-traced global illumination**.
+- **Post-processing** — Bloom, ACES tonemapping, depth of field, SSAO, SSR, volumetric fog, colour grading and more, blended from **post-process volumes** placed in the level.
+- **Particles & FX** — Stack-based emitters (Spawn / Initialize / Update / Render) driven by editable curves and gradients, **CPU or GPU** simulation, forces from curl noise to vortices, **SPH fluids**, light-emitting particles and ribbon trails.
+- **Image quality** — FXAA / MSAA / SSAA, a 1-200% render scale, **FSR** and **NIS** upscaling with quality presets, **HDR10** output, VSync, a low-latency mode, and **adaptive quality** that holds a target frame rate on its own.
+- **Scenes & ECS** — Entity-Component-System core (EnTT), level outliner, reusable entity classes with inheritance, a property/world editor, and **async level loading** with progress reporting for loading screens.
+- **2D Physics** — Rigid bodies, colliders, and joints powered by Box2D, with a multithreaded solver (enkiTS) on desktop and mobile, one-way platforms, ragdolls and bone physics, collision generated straight from sprites, flipbooks and tilemaps, and **destruction** into real physics debris.
+- **Sprites & Tilemaps** — Sprite editor, spritesheet slicer, flipbook animation, and dedicated tilemap / tileset editors with **orthogonal, isometric and hexagonal** projections, rotatable multi-cell tiles and animated tiles.
+- **Animation** — Skeletal animation with IK, skins, deformable meshes and per-bone physics, flipbooks, animation state machines, and timeline-driven clips.
+- **Text & UI** — In-engine UI widgets (19 element types, anchors and stretch layouts, nine-slice, keyframed animation, gamepad navigation) and high-quality text via FreeType, HarfBuzz, and SheenBidi (full Unicode shaping with right-to-left support).
+- **Accessibility** — Colourblind modes, a dyslexia-friendly font, **text-to-speech** for hovered and focused UI, a field-of-view lens, game speed and forced mono audio — all readable by the game, so a shipped build honours the player's choices.
+- **Audio** — Spatial mixing and playback (miniaudio) with per-sound filters, EQ, delay and reverb, six mixer groups, multiple listeners, streamed music, and Opus / Vorbis codec support.
+- **Voice** — Microphone capture, Opus encode/decode, real-time volume analysis and WAV recording — available to single-player games as well as networked ones.
+- **Video** — Video playback into a texture and a cinematic / cutscene editor (FFmpeg).
+- **Input** — Keyboard, mouse, four gamepads with rumble and motion sensors, eight raw joysticks, ten-finger touch with pinch and swipe, pen/stylus, force-feedback **haptics** and device sensors, all through SDL3.
 - **Scripting** — Lua gameplay scripting with an integrated debugger, a **visual node-graph** editor, and Python for editor tooling.
-- **AI** — Pathfinding, behaviour trees, and navigation.
-- **Networking** — Reliable UDP (ENet) plus WebSocket transport (IXWebSocket) for browser/server play, with cryptography via libsodium.
-- **Video** — Video playback and a cinematic / cutscene editor (FFmpeg).
+- **Gameplay systems** — Object pools, wave spawners, cooldowns, achievements, tweens, finite state machines, timers, coroutines, an event bus, seeded random streams for deterministic runs, and auto-persisting tables.
+- **Saves & replays** — Game state that survives level changes, binary **scene snapshots** (physics bodies, animators, skeletons and ragdoll bones) for checkpoints and save-states, save slots on disk, and a **replay** recorder with a rolling buffer for killcams.
+- **AI** — Behaviour trees with blackboards, services and **EQS**, sight perception, A\* **navigation grids** with line-of-sight and flow fields, and a **fog of war** system.
+- **Networking** — Reliable UDP (ENet) plus WebSocket transport (IXWebSocket) for browser/server play, with automatic replication, delta compression, area of interest, prediction, lag compensation, **rollback netcode**, voice chat, server discovery, matchmaking, headless dedicated servers, and cryptography via libsodium.
+- **Local multiplayer** — Split-screen for up to four players, each with its own camera, UI, audio listener and input device.
+- **Platform services** — Ads, in-app purchases, Play Games / Game Center, cloud saves, analytics, notifications, GDPR consent, in-app review, deep links, runtime permissions, Bluetooth and Web3, bridged per platform and exposed to Lua.
+- **Assets** — 25 asset types, each with its own editor, hidden sidecars for import settings, redirectors, a reference viewer, bulk editing, Aseprite and GIF importers, and **asset cooking** (WebP / KTX2 / Opus / Vorbis / VP9 / font subsetting) with `IcePak` packing behind a virtual file system.
 - **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
 - **Extensibility** — Drop-in **plugin** system and **mod** support.
-- **Tooling** — Built-in Tracy profiler, stats overlays, a hot-key reference, and a one-click **Build Game** pipeline targeting every supported platform.
+- **Tooling** — Built-in Tracy profiler, a frame profiler with recorded traces, per-pass GPU timings, memory and VRAM tracking and hitch detection, stats overlays, a developer console with commands and CVars, **Remote Preview** to an Android device over USB, a hot-key reference, and a one-click **Build Game** pipeline targeting every supported platform.
 
 ---
 
