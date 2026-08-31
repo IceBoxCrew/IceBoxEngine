@@ -6394,7 +6394,7 @@ Culling widens automatically to the bounding box of the rolled view, so nothing 
 > nothing when unused.
 >
 > **Custom post-process materials can follow the roll too.** Alongside `uCameraPosition` and `uScreenSize` they also
-> receive `uCameraView` — the view's size in world units plus the cosine and sine of the roll — and the material
+> receive `uCameraView` — the view's size in world units plus the cosine and sine of the world-to-screen roll — and the material
 > editor exposes it as three nodes under **Coordinates**: **Screen To World**, **World To Screen** and
 > **Camera View**. Feed a screen coordinate through Screen To World and the effect stays anchored to the world at any
 > camera angle; keep working in screen UVs and it stays anchored to the screen. Both remain available, so a material
@@ -6404,7 +6404,7 @@ Culling widens automatically to the bounding box of the rolled view, so nothing 
 -- A ship game where the world turns around the player
 function OnUpdate(dt)
     local heading = GetPhysicsRotation()
-    SetCameraRotation(heading)          -- the hull stays upright, the sea turns
+    SetCameraRotation(-heading)         -- the hull stays upright, the sea turns
 end
 ```
 
@@ -7661,8 +7661,10 @@ local aor = GetRaytracingAORadius()
 SetRaytracingAlbedoResponse(0.75)
 local ar = GetRaytracingAlbedoResponse()
 
--- Sky light picked up by rays that escape the scene; multiplies the ambient
--- colour and adds to the ambient intensity (0.0–8.0)
+-- Multiplier for the sky light picked up by rays that escape the scene. At 1
+-- open areas keep the ambient the renderer already applies and only enclosed
+-- spots darken; above 1 the open sky adds light. Scales ambient colour by
+-- ambient intensity, so it does nothing while Ambient Intensity is 0 (0.0–8.0)
 SetRaytracingSkyIntensity(1.0)
 local sk = GetRaytracingSkyIntensity()
 

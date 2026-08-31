@@ -479,7 +479,7 @@ viewport is hovered:
 | Input | Action |
 | ----- | ------ |
 | **Right-Mouse + W/A/S/D** | Pan the camera (hold RMB, then use WASD). Pan speed = **Editor Camera Speed** × frame time × current zoom, so panning stays consistent as you zoom out. Panning follows the current roll, so W always moves "up the screen". |
-| **Right-Mouse + Q / E** | Roll the viewport camera counter-clockwise / clockwise. Roll speed = 90°/s × (**Editor Camera Speed** ÷ its default), so the same `Left Shift+Scroll` that tunes panning tunes rolling with it. Degrees are clockwise-positive, exactly like `SetCameraRotation` at runtime. |
+| **Right-Mouse + Q / E** | Roll the view counter-clockwise / clockwise — the scene on screen turns the same way. Roll speed = 90°/s × (**Editor Camera Speed** ÷ its default), so the same `Left Shift+Scroll` that tunes panning tunes rolling with it. Degrees are clockwise-positive, exactly like `SetCameraRotation` at runtime. |
 | **Right-Mouse + R** | Snap the roll back to zero. |
 
 > While the right mouse button is held the viewport is in camera mode, so `Q` / `E` / `R` roll the camera instead of
@@ -1428,7 +1428,7 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | -------- | ------ |
 | `Q` / `E` / `R` | Translate / Scale / Rotate gizmo (viewport hovered, RMB not held) |
 | `RMB + W/A/S/D` | Pan camera |
-| `RMB + Q` / `RMB + E` | Roll the camera counter-clockwise / clockwise |
+| `RMB + Q` / `RMB + E` | Roll the view counter-clockwise / clockwise |
 | `RMB + R` | Reset the camera roll to zero |
 | `Scroll` | Zoom at the cursor |
 | `Left Shift+Scroll` | Camera pan and roll speed |

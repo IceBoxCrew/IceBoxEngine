@@ -1022,11 +1022,18 @@ How it works:
   off-screen hits fall back to analytic light evaluation with ray-traced shadow
   rays and area-sampled penumbra.
 * Ray hit distances also produce **ray-traced ambient occlusion** — contact
-  darkening wherever geometry meets — at no extra ray cost.
-* Results accumulate into a **history** texture with variance-based clamping,
+  darkening wherever geometry meets — at no extra ray cost. Open areas keep a
+  visibility of 1 and are left untouched.
+* The pass adds **indirect light only**. Rays that escape the scene count as sky
+  visibility instead of re-adding the ambient term the raster pass has already
+  applied, so turning GI on never washes the image out. A probe that is fully
+  enclosed — a pixel inside a solid caster — contributes neither bounce nor
+  occlusion, so the inside of geometry stays exactly as the raster pass drew it.
+* Results accumulate into a **history** texture with per-channel variance
+  clamping and disocclusion rejection at the edges of the reprojected frame,
   pass through an **à-trous spatial denoiser**, and are composited with a
   bicubic (Catmull-Rom) upsample so the result stays sharp at reduced GI
-  resolution.
+  resolution. Each split-screen view keeps its own history.
 
 Quality settings trade cost for fidelity:
 
@@ -1034,14 +1041,14 @@ Quality settings trade cost for fidelity:
 | ------- | ------ |
 | **Quality** | Rays per texel, GI resolution scale and denoiser passes: Low (4 rays / 0.40× / 1 pass), Medium (8 / 0.55× / 2), High (14 / 0.75× / 2), Ultra (24 / 1.0× / 3). |
 | **Intensity** | Overall strength of the bounced light. |
-| **Bounce** | Strength of light carried between bounces. |
+| **Bounce** | Albedo carried between bounces — how much of the light reaching a surface is re-emitted into the next bounce. |
 | **Max Bounces** | Number of light bounces (1–8). |
 | **Reflection** | Blends the bounce direction from diffuse toward the mirror direction (0 = diffuse GI, 1 = mirror-like light streaks). |
-| **Max Distance** | How far rays travel before giving up; also sets the distance falloff of bounced light. |
-| **Ray-Traced AO** | Strength of the contact-darkening term (0 = off). |
+| **Max Distance** | How far rays travel before giving up. Bounced light keeps full strength for nearby surfaces and fades out over the far end of that range. |
+| **Ray-Traced AO** | Strength of the contact-darkening term, derived from how much of the surroundings is blocked within the AO radius (0 = off). |
 | **AO Radius** | World-space reach of the ambient occlusion. |
 | **Albedo Response** | 0 adds GI on top of the image, 1 multiplies it by the surface colour so bounced light behaves like real light. AO is always applied multiplicatively. |
-| **Sky Light** | Brightness of the sky light picked up by rays that escape the scene; multiplies the ambient colour and adds to the ambient intensity. |
+| **Sky Light** | Multiplier on the scene's ambient light for rays that escape. At **1** (the default) open areas keep exactly the ambient the raster pass already applies and only the occlusion term darkens enclosed spots; above 1, open sky adds extra light. It scales *ambient colour × ambient intensity*, so it has no effect while Ambient Intensity is 0. |
 | **Detail Sharpness** | Denoiser aggressiveness — higher keeps crisper contact shadows, lower is smoother and more stable. |
 | **Screen Colour Bleeding** | Take bounce colour from the rendered scene (needs post-processing on and MSAA off); otherwise analytic lighting is used everywhere. |
 | **Denoise** | Toggle the temporal + spatial denoiser. |
