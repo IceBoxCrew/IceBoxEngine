@@ -950,10 +950,13 @@ Failures map to a specific message rather than a generic error:
 | No response at all | *Failed to connect to the update service. Check your connection and try again.* |
 | Any other HTTP status | *HTTP error `<code>`* |
 | The reply was not valid JSON | *Failed to parse response: `<detail>`* |
+| The installed engine carries no service address | *The update service address is missing from the engine configuration. Reinstall the engine to restore it.* |
 
-All five mean the same thing from your side: the update service could not be reached
-or answered with something unusable. Check your internet connection and try again; if
-it persists, report it to support with the message shown.
+The first five mean the same thing from your side: the update service could not be
+reached or answered with something unusable. Check your internet connection and try
+again; if it persists, report it to support with the message shown. The last one is
+different — it means the installation itself is incomplete, and only reinstalling the
+engine puts the address back.
 
 ### 4.3 Downloading & installing an update
 

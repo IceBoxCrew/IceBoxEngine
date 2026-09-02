@@ -7610,16 +7610,19 @@ SetCollidersBlockShadows(true)
 local cb = GetCollidersBlockShadows()
 ```
 
-### Ray Tracing (Vulkan / Direct3D 12 / Metal only)
+### Ray Tracing (Vulkan / Direct3D 12 / Metal / WebGPU only)
 
 ```lua
 -- Real-time 2D ray-traced global illumination (soft indirect light, color
--- bleeding, ray-traced ambient occlusion). Works ONLY on Vulkan devices with
+-- bleeding, ray-traced ambient occlusion). Works on Vulkan devices with
 -- hardware ray tracing support, on Direct3D 12 adapters with DirectX
--- Raytracing 1.1, and on Metal devices that report supportsRaytracing
--- (MSL 2.4 ray queries); on any other backend/device the calls are
+-- Raytracing 1.1, on Metal devices that report supportsRaytracing
+-- (MSL 2.4 ray queries), and on WebGPU builds with compute shaders enabled
+-- (software tracer: same bounced light and AO, more cost per ray, at most
+-- 1024 shadow edges per frame, and direct sprite shadows stay analytic);
+-- on any other backend/device the calls are
 -- remembered but produce no visual effect (the feature behaves as if absent).
-local supported = IsRaytracingSupported()   -- true only on RT-capable Vulkan / D3D12 / Metal
+local supported = IsRaytracingSupported()   -- RT-capable Vulkan / D3D12 / Metal, or WebGPU + compute
 
 SetRaytracingEnabled(true)
 local on = IsRaytracingEnabled()
@@ -11312,9 +11315,9 @@ Settings.LIGHTING_UNLIT  -- false
 
 ### Upscaling (FSR / NIS)
 
-> Renders the scene at a lower internal resolution and reconstructs it to the output resolution at the very end of the frame, **after** post-processing. **Vulkan, Direct3D 12 and Metal only, and only on a compatible GPU** — exactly like ray tracing. On any other backend or an unsupported device the setting is still stored, but it has no effect and the frame falls back to the plain linear filter.
+> Renders the scene at a lower internal resolution and reconstructs it to the output resolution at the very end of the frame, **after** post-processing. **Vulkan, Direct3D 12, Metal and WebGPU only, and only on a compatible GPU.** On any other backend or an unsupported device the setting is still stored, but it has no effect and the frame falls back to the plain linear filter.
 >
-> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive spatial upsampling) followed by RCAS (robust contrast-adaptive sharpening). Runs on **any** Vulkan, Direct3D 12 or Metal GPU.
+> - **`"fsr"`** — AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive spatial upsampling) followed by RCAS (robust contrast-adaptive sharpening). Runs on **any** Vulkan, Direct3D 12, Metal or WebGPU GPU.
 > - **`"nis"`** — NVIDIA Image Scaling: structure-tensor directional scaling with an edge-adaptive unsharp mask, in a single pass. Requires an **NVIDIA** GPU.
 >
 > The quality preset sets the internal render resolution as a fraction of the output resolution and **multiplies** with `SetRenderScale()` and the SSAA modes, so leave `RenderScale` at `1.0` to let the preset drive the resolution on its own. Defaults to `"off"`.
@@ -12023,6 +12026,7 @@ Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- raw image (atlas if it fits
 --   .ice_fx, .ice_tm, .ice_ts, .ice_widget, .ice_animation, .ice_view,
 --   .ttf, .otf, .ttc, .wav, .ogg, .mp3, .flac,
 --   .png, .jpg, .jpeg, .bmp, .tga
+-- Scans the loose Content/ folder and, in packaged builds, the mounted .icepak.
 Prewarm.Folder("Content/Levels/Forest")
 
 -- Progress (call from loading screen Update)

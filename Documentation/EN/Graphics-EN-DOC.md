@@ -991,6 +991,11 @@ The shadow system has two execution paths and two big optimizations:
   frame and shared by the shadow pass, the ray tracer and the debug overlays, even in
   split-screen.
 
+> With [ray-traced GI](#8-ray-traced-global-illumination) enabled and its **Shadow
+> rays** option on, the lit shaders read this same occluder set through the hardware
+> acceleration structure instead of the shadow maps below; everything described here
+> still defines *which* geometry occludes and in what Z order.
+
 Shadow counters — casters, edges, shadow-casting lights, directional state, map
 resolution and a per-light **shadow-map preview** strip — are in the
 [Statistics panel](Profiling-And-Building-EN-DOC.md#33-renderer).
@@ -1007,7 +1012,9 @@ where the device reports the required capability.
 
 How it works:
 
-* Occluder **edges** are extruded into a triangle mesh and built into a hardware
+* The **edges of every shadow-casting occluder** — exactly the set the rasterised
+  shadow system uses, so a collider with *Cast Shadow* off stays invisible to the
+  ray tracer too — are extruded into a triangle mesh and built into a hardware
   **acceleration structure** (BLAS + TLAS) once per geometry change; static scenes
   reuse the structure for free.
 * Every shadow-casting **point light**, **spot light** (with cone, falloff, cookie
@@ -1021,6 +1028,18 @@ How it works:
   hit is on-screen, giving full-detail colour bleeding and emissive glow;
   off-screen hits fall back to analytic light evaluation with ray-traced shadow
   rays and area-sampled penumbra.
+* With **Shadow rays** on, direct lighting itself becomes ray traced. **Every lit
+  shading path** — sprites, tilemaps, lit text, particles, metaball fluids and
+  custom **Lit** materials — queries the same acceleration structure per pixel
+  instead of sampling the 2D shadow maps, so nothing in the frame is shadowed by
+  a different method than anything else. Shadows lose the shadow map's angular
+  quantisation and gain a real penumbra that widens with distance from the
+  occluder (**Shadow Softness** is the light's physical size, **Quality** the
+  sample count). The Z-ordering rules of the rasterised path are preserved
+  exactly — a caster still only shadows receivers behind it, and a collider with
+  *Cast Shadow* off still casts nothing. If the acceleration structure or the
+  ray-traced shader variant is unavailable, every path falls back together to
+  the analytic shadow maps with no visual change.
 * Ray hit distances also produce **ray-traced ambient occlusion** — contact
   darkening wherever geometry meets — at no extra ray cost. Open areas keep a
   visibility of 1 and are left untouched.
@@ -1052,14 +1071,20 @@ Quality settings trade cost for fidelity:
 | **Detail Sharpness** | Denoiser aggressiveness — higher keeps crisper contact shadows, lower is smoother and more stable. |
 | **Screen Colour Bleeding** | Take bounce colour from the rendered scene (needs post-processing on and MSAA off); otherwise analytic lighting is used everywhere. |
 | **Denoise** | Toggle the temporal + spatial denoiser. |
-| **Shadow rays** | Toggle ray-traced occlusion for the analytic lighting path. |
+| **Shadow rays** | Replaces the analytic 2D shadow maps with **ray-traced direct shadows**: every shadow-casting point/spot light and the directional light is occluded per pixel by the real geometry, with a penumbra that softens with distance from the occluder. **Shadow Softness** becomes the light's physical size and **Quality** picks the shadow sample count (1 / 2 / 4 / 6 / 8; a softness of 0 always uses one perfectly sharp sample). Off keeps the analytic shadow maps and only traces occlusion inside the GI. |
 
 > GI is a higher-end feature. It requires a Vulkan device with hardware ray
 > tracing (`VK_KHR_ray_query` + acceleration structures), a Direct3D 12 adapter with
 > **DirectX Raytracing 1.1** (inline ray tracing, shader model 6.5), or a Metal device
 > that reports `supportsRaytracing` with MSL 2.4 ray queries (Apple silicon, macOS 12+ /
-> iOS 15+); everywhere else the setting is shown as unsupported and the scene falls back
-> to direct lighting + shadows.
+> iOS 15+). **WebGPU** has no ray-query API at all, so web builds fall back to a
+> *software tracer*: the same compute shader traverses the shadow-edge buffer directly
+> instead of an acceleration structure. It is enabled when WebGPU compute shaders are
+> on, costs more per ray and traverses at most 1024 edges per frame. Bounced light and
+> ray-traced AO are identical to the hardware path; **Shadow rays** keeps working
+> *inside* the GI, but the direct sprite shadows stay on the analytic shadow maps
+> because the lit sprite shader has no ray-query variant on WebGPU. Everywhere else the
+> setting is shown as unsupported and the scene falls back to direct lighting + shadows.
 
 > **Two different things are called "GI".** The system above (`Raytracer2D`) is the
 > *world* GI: it is a rendering setting, needs hardware ray tracing, and lights the
@@ -1192,16 +1217,16 @@ scale does not blur the interface.
 ### 10.2 Upscaling: FSR & NIS
 
 Render the scene at a lower internal resolution and reconstruct it to the output
-resolution at the very end of the frame — after post-processing, before the UI. Like
-[ray tracing](#8-ray-traced-global-illumination) this is **Vulkan / Direct3D 12 / Metal
-only and gated on the GPU**: the capability is probed once at device creation, and on any other backend or an
+resolution at the very end of the frame — after post-processing, before the UI. This is
+**Vulkan / Direct3D 12 / Metal / WebGPU only and gated on the GPU**: the capability is
+probed once at device creation, and on any other backend or an
 unsupported device the setting is stored but does nothing, leaving the normal linear
 blit in place. Defaults to **Off**.
 
 | Upscaler | How it works | Requires |
 | -------- | ------------ | -------- |
-| **FSR** | AMD FidelityFX Super Resolution 1.0 — **EASU**, a 12-tap edge-adaptive spatial upsample that fits an anisotropic elliptical filter to the local gradient, then **RCAS**, robust contrast-adaptive sharpening with a noise-aware limiter that cannot overshoot the local ring. Two passes. | Vulkan or Direct3D 12 + any GPU that can sample and render `RGBA8` with linear filtering |
-| **NIS** | NVIDIA Image Scaling — directional scaling driven by the local structure tensor (eigen-decomposed to get edge direction and coherence), with the reconstruction kernel stretched along the edge, plus an edge-adaptive unsharp mask clamped against the local 2×2 range to suppress ringing. One pass. | Vulkan or Direct3D 12 + an **NVIDIA** GPU |
+| **FSR** | AMD FidelityFX Super Resolution 1.0 — **EASU**, a 12-tap edge-adaptive spatial upsample that fits an anisotropic elliptical filter to the local gradient, then **RCAS**, robust contrast-adaptive sharpening with a noise-aware limiter that cannot overshoot the local ring. Two passes. | Vulkan, Direct3D 12, Metal or WebGPU + any GPU that can sample and render `RGBA8` with linear filtering |
+| **NIS** | NVIDIA Image Scaling — directional scaling driven by the local structure tensor (eigen-decomposed to get edge direction and coherence), with the reconstruction kernel stretched along the edge, plus an edge-adaptive unsharp mask clamped against the local 2×2 range to suppress ringing. One pass. | Vulkan, Direct3D 12, Metal or WebGPU + an **NVIDIA** GPU (WebGPU reads the vendor from the adapter info; when the browser hides it, NIS stays available) |
 
 **Quality presets** set the internal render resolution as a fraction of the output:
 Ultra Performance 33 %, Performance 50 %, Balanced 59 %, Quality 67 %, Ultra Quality
@@ -1225,7 +1250,7 @@ profiler as `Upscale.FSR.EASU` / `Upscale.FSR.RCAS` / `Upscale.NIS`.
 
 HDR10 (ST.2084 PQ / Rec.2020) output with configurable **paper-white** and
 **max-luminance** nits. Real HDR signalling is delivered by the **Vulkan**,
-**Direct3D 12** and **Metal** backends in a standalone build: the swapchain is created
+**Direct3D 12** and **Metal** backends: the swapchain is created
 with the HDR10 colour space when the surface offers it
 (`VK_COLOR_SPACE_HDR10_ST2084_EXT`, `DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020` via
 `IDXGISwapChain3::SetColorSpace1`, or a `CAMetalLayer` with
@@ -1233,10 +1258,29 @@ with the HDR10 colour space when the surface offers it
 on a display that reports EDR headroom), the
 final target switches to `RGB10_A2`, HDR metadata is published to the
 display, and the last post-process step becomes the PQ tonemap instead of a
-passthrough. In the editor viewport and on other backends (OpenGL / WebGPU / GLES) the
-request is ignored and the image stays correct SDR rather than emitting a washed-out PQ
-signal. When HDR10 is live, the normal SDR tonemap is bypassed so the image is not
+passthrough. When HDR10 is live, the normal SDR tonemap is bypassed so the image is not
 tonemapped twice.
+
+**In the editor.** HDR10 is not restricted to built games. Toggling it in
+*Preferences -> Engine* recreates the swapchain on the next frame, so the whole editor
+window is presented through the HDR10 signal and the viewport shows exactly what a
+shipped build would show. The viewport framebuffer switches to `RGB10_A2` so the PQ
+image keeps its 10-bit precision, and the ImGui backends encode their sRGB UI colours
+(and the window clear colour) to PQ per fragment, passing the already-PQ viewport
+texture straight through. Toggling HDR10 back off restores the SDR path just as
+quickly. The **HDR10** section of the settings panel reports live whether the
+swapchain actually got an HDR surface.
+
+**On WebGPU.** Web builds ask the canvas for an extended-range HDR configuration
+(`rgba16float` with `toneMapping: { mode: 'extended' }`) when the browser exposes it and
+`(dynamic-range: high)` reports an HDR display. That path is *scRGB-style* rather than
+PQ: 1.0 is SDR white and values above it drive the display's HDR headroom, so the final
+composite encodes extended sRGB instead of ST.2084 and the final target is `RGBA16F`.
+SDR content therefore passes through unchanged. If the browser or display refuses, the
+canvas falls back to `bgra8unorm` and the frame stays SDR.
+
+On the OpenGL, OpenGL ES and WebGL backends the request is ignored and the image stays
+correct SDR rather than emitting a washed-out PQ signal.
 
 ### 10.4 Pacing: VSync, low latency & adaptive quality
 
@@ -1662,9 +1706,11 @@ is exact.
 The world ray-traced GI requires a **Vulkan** device with hardware ray tracing
 (`VK_KHR_ray_query` + acceleration structures), a **Direct3D 12** adapter with DirectX
 Raytracing 1.1 and a shader-model-6.5 compiler, or a **Metal** device that reports
-`supportsRaytracing` with MSL 2.4 ray queries. On any other backend or on hardware
-without it, the setting reads as unsupported and the scene uses direct lighting + 2D
-shadows. The separate **Global Illumination** effect in a post-process volume
+`supportsRaytracing` with MSL 2.4 ray queries. On **WebGPU** it needs compute shaders to
+be enabled (`?webgpu_compute=1`, `localStorage.iceWebGPUCompute`, or
+`Module.ICE_WEBGPU_COMPUTE`), and then runs the software tracer. On any other backend or
+on hardware without it, the setting reads as unsupported and the scene uses direct
+lighting + 2D shadows. The separate **Global Illumination** effect in a post-process volume
 (radiance cascades) has no such requirement — see [Section 8](#8-ray-traced-global-illumination).
 
 **Performance drops with many sprites.**
@@ -1706,10 +1752,13 @@ must be marked infinite/unbounded). If two volumes overlap, the higher **Priorit
 wins and the **Blend Radius** controls the crossfade.
 
 **HDR10 is on but the picture looks the same (or washed out).**
-Real HDR10 signalling needs the **Vulkan**, **Direct3D 12** or **Metal** backend in a
-standalone build, on an HDR/EDR display with HDR enabled in the OS. Everywhere else — including the editor viewport —
-the request is deliberately ignored and a correct SDR image is shown instead of a
-washed-out PQ signal. See [10.3](#103-hdr10-output).
+Real HDR10 signalling needs the **Vulkan**, **Direct3D 12** or **Metal** backend on an
+HDR/EDR display with HDR enabled in the OS — in the editor as well as in a built game.
+WebGPU builds instead need a browser that supports the extended canvas tone-mapping mode
+on an HDR display. On the OpenGL, OpenGL ES and WebGL backends the request is
+deliberately ignored and a correct SDR image is shown instead of a washed-out PQ signal.
+The status line under the HDR10 sliders tells you whether the swapchain actually got an
+HDR surface. See [10.3](#103-hdr10-output).
 
 **My UI is blurry when Render Scale is low.**
 It should not be: UI drawn after the scene is composited at full resolution over the

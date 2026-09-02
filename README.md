@@ -89,7 +89,7 @@ IceBox Engine consists of several components:
 |-----------|--------|-------------|
 | **Launcher** | `IceBoxLauncher` | Entry point for users. Manages projects (create, open, delete), checks for engine updates, and launches the editor for the selected project. |
 | **Editor** | `IceBoxEngine` | The main visual editor. Scene editing, asset management, tilemap editor, animation tools, scripting workspace, and game build pipeline (Tools → Build Game). |
-| **Updater** | `IceBoxUpdater` | Standalone update app. Checks GitHub releases (or an update manifest) for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
+| **Updater** | `IceBoxUpdater` | Standalone update app. Checks the update manifest for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
 | **Runtime** | `IceBoxRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
 
 ---

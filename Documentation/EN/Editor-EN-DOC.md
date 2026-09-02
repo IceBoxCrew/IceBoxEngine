@@ -963,16 +963,19 @@ Window and top-level performance:
 * **VSync**, **Low Latency Mode**, **Project Pre-Warm on Startup** (warm caches at
   load).
 * **HDR10** output where supported, with **paper-white** (80–400 nits) and
-  **max luminance** (400–10000 nits).
+  **max luminance** (400–10000 nits). It applies immediately — in the editor as well as
+  in a built game — so the whole editor window and the viewport are presented through
+  the HDR10 signal, and a status line reports whether the swapchain actually got an HDR
+  surface. See [Graphics → HDR10 output](Graphics-EN-DOC.md#103-hdr10-output).
 * **Window Mode** — Windowed / Fullscreen / Borderless.
 * **Anti-Aliasing** — Off, FXAA (Post), MSAA 2×/4×/8×, SSAA 2×/4×. Switching to or
   from MSAA shows a restart warning; MSAA also exposes **Alpha-to-Coverage**.
 * **Upscaling** — **FSR** (AMD FidelityFX Super Resolution 1.0) or **NIS**
   (NVIDIA Image Scaling), with a quality preset (Ultra Performance 33 % / Performance
   50 % / Balanced 59 % / Quality 67 % / Ultra Quality 77 % / Native 100 %), a
-  **Sharpening** toggle and its 0–1 strength. Off by default. Like ray tracing this is
-  **Vulkan / Direct3D 12 / Metal only and gated on the GPU** — NIS additionally requires
-  an NVIDIA card — and
+  **Sharpening** toggle and its 0–1 strength. Off by default. This is
+  **Vulkan / Direct3D 12 / Metal / WebGPU only and gated on the GPU** — NIS additionally
+  requires an NVIDIA card — and
   the section shows why it is unavailable when it is. The preset multiplies with Render
   Scale and the SSAA modes, and the panel prints the resulting internal resolution. See
   [Graphics → Upscaling](Graphics-EN-DOC.md#102-upscaling-fsr--nis).
