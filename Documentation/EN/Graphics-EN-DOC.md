@@ -168,7 +168,7 @@ The RHI has **six** implementation families and **eleven** concrete backends
 | **WGPU** | `WebGPU` | WebGPU | GLSL → WGSL |
 | **Null** | `Null` | Null (headless) | — |
 
-The **six** target platforms and the renderers each one offers:
+The **seven** target platforms and the renderers each one offers:
 
 | Platform | Selectable renderers | Fallback chain (highest → lowest) |
 | -------- | -------------------- | -------------------------------- |
@@ -178,6 +178,7 @@ The **six** target platforms and the renderers each one offers:
 | **Web** | WebGPU or WebGL 2.0 | WebGPU → WebGL 2.0 |
 | **macOS** | Metal (native), Metal (ANGLE over GLES) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) → Metal (ANGLE) |
 | **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) |
+| **Xbox** | Direct3D 12 | Direct3D 12 (no fallback — it is the only API an Xbox title may present with) |
 
 Every chain runs top-down: the entry that is asked for is tried first, and each failure
 steps exactly one rung down, never sideways and never back up.
@@ -220,13 +221,16 @@ renderer is chosen per platform in **Build Game…** (see
   MoltenVK, so the probe is treated as advisory there — Metal is guaranteed — and no
   fallback backend exists. MoltenVK itself is searched for in the app
   bundle, the `Frameworks` directory, `@rpath`, and finally the SDL default loader.
-* **Direct3D 12** (Windows only) — if Direct3D 12 was not compiled in, or the pre-flight
+* **Direct3D 12** (Windows and Xbox) — if Direct3D 12 was not compiled in, or the pre-flight
   adapter probe finds no hardware device with feature level 11_0, the engine switches to
   **Vulkan** (when Vulkan itself probes clean) and otherwise to **OpenGL 4.6**, *before*
   the window is created. If device or swapchain creation still fails after the window
   exists, the window is destroyed and recreated for the fallback backend, and the new
   choice is written back to `Config/Engine.json` so the next launch starts on it
-  directly.
+  directly. On the **Xbox** target there is nothing to fall back to and nothing to
+  choose: the Microsoft GDK configuration compiles Direct3D 12 as the only backend and
+  the build pins `Rendering.RenderBackend` to it, so a failure there is a hard failure
+  rather than a downgrade.
 * **Metal** (macOS / iOS) — if the native Metal backend was not compiled in, or the
   pre-flight device probe finds no Metal device that can create a command queue, the
   engine switches to **Metal (MoltenVK)** (when Vulkan itself probes clean) and, on
@@ -308,7 +312,9 @@ ring and a content-hashed sampler heap, a deferred deletion queue that retires e
 resource only after the frame that used it has finished on the GPU, and a recycling
 upload-buffer pool. Storage buffers that a shader writes are promoted to a device-local
 resource on first UAV use, so compute output, GPU culling, GPU sorting and
-`ExecuteIndirect` draws all behave exactly as they do on Vulkan.
+`ExecuteIndirect` draws all behave exactly as they do on Vulkan. It is also the backend
+every **Xbox** build runs on: the Microsoft GDK target compiles this one and nothing
+else, so the feature set an Xbox title gets is the Windows Direct3D 12 feature set.
 
 The **Metal** backend is the Apple-native peer of the Vulkan and Direct3D 12 ones and
 exposes the same feature set on **macOS and iOS**. It renders straight into a
@@ -1119,14 +1125,15 @@ Three optimizations keep this cheap when you are not using it:
 
 * **The extra attachments are conditional.** The two G-buffer targets are only bound as
   draw buffers when an effect that reads them is active — SSR, screen-space GI, godrays
-  or volumetric fog — or when MSAA is on. Otherwise the scene renders into a
+  or volumetric fog — or when MSAA uses multisampled renderbuffers. Otherwise the scene renders into a
   single-attachment "lite" framebuffer that shares the same colour and depth textures,
   so the geometry pass writes one target instead of three.
 * **The depth attachment is invalidated** at the end of the scene when no active effect
   reads depth, which saves the write-back on tiled (mobile) GPUs.
 * **MSAA is resolved once.** With MSAA on, the scene renders into multisampled
   renderbuffers and is resolved into the sampleable textures exactly once, before the
-  first effect that needs to read the scene.
+  first effect that needs to read the scene. On OpenGL ES and ANGLE the resolve is
+  done by the GPU in tile memory instead, so it costs neither a blit nor extra storage.
 
 Effects then run as a chain of full-screen passes ping-ponging between two buffers,
 with dedicated mip chains for **bloom** (up to 6 mips, downsample/upsample) and
@@ -1205,7 +1212,7 @@ Set in [Preferences → Engine](Editor-EN-DOC.md#101-engine).
 | ---- | ------------ |
 | **Off** | No anti-aliasing. |
 | **FXAA** | A cheap screen-space post pass, applied last in the [effect chain](#93-effect-order). It activates the post-process path on its own, so it works in a level with no volume. |
-| **MSAA 2× / 4× / 8×** | Hardware multisampling: the scene renders into multisampled renderbuffers and is resolved once. Changing it needs a **restart**, and it exposes **Alpha-to-Coverage** for crisp masked (cutout) edges. MSAA forces the full G-buffer path and disables the ray tracer's screen-colour bleeding. |
+| **MSAA 2× / 4× / 8×** | Hardware multisampling, applied live — no restart needed on any backend. Vulkan, D3D12, Metal and WebGPU multisample the swapchain and resolve on present; desktop OpenGL uses multisampled renderbuffers resolved once; OpenGL ES and ANGLE use **tile-memory MSAA** (`GL_EXT_multisampled_render_to_texture`) which resolves for free and costs no extra memory; WebGL2 uses the antialiased canvas, which is fixed at startup. Exposes **Alpha-to-Coverage** for crisp masked (cutout) edges, and disables the ray tracer's screen-colour bleeding. The renderbuffer path forces the full G-buffer; the tile-memory path renders a single attachment instead and is skipped for frames whose effects read scene depth or the G-buffer (fog, DoF, SSAO, SSR, godrays, GI, volumetric fog). |
 | **SSAA 2× / 4×** | Supersampling, implemented as an internal render-scale multiplier of **1.414×** and **2×** respectively — render bigger, downscale on output. Highest quality, highest cost. |
 
 **Render Scale** is an internal-resolution multiplier exposed as 1–200 % and clamped to

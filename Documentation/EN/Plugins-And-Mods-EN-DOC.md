@@ -102,14 +102,19 @@ enabled per-project through small JSON config files.
 
 The engine ships one reference example of each:
 
-* **`Plugins/AIHelper`** — a native editor plugin that adds *Tools → AI Helper*, a chat
-  panel wired to a local Ollama LLM. It indexes every language folder under
+* **`Plugins/AIHelper`** — a native editor plugin that adds *Tools → AI Helper*, an
+  assistant wired to a local Ollama LLM. It indexes every language folder under
   `Documentation/`, the scripting API catalog from `Config/VisualScriptAPI.json`, the
-  project README files and optionally your own Lua/Python sources, then retrieves the
-  most relevant sections for each question. Role, answer style, sampling, retrieval and
-  interface are all configurable in the panel and stored in `Config/AIHelper.json`;
-  saved conversations live under `Saved/AIHelper/`. See
-  [`Plugins/AIHelper/README.md`](../../Plugins/AIHelper/README.md).
+  project README files, the asset inventory of the open project and optionally your own
+  Lua/Python sources, then retrieves the most relevant sections for each question.
+  Beyond answering, it can act: in **Agent** and **Autonomous** mode it runs a tool loop
+  over the `EditorHostAPI` and the editor Python bridge to create and edit assets, write
+  Lua, place entities and save levels, with per-action approval, a project-scoped write
+  sandbox, automatic backups and one-click revert. Role, answer style, sampling,
+  retrieval, autonomy and permissions are all configurable in the panel and stored in
+  `Config/AIHelper.json`; saved conversations live under `Saved/AIHelper/` and backups
+  under `Saved/AIHelper/Backups/`. It is also the reference consumer of the API 5 host
+  functions. See [`Plugins/AIHelper/README.md`](../../Plugins/AIHelper/README.md).
 * **`Mods/PlatformerCrates`** — a Lua mod that adds collectible crates and a HUD counter
   to the Platformer example, shipping its own classes, widget and sprite. See
   [`Mods/PlatformerCrates/README.md`](../../Mods/PlatformerCrates/README.md).
@@ -303,10 +308,23 @@ with `StructSize` and `AbiVersion` so you can sanity-check what you were given.
   `IsViewportFocused`, `Get/SetCamera`, `FocusEntity`.
 * **Editor control:** `RecordUndo`, `Undo`, `Redo`, `IsPlayMode`, `Play`, `Stop`,
   `Set/IsPanelVisible`.
+* **Environment (API 5):** `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`.
+  The engine root is the installation folder; the project root is the editor's working
+  directory, which is the folder of the open project. Keeping them apart is what lets a
+  plugin read the engine documentation while writing only inside the project.
+* **Capabilities and scripting (API 5):** `HasCapability(name)` answers `"python"`,
+  `"editor"` and `"scene"`; `RunScript(language, code, outBuf, bufSize, outOk)` runs a
+  snippet against the editor scripting API and returns its combined stdout and stderr,
+  with `outOk` set to `1` only when it completed without errors. `"python"` is the only
+  language today, and it is the same interpreter and the same `editor` / `scene` /
+  `engine` / `browser` modules as the **Run Python Script** window, so one call reaches
+  the whole editor Python API. Each call is wrapped in a single undo group. Call it from
+  the UI thread only — the editor state it touches is not thread safe.
 * **Registration:** see [Section 3.6](#36-editor-extension-points).
 
 Functions that return text (`GetEntityName`, `GetScenePath`, `ExportEntityJson`,
-`GetContentBrowserPath`, …) follow the usual C convention: they write at most
+`GetContentBrowserPath`, `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`,
+`RunScript`, …) follow the usual C convention: they write at most
 `bufSize - 1` bytes plus a terminator and return the **required** length, so you can
 call them once with a small buffer to size the allocation.
 
@@ -464,13 +482,13 @@ version gate.
 
 ### 3.9 API / ABI versioning
 
-The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **4**). Your
+The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **5**). Your
 plugin reports the version it was built against in `PluginInfo::APIVersion` (set it to
 `ICE_PLUGIN_API_VERSION`).
 
 * If a plugin's `APIVersion` is **greater** than the engine's, the engine **refuses to
   load it** (it was built for a newer ABI) and logs
-  `Plugin '<name>' requires API version N (engine has 4)`.
+  `Plugin '<name>' requires API version N (engine has 5)`.
 * Newer hooks/features are gated by version internally, so older plugins keep working as
   the ABI grows:
 
@@ -479,6 +497,13 @@ plugin reports the version it was built against in `PluginInfo::APIVersion` (set
 | ≤ 2 | The base lifecycle: `GetPluginInfo`, `OnLoad`, `OnUnload`, `OnUpdate`, `OnRuntimeStart/Stop`, and all `OnEditor*` hooks. |
 | 3 | `OnRegisterLua` / `OnUnregisterLua`. |
 | 4 | `OnEngineInit` (and therefore the `RuntimeHostAPI`), `OnRegisterPython`, `OnEditorEvent`, `OnEngineEvent`. |
+| 5 | `EditorHostAPI::GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`, `HasCapability` and `RunScript`. |
+
+The version 5 entries are appended to the end of `EditorHostAPI`, so a plugin built
+against an older header keeps working unchanged. A plugin that wants them must check
+that it really got them before calling: the host fills `AbiVersion` and `StructSize`, so
+`host->AbiVersion >= 5 || host->StructSize >= sizeof(EditorHostAPI)` is the guard, and
+each pointer should still be tested for null.
 
 Always rebuild plugins against the engine version you ship with.
 
@@ -797,9 +822,9 @@ a HUD widget and a sprite/texture.
 
 Icon resolution is identical to plugins — see [3.3](#33-the-pluginjson-manifest).
 
-> **`APIVersion` is checked against the engine's plugin ABI version** (currently **4**).
+> **`APIVersion` is checked against the engine's plugin ABI version** (currently **5**).
 > A mod that declares a higher number is refused with
-> `Mod '<name>' requires API version N (engine has 4)`. Leave it at `1` unless you have
+> `Mod '<name>' requires API version N (engine has 5)`. Leave it at `1` unless you have
 > a reason to raise it.
 
 ### 4.4 The mod environment & injected globals
@@ -1123,7 +1148,7 @@ default and remembered in `Config/Editor.json` (`BuildSettings.IncludePlugins` /
 Under each checkbox the dialog shows how many enabled packages will actually be shipped,
 plus how many enabled plugins are being skipped because they are **editor-only**.
 
-Both options apply to **all six platforms**. They are passed to the build scripts as
+Both options apply to **all seven platforms**. They are passed to the build scripts as
 `--no-plugins` / `--no-mods`, which forward `-DICE_INCLUDE_PLUGINS=OFF` /
 `-DICE_INCLUDE_MODS=OFF` to CMake, so the Web/iOS static link, the Android native
 libraries and the APK assets, and the desktop copy step all agree on one decision.
@@ -1178,7 +1203,7 @@ the same Plugin Manager flow as the editor.
 | Form | Native C++ library / static | Lua + content folder |
 | Manifest | `plugin.json` | `mod.json` |
 | Entry | `ICE_PLUGIN_ENTRY(Class)` → `IPlugin` | `main.lua` |
-| SDK / API | `IceBoxPluginSDK`, C ABI v`4` | engine Lua API, mod `APIVersion` (≤ `4`) |
+| SDK / API | `IceBoxPluginSDK`, C ABI v`5` | engine Lua API, mod `APIVersion` (≤ `5`) |
 | Folder / config | `Plugins/` · `Config/Plugins.json` | `Mods/` · `Config/Mods.json` |
 | Alive in | Editor + runtime | Play mode / game only |
 | Live toggle | Yes, once built | Yes |

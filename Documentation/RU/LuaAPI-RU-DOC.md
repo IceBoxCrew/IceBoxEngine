@@ -3490,7 +3490,10 @@ local mpos = GetMousePosition()  -- → {x, y}
 -- Позиция мыши в мировых координатах
 local wpos = GetMouseWorldPosition()  -- → {x, y}
 
--- Конвертация координат экран ↔ мир
+-- Конвертация координат экран ↔ мир.
+-- Экранные координаты — то же пространство, что у GetMouseX/GetMouseY, а сама
+-- конвертация идёт по реальному вьюпорту рендера, поэтому остаётся верной в
+-- изменённом окне и внутри вьюпорта редактора.
 local world = ScreenToWorld(400, 300)  -- → {x, y}
 local screen = WorldToScreen(10, 20)   -- → {x, y}
 
@@ -4500,28 +4503,148 @@ RemoveVirtualButton("jump")
 ClearVirtualControls()
 ```
 
-### Курсор геймпада (виртуальный курсор через стик)
+### Курсор геймпада (указать и кликнуть геймпадом)
+
+Курсор геймпада превращает стик в настоящий указатель мыши. Движок тикает его
+каждый кадр сам — вызывать что-то из Lua каждый кадр не нужно. Пока он активен:
+
+* двигает **системный указатель**, поэтому кастомный курсор, заданный через `SetCursor`,
+  `SetCursorSprite` или `SetCursorFlipbook` (включая анимированные), ездит за стиком;
+* задаёт позицию мыши движка, так что `GetMouseX`, `GetMousePosition`,
+  `GetMouseWorldPosition`, `LineTraceAtCursor` и все проверки попадания виджетов смотрят туда же;
+* превращает кнопку геймпада в настоящий клик мыши, поэтому кнопки, слайдеры,
+  выпадающие списки, поля ввода и скролл-вью реагируют точно так же, как под мышью —
+  **без системы фокус-навигации**;
+* крутит скролл-вью вторым стиком;
+* возвращает управление физической мыши, как только игрок её тронул, и забирает обратно
+  на следующем движении стика или нажатии кнопки.
 
 ```lua
--- Включить виртуальный курсор, управляемый стиком геймпада
+-- Самый простой вариант: включил и забыл
+SetGamepadCursorEnabled(true)
+
+-- Старая форма (по-прежнему работает): speed, useRightStick, gamepadIndex.
+-- Теперь она ведёт и настоящий указатель; скролл стиком остаётся выключенным,
+-- чтобы второй стик сохранил ту роль, которая была у него в игре.
 EnableGamepadCursor()                              -- по умолчанию: speed=400, правый стик, геймпад 0
 EnableGamepadCursor(600)                           -- своя скорость
-EnableGamepadCursor(400, true, 0)                  -- speed, useRightStick, gamepadIndex
+EnableGamepadCursor(400, false, 0)                 -- speed, useRightStick, gamepadIndex
 
--- Выключить виртуальный курсор
 DisableGamepadCursor()
 
--- Запрос состояния
-local enabled = IsGamepadCursorEnabled()
-local pos = GetGamepadCursorPosition()  -- → {x, y}
+-- Всё сразу (значения ниже — дефолты движка)
+ConfigureGamepadCursor({
+    enabled = true,
+    speed = 900,                -- пикселей в секунду при полном отклонении стика
+    response = 1.0,             -- 1 = линейно, >1 = точнее возле центра
+    threshold = 0.05,           -- дополнительная мёртвая зона поверх SetGamepadDeadzone
+    stick = "Left",             -- "Left" | "Right" | "Both" | "None"
+    scrollStick = "Right",      -- стик, который крутит колёсико
+    scrollSpeed = 30,
+    scrollThreshold = 0.3,
+    gamepadIndex = 0,
+    clickButton = "A",          -- левая кнопка мыши
+    rightClickButton = "X",     -- правая кнопка, "None" — отключить
+    middleClickButton = "None",
+    slowButton = "None",        -- удержание для точного прицеливания, например "LeftShoulder"
+    slowScale = 0.35,
+    warpSystemCursor = true,    -- двигать указатель ОС, чтобы кастомный курсор ехал за ним
+    driveMouse = true,          -- отдавать курсор как позицию мыши движка
+    autoSwitch = true,          -- вернуть управление физической мыши, когда она двигается
+    suppressWidgetNav = true,   -- выключить фокус-навигацию виджетов, пока ведёт курсор
+    centerOnEnable = true,
+    dpad = false,               -- разрешить крестовине тоже двигать курсор
+    mouseSwitchThreshold = 2.0, -- пикселей движения мыши, чтобы забрать управление
+})
 
--- Установить позицию / скорость вручную
+local cfg = GetGamepadCursorConfig()   -- все поля выше плюс active / device
+```
+
+```lua
+-- Состояние
+local enabled = IsGamepadCursorEnabled()   -- включён
+local active = IsGamepadCursorActive()     -- включён, геймпад подключён и сейчас ведёт указатель
+local pos = GetGamepadCursorPosition()     -- → {x, y} в пикселях окна
+local axis = GetGamepadCursorAxis()        -- → {x, y} сырой стик за этот кадр
+
+-- Позиция
 SetGamepadCursorPosition(960, 540)
-SetGamepadCursorSpeed(800)
+CenterGamepadCursor()
 
--- Обновлять каждый кадр (двигает курсор по стику)
+-- Держать курсор внутри прямоугольника (пиксели окна); по умолчанию — всё окно
+SetGamepadCursorBounds(0, 0, 1920, 1080)
+local bounds = GetGamepadCursorBounds()    -- → {x, y, width, height, custom}
+ClearGamepadCursorBounds()
+
+-- Отдельные настройки
+SetGamepadCursorSpeed(1100)          GetGamepadCursorSpeed()
+SetGamepadCursorResponse(2.0)        GetGamepadCursorResponse()
+SetGamepadCursorThreshold(0.05)      GetGamepadCursorThreshold()
+SetGamepadCursorIndex(0)             GetGamepadCursorIndex()
+SetGamepadCursorStick("Left")        GetGamepadCursorStick()
+SetGamepadCursorScrollStick("Right") GetGamepadCursorScrollStick()
+SetGamepadCursorScrollSpeed(30)      GetGamepadCursorScrollSpeed()
+SetGamepadCursorScrollThreshold(0.3) GetGamepadCursorScrollThreshold()
+SetGamepadCursorSlowScale(0.35)      GetGamepadCursorSlowScale()
+SetGamepadCursorDPadEnabled(false)   IsGamepadCursorDPadEnabled()
+SetGamepadCursorWarpSystemCursor(true)   IsGamepadCursorWarpSystemCursor()
+SetGamepadCursorDriveMouse(true)         IsGamepadCursorDriveMouse()
+SetGamepadCursorAutoSwitch(true)         IsGamepadCursorAutoSwitch()
+SetGamepadCursorSuppressWidgetNav(true)  IsGamepadCursorSuppressWidgetNav()
+
+-- Роли кнопок: "Click" | "RightClick" | "MiddleClick" | "Slow"
+SetGamepadCursorButton("Click", "A")
+SetGamepadCursorButton("RightClick", "None")
+local clickButton = GetGamepadCursorButton("Click")
+
+-- Какое устройство владеет указателем сейчас
+local device = GetActivePointerDevice()   -- "mouse" | "gamepad" | "touch"
+SetActivePointerDevice("gamepad")
+
+-- Оставлена для совместимости, ничего не делает: движок тикает курсор сам
 UpdateGamepadCursor(dt)
 ```
+
+Полноценное меню в стиле point-and-click, без фокус-навигации вообще:
+
+```lua
+function OnLevelStart()
+    SetCursorSprite("Content/UI/Cursor.icesprite", 2, 2, 1.0)
+    ConfigureGamepadCursor({
+        enabled = true,
+        speed = 1100,
+        response = 2.0,
+        stick = "Left",
+        scrollStick = "Right",
+        clickButton = "A",
+        rightClickButton = "X",
+        slowButton = "LeftShoulder",
+    })
+end
+```
+
+> **Замечания**
+> * Именно `warpSystemCursor` заставляет *видимый* кастомный курсор ехать за стиком. Он
+>   требует фокуса ввода у окна и пропускается в relative mouse mode.
+> * Платформы без указателя ОС — Android, Android TV, iOS и веб, где указателем владеет
+>   браузер, — варп игнорируют. Всё остальное там работает: с включённым
+>   `driveMouse` попадания, клики и скролл идут за стиком — рисуйте свой спрайт
+>   курсора в `GetGamepadCursorPosition()` на этих платформах.
+> * На тач-платформе касание экрана двигает системный указатель, поэтому оно забирает
+>   управление у геймпада точно так же, как это сделала бы мышь.
+> * `HideCursor()` переводит SDL в relative mouse mode, а там варп пропускается.
+>   Вызовите `ShowCursor()` перед открытием меню, которое должен вести курсор геймпада.
+> * `suppressWidgetNav` не даёт стику одновременно двигать фокус виджетов и курсор.
+>   Выключите его, если хотите оба режима сразу.
+> * Пока указателем владеет физическая мышь, курсор едет за ней, и
+>   `SetGamepadCursorPosition` / `CenterGamepadCursor` перезапишутся на следующем кадре.
+>   Сначала вызовите `SetActivePointerDevice("gamepad")`, чтобы поставить его настояще.
+> * В редакторе курсор автоматически ограничен игровым вьюпортом, так что
+>   плейтест работает без ручной установки границ. В собранной игре границы по
+>   умолчанию — всё окно.
+> * Клик фокусирует поле ввода точно так же, как клик мышью, но сам набор текста
+>   всё равно требует клавиатуры или экранной клавиатуры (`HasScreenKeyboardSupport`).
+> * При остановке рантайма курсор сбрасывается, так что следующий уровень его не наследует.
 
 ### Универсальный указатель (мышь / тач / курсор геймпада)
 
@@ -4668,9 +4791,16 @@ local vel = GetEntityVelocity(entityId)  -- → {x, y}
 SetEntityVelocity(entityId, 200, 0)
 AddEntityImpulse(entityId, 0, -500)
 
--- Флип спрайта другой сущности
-SetEntityFlipX(entityId, true)
-SetEntityFlipY(entityId, true)
+-- Флип одного инстанса спрайта другой сущности (индекс по умолчанию 0)
+SetEntitySpriteFlipX(entityId, true)
+SetEntitySpriteFlipY(entityId, true)
+
+-- Флип ВСЕЙ сущности: спрайты, флипбуки, скелет, виджеты, тайлмапы,
+-- FX и деколи отражаются вместе. Возвращает true, если что-то изменилось.
+SetEntityGlobalFlipX(entityId, true)
+SetEntityGlobalFlipY(entityId, true)
+local mirroredX = GetEntityGlobalFlipX(entityId)
+local mirroredY = GetEntityGlobalFlipY(entityId)
 
 -- Расстояние до другой сущности
 local dist = DistanceToEntity(targetId)
@@ -7532,7 +7662,7 @@ local scr = GetSpotLightCookieRotation(0)
 > **значение проекта** из `Config/Engine.json` → `Rendering` (редактор:
 > [Настройки → Рендеринг](Editor-RU-DOC.md#105-рендеринг)), которое при желании заменяется
 > для одного уровня через [Настройки мира](Editor-RU-DOC.md#8-настройки-мира). Рантайм
-> читает `Engine.json` при запуске на всех шести платформах, поэтому нетронутая игра
+> читает `Engine.json` при запуске на всех семи платформах, поэтому нетронутая игра
 > выглядит одинаково во вьюпорте редактора, в режиме Play и в собранной сборке.
 >
 > Вызов сеттера помечает **только этот параметр** как управляемый игрой: он сохраняет
@@ -8755,7 +8885,7 @@ local quit = IsQuitRequested()
 
 ### Приостановка приложения (пауза всего и вся)
 
-Замораживает update, render и аудио на всех 6 платформах (Windows, Linux, macOS, iOS, Android, Web). Удобно для меню паузы при сворачивании окна, ухода в фон на мобилках или когда нужно вручную поставить всё приложение на паузу из скрипта.
+Замораживает update, render и аудио на всех 7 платформах (Windows, Linux, macOS, iOS, Android, Web, Xbox). Удобно для меню паузы при сворачивании окна, ухода в фон на мобилках или когда нужно вручную поставить всё приложение на паузу из скрипта.
 
 ```lua
 -- Приостановить приложение вручную (звук выключается, update/render пропускается)
@@ -8769,6 +8899,27 @@ local suspended = IsAppSuspended()
 ```
 
 > **Примечание:** Движок также автоматически приостанавливается при сворачивании/скрытии окна и при уходе в фон на мобильных платформах; Lua API накладывается поверх этого — это отдельный флаг `RequestManualSuspend`, независимый от состояния окна, управляемого ОС. Эту автоматическую приостановку можно отключить через `Settings.SetIsSuspended(false)` (см. раздел "Приостановка (Suspend)" в Settings) — ручное API отсюда продолжает работать в любом случае.
+
+### Гейт игрового ввода (debug)
+
+Отключает весь игровой ввод, не ставя игру на паузу. Клавиатура, кнопки мыши, кнопки/оси/стики
+геймпада и тач для Lua читаются как «не нажато», пока гейт закрыт; таймеры, физика и скрипты
+продолжают работать. Удобно для катсцен, отладочного облёта уровня и удалённого осмотра.
+
+```lua
+SetGameInputEnabled(false)     -- управление игрой замирает
+SetGameInputEnabled(true)      -- принудительно включить, даже когда редактор блокирует
+ResetGameInputOverride()       -- снять переопределение и снова слушать редактор
+
+local enabled = IsGameInputEnabled()   -- фактическое состояние
+local blocked = IsGameInputBlocked()   -- то же самое, наоборот
+```
+
+> **Связка с редактором:** Eject камеры рантайма сам закрывает гейт, чтобы можно было летать по
+> запущенному уровню, не управляя игроком. Вызов из скрипта важнее: `SetGameInputEnabled(true)`
+> оставит управление живым во время Eject, `false` оставит его выключенным и после Inject, а
+> `ResetGameInputOverride()` вернёт решение редактору. Переопределение сбрасывается в режим
+> «слушать редактор» на старте каждого уровня.
 
 ### Глобальное состояние игры (Game State)
 
@@ -9967,6 +10118,13 @@ SetGamepadSliderStickSpeed(0.02)      -- скорость в кадр от ст�
 -- Какой стик управляет навигацией
 SetGamepadUseLeftStick(true)          -- false = правый стик
 
+-- Навигация по прокручиваемым спискам (фокус ScrollView + режим прокрутки)
+SetGamepadScrollViewNavigation(true)  -- false = ScrollView никогда не получает фокус
+local svNav = IsGamepadScrollViewNavigation()
+SetGamepadNavScrollSpeed(900)         -- скорость прокрутки в пикселях канваса в секунду
+local svSpeed = GetGamepadNavScrollSpeed()
+SetGamepadScrollFocusBorderColor(0.35, 0.85, 1.0, 1.0)   -- рамка фокуса в режиме прокрутки
+
 -- Рамка фокуса (выделение вокруг сфокусированного элемента)
 SetGamepadFocusBorder(true)                                 -- показать / скрыть
 SetGamepadFocusBorder(true, 1.0, 0.9, 0.2, 1.0)             -- показать + цвет (r,g,b,a)
@@ -9980,7 +10138,25 @@ local name = GetGamepadFocusedElement()     -- → string или ""
 -- Режим навигации (видимость рамки фокуса клавиатуры/геймпада)
 local navOn = IsUINavigationActive()        -- → bool: true пока показана рамка фокуса
 SetUINavigationActive(false)                -- принудительно включить (true) / выключить (false) режим навигации
+
+-- Режим прокрутки (сфокусированный ScrollView забирает направления себе)
+local scrolling = IsUINavScrolling()        -- → bool
+SetUINavScrolling(true)                     -- войти в режим прокрутки на сфокусированном ScrollView
+SetUINavScrolling(false)                    -- выйти из режима прокрутки, сохранив фокус
 ```
+
+> **Прокручиваемые списки (`ScrollView`).** `ScrollView` попадает в набор фокуса, как только
+> его содержимое больше видимой области, — клавиатура и геймпад добираются до длинных списков
+> так же, как до кнопок. Сфокусируйте его и нажмите **Activate**, чтобы войти в *режим
+> прокрутки*: ввод направления (DPad / стрелки / стик) начинает прокручивать список вместо
+> перемещения фокуса со скоростью `SetGamepadNavScrollSpeed` пикселей канваса в секунду, а
+> рамка фокуса переключается на `SetGamepadScrollFocusBorderColor`, чтобы режим был виден.
+> **Cancel**, **Escape** или повторный **Activate** выходят из режима прокрутки и возвращают
+> направления обычной навигации. `ScrollView`, содержимое которого влезает целиком, никогда не
+> получает фокус и не становится тупиком в цепочке фокуса; `SetGamepadScrollViewNavigation(false)`
+> убирает все `ScrollView` из навигации. Независимо от режима прокрутки, перевод фокуса на
+> элемент **внутри** `ScrollView` автоматически прокручивает список к этому элементу, в том
+> числе через вложенные ScrollView.
 
 > **Маршрутизация навигации по элементам.** У каждого элемента также есть явные
 > `NavUpID` / `NavDownID` / `NavLeftID` / `NavRightID`, задаваемые в редакторе
@@ -10289,6 +10465,12 @@ SetGamepadSliderStepSize(0.05)
 SetGamepadSliderStickSpeed(0.02)
 SetGamepadUseLeftStick(true)
 
+SetGamepadScrollViewNavigation(true)
+local svNav = IsGamepadScrollViewNavigation()
+SetGamepadNavScrollSpeed(900)
+local svSpeed = GetGamepadNavScrollSpeed()
+SetGamepadScrollFocusBorderColor(0.35, 0.85, 1.0, 1.0)
+
 SetGamepadFocusBorder(true, 1.0, 0.9, 0.2, 1.0, 2.0)   -- показать, r, g, b, a, толщина
 
 SetGamepadFocusedElement("PlayBtn")
@@ -10297,6 +10479,9 @@ local focused = GetGamepadFocusedElement()             -- → строка ил�
 
 local navOn = IsUINavigationActive()                   -- → bool: режим навигации клавиатуры/геймпада активен
 SetUINavigationActive(false)                           -- принудительно вкл (true) / выкл (false) режим навигации
+
+local scrolling = IsUINavScrolling()                   -- → bool: сфокусированный ScrollView в режиме прокрутки
+SetUINavScrolling(true)                                -- войти (true) / выйти (false) из режима прокрутки
 ```
 
 #### Доступ к элементам SubWidget (короткие имена)
@@ -11249,8 +11434,8 @@ Cinema.ClearOnFinished("Content/Cinema/intro.ice_cinema")
 ### Графика
 
 ```lua
-Settings.SetFPSLimit(60)
-local fps = Settings.GetFPSLimit()
+Settings.SetFPSLimit(60)              -- 1..500; 0 = без ограничения (максимум движка)
+local fps = Settings.GetFPSLimit()    -- 0 означает «без ограничения»
 
 Settings.SetResolution(1920, 1080)
 local res = Settings.GetResolution()  -- → {width, height}
@@ -11478,11 +11663,11 @@ local muted = Settings.IsMuted()
 
 ### Платформа
 
-Движок поддерживает 6 платформ: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. Из Lua можно определить текущую платформу и писать как платформо-специфичный код, так и общий код для всех платформ сразу. Про архитектуру процессора, под которую собрана эта же сборка, см. раздел **Архитектура** сразу ниже.
+Движок поддерживает 7 платформ: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web** и **Xbox** (Microsoft GDK). Из Lua можно определить текущую платформу и писать как платформо-специфичный код, так и общий код для всех платформ сразу. Про архитектуру процессора, под которую собрана эта же сборка, см. раздел **Архитектура** сразу ниже.
 
 ```lua
 local platform = Settings.GetPlatform()
--- Возвращает одно из: "Windows", "Linux", "macOS", "iOS", "Android", "Web"
+-- Возвращает одно из: "Windows", "Linux", "macOS", "iOS", "Android", "Web", "Xbox"
 -- ("Unknown" — только если собрано под неизвестную цель)
 
 -- Проверки конкретной платформы (ровно одна вернёт true в текущей сборке):
@@ -11492,12 +11677,20 @@ local isMacOS   = Settings.IsMacOS()
 local isIOS     = Settings.IsIOS()
 local isAndroid = Settings.IsAndroid()
 local isWeb     = Settings.IsWeb()
+local isXbox    = Settings.IsXbox()      -- любая сборка Microsoft GDK
 
 -- Групповые проверки:
 local isApple     = Settings.IsApple()      -- macOS или iOS
 local isMobile    = Settings.IsMobile()     -- iOS или Android (нативная сборка)
 local isMobileWeb = Settings.IsMobileWeb()  -- true ТОЛЬКО на Web-сборке, если браузер запущен на мобильном устройстве (UA + touch + pointer:coarse). На всех остальных платформах всегда false.
-local isDesktop   = Settings.IsDesktop()    -- Windows, Linux или macOS
+local isDesktop   = Settings.IsDesktop()    -- Windows, Linux или macOS (консоли Xbox сюда не входят)
+local isConsole   = Settings.IsConsole()    -- консольная сборка Xbox One или Xbox Series
+
+-- Под какую цель Xbox собрана сборка. На любой не-Xbox сборке — пустая строка:
+local family = Settings.GetXboxDeviceFamily()
+-- "Desktop"  -- Gaming.Desktop.x64: тайтл Xbox, работающий на Windows (Microsoft Store / приложение Xbox)
+-- "XboxOne"  -- Gaming.Xbox.XboxOne.x64
+-- "Scarlett" -- Gaming.Xbox.Scarlett.x64 (Xbox Series X|S)
 
 -- Строковые константы (удобно для switch-логики и сравнений):
 Settings.PLATFORM_WINDOWS  -- "Windows"
@@ -11506,6 +11699,12 @@ Settings.PLATFORM_MACOS    -- "macOS"
 Settings.PLATFORM_IOS      -- "iOS"
 Settings.PLATFORM_ANDROID  -- "Android"
 Settings.PLATFORM_WEB      -- "Web"
+Settings.PLATFORM_XBOX     -- "Xbox"
+
+-- Константы семейств устройств Xbox, для сравнения с GetXboxDeviceFamily():
+Settings.XBOX_FAMILY_DESKTOP   -- "Desktop"
+Settings.XBOX_FAMILY_XBOXONE   -- "XboxOne"
+Settings.XBOX_FAMILY_SCARLETT  -- "Scarlett"
 
 -- Шаблоны использования:
 
@@ -11536,10 +11735,33 @@ elseif p == Settings.PLATFORM_IOS then
     -- ...
 end
 
--- 4) Код «под все 6 платформ сразу» — просто не оборачивайте его в
---    проверки: один и тот же скрипт работает везде, так как все 6
+-- 4) Xbox: одна платформа, три семейства устройств
+if Settings.IsXbox() then
+    if Settings.IsConsole() then
+        -- Xbox One / Xbox Series: UI только под геймпад, безопасные поля под ТВ,
+        -- сохранения лежат в постоянном локальном хранилище тайтла.
+        if Settings.GetXboxDeviceFamily() == Settings.XBOX_FAMILY_SCARLETT then
+            -- у Series X|S хватает запаса на тяжёлые пресеты
+        end
+    else
+        -- Gaming.Desktop.x64: тайтл Xbox на Windows-ПК.
+        -- Settings.IsWindows() здесь ТОЖЕ true, потому что эта сборка
+        -- действительно работает на Windows — с клавиатурой и мышью.
+    end
+end
+
+-- 5) Код «под все 7 платформ сразу» — просто не оборачивайте его в
+--    проверки: один и тот же скрипт работает везде, так как все 7
 --    платформ предоставляют одинаковый Lua API.
 ```
+
+> **Как Xbox соотносится с остальными проверками.** `Settings.GetPlatform()` возвращает
+> `"Xbox"` для любой сборки Microsoft GDK, под какое бы семейство устройств она ни шла. В
+> семействе **PC** истинна ещё и `Settings.IsWindows()` — эта сборка действительно
+> работает на Windows, — поэтому пишите `Settings.IsXbox()`, когда имеете в виду «это
+> тайтл GDK», и `Settings.IsConsole()`, когда имеете в виду «это работает на консольном
+> железе». `Settings.IsDesktop()` остаётся истинной в семействе PC и ложной в обоих
+> консольных.
 
 ### Архитектура
 
@@ -11563,7 +11785,7 @@ local is64 = Settings.Is64Bit()   -- true на x64, arm64, wasm64
 local is32 = Settings.Is32Bit()   -- true на x86, arm32, wasm32
 ```
 
-Что могут вернуть все 6 платформ:
+Что могут вернуть все 7 платформ:
 
 | Платформа | Архитектуры, под которые собирается движок | Что вернёт `Settings.GetArch()` |
 |-----------|--------------------------------------------|---------------------------------|
@@ -11573,6 +11795,7 @@ local is32 = Settings.Is32Bit()   -- true на x86, arm32, wasm32
 | iOS       | arm64 (устройство и симулятор) | `"arm64"` |
 | Android   | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | `"arm64"`, `"arm32"`, `"x64"`, `"x86"` |
 | Web       | wasm32, wasm64 (сборка с `-sMEMORY64`) | `"wasm32"`, `"wasm64"` |
+| Xbox      | x64 (все семейства устройств GDK) | `"x64"` |
 
 > **Имена Android-ABI нормализованы**, поэтому одно сравнение работает везде: `armeabi-v7a` → `"arm32"`, `arm64-v8a` → `"arm64"`, `x86_64` → `"x64"`, `x86` → `"x86"`. Пишите `arch == Settings.ARCH_ARM64` один раз вместо разбора платформенных написаний ABI.
 
@@ -11938,8 +12161,8 @@ local on = Settings.IsLowLatencyMode()
 не в фокусе, свернуто, скрыто или приложение ушло в фон: update и render
 пропускаются, игровая логика замораживается, звук останавливается. Как
 только окно снова становится активным, всё возобновляется ровно с того же
-места. Так это работает на всех 6 платформах (Windows, Linux, macOS, iOS,
-Android, Web), и редактор ведёт себя так же.
+места. Так это работает на всех 7 платформах (Windows, Linux, macOS, iOS,
+Android, Web, Xbox), и редактор ведёт себя так же.
 
 Если выключено, автоматическая приостановка по состоянию окна полностью
 отключается — игра продолжает обновляться, рендериться и воспроизводить
@@ -12841,7 +13064,7 @@ end
 ```lua
 -- Создание системы
 local achievements = AchievementSystem({
-    autoSave = true,                        -- Автосохранение при Unlock/AddProgress
+    autoSave = true,                        -- Автосохранение при Unlock / AddProgress / SetProgress
     savePath = "achievements.json",          -- Путь в Saves/
     onUnlock = function(id, achievement)
         Print("Открыто: " .. achievement.title)
@@ -17042,7 +17265,7 @@ end
 >   инстанс относительно части).
 > * События contact/sensor/hit от шейпов части приходят сущности-владельцу с именем коллайдера.
 > * Группы коллизий и `CollideConnected` работают для частей так же, как для обычных коллайдеров.
-> * Флип сущности (`SetEntityFlipX`) зеркалит всё физически: тела частей, их скорости, якоря и оси
+> * Флип сущности (`SetEntityGlobalFlipX`) зеркалит всё физически: тела частей, их скорости, якоря и оси
 >   джоинтов, угловые лимиты, референс-углы и авторские скорости моторов — катапульта идеально
 >   флипается влево/вправо. Заметь: скорость мотора, заданная в рантайме через `SetJointMotorSpeed`,
 >   остаётся в мировой конвенции (положительная = по часовой); для семантики «вперёд» умножай на знак фейсинга сам.
@@ -22672,7 +22895,7 @@ end
 > Видеофайлы воспроизводятся напрямую (`.mp4`, `.webm`, `.avi`, `.mkv` — любой формат, поддерживаемый FFmpeg).
 > Работает как с обычными файлами на диске, так и с файлами, запакованными в `.ICEPAK` архивы через VFS.
 >
-> **Важно:** Доступно на всех шести платформах. **Windows**, **Linux**, **macOS** и **Android** декодируют
+> **Важно:** Доступно на всех семи платформах. **Windows**, **Linux**, **macOS**, **Android** и **Xbox** декодируют
 > через FFmpeg; **iOS** воспроизводит через AVFoundation (только H.264/HEVC — WebM/VP9 там не декодируется,
 > поэтому кукинг видео для iOS-сборок переключается на PassThrough); **Web** воспроизводит через
 > браузерный элемент `<video>`.

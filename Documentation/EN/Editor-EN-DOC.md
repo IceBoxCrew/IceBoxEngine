@@ -318,7 +318,7 @@ Separators group the list as: the four main panels, then **World Settings**, the
 | ---- | ------------- | ----- |
 | **Run Python Script** | [Python API](PythonAPI-EN-DOC.md) | Opens the **Python Console** panel — a script editor plus a command line for editor automation. |
 | **Network Manager (ENet)** | *This document, [Section 11](#11-network-manager-enet)* | Live multiplayer test client/host, chat, voice, rollback diagnostics and the network profiler. |
-| **Build Game…** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The packaging/cooking/installer pipeline for all six platforms. |
+| **Build Game…** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The packaging/cooking/installer pipeline for all seven platforms. |
 | **DLC Packager** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | Builds add-on content packages. |
 | **Remote Preview** | *This document, [Section 12](#12-remote-preview)* | Streams the running game to an Android device over ADB. **Not shown on macOS.** |
 | **Profiler (Tracy)** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The advanced frame profiler. |
@@ -1083,7 +1083,7 @@ Tuning knobs for the renderer and memory:
 * **Texture Atlas** — atlas page size, max sprite size, max texture size.
 * **Suspend** — **Is Suspended**: when on (the default behaviour), the app pauses
   update, render and audio while the window is unfocused, minimized or
-  backgrounded, on all six platforms; when off, the game keeps running and playing
+  backgrounded, on all seven platforms; when off, the game keeps running and playing
   audio without focus. Also scriptable via `Settings.SetIsSuspended`.
 * A read-out of the compile-time **Hard Caps** the engine enforces (max point
   lights, max texture slots).

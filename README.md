@@ -63,7 +63,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 - **Assets** — 25 asset types, each with its own editor, hidden sidecars for import settings, redirectors, a reference viewer, bulk editing, Aseprite and GIF importers, and **asset cooking** (WebP / KTX2 / Opus / Vorbis / VP9 / font subsetting) with a lossless guard that leaves hard-edged pixel art untouched.
 - **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
 - **Extensibility** — Drop-in **plugin** system and **mod** support, with a **Plugin Builder** that compiles native plugins on their own, without an engine build.
-- **Building** — One-click **Build Game** for all six platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, DLC paks that mount over the base game, and headless dedicated servers.
+- **Building** — One-click **Build Game** for all seven platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, Xbox `MicrosoftGame.config` layouts and `.msixvc` / `.xvc` packages via the Microsoft GDK, DLC paks that mount over the base game, and headless dedicated servers.
 - **Tooling** — Built-in Tracy profiler, a frame profiler with recorded traces, per-pass GPU timings, memory and VRAM tracking and hitch detection, **23 debug overlays** (colliders, nav grids, light heatmaps, shadow edges, Z-depth, frozen culling and more), stats overlays, a developer console with commands and CVars, a crash reporter that reports only to an endpoint you configure, **Remote Preview** to an Android device over USB, and a hot-key reference.
 
 ---
@@ -78,6 +78,11 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 | **iOS** | ❌ | ✅ |
 | **Android** | ❌ | ✅ |
 | **Web** | ❌ | ✅ |
+| **Xbox** *(Microsoft GDK)* | ❌ | ✅ |
+
+Xbox games are **built on Windows only** — the Microsoft GDK, its MSVC integration and
+`MakePkg` exist for Windows alone. Picking Xbox on a Linux or macOS host reports that a
+Windows machine is needed, the same way macOS and iOS report that they need a Mac.
 
 ---
 
@@ -132,6 +137,13 @@ IceBox Engine consists of several components:
 |-|-|
 | **Browser** | Any modern browser with WebGL 2.0 or WebGPU support |
 
+### Runtime — Xbox
+
+| | |
+|-|-|
+| **Device** | Xbox Series X\|S and Xbox One (`Gaming.Xbox.*`), or Windows 10+ x64 through the Microsoft Store / Xbox app (`Gaming.Desktop.x64`) |
+| **GPU** | Direct3D 12, the only graphics API an Xbox title presents with |
+
 ---
 
 ## 📦 Build Requirements
@@ -157,6 +169,7 @@ Building a game runs the native toolchain of the target platform on your machine
 | 📱 **iOS** | macOS host with Xcode 15+ (full IDE, not just CLI tools), vcpkg with `arm64-ios` triplet, Apple Developer account **only** for on-device deployment (compiling needs no account) |
 | 🤖 **Android** | Android SDK 37+, NDK 29+, Java JDK 25+, Gradle 9.7.0 *(auto-downloaded)* |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — plus Node.js 24+ if you build the `wasm64` memory model |
+| 🎮 **Xbox** | **Windows host only.** The [Microsoft GDK](https://github.com/microsoft/GDK/releases) (its installer sets `GameDK`, `GameDKLatest`, `GRDKLatest`) plus the Windows 11 SDK with Direct3D 12 and the DirectX Shader Compiler. The **Xbox One** and **Xbox Series** device families additionally need the private **GDKX** from Partner Center (ID@Xbox / Xbox Managed, which sets `GXDKLatest`) and a devkit to run on; their vcpkg triplets and GDK toolchain files ship with the engine in `Tools/BuildSystem/Utilities/`. The **PC** family (`Gaming.Desktop.x64`) needs nothing beyond the public GDK, and reuses the same `x64-windows` dependencies as the Windows target |
 
 ---
 
@@ -488,6 +501,32 @@ export EMSDK_PYTHON="$(brew --prefix python@3.13)/bin/python3.13"
 echo 'source ~/emsdk/emsdk_env.sh' >> ~/.zprofile
 ```
 
+### Xbox build tools (Windows)
+
+> Xbox builds run on a **Windows host only**. The Microsoft GDK, its MSVC integration and
+> `MakePkg` are Windows-only, and there is no cross compiler for `Gaming.Desktop.x64` or
+> `Gaming.Xbox.*`. `build_xbox.sh` on Linux/macOS is a stub that says exactly that.
+
+```bash
+# 1. Install the public Microsoft GDK — pick the release that matches your
+#    Visual Studio and Windows SDK: https://github.com/microsoft/GDK/releases
+#    The installer sets GameDK, GameDKLatest and GRDKLatest. Open a fresh shell
+#    afterwards so the build can see them.
+
+# 2. (Console families only) Install the private GDKX from Partner Center.
+#    Microsoft ships it to registered ID@Xbox and Xbox Managed partners under NDA;
+#    it sets GXDKLatest and is what Gaming.Xbox.XboxOne.x64 and
+#    Gaming.Xbox.Scarlett.x64 build against. The public GDK carries the
+#    Gaming.Desktop.x64 half only
+```
+
+The build writes an **Xbox game layout** — the game plus `MicrosoftGame.config` and the
+`Images/` store art — and, when asked, packs it into an `.msixvc` (PC) or `.xvc` (console)
+with `MakePkg`. Register and launch a PC layout with `wdapp register`, deploy a console
+one with `xbapp deploy`. Everything the dialog exposes — device family, package identity,
+publisher ID, Title ID, Store ID, Xbox network — is documented in
+**[Profiling & Building Games → 8.7 Xbox](Documentation/EN/Profiling-And-Building-EN-DOC.md#87-xbox-microsoft-gdk)**.
+
 ---
 
 ## 📖 Documentation
@@ -503,7 +542,7 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Graphics, Rendering & Physics](Documentation/EN/Graphics-EN-DOC.md) | RHI & backends, render graph, batching, lighting, 2D shadows, GI, post-processing, physics. |
 | [Engine, Multiplayer & Physics](Documentation/EN/Engine-EN-DOC.md) | Runtime architecture, split-screen & online multiplayer, advanced physics, audio and input. |
 | [Assets & Content Browser](Documentation/EN/Assets-EN-DOC.md) | Every asset type, its editor, sidecars, importers and cooking. |
-| [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all six platforms, installers, DLC, headless servers. |
+| [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all seven platforms, installers, DLC, headless servers. |
 | [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
 | [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference, opening with a full Lua course for beginners. |
 | [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling. |

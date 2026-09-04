@@ -27,7 +27,7 @@ A short guide to each document in the [`EN/`](EN) folder:
 | [LuaAPI-EN-DOC.md](EN/LuaAPI-EN-DOC.md) | Complete Lua API reference — every module, class, and function exposed to gameplay scripts, opening with a full Lua course for beginners. |
 | [PythonAPI-EN-DOC.md](EN/PythonAPI-EN-DOC.md) | Editor automation Python API: tooling, asset manipulation, custom build steps. |
 | [Assets-EN-DOC.md](EN/Assets-EN-DOC.md) | The asset system & Content Browser — every asset type, sidecars, redirectors, importing, and editing. |
-| [Profiling-And-Building-EN-DOC.md](EN/Profiling-And-Building-EN-DOC.md) | Profiling (editor & runtime) and building games for all six platforms — cooking, packing, manifests, installers, DLC. |
+| [Profiling-And-Building-EN-DOC.md](EN/Profiling-And-Building-EN-DOC.md) | Profiling (editor & runtime) and building games for all seven platforms — cooking, packing, manifests, installers, DLC. |
 | [Plugins-And-Mods-EN-DOC.md](EN/Plugins-And-Mods-EN-DOC.md) | The plugin & mod systems — authoring native C++ plugins and Lua/content mods: APIs, manifests, lifecycle, the editor panel, and shipping. |
 
 ---
@@ -46,7 +46,7 @@ A short guide to each document in the [`EN/`](EN) folder:
 | [LuaAPI-RU-DOC.md](RU/LuaAPI-RU-DOC.md) | Полный справочник Lua API — все модули, классы и функции, доступные игровым скриптам, начиная с полного курса Lua для новичков. |
 | [PythonAPI-RU-DOC.md](RU/PythonAPI-RU-DOC.md) | Python API для автоматизации редактора: инструменты, работа с ассетами, кастомные шаги сборки. |
 | [Assets-RU-DOC.md](RU/Assets-RU-DOC.md) | Система ассетов и Контент-браузер — все типы ассетов, сайдкары, редиректоры, импорт и редактирование. |
-| [Profiling-And-Building-RU-DOC.md](RU/Profiling-And-Building-RU-DOC.md) | Профайлинг (в редакторе и рантайме) и сборка игр под все шесть платформ — подготовка, упаковка, манифесты, инсталляторы, DLC. |
+| [Profiling-And-Building-RU-DOC.md](RU/Profiling-And-Building-RU-DOC.md) | Профайлинг (в редакторе и рантайме) и сборка игр под все семь платформ — подготовка, упаковка, манифесты, инсталляторы, DLC. |
 | [Plugins-And-Mods-RU-DOC.md](RU/Plugins-And-Mods-RU-DOC.md) | Системы плагинов и модов — создание нативных C++-плагинов и Lua/контент-модов: API, манифесты, жизненный цикл, панель редактора и поставка. |
 
 ---

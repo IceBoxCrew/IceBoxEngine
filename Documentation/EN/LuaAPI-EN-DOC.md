@@ -3488,7 +3488,10 @@ local mpos = GetMousePosition()  -- → {x, y}
 -- Mouse position in world coordinates
 local wpos = GetMouseWorldPosition()  -- → {x, y}
 
--- Screen ↔ world coordinate conversion
+-- Screen ↔ world coordinate conversion.
+-- Screen coordinates are the same space GetMouseX/GetMouseY report, and the
+-- conversion uses the real render viewport, so it stays correct in a resized
+-- window and inside the editor viewport.
 local world = ScreenToWorld(400, 300)  -- → {x, y}
 local screen = WorldToScreen(10, 20)   -- → {x, y}
 
@@ -4498,28 +4501,148 @@ RemoveVirtualButton("jump")
 ClearVirtualControls()
 ```
 
-### Gamepad Cursor (virtual cursor via gamepad stick)
+### Gamepad Cursor (point-and-click with a gamepad)
+
+The gamepad cursor turns a stick into a real mouse pointer. The engine ticks it
+every frame — no per-frame call from Lua is needed. While it is active it:
+
+* moves the **system pointer**, so the custom cursor set with `SetCursor`,
+  `SetCursorSprite` or `SetCursorFlipbook` (including animated ones) follows the stick;
+* feeds the engine mouse position, so `GetMouseX`, `GetMousePosition`,
+  `GetMouseWorldPosition`, `LineTraceAtCursor` and every widget hit-test point at it;
+* turns a gamepad button into a real mouse click, so buttons, sliders, dropdowns,
+  input fields and scroll views react exactly as they do under a mouse —
+  **no focus navigation needed**;
+* scrolls scroll views with the second stick;
+* switches back to the physical mouse the moment the player touches it, and back to
+  the pad on the next stick or button input.
 
 ```lua
--- Enable a virtual cursor controlled by a gamepad stick
+-- Simplest form: enable and forget
+SetGamepadCursorEnabled(true)
+
+-- Legacy form (still supported): speed, useRightStick, gamepadIndex.
+-- It now drives the real pointer as well; stick scrolling stays off so the other
+-- stick keeps whatever the game already used it for.
 EnableGamepadCursor()                              -- defaults: speed=400, rightStick, gamepad 0
 EnableGamepadCursor(600)                           -- custom speed
-EnableGamepadCursor(400, true, 0)                  -- speed, useRightStick, gamepadIndex
+EnableGamepadCursor(400, false, 0)                 -- speed, useRightStick, gamepadIndex
 
--- Disable the virtual cursor
 DisableGamepadCursor()
 
--- Query state
-local enabled = IsGamepadCursorEnabled()
-local pos = GetGamepadCursorPosition()  -- → {x, y}
+-- Everything at once (values below are the engine defaults unless noted)
+ConfigureGamepadCursor({
+    enabled = true,
+    speed = 900,                -- pixels per second at full stick deflection
+    response = 1.0,             -- 1 = linear, >1 = finer control near the center
+    threshold = 0.05,           -- extra dead zone on top of SetGamepadDeadzone
+    stick = "Left",             -- "Left" | "Right" | "Both" | "None"
+    scrollStick = "Right",      -- stick that drives the mouse wheel
+    scrollSpeed = 30,
+    scrollThreshold = 0.3,
+    gamepadIndex = 0,
+    clickButton = "A",          -- left mouse button
+    rightClickButton = "X",     -- right mouse button, "None" to disable
+    middleClickButton = "None",
+    slowButton = "None",        -- hold for precision aiming, e.g. "LeftShoulder"
+    slowScale = 0.35,
+    warpSystemCursor = true,    -- move the OS pointer so the custom cursor follows
+    driveMouse = true,          -- report the cursor as the engine mouse position
+    autoSwitch = true,          -- give control back to a physical mouse when it moves
+    suppressWidgetNav = true,   -- disable widget focus navigation while the cursor drives
+    centerOnEnable = true,
+    dpad = false,               -- let the D-pad nudge the cursor too
+    mouseSwitchThreshold = 2.0, -- pixels of physical mouse motion that steal control
+})
 
--- Set position / speed manually
+local cfg = GetGamepadCursorConfig()   -- every field above, plus active / device
+```
+
+```lua
+-- State
+local enabled = IsGamepadCursorEnabled()   -- turned on
+local active = IsGamepadCursorActive()     -- on, pad connected and currently driving
+local pos = GetGamepadCursorPosition()     -- → {x, y} in window pixels
+local axis = GetGamepadCursorAxis()        -- → {x, y} raw stick this frame
+
+-- Position
 SetGamepadCursorPosition(960, 540)
-SetGamepadCursorSpeed(800)
+CenterGamepadCursor()
 
--- Update every frame (moves cursor based on stick input)
+-- Keep the cursor inside a rectangle (window pixels); default is the whole window
+SetGamepadCursorBounds(0, 0, 1920, 1080)
+local bounds = GetGamepadCursorBounds()    -- → {x, y, width, height, custom}
+ClearGamepadCursorBounds()
+
+-- Individual settings
+SetGamepadCursorSpeed(1100)          GetGamepadCursorSpeed()
+SetGamepadCursorResponse(2.0)        GetGamepadCursorResponse()
+SetGamepadCursorThreshold(0.05)      GetGamepadCursorThreshold()
+SetGamepadCursorIndex(0)             GetGamepadCursorIndex()
+SetGamepadCursorStick("Left")        GetGamepadCursorStick()
+SetGamepadCursorScrollStick("Right") GetGamepadCursorScrollStick()
+SetGamepadCursorScrollSpeed(30)      GetGamepadCursorScrollSpeed()
+SetGamepadCursorScrollThreshold(0.3) GetGamepadCursorScrollThreshold()
+SetGamepadCursorSlowScale(0.35)      GetGamepadCursorSlowScale()
+SetGamepadCursorDPadEnabled(false)   IsGamepadCursorDPadEnabled()
+SetGamepadCursorWarpSystemCursor(true)   IsGamepadCursorWarpSystemCursor()
+SetGamepadCursorDriveMouse(true)         IsGamepadCursorDriveMouse()
+SetGamepadCursorAutoSwitch(true)         IsGamepadCursorAutoSwitch()
+SetGamepadCursorSuppressWidgetNav(true)  IsGamepadCursorSuppressWidgetNav()
+
+-- Button roles: "Click" | "RightClick" | "MiddleClick" | "Slow"
+SetGamepadCursorButton("Click", "A")
+SetGamepadCursorButton("RightClick", "None")
+local clickButton = GetGamepadCursorButton("Click")
+
+-- Which device owns the pointer right now
+local device = GetActivePointerDevice()   -- "mouse" | "gamepad" | "touch"
+SetActivePointerDevice("gamepad")
+
+-- Kept for backwards compatibility, does nothing: the engine ticks the cursor itself
 UpdateGamepadCursor(dt)
 ```
+
+A complete point-and-click menu, with no focus navigation at all:
+
+```lua
+function OnLevelStart()
+    SetCursorSprite("Content/UI/Cursor.icesprite", 2, 2, 1.0)
+    ConfigureGamepadCursor({
+        enabled = true,
+        speed = 1100,
+        response = 2.0,
+        stick = "Left",
+        scrollStick = "Right",
+        clickButton = "A",
+        rightClickButton = "X",
+        slowButton = "LeftShoulder",
+    })
+end
+```
+
+> **Notes**
+> * `warpSystemCursor` is what makes the *visible* custom cursor follow the stick. It
+>   needs the window to hold input focus and is skipped in relative mouse mode.
+> * Platforms with no OS pointer — Android, Android TV, iOS, and the Web, where the
+>   browser owns the pointer — ignore the warp. Everything else still works there:
+>   with `driveMouse` on, hit-testing, clicks and scrolling follow the stick, so draw
+>   your own cursor sprite at `GetGamepadCursorPosition()` on those targets.
+> * On a touch platform, touching the screen moves the system pointer, so it takes
+>   control back from the pad exactly like a mouse would.
+> * `HideCursor()` puts SDL into relative mouse mode, which suppresses the warp. Call
+>   `ShowCursor()` before opening a menu the gamepad cursor is meant to drive.
+> * `suppressWidgetNav` keeps the stick from moving the widget focus at the same time
+>   as it moves the cursor. Turn it off if you want both at once.
+> * While a physical mouse owns the pointer, the cursor follows it, so
+>   `SetGamepadCursorPosition` / `CenterGamepadCursor` are overwritten on the next
+>   frame. Call `SetActivePointerDevice("gamepad")` first to place it for real.
+> * Inside the editor the cursor is clamped to the game viewport automatically, so
+>   play-testing works without setting bounds by hand. In a shipped game the default
+>   bounds are the whole window.
+> * A click focuses an input field just like a mouse click does, but typing into it
+>   still needs a keyboard or the on-screen keyboard (`HasScreenKeyboardSupport`).
+> * The cursor is reset when the runtime stops, so a level never inherits it.
 
 ### Universal Pointer (mouse / touch / gamepad cursor)
 
@@ -4666,9 +4789,16 @@ local vel = GetEntityVelocity(entityId)  -- → {x, y}
 SetEntityVelocity(entityId, 200, 0)
 AddEntityImpulse(entityId, 0, -500)
 
--- Flip other entity sprite
-SetEntityFlipX(entityId, true)
-SetEntityFlipY(entityId, true)
+-- Flip one sprite instance of another entity (index defaults to 0)
+SetEntitySpriteFlipX(entityId, true)
+SetEntitySpriteFlipY(entityId, true)
+
+-- Flip the WHOLE entity: every sprite, flipbook, skeleton, widget,
+-- tilemap, FX and decal instance mirrors together. Returns true if anything changed.
+SetEntityGlobalFlipX(entityId, true)
+SetEntityGlobalFlipY(entityId, true)
+local mirroredX = GetEntityGlobalFlipX(entityId)
+local mirroredY = GetEntityGlobalFlipY(entityId)
 
 -- Distance to other entity
 local dist = DistanceToEntity(targetId)
@@ -7524,7 +7654,7 @@ specific lights when the entity has multiple PointLights or SpotLights.
 > **project default** authored in `Config/Engine.json` → `Rendering` (editor:
 > [Preferences → Rendering](Editor-EN-DOC.md#105-rendering)), optionally replaced for one
 > level by [World Settings](Editor-EN-DOC.md#8-world-settings). The runtime reads
-> `Engine.json` at startup on all six platforms, so an untouched game looks the same in the
+> `Engine.json` at startup on all seven platforms, so an untouched game looks the same in the
 > editor viewport, in Play mode and in the shipped build.
 >
 > Calling a setter marks **that one parameter** as game-controlled: it keeps the value you
@@ -8760,6 +8890,28 @@ local suspended = IsAppSuspended()
 
 > **Note:** The engine also auto-suspends on window minimize / hide and on mobile background events; the Lua API stacks on top of that — it represents an explicit `RequestManualSuspend` flag separate from the OS-driven window state. That automatic window-driven suspend can be disabled with `Settings.SetIsSuspended(false)` (see the "Suspend" section in Settings) — the manual API here keeps working either way.
 
+### Game input gate (debug)
+
+Turns the whole gameplay input surface off without pausing the game. Keyboard, mouse
+buttons, gamepad buttons/axes/sticks and touch all read as "not pressed" for Lua while the
+gate is closed; timers, physics and scripts keep running. Useful for cutscenes, debug
+fly-through and remote inspection.
+
+```lua
+SetGameInputEnabled(false)     -- game controls go dead
+SetGameInputEnabled(true)      -- force them on, even while the editor would block them
+ResetGameInputOverride()       -- drop the override and follow the editor again
+
+local enabled = IsGameInputEnabled()   -- effective state
+local blocked = IsGameInputBlocked()   -- the same answer, inverted
+```
+
+> **Editor interaction:** ejecting the runtime camera closes the gate by itself, so you can fly
+> around a running level without driving the player. A script call wins over that: `SetGameInputEnabled(true)`
+> keeps the controls alive while ejected, `false` keeps them dead after injecting, and
+> `ResetGameInputOverride()` hands control back to the editor. The override resets to
+> "follow the editor" on every level start.
+
 ### Global game state (Game State)
 
 Data that **persists between levels** (until the game closes):
@@ -9955,6 +10107,13 @@ SetGamepadSliderStickSpeed(0.02)      -- speed per frame from stick on focused s
 -- Which stick drives navigation
 SetGamepadUseLeftStick(true)          -- false = right stick
 
+-- Scrollable list navigation (ScrollView focus + scroll mode)
+SetGamepadScrollViewNavigation(true)  -- false = ScrollViews never take focus
+local svNav = IsGamepadScrollViewNavigation()
+SetGamepadNavScrollSpeed(900)         -- scroll speed in canvas px per second
+local svSpeed = GetGamepadNavScrollSpeed()
+SetGamepadScrollFocusBorderColor(0.35, 0.85, 1.0, 1.0)   -- focus border while scroll mode is on
+
 -- Focus border (the highlight rectangle around the focused element)
 SetGamepadFocusBorder(true)                                 -- show / hide
 SetGamepadFocusBorder(true, 1.0, 0.9, 0.2, 1.0)             -- show + color (r,g,b,a)
@@ -9968,7 +10127,25 @@ local name = GetGamepadFocusedElement()     -- → string or ""
 -- Navigation mode (keyboard/gamepad focus-highlight visibility)
 local navOn = IsUINavigationActive()        -- → bool: true while the focus highlight is shown
 SetUINavigationActive(false)                -- force nav mode on (true) / off (false)
+
+-- Scroll mode (the focused ScrollView consumes directions to scroll itself)
+local scrolling = IsUINavScrolling()        -- → bool
+SetUINavScrolling(true)                     -- enter scroll mode on the focused ScrollView
+SetUINavScrolling(false)                    -- leave scroll mode, keep the focus
 ```
+
+> **Scrollable lists (`ScrollView`).** A `ScrollView` joins the focus set as soon as its
+> content is larger than its viewport, so keyboard and gamepad reach long lists just like
+> buttons. Focus it and press **Activate** to enter *scroll mode*: direction input
+> (DPad / arrow keys / stick) then scrolls the list instead of moving focus, at
+> `SetGamepadNavScrollSpeed` canvas pixels per second, and the focus border switches to
+> `SetGamepadScrollFocusBorderColor` so the mode is visible. **Cancel**, **Escape** or
+> **Activate** again leaves scroll mode and returns direction input to normal navigation.
+> A `ScrollView` whose content already fits is never focusable, so it never becomes a dead
+> stop in the focus chain; `SetGamepadScrollViewNavigation(false)` keeps every `ScrollView`
+> out of navigation. Independently of scroll mode, moving focus to an element **inside** a
+> `ScrollView` scrolls that element into view automatically, including through nested
+> scroll views.
 
 > **Per-element navigation routing.** Each element also has explicit
 > `NavUpID` / `NavDownID` / `NavLeftID` / `NavRightID`, set in the editor or
@@ -10275,6 +10452,12 @@ SetGamepadSliderStepSize(0.05)
 SetGamepadSliderStickSpeed(0.02)
 SetGamepadUseLeftStick(true)
 
+SetGamepadScrollViewNavigation(true)
+local svNav = IsGamepadScrollViewNavigation()
+SetGamepadNavScrollSpeed(900)
+local svSpeed = GetGamepadNavScrollSpeed()
+SetGamepadScrollFocusBorderColor(0.35, 0.85, 1.0, 1.0)
+
 SetGamepadFocusBorder(true, 1.0, 0.9, 0.2, 1.0, 2.0)   -- show, r, g, b, a, width
 
 SetGamepadFocusedElement("PlayBtn")
@@ -10283,6 +10466,9 @@ local focused = GetGamepadFocusedElement()             -- → string or ""
 
 local navOn = IsUINavigationActive()                   -- → bool: keyboard/gamepad nav mode active
 SetUINavigationActive(false)                           -- force nav mode on (true) / off (false)
+
+local scrolling = IsUINavScrolling()                   -- → bool: focused ScrollView is in scroll mode
+SetUINavScrolling(true)                                -- enter (true) / leave (false) scroll mode
 ```
 
 #### Sub-widget element access (short names)
@@ -11232,8 +11418,8 @@ Cinema.ClearOnFinished("Content/Cinema/intro.ice_cinema")
 ### Graphics
 
 ```lua
-Settings.SetFPSLimit(60)
-local fps = Settings.GetFPSLimit()
+Settings.SetFPSLimit(60)              -- 1..500; 0 = unlimited (engine maximum)
+local fps = Settings.GetFPSLimit()    -- 0 means unlimited
 
 Settings.SetResolution(1920, 1080)
 local res = Settings.GetResolution()  -- → {width, height}
@@ -11461,11 +11647,11 @@ local muted = Settings.IsMuted()
 
 ### Platform
 
-The engine supports 6 platforms: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web**. From Lua you can detect the current platform and write platform-specific code (or code shared across all platforms). For the CPU architecture that same build was compiled for, see the **Architecture** section right below.
+The engine supports 7 platforms: **Windows**, **Linux**, **macOS**, **iOS**, **Android**, **Web** and **Xbox** (Microsoft GDK). From Lua you can detect the current platform and write platform-specific code (or code shared across all platforms). For the CPU architecture that same build was compiled for, see the **Architecture** section right below.
 
 ```lua
 local platform = Settings.GetPlatform()
--- Returns one of: "Windows", "Linux", "macOS", "iOS", "Android", "Web"
+-- Returns one of: "Windows", "Linux", "macOS", "iOS", "Android", "Web", "Xbox"
 -- ("Unknown" only if compiled for an unrecognized target)
 
 -- Per-platform boolean checks (one returns true on the current build):
@@ -11475,12 +11661,20 @@ local isMacOS   = Settings.IsMacOS()
 local isIOS     = Settings.IsIOS()
 local isAndroid = Settings.IsAndroid()
 local isWeb     = Settings.IsWeb()
+local isXbox    = Settings.IsXbox()      -- any Microsoft GDK build
 
 -- Family checks:
 local isApple     = Settings.IsApple()      -- macOS or iOS
 local isMobile    = Settings.IsMobile()     -- iOS or Android (native build)
 local isMobileWeb = Settings.IsMobileWeb()  -- true ONLY on the Web build when the browser runs on a mobile device (UA + touch + pointer:coarse). Always false on every other platform.
-local isDesktop   = Settings.IsDesktop()    -- Windows, Linux or macOS
+local isDesktop   = Settings.IsDesktop()    -- Windows, Linux or macOS (Xbox consoles are excluded)
+local isConsole   = Settings.IsConsole()    -- Xbox One or Xbox Series console build
+
+-- Which Xbox target the build was made for. Empty string on every non-Xbox build:
+local family = Settings.GetXboxDeviceFamily()
+-- "Desktop"  -- Gaming.Desktop.x64: an Xbox title running on Windows (Microsoft Store / Xbox app)
+-- "XboxOne"  -- Gaming.Xbox.XboxOne.x64
+-- "Scarlett" -- Gaming.Xbox.Scarlett.x64 (Xbox Series X|S)
 
 -- Platform string constants (handy for switch-style logic and comparisons):
 Settings.PLATFORM_WINDOWS  -- "Windows"
@@ -11489,6 +11683,12 @@ Settings.PLATFORM_MACOS    -- "macOS"
 Settings.PLATFORM_IOS      -- "iOS"
 Settings.PLATFORM_ANDROID  -- "Android"
 Settings.PLATFORM_WEB      -- "Web"
+Settings.PLATFORM_XBOX     -- "Xbox"
+
+-- Xbox device-family constants, to compare against GetXboxDeviceFamily():
+Settings.XBOX_FAMILY_DESKTOP   -- "Desktop"
+Settings.XBOX_FAMILY_XBOXONE   -- "XboxOne"
+Settings.XBOX_FAMILY_SCARLETT  -- "Scarlett"
 
 -- Patterns:
 
@@ -11519,10 +11719,32 @@ elseif p == Settings.PLATFORM_IOS then
     -- ...
 end
 
--- 4) Code that runs on ALL 6 platforms — just don't gate it: the
+-- 4) Xbox: one platform, three device families
+if Settings.IsXbox() then
+    if Settings.IsConsole() then
+        -- Xbox One / Xbox Series: gamepad-only UI, TV-safe margins,
+        -- saves live in the title's persistent local storage.
+        if Settings.GetXboxDeviceFamily() == Settings.XBOX_FAMILY_SCARLETT then
+            -- Series X|S has the headroom for the heavier presets
+        end
+    else
+        -- Gaming.Desktop.x64: an Xbox title on a Windows PC.
+        -- Settings.IsWindows() is ALSO true here, because the build
+        -- really does run on Windows - keyboard and mouse included.
+    end
+end
+
+-- 5) Code that runs on ALL 7 platforms — just don't gate it: the
 --    same script works everywhere because all platforms expose the
 --    same Lua API surface.
 ```
+
+> **How Xbox lines up with the other checks.** `Settings.GetPlatform()` returns `"Xbox"`
+> for every Microsoft GDK build, whichever device family it targets. On the **PC** family
+> `Settings.IsWindows()` is true as well — that build genuinely runs on Windows — so use
+> `Settings.IsXbox()` when you mean "this is a GDK title" and `Settings.IsConsole()` when
+> you mean "this is running on console hardware". `Settings.IsDesktop()` stays true on the
+> PC family and false on both console families.
 
 ### Architecture
 
@@ -11546,7 +11768,7 @@ local is64 = Settings.Is64Bit()   -- true on x64, arm64, wasm64
 local is32 = Settings.Is32Bit()   -- true on x86, arm32, wasm32
 ```
 
-What the 6 platforms can report:
+What the 7 platforms can report:
 
 | Platform | Architectures the engine builds | `Settings.GetArch()` returns |
 |----------|---------------------------------|------------------------------|
@@ -11556,6 +11778,7 @@ What the 6 platforms can report:
 | iOS      | arm64 (device and simulator) | `"arm64"` |
 | Android  | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | `"arm64"`, `"arm32"`, `"x64"`, `"x86"` |
 | Web      | wasm32, wasm64 (`-sMEMORY64` build) | `"wasm32"`, `"wasm64"` |
+| Xbox     | x64 (every GDK device family) | `"x64"` |
 
 > **Android ABI names are normalized** so one comparison works everywhere: `armeabi-v7a` → `"arm32"`, `arm64-v8a` → `"arm64"`, `x86_64` → `"x64"`, `x86` → `"x86"`. Write `arch == Settings.ARCH_ARM64` once instead of matching per-platform ABI spellings.
 
@@ -12817,7 +13040,7 @@ Data is saved in `Saves/` as JSON via `PlatformPaths` — works on all platforms
 ```lua
 -- Create system
 local achievements = AchievementSystem({
-    autoSave = true,                        -- Auto-save on Unlock/AddProgress
+    autoSave = true,                        -- Auto-save on Unlock / AddProgress / SetProgress
     savePath = "achievements.json",          -- Path in Saves/
     onUnlock = function(id, achievement)
         Print("Unlocked: " .. achievement.title)
@@ -17012,7 +17235,7 @@ end
 >   and move with it (keep the attached instance un-rotated relative to the part for exact polygon placement).
 > * Contact/sensor/hit events from part shapes are reported for the owner entity with the collider's name.
 > * Collision groups and `CollideConnected` work for parts exactly like for regular colliders.
-> * Flipping the entity (`SetEntityFlipX`) mirrors everything physically: part bodies, their velocities,
+> * Flipping the entity (`SetEntityGlobalFlipX`) mirrors everything physically: part bodies, their velocities,
 >   joint anchors, axes, angular limits, reference angles and authored motor speeds — a catapult flips
 >   left/right perfectly. Note: motor speeds set at runtime via `SetJointMotorSpeed` stay in world
 >   convention (positive = clockwise); multiply by the facing sign yourself if you want "forward" semantics.
@@ -22633,7 +22856,7 @@ end
 > Video files are played directly (`.mp4`, `.webm`, `.avi`, `.mkv` — any format supported by FFmpeg).
 > Works with both loose files on disk and files packed in `.ICEPAK` archives via VFS.
 >
-> **Note:** Available on all six platforms. **Windows**, **Linux**, **macOS** and **Android** decode through
+> **Note:** Available on all seven platforms. **Windows**, **Linux**, **macOS**, **Android** and **Xbox** decode through
 > FFmpeg; **iOS** plays through AVFoundation (H.264/HEVC only — WebM/VP9 is not decodable there, so video
 > cooking falls back to PassThrough for iOS builds); **Web** plays through the browser's `<video>` element.
 

@@ -92,7 +92,7 @@ explains a lot of behaviour:
 
 | Area | Foundation | Consequence |
 | ---- | ---------- | ----------- |
-| **Windowing, input, audio devices** | **SDL3** | One event pump feeds keyboard, mouse, gamepads, joysticks, touch, pen, sensors and haptics on all six platforms. |
+| **Windowing, input, audio devices** | **SDL3** | One event pump feeds keyboard, mouse, gamepads, joysticks, touch, pen, sensors and haptics on all seven platforms. |
 | **Entities** | **EnTT** registry | Entities are integer handles; components are stored in packed arrays and iterated as views. |
 | **Physics** | **Box2D v3** | Fixed-step solving, shape-level events, multithreaded solve. |
 | **Audio** | **miniaudio** | One engine object with multiple listeners, node-graph effects and streaming decoders. |
@@ -271,7 +271,7 @@ polling.
 **Suspend** is a different thing: with **Is Suspended** on (the default, in
 [Preferences → Optimization](Editor-EN-DOC.md#106-optimization)) the app stops updating,
 rendering and playing audio whenever the window loses focus, is minimized or is
-backgrounded, on all six platforms. The loop then blocks on an event wait instead of
+backgrounded, on all seven platforms. The loop then blocks on an event wait instead of
 spinning. A dedicated server never suspends, which is what lets it run unattended.
 
 ### 2.7 Determinism & random streams
@@ -1169,7 +1169,7 @@ underneath.
 | Every editor panel, menu, dialog, preference and shortcut; the Network Manager; Remote Preview | [Editor & Interface](Editor-EN-DOC.md) |
 | Renderers, RHI, render graph, batching, lighting, 2D shadows, GI, post-processing, cameras, debug overlays, **physics fundamentals** | [Graphics, Rendering & Physics](Graphics-EN-DOC.md) |
 | Asset types, sidecars, the Content Browser, every asset editor, importers, cooking | [Assets & Content Browser](Assets-EN-DOC.md) |
-| Profilers, statistics, the developer console, building for six platforms, installers, DLC, headless servers | [Profiling & Building Games](Profiling-And-Building-EN-DOC.md) |
+| Profilers, statistics, the developer console, building for seven platforms, installers, DLC, headless servers | [Profiling & Building Games](Profiling-And-Building-EN-DOC.md) |
 | Native C++ plugins and Lua/content mods | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) |
 | The complete gameplay scripting API | [Lua API](LuaAPI-EN-DOC.md) |
 | Editor automation and tooling | [Python API](PythonAPI-EN-DOC.md) |

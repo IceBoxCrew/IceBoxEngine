@@ -76,6 +76,7 @@
    - 8.4 [Web](#84-web)
    - 8.5 [macOS](#85-macos)
    - 8.6 [iOS](#86-ios)
+   - 8.7 [Xbox (Microsoft GDK)](#87-xbox-microsoft-gdk)
 9. [Asset cooking](#9-asset-cooking)
 10. [Distribution: manifest, packing & installers](#10-distribution-manifest-packing--installers)
     - 10.1 [Build manifest](#101-build-manifest)
@@ -818,6 +819,7 @@ Collect output → your chosen output folder
         ├─ copy + patch Config/Engine.json, Plugins.json, Mods.json, CollisionGroups.json
         ├─ [optional] Pack Content → Content.icepak (zstd, optionally split)
         ├─ [macOS] re-codesign, then .dmg / .pkg / notarize
+        ├─ [Xbox] write MicrosoftGame.config + store art, then [optional] MakePkg
         ├─ [optional] Generate game_manifest.json (SHA-256 of every file)
         └─ [optional] Create installer (NSIS .exe / .msi / .deb)
 ```
@@ -837,15 +839,15 @@ every setting is remembered in the editor config between sessions (passwords exc
 
 | Setting | Meaning |
 | ------- | ------- |
-| **Target Platform** | Windows, Linux, Android, Web, macOS, iOS. The rest of the dialog changes to match. |
+| **Target Platform** | Windows, Linux, Android, Web, macOS, iOS, Xbox. The rest of the dialog changes to match. |
 | **Configuration** | **Debug** or **Release** (see [7.2](#72-configuration-debug-vs-release)). |
 | **Game Name** | The product name; used for the executable/bundle name and installer metadata. |
 | **Icon Path** | App icon (`.png`/`.ico`/`.jpg`/`.jpeg`/`.bmp`); PNG is converted to platform icon formats automatically. |
-| **Output Path** | Folder to place the finished build — a per-build subfolder is created and **wiped** at the start of each build. It is named after the build itself, `<GameName>-<version>-<Config>-<Platform>-<arch>`, on **all six platforms**, so builds that differ in version, configuration, architecture or memory model sit side by side instead of overwriting each other. A **…** button opens a native folder picker. |
+| **Output Path** | Folder to place the finished build — a per-build subfolder is created and **wiped** at the start of each build. It is named after the build itself, `<GameName>-<version>-<Config>-<Platform>-<arch>`, on **all seven platforms**, so builds that differ in version, configuration, architecture or memory model sit side by side instead of overwriting each other. A **…** button opens a native folder picker. |
 | **Version Name / Version Code** | Human version string (e.g. `1.2.0`) and integer build number (minimum 1). |
 | **Publisher** | Studio/publisher name, used in installers and metadata. |
-| **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all six platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
-| **Include Mods** | *(Packages)* Ship the mods ticked in `Tools → Plugins & Mods`. On by default; applies to all six platforms. |
+| **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
+| **Include Mods** | *(Packages)* Ship the mods ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. |
 
 The dialog refuses to start with an empty **Game Name** or **Output Path**. While a build
 runs every setting is locked, the **Build** button becomes **Stop**, and cancelling wipes
@@ -853,7 +855,9 @@ the half-written output folder. **Esc** closes the dialog when nothing is runnin
 
 > A cross-platform note: on a non-Windows host, selecting **Windows** triggers a MinGW
 > cross-compile; **macOS/iOS** can only be built on a macOS host (the Windows `.bat`
-> stubs for those platforms tell you to run the `.sh` on a Mac).
+> stubs for those platforms tell you to run the `.sh` on a Mac), and **Xbox** is the
+> mirror image — it needs a Windows host with the Microsoft GDK, so `build_xbox.sh`
+> is the stub that sends you back to Windows.
 
 ### 7.2 Configuration: Debug vs Release
 
@@ -1127,6 +1131,142 @@ runtime (with fallbacks).
   MoltenVK), enabled `Plugins/` and `Mods/` are staged **before** code signing, so the
   packaged `.ipa` needs no post-processing — and the editor deliberately skips its own
   sidecar copies on iOS for the same reason.
+
+---
+
+### 8.7 Xbox (Microsoft GDK)
+
+Xbox builds go through the **Microsoft GDK** (Game Development Kit), and they are produced
+on a **Windows host only** — the GDK, its MSVC integration and `MakePkg` exist for Windows
+alone, and no cross compiler targets `Gaming.Desktop.x64` or `Gaming.Xbox.*`. On Linux and
+macOS the platform still appears in the dialog, and `build_xbox.sh` stops with a message
+telling you to run `build_xbox.bat` on Windows — exactly the way `build_macos.bat` behaves
+on a Windows host.
+
+* **Output:** an **Xbox game layout** — the game folder plus `MicrosoftGame.config` and an
+  `Images/` set of store art — and, when **Create installable package** is ticked, an
+  `.msixvc` (PC) or `.xvc` (console) written one level up. The layout is always kept:
+  it is what `wdapp register` and a devkit deploy consume.
+* **Graphics API:** **Direct3D 12**, fixed. There is no selector, because Direct3D 12 is
+  the only graphics API an Xbox title may present with. CMake forces
+  `ICE_RENDER_BACKEND=D3D12` for every GDK configuration and the build pins
+  `Rendering.RenderBackend` in `Config/Engine.json` to it, so the runtime never tries the
+  OpenGL or Vulkan fallbacks. Everything the Direct3D 12 backend does on Windows applies
+  here: DXR 1.1 ray-traced GI, FSR/NIS upscaling and a real HDR10 swapchain.
+* **Architecture:** **x64**, fixed — every Xbox device family is x64.
+
+**Device family** picks which GDK target is compiled and packaged:
+
+| Device family | GDK target | What it is | What it needs |
+| ------------- | ---------- | ---------- | ------------- |
+| **PC** | `Gaming.Desktop.x64` | An Xbox title that runs on Windows and ships through the Microsoft Store and the Xbox app | The public [Microsoft GDK](https://github.com/microsoft/GDK/releases) |
+| **Xbox One** | `Gaming.Xbox.XboxOne.x64` | Xbox One / One S / One X console title | The private **GDKX** plus a devkit |
+| **Xbox Series X\|S** | `Gaming.Xbox.Scarlett.x64` | Xbox Series X and Series S console title | The private **GDKX** plus a devkit |
+
+> **Which half of the GDK you have.** Microsoft publishes the GDK on GitHub, and that
+> public release carries the **GRDK** — the `Gaming.Desktop.x64` half. The console half,
+> the **GDKX**, is handed out through Partner Center to registered **ID@Xbox** and Xbox
+> Managed partners under NDA, together with the devkit needed to run the result. The
+> engine treats that split honestly: the PC family builds and runs end to end on any
+> Windows machine with the public GDK, and selecting a console family without the GDKX
+> stops immediately with a message naming exactly what is missing instead of failing
+> half-way through a compile.
+
+> **Where each family stands today.** **PC** (`Gaming.Desktop.x64`) is complete: it
+> compiles, packages, installs and runs with the public GDK and the engine's existing
+> Direct3D 12 renderer, which is exactly the Win32 + DXGI + D3D12 combination that target
+> uses. The two **console** families are wired end to end through the build system — GDK
+> toolchain, vcpkg triplet, pre-built core slot, `MicrosoftGame.config` with the right
+> `TargetDeviceFamily`, `MakePkg` packaging, `T:\` save storage and the Lua platform API —
+> but the console *runtime* has not been validated on devkit hardware. Two pieces still
+> need a machine with the GDKX: the Direct3D 12 backend creates its device and swapchain
+> through DXGI, which a console replaces with `D3D12XboxCreateDevice`, manually allocated
+> back buffers and `ID3D12CommandQueue::PresentX`; and the desktop-only dependencies
+> (glad/OpenGL, Vulkan, ImGui, curl, FFmpeg) have to be trimmed out of the console
+> dependency set. Configuring a console family prints exactly that as a CMake warning, so
+> it is never a surprise half-way through a build.
+
+**Store identity** — these fields go straight into `MicrosoftGame.config`:
+
+| Setting | Meaning |
+| ------- | ------- |
+| **Package Identity** | The package identity name reserved for the product in Partner Center, e.g. `MyStudio.MyGame`. A package whose identity does not match the product is rejected on submission. |
+| **Publisher ID** | The publisher identity in X.500 form, e.g. `CN=1234ABCD-5678-90EF-…`. Copy it from Partner Center → *Product identity*; a mismatch fails package validation. |
+| **Title ID** | The eight hexadecimal digits assigned to the title. Leave it empty for a local test build; it is required for anything that talks to Xbox network services. |
+| **Store ID** | The product's Store ID (for example `9NBLGGH4R315`). Optional for local builds. |
+| **Requires Xbox network** | Declares that the title signs in to Xbox network services, and reveals the **MSA App ID** field. Turn it on only once the title has both a Title ID and an MSA App ID — without them the game refuses to start on a console. |
+| **Create installable package** | Runs `MakePkg` from the GDK over the built layout. Off by default, because the loose layout alone is what you deploy while iterating. |
+
+`MicrosoftGame.config` and the four required store images —
+`Square150x150Logo.png`, `Square44x44Logo.png`, `StoreLogo.png` and
+`SplashScreenImage.png` — are generated into the build folder from the **Icon Path** you
+chose, scaled to fit rather than stretched. Edit the generated config by hand afterwards
+if you need something the dialog does not expose; the next build overwrites it, so keep a
+copy of anything you customise.
+
+**Version.** `MicrosoftGame.config` wants a four-part version whose last component is `0`,
+so the **Version Name** you enter (`1.4.2`) is written as `1.4.2.0`.
+
+**Running what you built:**
+
+```bat
+:: PC (Gaming.Desktop.x64) - register the loose layout with the Xbox app
+wdapp register "<output>\<Base>\MicrosoftGame.config"
+wdapp launch <PackageFamilyName>
+
+:: PC - install the packaged build instead
+wdapp install "<output>\<Base>.msixvc"
+
+:: Console - deploy the layout or the package to a devkit
+xbapp deploy "<output>\<Base>"
+xbapp install "<output>\<Base>.xvc"
+```
+
+**Runtime differences to know about:**
+
+* **Saved data.** On a console the writable root is the title's persistent local storage
+  (`T:\`), so `Saves/`, `Config/` and the crash reports live there. On the PC family the
+  game never writes into its own install folder — even a loose layout you registered
+  yourself — and uses the per-user application-data path instead, so saves survive a
+  package update.
+* **Lua.** `Settings.GetPlatform()` returns `"Xbox"` for every GDK build, and
+  `Settings.GetXboxDeviceFamily()` tells the three apart (`"Desktop"`, `"XboxOne"`,
+  `"Scarlett"`). `Settings.IsXbox()` is true for all of them, `Settings.IsConsole()` only
+  for the two console families. `Settings.IsWindows()` stays true on the PC family,
+  because that build really does run on Windows.
+* **Xbox game runtime.** The runtime calls `XGameRuntimeInitialize()` at start-up and
+  `XGameRuntimeUninitialize()` on exit. On a console a failure there is fatal — nothing can
+  run without it. On PC it is only logged, so a loose build you launched directly (without
+  registering it first) still starts, with Xbox services unavailable for that session.
+* **Plugins and mods** are packaged exactly like the desktop targets, and asset cooking
+  offers the same formats as Windows x64, KTX2 included.
+
+**Toolchain and triplets.** The Xbox targets are wired the same way as every other
+platform in the engine. `Gaming.Desktop.x64` is a normal Windows x64 build with the GDK
+headers and `xgameruntime.lib` added, so it reuses the `x64-windows` triplet and shares its
+compiled dependencies with the Windows target — no second copy of FFmpeg, SDL3 or the rest.
+The two console families get their own triplets and GDK toolchains, all shipped with the
+engine:
+
+| File | What it is |
+| ---- | ---------- |
+| `Tools/BuildSystem/Utilities/vcpkg-triplets/x64-xbox-scarlett.cmake` | vcpkg triplet for Xbox Series X\|S — static CRT and libraries, chainloads the toolchain below |
+| `Tools/BuildSystem/Utilities/vcpkg-triplets/x64-xbox-xboxone.cmake` | vcpkg triplet for Xbox One |
+| `Tools/BuildSystem/Utilities/Toolchains/Xbox-Scarlett.cmake` | Selects the Scarlett console target, then includes the shared GDK toolchain |
+| `Tools/BuildSystem/Utilities/Toolchains/Xbox-XboxOne.cmake` | Same for Xbox One |
+| `Tools/BuildSystem/Utilities/Toolchains/xbox-gdk-toolchain.cmake` | The shared implementation: finds the GXDK, adds its `gameKit`/`toolKit` include and library directories, defines `_GAMING_XBOX` and the per-console macro, sets `/favor:AMD64` with `/arch:AVX2` (Scarlett) or `/arch:AVX` (Xbox One), links `xgameplatform.lib` and applies the GDK `/NODEFAULTLIB` set |
+
+Both the engine's own targets and every vcpkg port it needs go through the same toolchain,
+because the triplet's `VCPKG_CHAINLOAD_TOOLCHAIN_FILE` is honoured on both sides. The
+overlay triplet directory is passed to every Xbox configure, so these files win over
+anything a vcpkg checkout might carry under the same name.
+
+**Pre-built cores.** Every device family is a separate target with its own core:
+`lib/IceBoxCore/Xbox/{Desktop,XboxOne,Scarlett}/{Release,RelWithDebInfo}/D3D12/`. Produce
+them with `Tools\BuildSystem\BuildEngine\prebuild_core_libs_xbox.bat --device-family all`,
+or as part of a full run with `build_windows_prebuilts.bat xbox`. The Xbox target is
+**opt-in** in the aggregate script: `build_windows_prebuilts.bat all` leaves it out,
+because the GDK is a separate install and the console families need the GDKX.
 
 ---
 
@@ -1447,7 +1587,8 @@ re-signed:
 
 The dialog invokes scripts in `Tools/BuildSystem/BuildGame/`. Each platform has a
 `.bat` (Windows host) and `.sh` (Unix host) variant; `build_macos.bat` and
-`build_ios.bat` are stubs that direct you to build on a Mac.
+`build_ios.bat` are stubs that direct you to build on a Mac, and `build_xbox.sh` is the
+stub in the other direction — Xbox is Windows-only.
 
 | Script | Platform |
 | ------ | -------- |
@@ -1457,9 +1598,11 @@ The dialog invokes scripts in `Tools/BuildSystem/BuildGame/`. Each platform has 
 | `build_web.bat` / `.sh` | Web (Emscripten) |
 | `build_macos.bat`* / `.sh` | macOS (*`.bat` is a stub) |
 | `build_ios.bat`* / `.sh` | iOS (*`.bat` is a stub) |
+| `build_xbox.bat` / `.sh`* | Xbox via the Microsoft GDK (*`.sh` is a stub) |
 | `create_game_installer_windows.*` | NSIS `.exe` installer and/or `.msi` package |
 | `create_game_installer_linux.*` | `.deb` package and/or `.AppImage` |
 | `create_game_installer_macos.sh` | macOS `.pkg` installer |
+| `create_game_package_xbox.bat` / `.sh`* | `MicrosoftGame.config`, store art and the `.msixvc` / `.xvc` package (*`.sh` is a stub) |
 | `generate_keystore.bat` / `.sh` | Android release keystore (`keytool`) |
 
 The scripts accept a consistent flag set assembled by the dialog. Common flags:
@@ -1479,8 +1622,8 @@ The scripts accept a consistent flag set assembled by the dialog. Common flags:
 | `--clean` | Wipe the intermediate build directory first. |
 | `--jobs <n>` | Parallel compile jobs. Defaults to an automatic value — see below. |
 | `--target <name>` / `--with-editor` | Build a different CMake target / include the editor (desktop and Apple scripts). |
-| `--no-plugins` / `--include-plugins` | Exclude / include `Plugins/` in the build. Forwarded to CMake as `-DICE_INCLUDE_PLUGINS=OFF\|ON`. Accepted by all six platform scripts. |
-| `--no-mods` / `--include-mods` | Exclude / include `Mods/` in the build. Forwarded to CMake as `-DICE_INCLUDE_MODS=OFF\|ON`. Accepted by all six platform scripts. |
+| `--no-plugins` / `--include-plugins` | Exclude / include `Plugins/` in the build. Forwarded to CMake as `-DICE_INCLUDE_PLUGINS=OFF\|ON`. Accepted by all seven platform scripts. |
+| `--no-mods` / `--include-mods` | Exclude / include `Mods/` in the build. Forwarded to CMake as `-DICE_INCLUDE_MODS=OFF\|ON`. Accepted by all seven platform scripts. |
 
 Plus platform-specific flags:
 
@@ -1495,6 +1638,15 @@ Plus platform-specific flags:
   `--main-loop`/`--no-main-loop`, `--pthreads`/`--no-pthreads`.
 * **macOS** — `--deployment-target`, `--bundle-id`, `--category`, `--codesign-identity`,
   `--hardened-runtime`, `--entitlements`, `--notarize`, `--notary-profile`, `--dmg`.
+* **Xbox** — `--device-family desktop|xboxone|scarlett` on `build_xbox.bat`. The packaging
+  script `create_game_package_xbox.bat` additionally takes `--game-dir`, `--game-name`,
+  `--game-exe`, `--version`, `--device-family`, `--identity-name`, `--publisher-id`,
+  `--publisher`, `--title-id`, `--store-id`, `--msa-app-id`, `--requires-live`, `--icon`,
+  `--format layout|msixvc` and `--skip-art` (reuse the `Images/` set already in the layout
+  instead of regenerating it). The editor calls it twice: once with `--format layout`
+  before the build manifest is hashed, so `MicrosoftGame.config` and `Images/` are covered
+  by it, and once with `--format msixvc --skip-art` afterwards when a package was asked
+  for.
 * **Installer scripts** — `--game-dir`, `--game-name`, `--game-exe`, `--version`, `--arch`,
   `--config`, `--publisher`, `--homepage`, `--contact-email`, `--icon`, `--license`, plus
   `--format exe|msi|both` on `create_game_installer_windows.*` and
@@ -1567,6 +1719,7 @@ The render backend is patched into the build's `Config/Engine.json` as
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` or `iphonesimulator`) |
 | Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web-wasm32.html` (wasm64: `out/build/Web-wasm64/bin/Web/…-Web-wasm64.html`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
+| Xbox | `out/gamebuild/Xbox-<family>-<config>/bin/Xbox/IceBoxRuntime.exe` (`<family>` = `Desktop`, `XboxOne` or `Scarlett`) |
 
 The finished product is copied into a subfolder of **your chosen Output Path**, alongside
 `game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`, `Config/`,
@@ -1584,6 +1737,7 @@ and the folder name — written `<Base>` below — is the same on every platform
 | iOS | `<GameName>-<version>-<Config>-iOS-arm64` (`…-iOS-Simulator-arm64` for the simulator) | `<Base>.app`, or `<Base>.ipa` when creating an IPA |
 | Android | `<GameName>-<version>-<Config>-Android-<abi>` | `<Base>.apk` (or `<Base>.aab`) |
 | Web | `<GameName>-<version>-<Config>-Web-<mem>` (`<mem>` = `wasm32` or `wasm64`) | `<Base>.html` + `<Base>.js` / `.wasm` / `.data` |
+| Xbox | `<GameName>-<version>-<Config>-Xbox-<family>` | `<GameName>.exe`, `MicrosoftGame.config`, `Images/` (package `<Base>.msixvc` or `<Base>.xvc` goes one level up) |
 
 So the folder name is the build's full identity — game, version, configuration, platform
 and architecture — and **every distributable inside it repeats that name**: the Android
@@ -1612,6 +1766,7 @@ You build with the native toolchain for each target. Install these on the build 
 | **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
 | **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |
 | **macOS / iOS** | A **macOS** host with **Xcode** (and command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization) and vcpkg. iOS additionally needs a development team / signing assets for device builds & IPAs. |
+| **Xbox** | A **Windows** host with Visual Studio (C++ workload), the **Windows 11 SDK** (Direct3D 12 + DirectX Shader Compiler), vcpkg, CMake 4.3+, Ninja and the **[Microsoft GDK](https://github.com/microsoft/GDK/releases)** — its installer sets `GameDK`, `GameDKLatest` and `GRDKLatest`, which the build reads. The **Xbox One / Xbox Series** families additionally need the private **GDKX** from Partner Center (which sets `GXDKLatest`) and a devkit to run on. Their vcpkg triplets and GDK toolchain files ship with the engine, so nothing has to be added to vcpkg by hand. |
 
 The first build of a configuration also builds third-party dependencies through vcpkg,
 so expect it to take longer than subsequent incremental builds.
@@ -1667,6 +1822,7 @@ an incompatible build. The Lua side of this is
 | **Web** | `.html`+`.wasm`+data | WebGPU (WebGL 2.0 fallback) / WebGL 2.0 | wasm32, wasm64 |
 | **macOS** | `.app` (+`.dmg`, `.pkg`) | Metal / Metal (ANGLE) / Metal (MoltenVK) | x86_64, arm64 |
 | **iOS** | `.ipa` / `.app` | Metal / Metal (MoltenVK) | arm64 |
+| **Xbox** | game layout + `.msixvc` / `.xvc` | Direct3D 12 | x64 |
 
 ### Cook formats
 
@@ -1687,6 +1843,7 @@ an incompatible build. The Lua side of this is
 | Create Installer | NSIS `.exe`, `.msi` or both (Win) / `.deb`, `.AppImage` or both (Linux) |
 | Include Plugins / Include Mods | *(all platforms)* Whether enabled `Plugins/` and `Mods/` are packaged at all |
 | macOS distribution | `.dmg` (drag-install) and/or `.pkg` installer, optionally notarized |
+| Xbox packaging | `MicrosoftGame.config` + store art always; `.msixvc` (PC) or `.xvc` (console) via `MakePkg` when asked |
 
 ### Profiler surfaces
 
