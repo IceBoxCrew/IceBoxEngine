@@ -318,6 +318,10 @@ The panel is split into a **top bar** and two resizable columns:
 * The tree remembers which folders you expanded, and it auto-expands the whole path down
   to the current folder whenever the view jumps somewhere (for example from the
   [reference viewer](#312-the-asset-references-viewer) or from a script).
+* **Right-click a folder** — in the tree *or* in the content area — for **Folder Color ▸**,
+  which tints that folder in both places. Colors are stored per project in
+  `Config/ContentBrowser.json`, so they survive restarts, and they follow the folder when
+  it is renamed, moved, copied or when the operation is undone.
 
 ### 3.3 Top bar & search
 
@@ -370,6 +374,13 @@ hidden).
 **Folders are always listed first**, then files, and the content area renders rich,
 type-aware thumbnails:
 
+* **Folders** are drawn as a folder tile. A folder that **has contents** is filled and
+  shows sheets peeking out of it plus a small **item-count badge** (`99+` past ninety-nine);
+  an **empty** folder is drawn dimmed and hollow, so you can tell the two apart at a
+  glance. The tile uses the folder's own color when one is set (see
+  [3.2](#32-navigation--the-folder-tree)) and the default amber otherwise, and it brightens
+  on hover. The count ignores hidden sidecar and redirector files, so it matches what you
+  actually see when you enter the folder.
 * **Textures** show the image itself (with a checkerboard behind transparency), honoring
   the texture's filtering settings and its aspect ratio.
 * **Sprites** show only their `SourceRect` region of the texture, over a checkerboard —
@@ -404,7 +415,8 @@ grows past its budget, so a folder with thousands of assets stays responsive. Of
 rows are skipped entirely.
 
 **Hovering** an asset for half a second shows a tooltip with its type
-(e.g. `.ice_sprite (Sprite)`).
+(e.g. `.ice_sprite (Sprite)`); hovering a **folder** shows its item count, or
+*Empty Folder*.
 
 Asset **type badges** (two-letter abbreviations such as `SP`, `MA`, `TM`) and
 type colors help identify items at a glance — see the
@@ -476,6 +488,7 @@ New assets get a **type prefix and a unique default name** (`SP_NewSprite`,
 
 | Action | Available on | Effect |
 | ------ | ------------ | ------ |
+| **Folder Color ▸** | folders (also in the folder tree) | Pick one of twelve preset colors or a custom one, or **Reset Color**. Applies to every selected folder; saved to `Config/ContentBrowser.json`. |
 | **Create Sprite (.ice_sprite)** | textures | Make a `.ice_sprite` (`SP_<name>`) from the whole image. |
 | **Create Tileset (.ice_ts)** | textures | Make a `.ice_ts` (`TS_<name>`) from the image, tile size 64. |
 | **Slice Spritesheet…** | textures | Open the [Spritesheet Slicer](#421-the-spritesheet-slicer) to cut the sheet into sprites. |
@@ -1895,6 +1908,21 @@ direction.
 
 > The categories match the **+ Add Element** menu, which is grouped into *Common*, *Input*,
 > *Display*, *Layout* and *Misc*.
+
+> **Layout containers own the placement of their children.** `HorizontalBox`, `VerticalBox`,
+> `SizeBox` and `Overlay` rewrite the position of every child (and, for `SizeBox` and
+> `Overlay`, its size) on every frame, identically in the editor canvas and in the game.
+> Dragging such a child around the canvas therefore has no lasting effect — control the
+> layout with **Spacing**, **Padding** and the order of the children in the hierarchy.
+
+> **ScrollView scrollbars are interactive.** The visible bar can be dragged with the mouse
+> or a finger, and pressing anywhere on the track jumps the thumb to that spot and keeps
+> dragging from there. **Drag Scroll** additionally lets a press anywhere inside the
+> viewport scroll the content: the content follows the pointer once it has moved past a
+> small threshold, so buttons inside the list still receive normal clicks, and releasing a
+> fast drag keeps the list gliding. A wheel over a `ScrollView` that cannot scroll
+> vertically scrolls it horizontally instead, and a `ScrollView` whose content already fits
+> passes the wheel on to a scrollable parent `ScrollView`.
 
 ### 4.14 View / Post-Process Volume (`.ice_view`)
 

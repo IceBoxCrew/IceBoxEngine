@@ -110,6 +110,7 @@
 60. [Console — Developer Console & Command System](#60-console--developer-console--command-system)
 61. [Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)](#61-draw--immediate-mode-rendering-draw--texture--rendertarget)
 62. [Decal — Bullet Holes, Blood Splatter, Scorch Marks](#62-decal--bullet-holes-blood-splatter-scorch-marks)
+63. [Xbox — Microsoft Ecosystem (Xbox network and Microsoft Store)](#63-xbox--microsoft-ecosystem-xbox-network-and-microsoft-store)
 
 ---
 
@@ -19626,7 +19627,7 @@ local id = Ads.GetAdvertisingId()        -- "" until fetched / when the user opt
 
 | Function | Description |
 |---|---|
-| `Ads.UpdateConversionValue(value)` | SKAdNetwork fine conversion value `0..63` |
+| `Ads.UpdateConversionValue(value)` | SKAdNetwork fine conversion value `0..63` — only reaches a network listed in `SKAdNetworkItems`, see Build Game → iOS → *SKAdNetwork IDs* |
 | `Ads.UpdatePostbackConversionValue(fine, coarse)` | Fine value plus a coarse bucket — `"low"` / `"medium"` / `"high"` (iOS 16.1+; falls back to the fine value alone below that) |
 | `Ads.GetAttributionToken()` | Apple Search Ads attribution token — POST it to `https://api-adservices.apple.com/api/v1/` from your server to resolve the campaign |
 | `Ads.ShowStoreOverlay(appStoreId)` | Presents an `SKOverlay` App Store card — Apple's own cross-promotion surface, no ad SDK needed |
@@ -20230,7 +20231,9 @@ Allows saving and loading game data to the cloud, deleting saves, and showing th
 >
 > **iOS note:** saves go through GameKit, so the player must be signed in to Game Center — `SavedGames.Init()` raises `OnError("", "not_signed_in")` when they are not. `SavedGames.ShowUI()` has no native iOS equivalent and raises `OnError("", "no_system_saved_games_ui_on_ios")`; build your own slot picker from the data you saved.
 >
-> **Build requirement:** Enable "Google Play Games" with Saved Games support in the Build Game popup.
+> **Build requirement:** tick **Cloud Save (Saved Games)** in Build Game → Android. Saved Games are Play Games Snapshots, so the editor turns **Google Play Games** on with it and the build refuses to run without a Play Games App ID — without an initialised SDK and a signed-in player, every slot operation fails at runtime.
+>
+> **Sign-in:** `SavedGames.Init()` initialises the Play Games SDK itself, so it works whether or not you also call `PlayGames.Init()`. If the player is not signed in to Play Games it raises `OnError("", "not_signed_in")`, the same message the iOS/Game Center path uses — call `PlayGames.SignIn()` and retry.
 
 ---
 
@@ -20329,7 +20332,41 @@ end)
 SavedGames.ShowUI()
 ```
 
-Opens the built-in Google Play Saved Games UI where the player can view and manage their saves.
+Opens the built-in Google Play Saved Games UI where the player can browse, add and delete
+their saves. What the player picked comes back through `SavedGames.OnUIResult` — the UI
+itself neither loads nor writes anything, so it is your code that calls `SavedGames.Load()`
+or `SavedGames.Save()` afterwards.
+
+```lua
+SavedGames.OnUIResult(function(action, slotName, description)
+    if action == "selected" then
+        SavedGames.Load(slotName)
+    elseif action == "new" then
+        SavedGames.Save("save_" .. os.time(), SerializeGameState(), "New save")
+    end
+end)
+
+SavedGames.ShowUI()
+```
+
+---
+
+### 46.6a SavedGames.OnUIResult
+
+```lua
+SavedGames.OnUIResult(function(action, slotName, description) end)
+```
+
+Fires once the player closes the Saved Games UI opened by `SavedGames.ShowUI()`.
+
+| `action` | Meaning | `slotName` / `description` |
+|----------|---------|----------------------------|
+| `"selected"` | The player picked an existing save | slot name and its description |
+| `"new"` | The player asked for a new save slot | both empty — pick a name yourself |
+| `"cancelled"` | The player backed out | both empty |
+
+> **Platform:** Android only. On iOS `SavedGames.ShowUI()` still raises
+> `OnError("", "no_system_saved_games_ui_on_ios")` and this callback never fires.
 
 ---
 
@@ -20351,6 +20388,7 @@ Cleans up Saved Games resources and clears all callbacks.
 | `SavedGames.OnSaved(fn)` | `(slotName: string)` | Data saved to a slot |
 | `SavedGames.OnDeleted(fn)` | `(slotName: string)` | Slot deleted |
 | `SavedGames.OnError(fn)` | `(slotName: string, message: string)` | Error occurred |
+| `SavedGames.OnUIResult(fn)` | `(action: string, slotName: string, description: string)` | The player closed the Saved Games UI (Android) |
 | `SavedGames.ClearCallbacks()` | — | Remove all callbacks |
 
 ---
@@ -20398,7 +20436,7 @@ The **`Firebase`** table provides a Lua API for **Firebase Analytics** — event
 
 > **Platform:** Android. The engine bundles no Firebase SDK for iOS, so `Firebase.IsSupported()` returns `false` there and all calls are no-ops. On desktop and Web it returns `false` too.
 >
-> **Build requirement:** Enable "Firebase" in the Build Game popup and place `google-services.json` in the project.
+> **Build requirement:** tick **Firebase Analytics** in Build Game → Android and point **Firebase config (google-services.json)** at the file you downloaded from the Firebase console (Project settings → Your apps → Android). The build parses it, matches the client whose `package_name` equals your **Package Name** and emits the `google_app_id` / `gcm_defaultSenderId` / `project_id` / `google_api_key` string resources `FirebaseApp` reads at process start, plus a `res/raw/keep.xml` so resource shrinking cannot strip them. A missing file, malformed JSON or a package-name mismatch fails the build with an explicit message — that is deliberate, because without those resources every `Firebase.*` call is silently dropped and `Notifications.GetToken()` never returns an FCM token.
 
 ---
 
@@ -20590,6 +20628,10 @@ Schedule local notifications with optional delay, cancel them, and request the n
 > **iOS note:** local notifications are fully supported, including `OnShown` (foreground presentation) and `OnClicked`. `Notifications.GetToken()` returns the APNs device token as a hex string once `Notifications.Init()` has registered for remote notifications — that only happens when the app is signed with the `aps-environment` entitlement (Build Game → iOS → *Push Notifications*); without it the token stays `""`. Note that `delaySec = 0` fires immediately on iOS instead of being clamped to one second.
 >
 > **Build requirement:** Enable "Notifications" in the Build Game popup.
+>
+> **`OnClicked` on Android:** every notification the engine posts carries the id you passed to `ShowLocal()`, and tapping it opens the game and fires `OnClicked` with that id as a string — whether the game was running, backgrounded or dead. A cold start delivers the event on the first frame after `Notifications.Init()`, so register the callback in `OnCreate()` right after `Init()` if you want to react to the tap that launched the game.
+>
+> **`OnTokenReceived` on Android:** the FCM token is fetched at `Notifications.Init()` and re-checked every time the app returns to the foreground; the callback fires only when the value actually changes, so it is safe to push the token to your server from inside it. A token that FCM rotates while the game is closed arrives on the next launch. This needs **Firebase** enabled with a valid `google-services.json` — with plain **Notifications** the token stays `""` and only local notifications work.
 
 ---
 
@@ -20768,9 +20810,14 @@ end
 The **`Consent`** table provides a Lua API for **GDPR consent management** via Google's **User Messaging Platform (UMP)**.
 Shows consent forms, checks consent status, and determines whether ads can be shown with personalization.
 
-> **Platform:** Android (Google UMP) and iOS (App Tracking Transparency). On iOS `Consent.ShowForm()` presents the system ATT prompt and `Consent.GetStatus()` maps the ATT status onto the same vocabulary as UMP: `"required"` (not yet asked), `"obtained"` (user answered), `"not_required"` (restricted / pre-iOS 14). `Consent.Reset()` has no iOS equivalent and raises an `OnError` with `"reset_unsupported_on_ios"`. On desktop and Web `Consent.IsSupported()` returns `false`.
+> **Platform:** Android (Google UMP) and iOS. On iOS the module has two modes:
 >
-> **Build requirement:** Enable "Consent (UMP)" in the Build Game popup.
+> * **With `UserMessagingPlatform.xcframework` vendored** (what `fetch_googlemobileads.sh` installs next to the ads SDK) `Consent` is the real Google UMP flow, exactly as on Android: `Consent.Init()` requests the consent info, `Consent.ShowForm()` presents the UMP form when one is required **and then** shows the ATT prompt, `Consent.GetStatus()` returns the UMP consent status, `Consent.CanShowAds()` mirrors UMP's `canRequestAds`, and `Consent.Reset()` clears the stored consent. This is the mode you want in production — Google requires a certified consent platform before serving ads to EEA/UK users, and ATT alone does not satisfy that.
+> * **Without the UMP framework** the module falls back to App Tracking Transparency alone: `Consent.ShowForm()` presents the system ATT prompt and `Consent.GetStatus()` maps the ATT status onto the same vocabulary — `"required"` (not yet asked), `"obtained"` (user answered), `"not_required"` (restricted / pre-iOS 14) — while `Consent.Reset()` raises an `OnError` with `"reset_unsupported_on_ios"`.
+>
+> The engine picks the mode at runtime, so the same Lua code covers both. On desktop and Web `Consent.IsSupported()` returns `false`.
+>
+> **Build requirement:** on Android, tick **Consent (UMP)** in Build Game → Android. On iOS there is no separate toggle — the consent SDK arrives with **Ads & Attribution**, so enable that and let `fetch_googlemobileads.sh` vendor both frameworks.
 
 ---
 
@@ -20795,6 +20842,16 @@ Initializes the UMP SDK and requests consent information.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `debugGeography` | `bool` | If `true`, simulates EEA geography for testing (default: `false`) |
+
+On Android `debugGeography = true` builds a `ConsentDebugSettings` with
+`DEBUG_GEOGRAPHY_EEA` and registers the current device as a UMP test device (the hashed id
+is derived from `ANDROID_ID` the same way AdMob derives its test-device id), so the form
+appears even outside the EEA. On iOS it does the same through `UMPDebugSettings` when the
+UMP framework is present — the test-device list comes from `Ads.SetTestDeviceIds()` if you
+called it, otherwise the device's `identifierForVendor` is used. In the ATT-only fallback
+the flag is ignored, because the system prompt has no geography to simulate. Ship with it
+off either way: a test-device flag has no effect on a real install but makes the debug
+build behave differently from what your players see.
 
 ```lua
 Consent.Init()
@@ -21295,9 +21352,9 @@ end
 The **`DeepLinks`** table provides a Lua API for **deep linking** (App Links / Intent URIs) —
 allows your game to be opened via custom URLs and react to the incoming data.
 
-> **Platform:** Android (intent filter) and iOS (custom URL scheme). Set the scheme in Build Game → iOS → *Deep Link URL Scheme*; it is registered in `CFBundleURLTypes` and opening `yourscheme://...` delivers the full URI to `OnReceived` (the second argument carries the query string). On desktop and Web `DeepLinks.IsSupported()` returns `false`.
+> **Platform:** Android (intent filter) and iOS (custom URL scheme). Set the scheme in Build Game → Android → *Deep Link URL Scheme* and Build Game → iOS → *Deep Link URL Scheme*; on iOS it lands in `CFBundleURLTypes`, on Android in the launcher activity's `<intent-filter>`. Opening `yourscheme://...` delivers the full URI to `OnReceived` (the second argument carries the query string). On desktop and Web `DeepLinks.IsSupported()` returns `false`.
 >
-> **Configuration:** Register your deep link scheme/host in `AndroidManifest.xml` via the Build Game settings.
+> **Configuration:** set the scheme in Build Game → Android → *Deep Link URL Scheme* (Android) and Build Game → iOS → *Deep Link URL Scheme* (iOS). On Android it is written into the launcher activity's `<intent-filter>`; leaving the field empty falls back to the package name, so `com.studio.game://invite?code=ABC` works out of the box without two games ever claiming the same scheme.
 
 ---
 
@@ -24636,6 +24693,812 @@ function Shoot(fromX, fromY, dirX, dirY)
             lifetime = 30, fadeOut = 2
         })
     end
+end
+```
+
+---
+
+## 63. Xbox — Microsoft Ecosystem (Xbox network and Microsoft Store)
+
+### Overview
+
+Three tables cover everything a Microsoft GDK title talks to. **`Xbox`** is the player and the
+console itself — sign-in, gamertag, privileges, system UI, connected storage, and, once the title
+has a Service Configuration ID, achievements, stats, leaderboards, presence, profile and friends.
+**`XboxStore`** is commerce: the game licence, trials, Store products, purchases, add-ons,
+consumables, DLC packages and package updates. **`XboxMultiplayer`** plugs the engine's own netcode
+into the Xbox social graph: joinable activities with your own connection string, invites,
+join-from-guide and Recent Players — across platforms.
+
+> **Platform:** every Microsoft GDK build — `Desktop` (Gaming.Desktop.x64, an Xbox title running
+> on Windows and sold through the Microsoft Store), `XboxOne` and `Scarlett`. The same script runs
+> on all three: nothing here is device-family specific. On every non-GDK platform
+> `Xbox.IsSupported()` returns `false` and every call is a safe no-op, so you can leave the code in
+> a cross-platform project unguarded.
+>
+> **Build requirement:** pick **Xbox** in the Build Game popup and fill in the Xbox settings
+> (Package Identity, Publisher ID, and — for anything that touches the Xbox network — Title ID,
+> Store ID and MSA App ID from Partner Center). Without a Title ID the title runs, but the Xbox
+> network side stays unavailable.
+>
+> **Threading:** every asynchronous call returns immediately and reports through a callback that
+> the engine dispatches on the game thread, between frames. You never need to lock anything.
+
+---
+
+### 63.1 Availability and lifecycle
+
+```lua
+Xbox.IsSupported() -> bool          -- built for the Microsoft GDK
+Xbox.IsConsole() -> bool            -- Xbox One / Xbox Series, not the PC family
+Xbox.GetDeviceFamily() -> string    -- "Desktop", "XboxOne", "Scarlett", "" off-GDK
+Xbox.IsInitialized() -> bool        -- the game runtime and the task queue are up
+Xbox.Init() -> bool                 -- idempotent; the engine already calls it at startup
+Xbox.Shutdown()                     -- release the task queue and every open handle
+Xbox.IsFeatureAvailable(name) -> bool
+```
+
+`Xbox.Init()` runs automatically when the script API is registered, so scripts normally only read
+`Xbox.IsInitialized()`. `Xbox.IsFeatureAvailable` asks the installed Gaming Services which parts of
+the runtime are present; it takes a feature name: `"XStore"`, `"XUser"`, `"XGameUI"`, `"XGameSave"`,
+`"XPackage"`, `"XPersistentLocalStorage"`, `"XSystem"`, `"XLauncher"`, `"XNetworking"`,
+`"XAppCapture"`, `"XAccessibility"`, `"XSpeechSynthesizer"`, `"XGameStreaming"`, `"XGameInvite"`,
+`"XTaskQueue"`, `"XThread"`, `"XAsync"`, `"XDisplay"`, `"XGame"`.
+
+```lua
+function OnStart()
+    if not Xbox.IsSupported() then return end
+
+    Print("Device family: " .. Xbox.GetDeviceFamily())
+    if Xbox.IsConsole() then
+        -- gamepad-only UI, TV-safe margins
+    end
+end
+```
+
+---
+
+### 63.2 Sign-in and the player profile
+
+```lua
+Xbox.SignIn(allowUi)                    -- allowUi defaults to true
+Xbox.IsSignedIn() -> bool
+Xbox.GetGamertag(component) -> string
+Xbox.GetUserId() -> number              -- XUID
+Xbox.GetUserIdString() -> string        -- the same XUID as text
+Xbox.GetUserState() -> string           -- "signedin" | "signingout" | "signedout" | "none"
+Xbox.GetAgeGroup() -> string            -- "unknown" | "child" | "teen" | "adult"
+Xbox.IsGuest() -> bool
+Xbox.GetMaxUsers() -> number
+```
+
+`Xbox.SignIn(true)` shows the account picker when nobody is signed in; `Xbox.SignIn(false)` only
+takes the default user silently and fails quietly if there is none — that is what you want at
+startup, with the interactive form behind a button.
+
+`component` selects which form of the gamertag you get:
+
+| Value | Meaning |
+| ----- | ------- |
+| `"unique"` *(default)* | Modern gamertag with its suffix — `Player#1234` |
+| `"modern"` | Modern gamertag without the suffix |
+| `"suffix"` | The suffix on its own, empty when there is none |
+| `"classic"` | The legacy 15-character gamertag |
+
+```lua
+Xbox.OnSignIn(function(success, gamertag, message)
+    if success then
+        Print("Welcome, " .. gamertag)
+    else
+        Print("Sign-in failed: " .. message)
+    end
+end)
+
+function OnStart()
+    Xbox.SignIn(false)
+end
+
+function OnSignInButton()
+    Xbox.SignIn(true)
+end
+```
+
+Use `Xbox.GetAgeGroup()` to soften anything age-sensitive (chat, user-generated content, store
+prompts) for `"child"` and `"teen"` accounts.
+
+---
+
+### 63.3 Privileges
+
+```lua
+local allowed, reason = Xbox.CheckPrivilege(name)
+Xbox.ResolvePrivilege(name)     -- show the system flow that fixes it
+```
+
+`name` is one of `"CrossPlay"`, `"Clubs"`, `"Sessions"`, `"Broadcast"`, `"ManageProfilePrivacy"`,
+`"GameDvr"`, `"MultiplayerParties"`, `"CloudManageSession"`, `"CloudJoinSession"`,
+`"CloudSavedGames"`, `"SocialNetworkSharing"`, `"UserGeneratedContent"`, `"Communications"`,
+`"Multiplayer"`, `"AddFriends"` (case-insensitive).
+
+`reason` is `"none"`, `"purchase_required"`, `"restricted"`, `"banned"`, `"no_user"`,
+`"unknown_privilege"` or `"unknown"`.
+
+```lua
+function TryOpenMultiplayer()
+    local allowed, reason = Xbox.CheckPrivilege("Multiplayer")
+    if allowed then
+        StartMatchmaking()
+    else
+        Xbox.ResolvePrivilege("Multiplayer")
+    end
+end
+
+Xbox.OnPrivilege(function(success, privilege, message)
+    if success then TryOpenMultiplayer() end
+end)
+```
+
+> **Certification note.** A title that offers online play must check `Multiplayer` (and
+> `Communications` before voice or text chat) and route a denied player into
+> `Xbox.ResolvePrivilege`, never into a dead end.
+
+---
+
+### 63.4 System information
+
+```lua
+Xbox.GetDeviceType() -> string     -- "pc", "xboxone", "xboxone_s", "xboxone_x",
+                                   -- "xboxone_x_devkit", "xbox_series_s", "xbox_series_x",
+                                   -- "xbox_series_devkit", "unknown"
+Xbox.GetConsoleId() -> string      -- empty on the PC family
+Xbox.GetSandboxId() -> string      -- "RETAIL" in production, your sandbox during development
+Xbox.GetTitleId() -> number        -- 0 until a Title ID is set in MicrosoftGame.config
+Xbox.GetAnalyticsInfo() -> table   -- { family, form, osVersion, hostingOsVersion }
+```
+
+`GetDeviceType()` is the right hook for quality presets: an Xbox Series X has room for settings an
+Xbox One S does not.
+
+```lua
+local device = Xbox.GetDeviceType()
+if device == "xbox_series_x" then
+    Settings.SetQualityPreset("high")
+elseif device == "xboxone" or device == "xboxone_s" then
+    Settings.SetQualityPreset("low")
+end
+```
+
+---
+
+### 63.5 System UI
+
+```lua
+Xbox.ShowAchievements()                                       -- the system achievements panel
+Xbox.ShowProfileCard(xuid)                                    -- defaults to the local player
+Xbox.ShowMessageDialog(title, text, first, second, third)     -- 1..3 buttons
+Xbox.ShowTextEntry(title, description, defaultText, maxLength, scope)
+Xbox.ShowErrorDialog(code, context)
+Xbox.LaunchUri(uri) -> bool
+```
+
+`scope` picks the on-screen keyboard layout: `"default"`, `"url"`, `"email"`, `"number"`,
+`"password"`, `"telephone"`, `"alphanumeric"`, `"search"`, `"chat"`.
+
+```lua
+Xbox.OnDialog(function(success, operation, button, message)
+    if operation == "ShowMessageDialog" and button == 1 then
+        QuitToMenu()
+    end
+end)
+
+Xbox.OnTextEntry(function(success, text)
+    if success then SetPlayerName(text) end
+end)
+
+function OnQuitPressed()
+    Xbox.ShowMessageDialog("Quit", "Leave the current run?", "Quit", "Cancel")
+end
+
+function OnRenamePressed()
+    Xbox.ShowTextEntry("Name", "Name your save", CurrentName(), 24, "alphanumeric")
+end
+```
+
+> **Achievements.** `Xbox.ShowAchievements()` opens the system panel for your title, which is what
+> a "View achievements" menu item should do. *Unlocking* an achievement goes through the Xbox
+> Services API (XSAPI), a separate GDK extension library that also needs a Service Configuration ID
+> from Partner Center; it is not part of this table.
+
+---
+
+### 63.6 Connected storage — cloud saves
+
+```lua
+Xbox.GetSaveFolder(configurationId)                 -- async, answers on OnSaveFolder
+Xbox.GetSaveQuota(configurationId) -> number        -- bytes left, 0 when unavailable
+```
+
+Connected storage gives the signed-in player a folder that the system syncs to the cloud and back
+on every device they sign in on. `configurationId` is the save-container name you declared for the
+title; the engine hands you a real path, and you then read and write it with ordinary
+`Scene.SaveGame` / file calls.
+
+```lua
+local saveDir = nil
+
+Xbox.OnSaveFolder(function(success, configurationId, pathOrError)
+    if success then
+        saveDir = pathOrError
+        LoadProgressFrom(saveDir .. "/progress.json")
+    else
+        Print("Connected storage unavailable: " .. pathOrError)
+    end
+end)
+
+function OnStart()
+    if Xbox.IsSupported() then Xbox.GetSaveFolder("MyGameSaves") end
+end
+```
+
+---
+
+### 63.7 XboxStore — the licence and trials
+
+```lua
+XboxStore.IsAvailable() -> bool
+XboxStore.QueryLicense()                    -- async, answers on Xbox.OnLicense
+XboxStore.GetLicense() -> table
+XboxStore.IsLicenseActive() -> bool
+XboxStore.IsTrial() -> bool
+XboxStore.GetTrialSecondsRemaining() -> number
+```
+
+`GetLicense()` returns the last answer, so it is cheap to poll:
+
+| Field | Meaning |
+| ----- | ------- |
+| `queried` | `false` until the first successful `QueryLicense()` |
+| `isActive` | The player is licensed to play right now |
+| `isTrial` | This is a trial licence |
+| `isTrialOwnedByThisUser` | The trial belongs to the signed-in player |
+| `isDiscLicense` | The licence came from a disc |
+| `trialTimeRemainingInSeconds` | Seconds left in the trial |
+| `skuStoreId`, `trialUniqueId`, `expirationDate` | Identifiers and the expiry timestamp |
+
+```lua
+Xbox.OnLicense(function(success, message)
+    if not success then return end
+    local lic = XboxStore.GetLicense()
+    if lic.isTrial then
+        StartTrialCountdown(lic.trialTimeRemainingInSeconds)
+    end
+end)
+
+function OnStart()
+    XboxStore.QueryLicense()
+end
+```
+
+The licence is re-queried by the system whenever it changes (a trial converted into a purchase, a
+subscription lapsed): `Xbox.OnLicense` fires again on its own, so read `GetLicense()` there rather
+than caching the flags.
+
+---
+
+### 63.8 XboxStore — products and prices
+
+```lua
+XboxStore.QueryProducts(kinds, storeIds)      -- specific Store IDs
+XboxStore.QueryAssociatedProducts(kinds)      -- everything sold with this title
+XboxStore.QueryEntitledProducts(kinds)        -- everything this player already owns
+XboxStore.GetProducts() -> table              -- the last result set
+```
+
+`kinds` is a `"|"`-separated filter — `"Durable"`, `"Consumable"`, `"UnmanagedConsumable"`,
+`"Game"`, `"Pass"` — and defaults to all of them. `storeIds` is an array of Store IDs.
+
+Each entry of `GetProducts()` carries `storeId`, `title`, `description`, `language`,
+`inAppOfferToken`, `linkUri`, `kind`, `price`, `basePrice`, `currencyCode`, `formattedPrice`,
+`formattedBasePrice`, `isOnSale`, `hasDigitalDownload` and `isInUserCollection`.
+
+**Always show `formattedPrice`, never `price`** — it is the localized, currency-correct string the
+Store itself would print.
+
+```lua
+Xbox.OnProducts(function(success, count, operation, message)
+    if not success then
+        Print("Store query failed: " .. message)
+        return
+    end
+    for _, p in ipairs(XboxStore.GetProducts()) do
+        AddShopRow(p.storeId, p.title, p.formattedPrice, p.isInUserCollection)
+    end
+end)
+
+function OpenShop()
+    XboxStore.QueryAssociatedProducts("Durable|Consumable")
+end
+```
+
+---
+
+### 63.9 XboxStore — purchases and the Store UI
+
+```lua
+XboxStore.ShowPurchaseUI(storeId, name)               -- name is optional
+XboxStore.ShowProductPageUI(storeId)
+XboxStore.ShowAssociatedProductsUI(storeId, kinds)
+XboxStore.ShowRateAndReviewUI()
+```
+
+All four hand control to the system Store overlay and answer through a callback.
+`ShowPurchaseUI` reports on `Xbox.OnPurchase`; the other three on `Xbox.OnDialog`.
+
+```lua
+Xbox.OnPurchase(function(success, storeId, message)
+    if success then
+        XboxStore.QueryEntitledProducts("Durable")
+        XboxStore.QueryAddOnLicenses()
+    else
+        Print("Purchase not completed: " .. message)
+    end
+end)
+
+function BuySkin()
+    XboxStore.ShowPurchaseUI("9NBLGGH4R315", "Golden Skin")
+end
+```
+
+`ShowRateAndReviewUI()` reports through `Xbox.OnDialog` with `operation == "ShowRateAndReviewUI"`
+and `value == 1` when the player actually left or updated a review.
+
+---
+
+### 63.10 XboxStore — add-ons and consumables
+
+```lua
+XboxStore.QueryAddOnLicenses()                            -- async
+XboxStore.GetAddOnLicenses() -> table
+XboxStore.QueryConsumableBalance(storeId)                 -- async
+XboxStore.ReportConsumableFulfillment(storeId, quantity)  -- async, quantity defaults to 1
+```
+
+Add-on licences are what you check for durable content — a season pass, a character, an unlock.
+Each entry has `skuStoreId`, `inAppOfferToken`, `isActive` and `expirationDate`.
+
+Consumables are spent, not owned: query the balance, and report a fulfilment every time the player
+spends some. Both answer on `Xbox.OnConsumableBalance` with the remaining quantity.
+
+```lua
+Xbox.OnAddOnLicenses(function(success, count, message)
+    if not success then return end
+    for _, lic in ipairs(XboxStore.GetAddOnLicenses()) do
+        if lic.isActive then UnlockContent(lic.inAppOfferToken) end
+    end
+end)
+
+Xbox.OnConsumableBalance(function(success, storeId, quantity, message)
+    if success then SetCoinBalance(quantity) end
+end)
+
+function SpendCoins(amount)
+    XboxStore.ReportConsumableFulfillment("9NBLGGH4R315", amount)
+end
+```
+
+---
+
+### 63.11 XboxStore — packages, DLC and updates
+
+```lua
+XboxStore.GetCurrentPackageIdentifier() -> string
+XboxStore.IsPackaged() -> bool
+XboxStore.GetUserLocale() -> string
+XboxStore.GetPackageIdentifier(storeId) -> string
+XboxStore.GetInstalledPackages(kind) -> table    -- "content" (default), "game", "publishercontent"
+
+XboxStore.MountPackage(packageIdentifier)        -- async, answers on Xbox.OnPackageMounted
+XboxStore.GetPackageMountPath(packageIdentifier) -> string
+XboxStore.UnmountPackage(packageIdentifier)
+
+XboxStore.QueryPackageUpdates()                  -- async, answers on Xbox.OnPackageUpdates
+XboxStore.GetPackageUpdates() -> table
+XboxStore.DownloadAndInstallUpdates()            -- async, answers on Xbox.OnPackageInstall
+```
+
+Installed DLC arrives as packages. Enumerate them, mount the one you need, and the mount path is a
+plain folder you can read like any other content root — which is how a GDK title layers DLC on top
+of `Content/`. Entries from `GetInstalledPackages` carry `packageIdentifier`, `displayName`,
+`description`, `publisher`, `storeId`, `titleId`, `version`, `kind`, `installing` and
+`ageRestricted`.
+
+```lua
+Xbox.OnPackageMounted(function(success, packageIdentifier, pathOrError)
+    if success then
+        Print("DLC mounted at " .. pathOrError)
+    end
+end)
+
+function LoadInstalledDlc()
+    for _, pkg in ipairs(XboxStore.GetInstalledPackages("content")) do
+        if not pkg.installing then XboxStore.MountPackage(pkg.packageIdentifier) end
+    end
+end
+```
+
+Package updates are the mandatory-update flow: query them, and if any entry has `isMandatory`,
+start the download before letting the player into the game.
+
+```lua
+Xbox.OnPackageUpdates(function(success, count, message)
+    if not success or count == 0 then return end
+    for _, upd in ipairs(XboxStore.GetPackageUpdates()) do
+        if upd.isMandatory then
+            XboxStore.DownloadAndInstallUpdates()
+            return
+        end
+    end
+end)
+```
+
+---
+
+### 63.12 Xbox Services — the Service Configuration ID
+
+Everything from here down (achievements, stats, leaderboards, presence, profile, friends and
+`XboxMultiplayer`) runs on the **Xbox Services API** — the XSAPI extension library that ships
+inside the Microsoft GDK. It needs one thing the rest of this section does not: the title's
+**Service Configuration ID (SCID)**, a GUID Partner Center issues alongside the Title ID.
+
+```lua
+Xbox.IsServicesSupported() -> bool   -- the engine was built with XSAPI linked in
+Xbox.AreServicesReady() -> bool      -- XSAPI is initialised and a player is signed in
+Xbox.GetScid() -> string
+Xbox.InitServices(scid) -> bool      -- optional: initialise explicitly
+```
+
+Set the SCID in **Build Game → Xbox → Service Configuration ID** and the build writes it into the
+packaged `Config/Engine.json`; the engine picks it up at startup and initialises XSAPI for you, so
+scripts normally only ever read `Xbox.AreServicesReady()`. `Xbox.InitServices(scid)` is there for
+titles that resolve the SCID at run time.
+
+`AreServicesReady()` only turns true **after a player signs in** — the Xbox Live context belongs to
+a user. Do your service calls from `Xbox.OnSignIn`, not from `OnStart`.
+
+> **What it costs.** Two Microsoft redistributables (`libHttpClient.GDK.dll` and `XCurl.dll`) are
+> staged next to the executable by the build and travel into the game layout automatically. There
+> is nothing to install and nothing to configure. If the engine was built without XSAPI, every call
+> below answers with `"services_unavailable"` and the rest of the Xbox build is unaffected.
+
+---
+
+### 63.13 Achievements
+
+```lua
+Xbox.UnlockAchievement(achievementId)                        -- same as 100% progress
+Xbox.SetAchievementProgress(achievementId, percentComplete)  -- 0..100
+Xbox.QueryAchievements(unlockedOnly)                         -- async, all pages
+Xbox.GetAchievements() -> table
+```
+
+`achievementId` is the ID you configured in Partner Center. Progress achievements take a
+percentage; an achievement without progress requirements simply unlocks at 100.
+
+Each entry from `GetAchievements()` carries `id`, `name`, `unlockedDescription`,
+`lockedDescription`, `progressState` (`"achieved"`, `"in_progress"`, `"not_started"`, `"unknown"`),
+`iconUrl`, `gamerscore`, `currentProgress`, `targetProgress`, `timeUnlocked`, `isSecret` and
+`isRevoked`.
+
+```lua
+Xbox.OnAchievements(function(success, operation, achievementId, count, message)
+    if operation == "Update" then
+        if success and message ~= "not_modified" then
+            ShowToast("Achievement unlocked!")
+        end
+    elseif operation == "Query" and success then
+        RebuildAchievementList(Xbox.GetAchievements())
+    end
+end)
+
+function OnBossDefeated()
+    Xbox.UnlockAchievement("1")
+end
+
+function OnEnemyKilled(total)
+    Xbox.SetAchievementProgress("2", math.min(100, math.floor(total * 100 / 500)))
+end
+```
+
+> The service answers `"not_modified"` when the achievement was already at that value — that is a
+> success, not an error, and it is exactly how you avoid showing the unlock toast twice.
+> `Xbox.ShowAchievements()` (section 63.5) opens the system panel and needs no SCID.
+
+---
+
+### 63.14 Stats and leaderboards
+
+Xbox leaderboards are built on **title-managed stats**: you write named values for the player, and
+the service ranks them. The engine batches the writes so a busy frame does not turn into a service
+call per stat.
+
+```lua
+Xbox.SetStatNumber(name, value)     -- queue a numeric stat
+Xbox.SetStatString(name, value)     -- queue a string stat
+Xbox.FlushStats()                   -- send everything queued, async
+Xbox.DeleteStat(name)               -- async
+
+Xbox.QueryLeaderboard(leaderboardName, statName, socialGroup, ascending, maxItems)
+Xbox.GetLeaderboardColumns() -> table
+Xbox.GetLeaderboard() -> table
+```
+
+`socialGroup` is `"none"` (default — the global leaderboard), `"people"` (the player's friends) or
+`"favorites"`. `ascending` defaults to `false`, which is what you want for a high-score board.
+
+Each leaderboard row has `xuid`, `gamertag`, `uniqueModernGamertag`, `rank`, `globalRank`,
+`percentile` and `values` — an array lined up with `GetLeaderboardColumns()`.
+
+```lua
+Xbox.OnStats(function(success, operation, count, message)
+    if not success then Print("[stats] " .. operation .. ": " .. message) end
+end)
+
+Xbox.OnLeaderboard(function(success, leaderboardName, rowCount, message)
+    if not success then return end
+    local columns = Xbox.GetLeaderboardColumns()
+    for _, row in ipairs(Xbox.GetLeaderboard()) do
+        AddScoreRow(row.rank, row.gamertag, row.values[1])
+    end
+end)
+
+function OnRunFinished(score, timeSeconds)
+    Xbox.SetStatNumber("HighScore", score)
+    Xbox.SetStatNumber("FastestRun", timeSeconds)
+    Xbox.FlushStats()
+end
+
+function OpenScoreboard()
+    Xbox.QueryLeaderboard("HighScoreLB", "HighScore", "none", false, 25)
+end
+```
+
+> Flush on natural boundaries — end of a run, level complete, returning to the menu — not every
+> frame. Stat names and leaderboard names must match what you configured in Partner Center.
+
+---
+
+### 63.15 Presence, profile and friends
+
+```lua
+Xbox.SetPresence(activeInTitle, richPresenceId)   -- async
+Xbox.QueryProfile(xuid)                           -- async, defaults to the local player
+Xbox.GetProfile() -> table
+Xbox.QueryFriends(filter, maxItems)               -- async, all pages
+Xbox.GetFriends() -> table
+```
+
+`richPresenceId` is a rich-presence string ID configured in Partner Center — it is what turns
+"Playing MyGame" into "In the Frozen Caves, wave 12" on the player's profile card. Pass an empty
+string to just mark the player active or inactive in the title.
+
+`GetProfile()` returns `queried`, `xuid`, `gamertag`, `modernGamertag`, `uniqueModernGamertag`,
+`appDisplayName`, `gameDisplayName`, `gamerscore` and `gamerPictureUrl`.
+
+`filter` for `QueryFriends` is `"all"` (default), `"favorite"` or `"legacy"`. Each entry has
+`xuid`, `isFriend`, `isFavorite` and `isFollowingCaller`.
+
+```lua
+Xbox.OnProfile(function(success, gamertag, message)
+    if success then
+        local p = Xbox.GetProfile()
+        SetHudGamerscore(p.gamerscore)
+        LoadRemoteImage(p.gamerPictureUrl)
+    end
+end)
+
+Xbox.OnFriends(function(success, count, message)
+    if not success then return end
+    for _, friend in ipairs(Xbox.GetFriends()) do
+        if friend.isFriend then AddFriendRow(friend.xuid) end
+    end
+end)
+
+function OnEnterLevel(levelName)
+    Xbox.SetPresence(true, "PresenceInLevel")
+end
+```
+
+---
+
+### 63.16 XboxMultiplayer — cross-platform sessions and invites
+
+The engine's own netcode (`Network.*`) is the transport, on Xbox exactly as everywhere else.
+**`XboxMultiplayer`** is the layer that plugs that transport into the Xbox social graph: it
+publishes what the player is doing as an *activity* with a **connection string** you define, so
+friends can send and accept invites, join straight from the Xbox guide, and show up in Recent
+Players — and it does that across platforms.
+
+```lua
+XboxMultiplayer.IsAvailable() -> bool
+
+XboxMultiplayer.SetActivity(connectionString, joinRestriction, maxPlayers,
+                            currentPlayers, allowCrossPlatform, groupId)
+XboxMultiplayer.DeleteActivity()
+
+XboxMultiplayer.QueryActivities(xuids)     -- what your friends are playing
+XboxMultiplayer.GetActivities() -> table
+
+XboxMultiplayer.SendInvites(xuids, connectionString, allowCrossPlatform)
+XboxMultiplayer.ShowInviteUI()             -- the system "invite friends" panel
+
+XboxMultiplayer.UpdateRecentPlayers(xuids, encounterType)
+XboxMultiplayer.FlushRecentPlayers()
+
+XboxMultiplayer.GetLastInvite() -> table
+XboxMultiplayer.TakePendingInvite() -> string
+XboxMultiplayer.AcceptInvite(inviteUri) -> bool
+
+XboxMultiplayer.GetPreferredLocalUdpPort() -> number
+XboxMultiplayer.GetConnectivityLevel() -> string
+```
+
+**The connection string is yours.** It is an opaque string the platform hands back to whoever
+joins — put whatever your netcode needs in it: a host address and port, a room code, a relay
+ticket. The engine never parses it.
+
+`joinRestriction` is `"public"` (default), `"invite_only"` or `"followed"`. `allowCrossPlatform`
+defaults to **true**: with it on, the activity and its invites reach players on PC, mobile and
+other consoles running your title, and `GetActivities()` reports each friend's `platform`
+(`"scarlett"`, `"xboxone"`, `"win32"`, `"windows"`, `"ios"`, `"android"`, `"playstation"`,
+`"nintendo"`, `"all"`, `"unknown"`).
+
+`encounterType` for `UpdateRecentPlayers` is `"default"`, `"teammate"` or `"opponent"`. Reporting
+recent players is an Xbox certification requirement for any title with online multiplayer — call
+it as players join and leave, then flush once when the match ends.
+
+**Joining from the guide.** When a player accepts an invite while the game is closed, the title is
+launched with the invite attached; when it is already running, the invite arrives as an event.
+Both land in the same place:
+
+```lua
+XboxMultiplayer.OnInvite(function(success, operation, sender, payload)
+    if operation == "InviteReceived" then
+        local invite = XboxMultiplayer.GetLastInvite()
+        AskToJoin(invite.senderGamertag, invite.connectionString)
+    elseif operation == "AcceptedInvite" or operation == "PendingInvite" then
+        XboxMultiplayer.AcceptInvite(payload)
+    end
+end)
+
+function OnStart()
+    local pending = XboxMultiplayer.TakePendingInvite()
+    if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+end
+```
+
+`TakePendingInvite()` returns the invite the game was launched with and clears it, so calling it
+twice never joins twice.
+
+**Networking on a console.** `GetPreferredLocalUdpPort()` returns the UDP port the console has
+reserved for multiplayer traffic — bind your host socket to it instead of a hardcoded port.
+`GetConnectivityLevel()` returns `"none"`, `"local"`, `"internet"`, `"constrained"` or
+`"unknown"`; anything other than `"internet"` means online play will not work and the player
+deserves a clear message rather than a timeout.
+
+```lua
+XboxMultiplayer.OnActivity(function(success, operation, id, count, message)
+    if operation == "SetActivity" and success then
+        Print("Friends can now join this game")
+    end
+end)
+
+XboxMultiplayer.OnActivities(function(success, count, message)
+    if not success then return end
+    for _, activity in ipairs(XboxMultiplayer.GetActivities()) do
+        if activity.connectionString ~= "" then
+            AddJoinableFriendRow(activity.xuid, activity.platform,
+                                 activity.currentPlayers, activity.maxPlayers,
+                                 activity.connectionString)
+        end
+    end
+end)
+```
+
+---
+
+### 63.17 Events
+
+Every asynchronous call reports through one of these. They are dispatched on the game thread, so
+you can touch the scene from inside them.
+
+```lua
+Xbox.OnSignIn(function(success, gamertag, message) end)
+Xbox.OnUserChanged(function(change, stillSignedIn) end)
+Xbox.OnLicense(function(success, message) end)
+Xbox.OnProducts(function(success, count, operation, message) end)
+Xbox.OnPurchase(function(success, storeId, message) end)
+Xbox.OnAddOnLicenses(function(success, count, message) end)
+Xbox.OnConsumableBalance(function(success, storeId, quantity, message) end)
+Xbox.OnSaveFolder(function(success, configurationId, pathOrError) end)
+Xbox.OnPackageUpdates(function(success, count, message) end)
+Xbox.OnPackageMounted(function(success, packageIdentifier, pathOrError) end)
+Xbox.OnPackageInstall(function(success, count, message) end)
+Xbox.OnDialog(function(success, operation, value, message) end)
+Xbox.OnTextEntry(function(success, text) end)
+Xbox.OnPrivilege(function(success, privilege, message) end)
+Xbox.OnError(function(operation, message) end)
+
+Xbox.OnAchievements(function(success, operation, achievementId, count, message) end)
+Xbox.OnLeaderboard(function(success, leaderboardName, rowCount, message) end)
+Xbox.OnStats(function(success, operation, count, message) end)
+Xbox.OnPresence(function(success, richPresenceId, message) end)
+Xbox.OnProfile(function(success, gamertag, message) end)
+Xbox.OnFriends(function(success, count, message) end)
+
+XboxMultiplayer.OnActivity(function(success, operation, id, count, message) end)
+XboxMultiplayer.OnActivities(function(success, count, message) end)
+XboxMultiplayer.OnInvite(function(success, operation, sender, payload) end)
+
+Xbox.ClearCallbacks()
+```
+
+`change` in `OnUserChanged` is `"SignedInAgain"`, `"SigningOut"`, `"SignedOut"`, `"Gamertag"`,
+`"GamerPicture"` or `"Privileges"`. Treat `"SignedOut"` as "pause and return to the title screen" —
+a console can sign the player out from the guide at any moment.
+
+`message` on a failed call is either a short reason (`"store_unavailable"`, `"no_user"`,
+`"unavailable"`, `"unsupported_platform"`, `"no_title_id"`) or the raw `HRESULT` as `0xXXXXXXXX`,
+which is what Partner Center support asks for.
+
+---
+
+### 63.18 Complete example — a GDK-aware boot sequence
+
+```lua
+local licenceChecked = false
+
+function OnStart()
+    if not Xbox.IsSupported() then
+        StartGame()
+        return
+    end
+
+    Xbox.OnSignIn(function(success, gamertag)
+        if not success then return end
+        SetPlayerLabel(gamertag)
+        XboxStore.QueryLicense()
+        XboxStore.QueryAddOnLicenses()
+        Xbox.GetSaveFolder("MyGameSaves")
+        XboxStore.QueryPackageUpdates()
+
+        if Xbox.AreServicesReady() then
+            Xbox.QueryProfile()
+            Xbox.QueryAchievements(false)
+            Xbox.SetPresence(true, "PresenceInMenu")
+        end
+
+        local pending = XboxMultiplayer.TakePendingInvite()
+        if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+    end)
+
+    Xbox.OnLicense(function(success)
+        if not success then return end
+        local lic = XboxStore.GetLicense()
+        licenceChecked = true
+        if lic.isTrial then
+            StartTrialCountdown(lic.trialTimeRemainingInSeconds)
+        end
+    end)
+
+    Xbox.OnUserChanged(function(change)
+        if change == "SignedOut" then ReturnToTitleScreen() end
+    end)
+
+    Xbox.OnError(function(operation, message)
+        Print("[Xbox] " .. operation .. " -> " .. message)
+    end)
+
+    Xbox.SignIn(false)
 end
 ```
 

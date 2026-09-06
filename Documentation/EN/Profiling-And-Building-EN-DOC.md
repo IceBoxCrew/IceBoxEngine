@@ -997,7 +997,24 @@ runtime (with fallbacks).
   request it at runtime with `Permissions.Request(Permissions.ACCESS_LOCAL_NETWORK)`.
   Enabling **Ads** without a valid AdMob App ID (`ca-app-pub-…~…`) fails the build on
   purpose — the SDK reads it from the manifest at process start and serves nothing without
-  it, so the APK would build clean and never show an ad.
+  it, so the APK would build clean and never show an ad. **Play Games** fails the same way
+  without its numeric App ID, because `PlayGamesSdk.initialize()` reads
+  `com.google.android.gms.games.APP_ID` from the manifest and gives up when it is a
+  placeholder. **Saved Games** implies **Play Games** — Saved Games are Play Games
+  Snapshots, so the SDK has to be initialised and the player signed in before a slot can
+  reach the cloud; ticking it turns Play Games on for you.
+* **Firebase config (`google-services.json`):** required whenever **Firebase** is on. The
+  build reads the file, matches the client whose `package_name` equals your **Package
+  Name**, and emits the `google_app_id`, `gcm_defaultSenderId`, `project_id`,
+  `google_api_key` (and friends) string resources that `FirebaseApp` looks up at process
+  start, plus a `res/raw/keep.xml` so resource shrinking cannot strip them. A missing file,
+  malformed JSON or a package-name mismatch fails the build with an explicit message —
+  without those resources `Firebase.LogEvent()` is silently dropped and
+  `Notifications.GetToken()` never returns an FCM token.
+* **Deep Link URL Scheme:** custom scheme (without `://`) written into the launcher
+  activity's intent filter and delivered to the `DeepLinks` Lua API. Left empty it falls
+  back to the **Package Name**, so every build registers a scheme unique to that app
+  instead of a shared placeholder.
 * **Extra Permissions** (custom Android permissions).
 * **Signing:** keystore path, keystore password, key alias, key password (for release
   signing; unsigned/debug-signed otherwise). Passwords are **never stored in the editor
@@ -1111,21 +1128,36 @@ runtime (with fallbacks).
 * **Privacy manifest:** every `.app` gets a `PrivacyInfo.xcprivacy` declaring the
   required-reason APIs the runtime touches (file timestamps, disk space, system boot
   time, `NSUserDefaults`). Without it App Store Connect rejects the upload with
-  ITMS-91053. Drop your own `PrivacyInfo.xcprivacy` next to the project's `Content/` to
-  override the engine's — the project copy always wins, so extend it rather than fight it
-  when you add an SDK that collects data.
+  ITMS-91053. With **Ads & Attribution** on, the engine ships the tracking-aware variant
+  instead: `NSPrivacyTracking` is `true` and the advertising identifier is declared as
+  data collected for third-party advertising, which is what Apple expects from a build
+  that calls `requestTrackingAuthorization` and reads the IDFA. Drop your own
+  `PrivacyInfo.xcprivacy` next to the project's `Content/` to override either default —
+  the project copy always wins, so extend it rather than fight it when you add an SDK
+  that collects data.
 * **Ads on iOS:** the Google Mobile Ads SDK is not redistributed with the engine — Google
-  licenses it to you directly. Download it once and put `GoogleMobileAds.xcframework` into
-  `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder (add
-  `UserMessagingPlatform.xcframework` next to it if you also want Google's consent SDK),
-  then enable **Ads & Attribution** and set the AdMob App ID. With the SDK in place the
-  build links it and `Ads.*` goes live; without it those calls stay no-ops and the build
-  log says so. An empty AdMob App ID combined with a linked SDK fails configure on
+  licenses it to you directly. Turning on **Ads & Attribution** makes `build_ios.sh` fetch
+  it for you the same way it fetches MoltenVK: when
+  `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework` is missing it runs
+  `fetch_googlemobileads.sh` and **fails the build** if the download does not succeed,
+  rather than quietly producing a game whose `Ads.*` calls are no-op stubs. You can still
+  vendor the framework by hand into that folder. The fetcher also installs
+  `UserMessagingPlatform.xcframework` next to it, and when that framework is present the
+  `Consent` Lua API stops being ATT-only and runs the real Google UMP flow (the UMP form
+  first, the ATT prompt after) — which is what Google requires before serving ads to EEA/UK
+  users. CMake warns if it is missing. With the SDK in place the build links it and `Ads.*`
+  goes live. An empty AdMob App ID combined with a linked SDK fails configure on
   purpose, because the SDK aborts at launch when `GADApplicationIdentifier` is absent.
   `fetch_googlemobileads.sh` vendors SDK 13.7.0 by default, and that line needs **Xcode
   26.2**; the engine itself still builds on Xcode 15+, so the higher floor only applies
   when the ads SDK is linked. `--version=X.Y.Z` (or `ICE_ADMOB_VERSION`) vendors an older
   SDK — 11.x is the last line that builds on Xcode 15.
+* **SKAdNetwork IDs:** Apple attributes an install only to ad networks the app declares in
+  `SKAdNetworkItems`. Google's own network (`cstr6suwn9.skadnetwork`) is always written when
+  the ads SDK is linked; paste the ids your **mediation partners** publish into the
+  **SKAdNetwork IDs** box (one per line or comma separated) and they are merged in,
+  de-duplicated and lower-cased. Entries that are not of the form `<networkid>.skadnetwork`
+  are skipped with a warning instead of silently corrupting the plist.
 * The `.app` bundle is fully self-contained: `game.json` (start scene, name, version,
   orientation, crash-report URL), `Content/`, `Config/` (with the render backend pinned to
   MoltenVK), enabled `Plugins/` and `Mods/` are staged **before** code signing, so the
@@ -1178,13 +1210,33 @@ on a Windows host.
 > uses. The two **console** families are wired end to end through the build system — GDK
 > toolchain, vcpkg triplet, pre-built core slot, `MicrosoftGame.config` with the right
 > `TargetDeviceFamily`, `MakePkg` packaging, `T:\` save storage and the Lua platform API —
-> but the console *runtime* has not been validated on devkit hardware. Two pieces still
-> need a machine with the GDKX: the Direct3D 12 backend creates its device and swapchain
-> through DXGI, which a console replaces with `D3D12XboxCreateDevice`, manually allocated
-> back buffers and `ID3D12CommandQueue::PresentX`; and the desktop-only dependencies
-> (glad/OpenGL, Vulkan, ImGui, curl, FFmpeg) have to be trimmed out of the console
-> dependency set. Configuring a console family prints exactly that as a CMake warning, so
-> it is never a surprise half-way through a build.
+> and the renderer speaks the console's own Direct3D 12.X: the toolchain puts
+> `<edition>/xbox/include` and its `gen8` / `gen9` half on the include and library path, the
+> device comes from `D3D12XboxCreateDevice`, the back buffers are committed resources with
+> `D3D12_HEAP_FLAG_ALLOW_DISPLAY`, pacing runs on `SetFrameIntervalX` /
+> `ScheduleFrameEventX` / `WaitFrameEventX`, frames go out through
+> `ID3D12CommandQueue::PresentX`, and the suspend and resume lifecycle Xbox certification
+> requires is handled with `SuspendX` / `ResumeX` and `SDL_GDKSuspendComplete`. OpenGL is
+> gone from the console build entirely — glad is neither resolved nor linked and the
+> OpenGL backend sources are excluded, because a title may only present through Direct3D 12
+> there. Xbox Services links from the GDKX's own console libraries, and the crash reporter
+> and hardware sensors step aside for the console operating system, which captures crashes
+> itself and delivers them through Partner Center.
+>
+> What is left needs the GDKX and a devkit. **SDL3:** SDL carries the `Gaming.Xbox.*` code
+> in its public release, but it builds for the console only through its own `VisualC-GDK`
+> solution, so vcpkg cannot produce it — build the SDL3 target for the console platform
+> from `VisualC-GDK/SDL.sln` and pass `-DICE_XBOX_SDL3_ROOT=<folder with include/SDL3/SDL.h
+> and SDL3.lib>`. **Shaders:** a console title has no run-time shader compiler. The renderer
+> now reads a pre-baked cache from a `ShaderCache` folder shipped next to the executable
+> before it tries to compile anything, so the remaining step is to bake that cache with the
+> GDKX compiler — the toolchain already locates it and exposes it as `ICE_XBOX_DXC` and
+> `GDK_DXCTool`. **Bring-up:** nothing here has run on a devkit, so frame pacing, memory
+> budgets, the ENet transport over the console sockets and certification still need real
+> hardware. Configuring a console family prints exactly this as a CMake warning, so it is
+> never a surprise half-way through a build. Everything above the renderer — including the
+> whole `Xbox.*` / `XboxStore.*` / `XboxMultiplayer.*` ecosystem layer — is device-family
+> agnostic and needs no console work of its own.
 
 **Store identity** — these fields go straight into `MicrosoftGame.config`:
 
@@ -1194,6 +1246,7 @@ on a Windows host.
 | **Publisher ID** | The publisher identity in X.500 form, e.g. `CN=1234ABCD-5678-90EF-…`. Copy it from Partner Center → *Product identity*; a mismatch fails package validation. |
 | **Title ID** | The eight hexadecimal digits assigned to the title. Leave it empty for a local test build; it is required for anything that talks to Xbox network services. |
 | **Store ID** | The product's Store ID (for example `9NBLGGH4R315`). Optional for local builds. |
+| **Service Configuration ID** | The title's SCID from Partner Center, a GUID. It is what turns on achievements, stats, leaderboards, presence, friends and Multiplayer Activity at run time; the build writes it into the packaged `Config/Engine.json`. Leave it empty and those stay unavailable — the rest of the Xbox build is unaffected. |
 | **Requires Xbox network** | Declares that the title signs in to Xbox network services, and reveals the **MSA App ID** field. Turn it on only once the title has both a Title ID and an MSA App ID — without them the game refuses to start on a console. |
 | **Create installable package** | Runs `MakePkg` from the GDK over the built layout. Off by default, because the loose layout alone is what you deploy while iterating. |
 
@@ -1234,6 +1287,24 @@ xbapp install "<output>\<Base>.xvc"
   `"Scarlett"`). `Settings.IsXbox()` is true for all of them, `Settings.IsConsole()` only
   for the two console families. `Settings.IsWindows()` stays true on the PC family,
   because that build really does run on Windows.
+* **Microsoft ecosystem.** The `Xbox.*`, `XboxStore.*` and `XboxMultiplayer.*` tables expose
+  the Microsoft GDK itself to Lua on all three device families: sign-in and the gamertag, age
+  group and privileges, the system achievements panel, message dialogs and the on-screen
+  keyboard, connected-storage cloud saves, the game licence and trial countdown, Store products
+  with localized prices, the purchase and rate-and-review overlays, add-on licences and
+  consumables, installed DLC packages with mounting, and mandatory package updates. With a
+  **Service Configuration ID** filled in, the Xbox Services API (XSAPI) comes along on top:
+  unlocking achievements and reporting progress, title-managed stats and the leaderboards they
+  feed, rich presence, the player profile and the friends list, and Multiplayer Activity —
+  joinable activities carrying your own connection string, invites, join-from-guide and Recent
+  Players, all of it cross-platform. See
+  [Lua API → Xbox](LuaAPI-EN-DOC.md#63-xbox--microsoft-ecosystem-xbox-network-and-microsoft-store).
+  Everything is a safe no-op off the GDK, so the same script also runs on the other six
+  platforms.
+* **Xbox Services redistributables.** When XSAPI is linked in, the build stages
+  `libHttpClient.GDK.dll` and `XCurl.dll` next to the executable and they travel into the game
+  layout with the rest of the DLLs. `ICE_GDK_XBOX_SERVICES=OFF` leaves them out; the pre-built
+  core and the game build have to agree on that switch.
 * **Xbox game runtime.** The runtime calls `XGameRuntimeInitialize()` at start-up and
   `XGameRuntimeUninitialize()` on exit. On a console a failure there is fatal — nothing can
   run without it. On PC it is only logged, so a loose build you launched directly (without
@@ -1254,11 +1325,25 @@ engine:
 | `Tools/BuildSystem/Utilities/vcpkg-triplets/x64-xbox-xboxone.cmake` | vcpkg triplet for Xbox One |
 | `Tools/BuildSystem/Utilities/Toolchains/Xbox-Scarlett.cmake` | Selects the Scarlett console target, then includes the shared GDK toolchain |
 | `Tools/BuildSystem/Utilities/Toolchains/Xbox-XboxOne.cmake` | Same for Xbox One |
-| `Tools/BuildSystem/Utilities/Toolchains/xbox-gdk-toolchain.cmake` | The shared implementation: finds the GXDK, adds its `gameKit`/`toolKit` include and library directories, defines `_GAMING_XBOX` and the per-console macro, sets `/favor:AMD64` with `/arch:AVX2` (Scarlett) or `/arch:AVX` (Xbox One), links `xgameplatform.lib` and applies the GDK `/NODEFAULTLIB` set |
+| `Tools/BuildSystem/Utilities/Toolchains/xbox-gdk-toolchain.cmake` | The shared implementation: finds the GXDK, adds its `gameKit`/`toolKit` include and library directories **and the console platform half under `<edition>/xbox` — `include`, `include/gen8` or `include/gen9`, `lib/x64` and `lib/gen8` or `lib/gen9`, where `gxdk.h`, `d3d12_x.h` / `d3d12_xs.h` and the console Direct3D libraries live** — defines `_GAMING_XBOX` and the per-console macro, sets `/favor:AMD64` with `/arch:AVX2` (Scarlett) or `/arch:AVX` (Xbox One), links `xgameplatform.lib` and `xgameruntime.lib`, picks the CRT that matches the triplet's `VCPKG_CRT_LINKAGE`, applies the GDK `/NODEFAULTLIB` set, and locates the console shader compiler as `ICE_XBOX_DXC` / `GDK_DXCTool` |
+
+Three cache variables exist for the cases where a GDKX install does not sit where the
+toolchain expects, or where a dependency has to come from outside vcpkg:
+
+| Variable | What it does |
+| -------- | ------------ |
+| `ICE_XBOX_PLATFORM_ROOT` | Path to the GDKX `xbox` folder, when the Direct3D 12.X headers are not found automatically. Configuring without it prints a warning naming every directory that was searched |
+| `ICE_XBOX_SDL3_ROOT` | Folder holding an SDL3 built for `Gaming.Xbox.*` out of SDL's own `VisualC-GDK/SDL.sln` — it must contain `include/SDL3/SDL.h` and `SDL3.lib`. vcpkg cannot build SDL3 for the console, so a console configure without this fails with those instructions |
+| `ICE_GDK_XBOX_SERVICES` | On by default. Links the Xbox Services API. On a console it comes from the GDKX's own `Microsoft.Xbox.Services.<toolset>.C.lib` and `libHttpClient.lib` and needs no redistributable DLLs; on `Gaming.Desktop.x64` it comes from the GDK's `ExtensionLibraries` and stages two DLLs next to the executable |
 
 Both the engine's own targets and every vcpkg port it needs go through the same toolchain,
 because the triplet's `VCPKG_CHAINLOAD_TOOLCHAIN_FILE` is honoured on both sides. The
-overlay triplet directory is passed to every Xbox configure, so these files win over
+The same toolchain file is handed to CMake directly (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) when
+a console family is configured, because a vcpkg triplet only governs how the *dependencies*
+are built — without that the engine's own translation units would compile as a plain desktop
+Windows build, with no `_GAMING_XBOX` and no GDK include or library paths. `build_xbox.bat`,
+`prebuild_core_libs_xbox.bat` and the `Xbox-XboxOne-*` / `Xbox-Scarlett-*` CMake presets all
+pass it. The overlay triplet directory is passed to every Xbox configure, so these files win over
 anything a vcpkg checkout might carry under the same name.
 
 **Pre-built cores.** Every device family is a separate target with its own core:

@@ -625,16 +625,31 @@ volumes.
 
 **The tree**
 
-* **Entities** are listed by their tag (name) with a one-letter icon: `[C]` for a
-  camera, `[S]` for a sprite renderer, `[L]` for a class/script entity, `[E]`
-  otherwise. If an entity was instantiated from a class and later renamed, the row
-  shows `Tag (ClassName)` so you can still tell what it is.
-* **Folders** (`[F]`) are purely organizational groupings. Drag entities onto a
-  folder to file them; folders can be nested (the tree stops recursing past 10
-  levels). Expansion state and membership are saved with the level.
-* **World Assets** — placed **view** (`[V]`) and **cinema** (`[C]`) volumes appear
-  in their own section at the bottom, under a *World Assets* heading. Hovering one
-  shows its asset path and position (and scale, for a bounded view volume, or
+Every row starts with a **marker** that says what the row *is*. The markers reuse the
+Content Browser's asset-type codes, so an `.ice_class` instance reads the same way in
+both panels:
+
+| Marker | Meaning |
+| ------ | ------- |
+| `[F]` | **Folder** — an organizational grouping (drawn in folder amber). |
+| `[CL]` | **Class instance** — an entity spawned from an `.ice_class` asset. |
+| `[EN]` | **Entity** — an entity with no class behind it. |
+| `[VW]` | **View** world asset (`.ice_view`). |
+| `[CN]` | **Cinema** world asset (`.ice_cinema`). |
+| `[WA]` | Any other world asset. |
+
+The same legend is printed at the bottom of the **right-click-empty-space** menu, and
+hovering a row for a moment shows its type in a tooltip.
+
+* **Entities** are listed by their tag (name). If an entity was instantiated from a
+  class and later renamed, the row shows `Tag (ClassName)` so you can still tell what
+  it is; its tooltip also shows the class asset path.
+* **Folders** are purely organizational groupings. Drag entities onto a folder to file
+  them; folders can be nested (the tree stops recursing past 10 levels). Expansion
+  state and membership are saved with the level.
+* **World Assets** — placed **view** and **cinema** volumes appear in their own section
+  at the bottom, under a *World Assets* heading, tinted per type. Hovering one shows
+  its type, asset path and position (and scale, for a bounded view volume, or
   *Infinite* for an unbounded one).
 
 **Operations**
@@ -653,7 +668,7 @@ volumes.
 | **Right-click an entity** | Copy / Cut / Paste, and **Move to Folder ▸** with `(None)` plus every folder. |
 | **Right-click a folder** | **Rename Folder**, **Create Subfolder**, **Delete Folder**, and **Move to Root** for a nested folder. |
 | **Right-click a world asset** | **Remove**, **Open in Editor**. |
-| **Right-click empty space** | **Create Folder**, plus the drag hints. |
+| **Right-click empty space** | **Create Folder**, the drag hints, plus the **marker legend**. |
 
 All shortcuts require the Outliner to be focused, no popup open, and no text field
 active.

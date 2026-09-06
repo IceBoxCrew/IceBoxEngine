@@ -110,6 +110,7 @@
 60. [Console — Консоль разработчика и система команд](#60-console--консоль-разработчика-и-система-команд)
 61. [Draw — Немедленная отрисовка (Draw / Texture / RenderTarget)](#61-draw--немедленная-отрисовка-draw--texture--rendertarget)
 62. [Decal — Дырки от пуль, брызги крови, следы копоти](#62-decal--дырки-от-пуль-брызги-крови-следы-копоти)
+63. [Xbox — Экосистема Microsoft (сеть Xbox и Microsoft Store)](#63-xbox--экосистема-microsoft-сеть-xbox-и-microsoft-store)
 
 ---
 
@@ -19661,7 +19662,7 @@ local id = Ads.GetAdvertisingId()        -- "" пока не получен / е
 
 | Функция | Описание |
 |---|---|
-| `Ads.UpdateConversionValue(value)` | Точное значение конверсии SKAdNetwork `0..63` |
+| `Ads.UpdateConversionValue(value)` | Точное значение конверсии SKAdNetwork `0..63` — доходит только до сетей, перечисленных в `SKAdNetworkItems`, см. Build Game → iOS → *Идентификаторы SKAdNetwork* |
 | `Ads.UpdatePostbackConversionValue(fine, coarse)` | Точное значение плюс грубая корзина — `"low"` / `"medium"` / `"high"` (iOS 16.1+; ниже откатывается только к точному значению) |
 | `Ads.GetAttributionToken()` | Токен атрибуции Apple Search Ads — отправьте его POST-ом на `https://api-adservices.apple.com/api/v1/` со своего сервера, чтобы определить кампанию |
 | `Ads.ShowStoreOverlay(appStoreId)` | Показывает карточку App Store через `SKOverlay` — родная площадка Apple для кросс-промо, рекламный SDK не нужен |
@@ -20269,7 +20270,9 @@ end
 >
 > **Про iOS:** сохранения идут через GameKit, поэтому игрок должен быть авторизован в Game Center — иначе `SavedGames.Init()` присылает `OnError("", "not_signed_in")`. У `SavedGames.ShowUI()` нет нативного аналога на iOS: он присылает `OnError("", "no_system_saved_games_ui_on_ios")`, свой выбор слота нужно рисовать самим.
 >
-> **Требование при сборке:** включите «Google Play Games» с поддержкой Saved Games в окне Build Game.
+> **Требование при сборке:** отметьте **Облачное сохранение (Saved Games)** в Build Game → Android. Saved Games — это Snapshots из Play Games, поэтому редактор включает вместе с ним **Google Play Games**, а сборка не запустится без Play Games App ID: без инициализированного SDK и авторизованного игрока любая операция со слотом падает в рантайме.
+>
+> **Авторизация:** `SavedGames.Init()` сам инициализирует Play Games SDK, поэтому работает независимо от того, вызывали вы `PlayGames.Init()` или нет. Если игрок не авторизован в Play Games, приходит `OnError("", "not_signed_in")` — то же сообщение, что и на пути iOS/Game Center; вызовите `PlayGames.SignIn()` и повторите.
 
 ---
 
@@ -20368,7 +20371,41 @@ end)
 SavedGames.ShowUI()
 ```
 
-Открывает встроенный UI Google Play Saved Games, где игрок может просматривать и управлять своими сохранениями.
+Открывает встроенный UI Google Play Saved Games, где игрок может просматривать, добавлять
+и удалять свои сохранения. Что именно выбрал игрок, приходит в `SavedGames.OnUIResult` —
+сам UI ничего не загружает и не пишет, поэтому `SavedGames.Load()` или `SavedGames.Save()`
+после него вызываете вы.
+
+```lua
+SavedGames.OnUIResult(function(action, slotName, description)
+    if action == "selected" then
+        SavedGames.Load(slotName)
+    elseif action == "new" then
+        SavedGames.Save("save_" .. os.time(), SerializeGameState(), "Новое сохранение")
+    end
+end)
+
+SavedGames.ShowUI()
+```
+
+---
+
+### 46.6a SavedGames.OnUIResult
+
+```lua
+SavedGames.OnUIResult(function(action, slotName, description) end)
+```
+
+Срабатывает, когда игрок закрывает UI Saved Games, открытый через `SavedGames.ShowUI()`.
+
+| `action` | Что произошло | `slotName` / `description` |
+|----------|---------------|----------------------------|
+| `"selected"` | Игрок выбрал существующее сохранение | имя слота и его описание |
+| `"new"` | Игрок попросил новый слот | оба пустые — имя придумываете вы |
+| `"cancelled"` | Игрок вышел из UI | оба пустые |
+
+> **Платформа:** только Android. На iOS `SavedGames.ShowUI()` по-прежнему присылает
+> `OnError("", "no_system_saved_games_ui_on_ios")`, и этот колбэк не срабатывает.
 
 ---
 
@@ -20390,6 +20427,7 @@ SavedGames.Destroy()
 | `SavedGames.OnSaved(fn)` | `(slotName: string)` | Данные сохранены в слот |
 | `SavedGames.OnDeleted(fn)` | `(slotName: string)` | Слот удалён |
 | `SavedGames.OnError(fn)` | `(slotName: string, message: string)` | Произошла ошибка |
+| `SavedGames.OnUIResult(fn)` | `(action: string, slotName: string, description: string)` | Игрок закрыл UI Saved Games (Android) |
 | `SavedGames.ClearCallbacks()` | — | Удалить все колбэки |
 
 ---
@@ -20437,7 +20475,7 @@ end
 
 > **Платформа:** Android. Для iOS движок не поставляет Firebase SDK, поэтому там `Firebase.IsSupported()` возвращает `false`, а все вызовы ничего не делают. На десктопе и в Web — тоже `false`.
 >
-> **Требование при сборке:** включите «Firebase» в окне Build Game и поместите `google-services.json` в проект.
+> **Требование при сборке:** отметьте **Firebase Analytics** в Build Game → Android и укажите в поле **Конфиг Firebase (google-services.json)** файл, скачанный из консоли Firebase (Настройки проекта → Ваши приложения → Android). Сборка разбирает его, находит клиента, у которого `package_name` совпадает с вашим **Именем пакета**, и генерирует строковые ресурсы `google_app_id` / `gcm_defaultSenderId` / `project_id` / `google_api_key`, которые `FirebaseApp` читает при старте процесса, плюс `res/raw/keep.xml`, чтобы shrinker ресурсов их не вырезал. Отсутствующий файл, битый JSON или несовпадение имени пакета намеренно валят сборку: без этих ресурсов любой вызов `Firebase.*` молча выбрасывается, а `Notifications.GetToken()` никогда не вернёт FCM-токен.
 
 ---
 
@@ -20629,6 +20667,10 @@ end
 > **Про iOS:** локальные уведомления поддерживаются полностью, включая `OnShown` (показ поверх работающей игры) и `OnClicked`. `Notifications.GetToken()` возвращает APNs-токен устройства в виде hex-строки после того, как `Notifications.Init()` зарегистрирует приложение для remote-уведомлений — это происходит только если приложение подписано с entitlement `aps-environment` (Build Game → iOS → *Push Notifications*); без него токен останется `""`. Учтите, что `delaySec = 0` на iOS срабатывает сразу, а не округляется до секунды.
 >
 > **Требование при сборке:** включите «Notifications» в окне Build Game.
+>
+> **`OnClicked` на Android:** каждое уведомление, которое отправляет движок, несёт id, переданный в `ShowLocal()`; тап по нему открывает игру и вызывает `OnClicked` с этим id строкой — неважно, работала игра, была свёрнута или была убита. При холодном старте событие приходит на первом кадре после `Notifications.Init()`, поэтому регистрируйте колбэк в `OnCreate()` сразу после `Init()`, если хотите отреагировать на тап, которым игру и запустили.
+>
+> **`OnTokenReceived` на Android:** токен FCM запрашивается в `Notifications.Init()` и перепроверяется каждый раз, когда приложение возвращается на передний план; колбэк срабатывает только при реальном изменении значения, поэтому отправлять токен на свой сервер прямо из него безопасно. Токен, который FCM обновил при закрытой игре, придёт при следующем запуске. Для этого нужен включённый **Firebase** с корректным `google-services.json` — с одними **Notifications** токен остаётся `""`, работают только локальные уведомления.
 
 ---
 
@@ -20807,9 +20849,14 @@ end
 Таблица **`Consent`** предоставляет Lua API для **управления согласием GDPR** через **User Messaging Platform (UMP)** от Google.
 Показывает формы согласия, проверяет статус и определяет, можно ли показывать рекламу с персонализацией.
 
-> **Платформа:** Android (Google UMP) и iOS (App Tracking Transparency). На iOS `Consent.ShowForm()` показывает системный запрос ATT, а `Consent.GetStatus()` отображает статус ATT на тот же словарь, что и UMP: `"required"` (ещё не спрашивали), `"obtained"` (пользователь ответил), `"not_required"` (ограничено / до iOS 14). У `Consent.Reset()` нет аналога на iOS — он вызывает `OnError` с `"reset_unsupported_on_ios"`. На десктопе и в Web `Consent.IsSupported()` возвращает `false`.
+> **Платформа:** Android (Google UMP) и iOS. На iOS у модуля два режима:
 >
-> **Требование при сборке:** включите «Consent (UMP)» в окне Build Game.
+> * **Когда рядом с рекламным SDK положен `UserMessagingPlatform.xcframework`** (его ставит `fetch_googlemobileads.sh`) `Consent` — это настоящий поток Google UMP, ровно как на Android: `Consent.Init()` запрашивает информацию о согласии, `Consent.ShowForm()` показывает форму UMP, если она требуется, **а затем** запрос ATT, `Consent.GetStatus()` возвращает статус согласия UMP, `Consent.CanShowAds()` повторяет `canRequestAds` из UMP, а `Consent.Reset()` сбрасывает сохранённое согласие. Именно этот режим нужен в продакшене: Google требует сертифицированную платформу согласия до показа рекламы пользователям из EEA/Великобритании, и одного ATT для этого недостаточно.
+> * **Без фреймворка UMP** модуль откатывается к одному App Tracking Transparency: `Consent.ShowForm()` показывает системный запрос ATT, а `Consent.GetStatus()` отображает статус ATT на тот же словарь — `"required"` (ещё не спрашивали), `"obtained"` (пользователь ответил), `"not_required"` (ограничено / до iOS 14); `Consent.Reset()` при этом присылает `OnError` с `"reset_unsupported_on_ios"`.
+>
+> Режим выбирается в рантайме, поэтому один и тот же Lua-код покрывает оба. На десктопе и в Web `Consent.IsSupported()` возвращает `false`.
+>
+> **Требование при сборке:** на Android отметьте **Consent (UMP)** в Build Game → Android. На iOS отдельного переключателя нет — SDK согласия приезжает вместе с **Ads & Attribution**, поэтому включите его и дайте `fetch_googlemobileads.sh` положить оба фреймворка.
 
 ---
 
@@ -20834,6 +20881,17 @@ Consent.Init(debugGeography?)
 | Параметр | Тип | Описание |
 |----------|-----|----------|
 | `debugGeography` | `bool` | Если `true`, симулирует географию EEA для тестирования (по умолчанию: `false`) |
+
+На Android `debugGeography = true` собирает `ConsentDebugSettings` с
+`DEBUG_GEOGRAPHY_EEA` и регистрирует текущее устройство как тестовое для UMP (хешированный
+id выводится из `ANDROID_ID` так же, как AdMob выводит свой test-device id), поэтому форма
+показывается и за пределами EEA. На iOS то же самое делается через `UMPDebugSettings`,
+когда фреймворк UMP присутствует: список тестовых устройств берётся из
+`Ads.SetTestDeviceIds()`, если вы его вызывали, иначе используется `identifierForVendor`
+устройства. В режиме отката на ATT флаг игнорируется — у системного запроса нет географии
+для симуляции. В релиз в любом случае отправляйте с выключенным флагом: на реальной
+установке отметка тестового устройства ничего не даёт, зато отладочная сборка ведёт себя не
+так, как видят игроки.
 
 ```lua
 Consent.Init()
@@ -21334,7 +21392,7 @@ end
 Таблица **`DeepLinks`** предоставляет Lua API для **глубоких ссылок** (App Links / Intent URI) —
 позволяет открывать игру через пользовательские URL и реагировать на входящие данные.
 
-> **Платформа:** Android (intent-фильтр) и iOS (своя URL-схема). Схема задаётся в Build Game → iOS → *URL-схема диплинков*, регистрируется в `CFBundleURLTypes`, и открытие `yourscheme://...` передаёт полный URI в `OnReceived` (вторым аргументом приходит query-строка). На десктопе и в Web `DeepLinks.IsSupported()` возвращает `false`.
+> **Платформа:** Android (intent-фильтр) и iOS (своя URL-схема). Схема задаётся в Build Game → Android → *URL-схема диплинков* и Build Game → iOS → *URL-схема диплинков*; на iOS она регистрируется в `CFBundleURLTypes`, на Android — в `<intent-filter>` запускаемой Activity. Открытие `yourscheme://...` передаёт полный URI в `OnReceived` (вторым аргументом приходит query-строка). Если поле Android оставить пустым, схемой становится имя пакета, так что `com.studio.game://invite?code=ABC` работает сразу и две игры никогда не претендуют на одну схему. На десктопе и в Web `DeepLinks.IsSupported()` возвращает `false`.
 >
 > **Настройка:** зарегистрируйте свою схему/хост глубоких ссылок в `AndroidManifest.xml` через настройки Build Game.
 
@@ -24682,6 +24740,812 @@ function Shoot(fromX, fromY, dirX, dirY)
             lifetime = 30, fadeOut = 2
         })
     end
+end
+```
+
+---
+
+## 63. Xbox — Экосистема Microsoft (сеть Xbox и Microsoft Store)
+
+### Обзор
+
+Три таблицы покрывают всё, с чем общается тайтл на Microsoft GDK. **`Xbox`** — это игрок и сама
+консоль: вход в профиль, геймертег, привилегии, системный UI, облачные сохранения, а при наличии
+Service Configuration ID — ещё и достижения, статистика, таблицы лидеров, присутствие, профиль и
+друзья. **`XboxStore`** — коммерция: лицензия игры, триалы, товары Store, покупки, дополнения,
+расходуемые товары, пакеты DLC и обновления пакетов. **`XboxMultiplayer`** подключает собственный
+сетевой код движка к социальному графу Xbox: активности со своей строкой подключения, приглашения,
+заход из гайда и Recent Players — в том числе между платформами.
+
+> **Платформа:** любая сборка Microsoft GDK — `Desktop` (Gaming.Desktop.x64, тайтл Xbox, который
+> работает на Windows и продаётся в Microsoft Store), `XboxOne` и `Scarlett`. Один и тот же скрипт
+> работает на всех трёх: здесь нет ничего, что зависит от семейства устройств. На любой не-GDK
+> платформе `Xbox.IsSupported()` возвращает `false`, а все вызовы становятся безопасными
+> no-op — код можно оставить в кроссплатформенном проекте без обёрток.
+>
+> **Требование к сборке:** выберите **Xbox** в окне Build Game и заполните настройки Xbox
+> (Package Identity, Publisher ID, а для всего, что касается сети Xbox, — Title ID, Store ID и
+> MSA App ID из Partner Center). Без Title ID тайтл запустится, но сетевая часть Xbox останется
+> недоступной.
+>
+> **Потоки:** каждый асинхронный вызов возвращает управление сразу, а результат приходит в
+> колбэк, который движок вызывает в игровом потоке между кадрами. Никакие блокировки не нужны.
+
+---
+
+### 63.1 Доступность и жизненный цикл
+
+```lua
+Xbox.IsSupported() -> bool          -- сборка сделана под Microsoft GDK
+Xbox.IsConsole() -> bool            -- Xbox One / Xbox Series, а не PC-семейство
+Xbox.GetDeviceFamily() -> string    -- "Desktop", "XboxOne", "Scarlett", "" вне GDK
+Xbox.IsInitialized() -> bool        -- игровой рантайм и очередь задач подняты
+Xbox.Init() -> bool                 -- идемпотентно; движок сам вызывает это на старте
+Xbox.Shutdown()                     -- освободить очередь задач и все открытые хендлы
+Xbox.IsFeatureAvailable(name) -> bool
+```
+
+`Xbox.Init()` вызывается автоматически при регистрации скриптового API, поэтому скриптам обычно
+достаточно читать `Xbox.IsInitialized()`. `Xbox.IsFeatureAvailable` спрашивает у установленных
+Gaming Services, какие части рантайма присутствуют, и принимает имя фичи: `"XStore"`, `"XUser"`,
+`"XGameUI"`, `"XGameSave"`, `"XPackage"`, `"XPersistentLocalStorage"`, `"XSystem"`, `"XLauncher"`,
+`"XNetworking"`, `"XAppCapture"`, `"XAccessibility"`, `"XSpeechSynthesizer"`, `"XGameStreaming"`,
+`"XGameInvite"`, `"XTaskQueue"`, `"XThread"`, `"XAsync"`, `"XDisplay"`, `"XGame"`.
+
+```lua
+function OnStart()
+    if not Xbox.IsSupported() then return end
+
+    Print("Семейство устройств: " .. Xbox.GetDeviceFamily())
+    if Xbox.IsConsole() then
+        -- UI только под геймпад, безопасные поля под ТВ
+    end
+end
+```
+
+---
+
+### 63.2 Вход в профиль и данные игрока
+
+```lua
+Xbox.SignIn(allowUi)                    -- allowUi по умолчанию true
+Xbox.IsSignedIn() -> bool
+Xbox.GetGamertag(component) -> string
+Xbox.GetUserId() -> number              -- XUID
+Xbox.GetUserIdString() -> string        -- тот же XUID строкой
+Xbox.GetUserState() -> string           -- "signedin" | "signingout" | "signedout" | "none"
+Xbox.GetAgeGroup() -> string            -- "unknown" | "child" | "teen" | "adult"
+Xbox.IsGuest() -> bool
+Xbox.GetMaxUsers() -> number
+```
+
+`Xbox.SignIn(true)` показывает системный выбор аккаунта, если никто не вошёл; `Xbox.SignIn(false)`
+молча берёт пользователя по умолчанию и так же молча ничего не делает, если его нет — именно это
+нужно на старте, а интерактивную форму лучше повесить на кнопку.
+
+`component` выбирает форму геймертега:
+
+| Значение | Что возвращает |
+| -------- | -------------- |
+| `"unique"` *(по умолчанию)* | Современный геймертег с суффиксом — `Player#1234` |
+| `"modern"` | Современный геймертег без суффикса |
+| `"suffix"` | Только суффикс, пустая строка если его нет |
+| `"classic"` | Старый 15-символьный геймертег |
+
+```lua
+Xbox.OnSignIn(function(success, gamertag, message)
+    if success then
+        Print("С возвращением, " .. gamertag)
+    else
+        Print("Вход не выполнен: " .. message)
+    end
+end)
+
+function OnStart()
+    Xbox.SignIn(false)
+end
+
+function OnSignInButton()
+    Xbox.SignIn(true)
+end
+```
+
+`Xbox.GetAgeGroup()` пригодится, чтобы смягчить всё возрастно-чувствительное (чат,
+пользовательский контент, предложения магазина) для аккаунтов `"child"` и `"teen"`.
+
+---
+
+### 63.3 Привилегии
+
+```lua
+local allowed, reason = Xbox.CheckPrivilege(name)
+Xbox.ResolvePrivilege(name)     -- показать системный сценарий, который это исправляет
+```
+
+`name` — одно из `"CrossPlay"`, `"Clubs"`, `"Sessions"`, `"Broadcast"`, `"ManageProfilePrivacy"`,
+`"GameDvr"`, `"MultiplayerParties"`, `"CloudManageSession"`, `"CloudJoinSession"`,
+`"CloudSavedGames"`, `"SocialNetworkSharing"`, `"UserGeneratedContent"`, `"Communications"`,
+`"Multiplayer"`, `"AddFriends"` (регистр не важен).
+
+`reason` — `"none"`, `"purchase_required"`, `"restricted"`, `"banned"`, `"no_user"`,
+`"unknown_privilege"` или `"unknown"`.
+
+```lua
+function TryOpenMultiplayer()
+    local allowed, reason = Xbox.CheckPrivilege("Multiplayer")
+    if allowed then
+        StartMatchmaking()
+    else
+        Xbox.ResolvePrivilege("Multiplayer")
+    end
+end
+
+Xbox.OnPrivilege(function(success, privilege, message)
+    if success then TryOpenMultiplayer() end
+end)
+```
+
+> **Требование сертификации.** Тайтл с онлайн-игрой обязан проверять `Multiplayer` (и
+> `Communications` перед голосовым или текстовым чатом) и уводить игрока с отказом в
+> `Xbox.ResolvePrivilege`, а не в тупик.
+
+---
+
+### 63.4 Информация о системе
+
+```lua
+Xbox.GetDeviceType() -> string     -- "pc", "xboxone", "xboxone_s", "xboxone_x",
+                                   -- "xboxone_x_devkit", "xbox_series_s", "xbox_series_x",
+                                   -- "xbox_series_devkit", "unknown"
+Xbox.GetConsoleId() -> string      -- пусто на PC-семействе
+Xbox.GetSandboxId() -> string      -- "RETAIL" в продакшене, ваш sandbox при разработке
+Xbox.GetTitleId() -> number        -- 0, пока Title ID не задан в MicrosoftGame.config
+Xbox.GetAnalyticsInfo() -> table   -- { family, form, osVersion, hostingOsVersion }
+```
+
+`GetDeviceType()` — правильная точка для пресетов качества: у Xbox Series X есть запас на
+настройки, которых Xbox One S не потянет.
+
+```lua
+local device = Xbox.GetDeviceType()
+if device == "xbox_series_x" then
+    Settings.SetQualityPreset("high")
+elseif device == "xboxone" or device == "xboxone_s" then
+    Settings.SetQualityPreset("low")
+end
+```
+
+---
+
+### 63.5 Системный UI
+
+```lua
+Xbox.ShowAchievements()                                       -- системная панель достижений
+Xbox.ShowProfileCard(xuid)                                    -- по умолчанию локальный игрок
+Xbox.ShowMessageDialog(title, text, first, second, third)     -- 1..3 кнопки
+Xbox.ShowTextEntry(title, description, defaultText, maxLength, scope)
+Xbox.ShowErrorDialog(code, context)
+Xbox.LaunchUri(uri) -> bool
+```
+
+`scope` выбирает раскладку экранной клавиатуры: `"default"`, `"url"`, `"email"`, `"number"`,
+`"password"`, `"telephone"`, `"alphanumeric"`, `"search"`, `"chat"`.
+
+```lua
+Xbox.OnDialog(function(success, operation, button, message)
+    if operation == "ShowMessageDialog" and button == 1 then
+        QuitToMenu()
+    end
+end)
+
+Xbox.OnTextEntry(function(success, text)
+    if success then SetPlayerName(text) end
+end)
+
+function OnQuitPressed()
+    Xbox.ShowMessageDialog("Выход", "Прервать текущий забег?", "Выйти", "Отмена")
+end
+
+function OnRenamePressed()
+    Xbox.ShowTextEntry("Имя", "Назовите сохранение", CurrentName(), 24, "alphanumeric")
+end
+```
+
+> **Достижения.** `Xbox.ShowAchievements()` открывает системную панель достижений вашего тайтла —
+> именно это должен делать пункт меню «Достижения». *Выдача* достижения идёт через Xbox Services
+> API (XSAPI) — отдельную extension-библиотеку GDK, которой дополнительно нужен Service
+> Configuration ID из Partner Center; в эту таблицу она не входит.
+
+---
+
+### 63.6 Connected storage — облачные сохранения
+
+```lua
+Xbox.GetSaveFolder(configurationId)                 -- асинхронно, ответ в OnSaveFolder
+Xbox.GetSaveQuota(configurationId) -> number        -- сколько байт осталось, 0 если недоступно
+```
+
+Connected storage выдаёт вошедшему игроку папку, которую система синхронизирует с облаком и
+обратно на каждом устройстве, где он входит в профиль. `configurationId` — имя контейнера
+сохранений, объявленное для тайтла; движок отдаёт вам реальный путь, а дальше вы читаете и пишете
+его обычными `Scene.SaveGame` и файловыми вызовами.
+
+```lua
+local saveDir = nil
+
+Xbox.OnSaveFolder(function(success, configurationId, pathOrError)
+    if success then
+        saveDir = pathOrError
+        LoadProgressFrom(saveDir .. "/progress.json")
+    else
+        Print("Connected storage недоступен: " .. pathOrError)
+    end
+end)
+
+function OnStart()
+    if Xbox.IsSupported() then Xbox.GetSaveFolder("MyGameSaves") end
+end
+```
+
+---
+
+### 63.7 XboxStore — лицензия и триалы
+
+```lua
+XboxStore.IsAvailable() -> bool
+XboxStore.QueryLicense()                    -- асинхронно, ответ в Xbox.OnLicense
+XboxStore.GetLicense() -> table
+XboxStore.IsLicenseActive() -> bool
+XboxStore.IsTrial() -> bool
+XboxStore.GetTrialSecondsRemaining() -> number
+```
+
+`GetLicense()` отдаёт последний полученный ответ, поэтому его дёшево опрашивать:
+
+| Поле | Что означает |
+| ---- | ------------ |
+| `queried` | `false`, пока не прошёл первый успешный `QueryLicense()` |
+| `isActive` | Игрок лицензирован играть прямо сейчас |
+| `isTrial` | Это триальная лицензия |
+| `isTrialOwnedByThisUser` | Триал принадлежит вошедшему игроку |
+| `isDiscLicense` | Лицензия получена с диска |
+| `trialTimeRemainingInSeconds` | Сколько секунд триала осталось |
+| `skuStoreId`, `trialUniqueId`, `expirationDate` | Идентификаторы и время истечения |
+
+```lua
+Xbox.OnLicense(function(success, message)
+    if not success then return end
+    local lic = XboxStore.GetLicense()
+    if lic.isTrial then
+        StartTrialCountdown(lic.trialTimeRemainingInSeconds)
+    end
+end)
+
+function OnStart()
+    XboxStore.QueryLicense()
+end
+```
+
+Систему лицензии перезапрашивает сама, как только та меняется (триал превратился в покупку,
+подписка закончилась): `Xbox.OnLicense` срабатывает снова, поэтому читайте `GetLicense()` внутри
+колбэка, а не кэшируйте флаги.
+
+---
+
+### 63.8 XboxStore — товары и цены
+
+```lua
+XboxStore.QueryProducts(kinds, storeIds)      -- конкретные Store ID
+XboxStore.QueryAssociatedProducts(kinds)      -- всё, что продаётся вместе с тайтлом
+XboxStore.QueryEntitledProducts(kinds)        -- всё, чем игрок уже владеет
+XboxStore.GetProducts() -> table              -- последний набор результатов
+```
+
+`kinds` — фильтр через `"|"`: `"Durable"`, `"Consumable"`, `"UnmanagedConsumable"`, `"Game"`,
+`"Pass"`; по умолчанию включены все. `storeIds` — массив Store ID.
+
+У каждой записи `GetProducts()` есть `storeId`, `title`, `description`, `language`,
+`inAppOfferToken`, `linkUri`, `kind`, `price`, `basePrice`, `currencyCode`, `formattedPrice`,
+`formattedBasePrice`, `isOnSale`, `hasDigitalDownload` и `isInUserCollection`.
+
+**Всегда показывайте `formattedPrice`, а не `price`** — это локализованная строка с правильной
+валютой, ровно та, что напечатал бы сам Store.
+
+```lua
+Xbox.OnProducts(function(success, count, operation, message)
+    if not success then
+        Print("Запрос в Store не удался: " .. message)
+        return
+    end
+    for _, p in ipairs(XboxStore.GetProducts()) do
+        AddShopRow(p.storeId, p.title, p.formattedPrice, p.isInUserCollection)
+    end
+end)
+
+function OpenShop()
+    XboxStore.QueryAssociatedProducts("Durable|Consumable")
+end
+```
+
+---
+
+### 63.9 XboxStore — покупки и UI магазина
+
+```lua
+XboxStore.ShowPurchaseUI(storeId, name)               -- name необязателен
+XboxStore.ShowProductPageUI(storeId)
+XboxStore.ShowAssociatedProductsUI(storeId, kinds)
+XboxStore.ShowRateAndReviewUI()
+```
+
+Все четыре передают управление системному оверлею Store и отвечают через колбэк.
+`ShowPurchaseUI` отчитывается в `Xbox.OnPurchase`, остальные три — в `Xbox.OnDialog`.
+
+```lua
+Xbox.OnPurchase(function(success, storeId, message)
+    if success then
+        XboxStore.QueryEntitledProducts("Durable")
+        XboxStore.QueryAddOnLicenses()
+    else
+        Print("Покупка не завершена: " .. message)
+    end
+end)
+
+function BuySkin()
+    XboxStore.ShowPurchaseUI("9NBLGGH4R315", "Золотой скин")
+end
+```
+
+`ShowRateAndReviewUI()` отчитывается через `Xbox.OnDialog` с `operation == "ShowRateAndReviewUI"`
+и `value == 1`, если игрок действительно оставил или обновил отзыв.
+
+---
+
+### 63.10 XboxStore — дополнения и расходуемые товары
+
+```lua
+XboxStore.QueryAddOnLicenses()                            -- асинхронно
+XboxStore.GetAddOnLicenses() -> table
+XboxStore.QueryConsumableBalance(storeId)                 -- асинхронно
+XboxStore.ReportConsumableFulfillment(storeId, quantity)  -- асинхронно, quantity по умолчанию 1
+```
+
+Лицензии дополнений — это то, что вы проверяете для постоянного контента: сезонного пропуска,
+персонажа, разблокировки. У каждой записи есть `skuStoreId`, `inAppOfferToken`, `isActive` и
+`expirationDate`.
+
+Расходуемые товары не «принадлежат», а тратятся: запросите баланс и сообщайте о списании каждый
+раз, когда игрок что-то потратил. Оба вызова отвечают в `Xbox.OnConsumableBalance` с остатком.
+
+```lua
+Xbox.OnAddOnLicenses(function(success, count, message)
+    if not success then return end
+    for _, lic in ipairs(XboxStore.GetAddOnLicenses()) do
+        if lic.isActive then UnlockContent(lic.inAppOfferToken) end
+    end
+end)
+
+Xbox.OnConsumableBalance(function(success, storeId, quantity, message)
+    if success then SetCoinBalance(quantity) end
+end)
+
+function SpendCoins(amount)
+    XboxStore.ReportConsumableFulfillment("9NBLGGH4R315", amount)
+end
+```
+
+---
+
+### 63.11 XboxStore — пакеты, DLC и обновления
+
+```lua
+XboxStore.GetCurrentPackageIdentifier() -> string
+XboxStore.IsPackaged() -> bool
+XboxStore.GetUserLocale() -> string
+XboxStore.GetPackageIdentifier(storeId) -> string
+XboxStore.GetInstalledPackages(kind) -> table    -- "content" (по умолчанию), "game", "publishercontent"
+
+XboxStore.MountPackage(packageIdentifier)        -- асинхронно, ответ в Xbox.OnPackageMounted
+XboxStore.GetPackageMountPath(packageIdentifier) -> string
+XboxStore.UnmountPackage(packageIdentifier)
+
+XboxStore.QueryPackageUpdates()                  -- асинхронно, ответ в Xbox.OnPackageUpdates
+XboxStore.GetPackageUpdates() -> table
+XboxStore.DownloadAndInstallUpdates()            -- асинхронно, ответ в Xbox.OnPackageInstall
+```
+
+Установленное DLC приходит пакетами. Перечислите их, смонтируйте нужный — и путь монтирования
+станет обычной папкой, которую можно читать как любой другой корень контента; именно так тайтл на
+GDK накладывает DLC поверх `Content/`. У записей `GetInstalledPackages` есть `packageIdentifier`,
+`displayName`, `description`, `publisher`, `storeId`, `titleId`, `version`, `kind`, `installing` и
+`ageRestricted`.
+
+```lua
+Xbox.OnPackageMounted(function(success, packageIdentifier, pathOrError)
+    if success then
+        Print("DLC смонтировано в " .. pathOrError)
+    end
+end)
+
+function LoadInstalledDlc()
+    for _, pkg in ipairs(XboxStore.GetInstalledPackages("content")) do
+        if not pkg.installing then XboxStore.MountPackage(pkg.packageIdentifier) end
+    end
+end
+```
+
+Обновления пакетов — это сценарий обязательного апдейта: запросите их, и если у какой-то записи
+стоит `isMandatory`, запустите загрузку до того, как пустить игрока в игру.
+
+```lua
+Xbox.OnPackageUpdates(function(success, count, message)
+    if not success or count == 0 then return end
+    for _, upd in ipairs(XboxStore.GetPackageUpdates()) do
+        if upd.isMandatory then
+            XboxStore.DownloadAndInstallUpdates()
+            return
+        end
+    end
+end)
+```
+
+---
+
+### 63.12 Xbox Services — Service Configuration ID
+
+Всё, что ниже (достижения, статистика, таблицы лидеров, присутствие, профиль, друзья и
+`XboxMultiplayer`), работает через **Xbox Services API** — extension-библиотеку XSAPI, которая
+входит в состав Microsoft GDK. Ей нужно то, чего не требует остальная часть этого раздела:
+**Service Configuration ID (SCID)** тайтла — GUID, который Partner Center выдаёт вместе с Title ID.
+
+```lua
+Xbox.IsServicesSupported() -> bool   -- движок собран с прилинкованным XSAPI
+Xbox.AreServicesReady() -> bool      -- XSAPI инициализирован и игрок вошёл в профиль
+Xbox.GetScid() -> string
+Xbox.InitServices(scid) -> bool      -- опционально: инициализировать явно
+```
+
+Задайте SCID в **Build Game → Xbox → Service Configuration ID** — сборка запишет его в
+`Config/Engine.json` внутри пакета, движок подхватит его на старте и сам инициализирует XSAPI.
+Скриптам обычно достаточно читать `Xbox.AreServicesReady()`. `Xbox.InitServices(scid)` существует
+для тайтлов, которые получают SCID в рантайме.
+
+`AreServicesReady()` становится истинной **только после входа игрока в профиль** — контекст Xbox
+Live принадлежит пользователю. Делайте сервисные вызовы из `Xbox.OnSignIn`, а не из `OnStart`.
+
+> **Чего это стоит.** Две редистрибутивные библиотеки Microsoft (`libHttpClient.GDK.dll` и
+> `XCurl.dll`) сборка кладёт рядом с исполняемым файлом, и они сами едут в раскладку игры.
+> Ставить и настраивать ничего не нужно. Если движок собран без XSAPI, каждый вызов ниже отвечает
+> `"services_unavailable"`, а остальная часть сборки Xbox работает как обычно.
+
+---
+
+### 63.13 Достижения
+
+```lua
+Xbox.UnlockAchievement(achievementId)                        -- то же, что прогресс 100%
+Xbox.SetAchievementProgress(achievementId, percentComplete)  -- 0..100
+Xbox.QueryAchievements(unlockedOnly)                         -- асинхронно, все страницы
+Xbox.GetAchievements() -> table
+```
+
+`achievementId` — идентификатор, который вы задали в Partner Center. Прогрессные достижения
+принимают процент; достижение без требований прогресса просто выдаётся на 100.
+
+У каждой записи `GetAchievements()` есть `id`, `name`, `unlockedDescription`, `lockedDescription`,
+`progressState` (`"achieved"`, `"in_progress"`, `"not_started"`, `"unknown"`), `iconUrl`,
+`gamerscore`, `currentProgress`, `targetProgress`, `timeUnlocked`, `isSecret` и `isRevoked`.
+
+```lua
+Xbox.OnAchievements(function(success, operation, achievementId, count, message)
+    if operation == "Update" then
+        if success and message ~= "not_modified" then
+            ShowToast("Достижение получено!")
+        end
+    elseif operation == "Query" and success then
+        RebuildAchievementList(Xbox.GetAchievements())
+    end
+end)
+
+function OnBossDefeated()
+    Xbox.UnlockAchievement("1")
+end
+
+function OnEnemyKilled(total)
+    Xbox.SetAchievementProgress("2", math.min(100, math.floor(total * 100 / 500)))
+end
+```
+
+> Сервис отвечает `"not_modified"`, если достижение уже было в этом состоянии — это успех, а не
+> ошибка, и именно так вы не покажете тост о разблокировке дважды. `Xbox.ShowAchievements()`
+> (раздел 63.5) открывает системную панель и SCID не требует.
+
+---
+
+### 63.14 Статистика и таблицы лидеров
+
+Таблицы лидеров Xbox строятся на **title-managed stats**: вы пишете именованные значения игрока, а
+сервис их ранжирует. Движок батчит записи, чтобы насыщенный кадр не превращался в сервисный вызов
+на каждую статистику.
+
+```lua
+Xbox.SetStatNumber(name, value)     -- поставить числовую статистику в очередь
+Xbox.SetStatString(name, value)     -- поставить строковую статистику в очередь
+Xbox.FlushStats()                   -- отправить всё накопленное, асинхронно
+Xbox.DeleteStat(name)               -- асинхронно
+
+Xbox.QueryLeaderboard(leaderboardName, statName, socialGroup, ascending, maxItems)
+Xbox.GetLeaderboardColumns() -> table
+Xbox.GetLeaderboard() -> table
+```
+
+`socialGroup` — `"none"` (по умолчанию, глобальная таблица), `"people"` (друзья игрока) или
+`"favorites"`. `ascending` по умолчанию `false` — именно это нужно таблице рекордов.
+
+У каждой строки таблицы есть `xuid`, `gamertag`, `uniqueModernGamertag`, `rank`, `globalRank`,
+`percentile` и `values` — массив, выровненный по `GetLeaderboardColumns()`.
+
+```lua
+Xbox.OnStats(function(success, operation, count, message)
+    if not success then Print("[stats] " .. operation .. ": " .. message) end
+end)
+
+Xbox.OnLeaderboard(function(success, leaderboardName, rowCount, message)
+    if not success then return end
+    local columns = Xbox.GetLeaderboardColumns()
+    for _, row in ipairs(Xbox.GetLeaderboard()) do
+        AddScoreRow(row.rank, row.gamertag, row.values[1])
+    end
+end)
+
+function OnRunFinished(score, timeSeconds)
+    Xbox.SetStatNumber("HighScore", score)
+    Xbox.SetStatNumber("FastestRun", timeSeconds)
+    Xbox.FlushStats()
+end
+
+function OpenScoreboard()
+    Xbox.QueryLeaderboard("HighScoreLB", "HighScore", "none", false, 25)
+end
+```
+
+> Сбрасывайте на естественных границах — конец забега, завершение уровня, выход в меню, — а не
+> каждый кадр. Имена статистик и таблиц должны совпадать с тем, что настроено в Partner Center.
+
+---
+
+### 63.15 Присутствие, профиль и друзья
+
+```lua
+Xbox.SetPresence(activeInTitle, richPresenceId)   -- асинхронно
+Xbox.QueryProfile(xuid)                           -- асинхронно, по умолчанию локальный игрок
+Xbox.GetProfile() -> table
+Xbox.QueryFriends(filter, maxItems)               -- асинхронно, все страницы
+Xbox.GetFriends() -> table
+```
+
+`richPresenceId` — идентификатор строки rich presence, настроенной в Partner Center: именно он
+превращает «Играет в MyGame» в «В Ледяных пещерах, волна 12» на карточке профиля. Передайте пустую
+строку, чтобы просто пометить игрока активным или неактивным в тайтле.
+
+`GetProfile()` возвращает `queried`, `xuid`, `gamertag`, `modernGamertag`, `uniqueModernGamertag`,
+`appDisplayName`, `gameDisplayName`, `gamerscore` и `gamerPictureUrl`.
+
+`filter` для `QueryFriends` — `"all"` (по умолчанию), `"favorite"` или `"legacy"`. У каждой записи
+есть `xuid`, `isFriend`, `isFavorite` и `isFollowingCaller`.
+
+```lua
+Xbox.OnProfile(function(success, gamertag, message)
+    if success then
+        local p = Xbox.GetProfile()
+        SetHudGamerscore(p.gamerscore)
+        LoadRemoteImage(p.gamerPictureUrl)
+    end
+end)
+
+Xbox.OnFriends(function(success, count, message)
+    if not success then return end
+    for _, friend in ipairs(Xbox.GetFriends()) do
+        if friend.isFriend then AddFriendRow(friend.xuid) end
+    end
+end)
+
+function OnEnterLevel(levelName)
+    Xbox.SetPresence(true, "PresenceInLevel")
+end
+```
+
+---
+
+### 63.16 XboxMultiplayer — кроссплатформенные сессии и приглашения
+
+Транспортом остаётся собственный сетевой код движка (`Network.*`) — на Xbox ровно так же, как
+везде. **`XboxMultiplayer`** — это слой, который подключает этот транспорт к социальному графу
+Xbox: он публикует то, чем занят игрок, как *активность* с вашей **строкой подключения**, чтобы
+друзья могли отправлять и принимать приглашения, заходить прямо из гайда Xbox и попадать в Recent
+Players. И всё это работает между платформами.
+
+```lua
+XboxMultiplayer.IsAvailable() -> bool
+
+XboxMultiplayer.SetActivity(connectionString, joinRestriction, maxPlayers,
+                            currentPlayers, allowCrossPlatform, groupId)
+XboxMultiplayer.DeleteActivity()
+
+XboxMultiplayer.QueryActivities(xuids)     -- во что играют друзья
+XboxMultiplayer.GetActivities() -> table
+
+XboxMultiplayer.SendInvites(xuids, connectionString, allowCrossPlatform)
+XboxMultiplayer.ShowInviteUI()             -- системная панель «пригласить друзей»
+
+XboxMultiplayer.UpdateRecentPlayers(xuids, encounterType)
+XboxMultiplayer.FlushRecentPlayers()
+
+XboxMultiplayer.GetLastInvite() -> table
+XboxMultiplayer.TakePendingInvite() -> string
+XboxMultiplayer.AcceptInvite(inviteUri) -> bool
+
+XboxMultiplayer.GetPreferredLocalUdpPort() -> number
+XboxMultiplayer.GetConnectivityLevel() -> string
+```
+
+**Строка подключения — ваша.** Это непрозрачная строка, которую платформа отдаёт тому, кто
+присоединяется: положите туда всё, что нужно вашему сетевому коду — адрес хоста и порт, код
+комнаты, тикет релея. Движок её не разбирает.
+
+`joinRestriction` — `"public"` (по умолчанию), `"invite_only"` или `"followed"`.
+`allowCrossPlatform` по умолчанию **true**: с ним активность и приглашения доходят до игроков на
+ПК, мобильных и других консолях, где запущен ваш тайтл, а `GetActivities()` сообщает платформу
+каждого друга (`"scarlett"`, `"xboxone"`, `"win32"`, `"windows"`, `"ios"`, `"android"`,
+`"playstation"`, `"nintendo"`, `"all"`, `"unknown"`).
+
+`encounterType` для `UpdateRecentPlayers` — `"default"`, `"teammate"` или `"opponent"`. Отчёт о
+недавних игроках — требование сертификации Xbox для любого тайтла с онлайном: вызывайте его, когда
+игроки заходят и выходят, и один раз сбрасывайте по окончании матча.
+
+**Заход из гайда.** Если игрок принимает приглашение при закрытой игре, тайтл запускается вместе с
+приглашением; если игра уже запущена, приглашение приходит событием. И то и другое попадает в одно
+место:
+
+```lua
+XboxMultiplayer.OnInvite(function(success, operation, sender, payload)
+    if operation == "InviteReceived" then
+        local invite = XboxMultiplayer.GetLastInvite()
+        AskToJoin(invite.senderGamertag, invite.connectionString)
+    elseif operation == "AcceptedInvite" or operation == "PendingInvite" then
+        XboxMultiplayer.AcceptInvite(payload)
+    end
+end)
+
+function OnStart()
+    local pending = XboxMultiplayer.TakePendingInvite()
+    if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+end
+```
+
+`TakePendingInvite()` возвращает приглашение, с которым игру запустили, и сразу его очищает —
+второй вызов не подключит вас повторно.
+
+**Сеть на консоли.** `GetPreferredLocalUdpPort()` возвращает UDP-порт, который консоль
+зарезервировала под мультиплеерный трафик: привязывайте сокет хоста к нему, а не к жёстко
+прописанному порту. `GetConnectivityLevel()` возвращает `"none"`, `"local"`, `"internet"`,
+`"constrained"` или `"unknown"`; всё, кроме `"internet"`, означает, что онлайн не заработает, и
+игрок заслуживает внятного сообщения, а не таймаута.
+
+```lua
+XboxMultiplayer.OnActivity(function(success, operation, id, count, message)
+    if operation == "SetActivity" and success then
+        Print("Друзья теперь могут присоединиться к этой игре")
+    end
+end)
+
+XboxMultiplayer.OnActivities(function(success, count, message)
+    if not success then return end
+    for _, activity in ipairs(XboxMultiplayer.GetActivities()) do
+        if activity.connectionString ~= "" then
+            AddJoinableFriendRow(activity.xuid, activity.platform,
+                                 activity.currentPlayers, activity.maxPlayers,
+                                 activity.connectionString)
+        end
+    end
+end)
+```
+
+---
+
+### 63.17 События
+
+Каждый асинхронный вызов отчитывается через один из этих колбэков. Они вызываются в игровом
+потоке, поэтому внутри них можно спокойно трогать сцену.
+
+```lua
+Xbox.OnSignIn(function(success, gamertag, message) end)
+Xbox.OnUserChanged(function(change, stillSignedIn) end)
+Xbox.OnLicense(function(success, message) end)
+Xbox.OnProducts(function(success, count, operation, message) end)
+Xbox.OnPurchase(function(success, storeId, message) end)
+Xbox.OnAddOnLicenses(function(success, count, message) end)
+Xbox.OnConsumableBalance(function(success, storeId, quantity, message) end)
+Xbox.OnSaveFolder(function(success, configurationId, pathOrError) end)
+Xbox.OnPackageUpdates(function(success, count, message) end)
+Xbox.OnPackageMounted(function(success, packageIdentifier, pathOrError) end)
+Xbox.OnPackageInstall(function(success, count, message) end)
+Xbox.OnDialog(function(success, operation, value, message) end)
+Xbox.OnTextEntry(function(success, text) end)
+Xbox.OnPrivilege(function(success, privilege, message) end)
+Xbox.OnError(function(operation, message) end)
+
+Xbox.OnAchievements(function(success, operation, achievementId, count, message) end)
+Xbox.OnLeaderboard(function(success, leaderboardName, rowCount, message) end)
+Xbox.OnStats(function(success, operation, count, message) end)
+Xbox.OnPresence(function(success, richPresenceId, message) end)
+Xbox.OnProfile(function(success, gamertag, message) end)
+Xbox.OnFriends(function(success, count, message) end)
+
+XboxMultiplayer.OnActivity(function(success, operation, id, count, message) end)
+XboxMultiplayer.OnActivities(function(success, count, message) end)
+XboxMultiplayer.OnInvite(function(success, operation, sender, payload) end)
+
+Xbox.ClearCallbacks()
+```
+
+`change` в `OnUserChanged` — это `"SignedInAgain"`, `"SigningOut"`, `"SignedOut"`, `"Gamertag"`,
+`"GamerPicture"` или `"Privileges"`. `"SignedOut"` трактуйте как «поставить на паузу и вернуться в
+титульный экран»: консоль может выкинуть игрока из профиля через гайд в любой момент.
+
+`message` при неудаче — это либо короткая причина (`"store_unavailable"`, `"no_user"`,
+`"unavailable"`, `"unsupported_platform"`, `"no_title_id"`), либо сырой `HRESULT` в виде
+`0xXXXXXXXX` — именно его просит поддержка Partner Center.
+
+---
+
+### 63.18 Полный пример — загрузка с учётом GDK
+
+```lua
+local licenceChecked = false
+
+function OnStart()
+    if not Xbox.IsSupported() then
+        StartGame()
+        return
+    end
+
+    Xbox.OnSignIn(function(success, gamertag)
+        if not success then return end
+        SetPlayerLabel(gamertag)
+        XboxStore.QueryLicense()
+        XboxStore.QueryAddOnLicenses()
+        Xbox.GetSaveFolder("MyGameSaves")
+        XboxStore.QueryPackageUpdates()
+
+        if Xbox.AreServicesReady() then
+            Xbox.QueryProfile()
+            Xbox.QueryAchievements(false)
+            Xbox.SetPresence(true, "PresenceInMenu")
+        end
+
+        local pending = XboxMultiplayer.TakePendingInvite()
+        if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+    end)
+
+    Xbox.OnLicense(function(success)
+        if not success then return end
+        local lic = XboxStore.GetLicense()
+        licenceChecked = true
+        if lic.isTrial then
+            StartTrialCountdown(lic.trialTimeRemainingInSeconds)
+        end
+    end)
+
+    Xbox.OnUserChanged(function(change)
+        if change == "SignedOut" then ReturnToTitleScreen() end
+    end)
+
+    Xbox.OnError(function(operation, message)
+        Print("[Xbox] " .. operation .. " -> " .. message)
+    end)
+
+    Xbox.SignIn(false)
 end
 ```
 

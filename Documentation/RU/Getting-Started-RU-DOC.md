@@ -133,8 +133,9 @@ IceBoxEngine-0.9.1-Release-macOS-x64-Setup.pkg
 
 **Linux.** Пакет `.deb` устанавливается в `/opt/iceboxengine`, создаёт симлинки
 `IceBoxLauncher`, `IceBoxEngine` и `IceBoxUpdater` в `/usr/bin`, кладёт
-`iceboxlauncher.desktop` / `iceboxengine.desktop` в `/usr/share/applications` и
-регистрирует MIME-тип `application/x-iceproject` для `*.iceproject`. Он зависит от
+`iceboxlauncher.desktop`, `iceboxengine.desktop` и `iceboxupdater.desktop`
+в `/usr/share/applications` и регистрирует MIME-тип `application/x-iceproject`
+для `*.iceproject`. Он зависит от
 `libgl1`, `libx11-6` и `zenity`, а также рекомендует
 `libasound2`/`libasound2t64`, `libpulse0`, `libwayland-client0`, `libxkbcommon0`,
 `libdecor-0-0` и `libvulkan1` (бэкенд Vulkan подгружает `libvulkan.so.1` в

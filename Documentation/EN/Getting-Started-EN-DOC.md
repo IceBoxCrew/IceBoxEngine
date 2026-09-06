@@ -132,8 +132,9 @@ folder, both shortcut sets, the file association and all of that state.
 
 **Linux.** The `.deb` package installs into `/opt/iceboxengine`, symlinks
 `IceBoxLauncher`, `IceBoxEngine` and `IceBoxUpdater` into `/usr/bin`, installs
-`iceboxlauncher.desktop` / `iceboxengine.desktop` into `/usr/share/applications`
-and registers the `application/x-iceproject` MIME type for `*.iceproject`.
+`iceboxlauncher.desktop`, `iceboxengine.desktop` and `iceboxupdater.desktop` into
+`/usr/share/applications` and registers the `application/x-iceproject` MIME type
+for `*.iceproject`.
 It depends on `libgl1`, `libx11-6` and `zenity`, and recommends
 `libasound2`/`libasound2t64`, `libpulse0`, `libwayland-client0`, `libxkbcommon0`,
 `libdecor-0-0` and `libvulkan1` (the Vulkan backend loads `libvulkan.so.1` at
