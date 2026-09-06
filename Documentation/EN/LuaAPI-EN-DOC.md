@@ -19308,15 +19308,18 @@ Supports **banner**, **interstitial** (full-screen between screens), and **rewar
 >
 > **Build requirement — iOS:** the Google Mobile Ads SDK is not redistributed with the engine,
 > so download it from Google once per machine and put `GoogleMobileAds.xcframework` into
-> `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder.
-> `Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh` does that for you and defaults to
+> `Tools/BuildSystem/Vendor/GoogleMobileAds/` inside the engine folder, or into
+> `~/.cache/IceBoxEngine/Vendor/GoogleMobileAds/` when the engine sits somewhere you cannot
+> write, as an installed `/Applications/IceBoxEngine` is; the build searches both.
+> `Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh` does that for you, picks whichever
+> of the two locations is writable, and defaults to
 > SDK 13.7.0, which Google builds with **Xcode 26.2** — the engine itself still configures on
 > Xcode 15+, so this raised floor applies only to iOS builds that actually link the ads SDK.
 > Pass `--version=X.Y.Z` (or set `ICE_ADMOB_VERSION`) to vendor an older SDK if your Xcode is
 > older; 11.x is the last line that builds on Xcode 15.
 >
 > Then enable **Ads & Attribution** in Build Game → iOS and fill in the **AdMob App ID**.
-> CMake finds `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework`, defines
+> CMake finds `GoogleMobileAds.xcframework` in either vendor location, defines
 > `ICE_HAS_ADMOB` and links it; the build log prints the SDK version it picked up. Without the
 > vendored SDK every `Ads.*` call stays a no-op and logs why. Leaving the AdMob App ID empty
 > while the SDK *is* linked is a hard configure error, because the SDK aborts at launch when

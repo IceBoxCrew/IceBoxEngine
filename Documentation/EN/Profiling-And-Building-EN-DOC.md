@@ -1140,8 +1140,10 @@ runtime (with fallbacks).
   it for you the same way it fetches MoltenVK: when
   `Tools/BuildSystem/Vendor/GoogleMobileAds/GoogleMobileAds.xcframework` is missing it runs
   `fetch_googlemobileads.sh` and **fails the build** if the download does not succeed,
-  rather than quietly producing a game whose `Ads.*` calls are no-op stubs. You can still
-  vendor the framework by hand into that folder. The fetcher also installs
+  rather than quietly producing a game whose `Ads.*` calls are no-op stubs. On a read-only
+  install the fetcher vendors into `~/.cache/IceBoxEngine/Vendor/GoogleMobileAds/` instead,
+  and the build searches the engine tree first and that cache second. You can still vendor
+  the framework by hand into either folder. The fetcher also installs
   `UserMessagingPlatform.xcframework` next to it, and when that framework is present the
   `Consent` Lua API stops being ATT-only and runs the real Google UMP flow (the UMP form
   first, the ATT prompt after) — which is what Google requires before serving ads to EEA/UK

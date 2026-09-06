@@ -519,9 +519,10 @@ under an open-source licence:
 On iOS the equivalent Google Mobile Ads SDK is fetched by the developer with
 Tools/BuildSystem/BuildEngine/fetch_googlemobileads.sh, which downloads it
 straight from Google and places it in Tools/BuildSystem/Vendor/GoogleMobileAds/
-for the build to link. IceBox Engine ships no part of it and never
-redistributes it; that copy is licensed to the developer by Google under the
-terms below.
+- or, when the engine tree is not writable, in
+~/.cache/IceBoxEngine/Vendor/GoogleMobileAds/ - for the build to link. IceBox
+Engine ships that fetcher but no part of the SDK, and never redistributes it;
+that copy is licensed to the developer by Google under the terms below.
 
 Obligations that follow the developer, not IceBoxCrew Studio, when any of
 these are enabled:
