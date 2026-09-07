@@ -151,6 +151,47 @@ This software is used under the terms of the Python Software Foundation License
 Version 2.
 The full text of the license can be found at:
 https://docs.python.org/3/license.html
+The verbatim text, including the copyright notice that PSF License section 2
+requires be retained, is in ThirdPartyLicenses/Python.txt.
+
+Summary of the changes made to Python, as PSF License section 3 requires
+-----------------------------------------------------------------------
+The embedded interpreter is NOT an unmodified upstream build. It is compiled
+from the official CPython 3.12.13 release - available from the Python Software
+Foundation at https://www.python.org/downloads/ and
+https://github.com/python/cpython - with the patch set of the vcpkg "python3"
+port applied on top of it. That patch set originates from the Microsoft vcpkg
+registry (https://github.com/microsoft/vcpkg); IceBoxCrew Studio adds nothing
+to it.
+
+Nine of those patches change CPython's own sources rather than only its build
+system:
+
+  - PC/pyconfig.h and Python/sysmodule.c, to allow CPython to be built and
+    linked as a static library;
+  - PC/pyconfig.h, to stop the headers from emitting an automatic link
+    directive for the Python import library;
+  - PC/python_ver_rc.h, to work around a Windows 11 SDK resource-compiler
+    error;
+  - PC/launcher.c, to stop the launcher from relying on a WINDOWS definition
+    supplied by the build system;
+  - Modules/_ctypes/malloc_closure.c, to remove libffi symbols that would
+    otherwise be defined twice when ctypes links the devendored libffi;
+  - Lib/sysconfig.py, to report the correct include directory;
+  - Misc/python.pc.in and Misc/python-embed.pc.in, to emit correct pkg-config
+    metadata; and
+  - configure.ac, twice: to keep the runtime library search path, and to fix
+    how OpenSSL is linked.
+
+The remaining patches adjust only CPython's MSBuild project files, so that the
+interpreter builds against the same zlib, bzip2, liblzma, SQLite, Expat, libffi
+and OpenSSL that the rest of the engine uses instead of vendored copies of them.
+
+The patches and the complete build recipe travel verbatim inside every IceBox
+Engine installation, in Tools/BuildSystem/Utilities/vcpkg-overlay-ports/python3/;
+the vcpkg.json and portfile.cmake in that same directory record the exact
+upstream version and the full list of patches actually applied, and govern in
+case this summary is ever out of date.
 
 ========================================================================
 6. APACHE LICENSE 2.0
@@ -483,10 +524,64 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 
 ========================================================================
-13. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+13. UNIVERSITY OF ILLINOIS/NCSA OPEN SOURCE LICENSE
+========================================================================
+Used by:
+- DirectX Shader Compiler (dxcompiler.dll; Microsoft's redistributable build of the open source https://github.com/microsoft/DirectXShaderCompiler, which is derived from LLVM and Clang)
+
+Copyright (c) 2003-2015 University of Illinois at Urbana-Champaign.
+Copyright (c) Microsoft Corporation.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+dxcompiler.dll ships on Windows only - next to the engine binaries and next to a
+Windows game built with it - and only where the Direct3D 12 backend is
+available; Direct3D 12 exists on no other target platform. It is taken
+unmodified from the Redist\D3D\<arch> folder of the installed Windows SDK, which
+is where Microsoft places it for redistribution, and it is therefore also
+Microsoft "Distributable Code" under the Visual Studio and Windows SDK licence
+terms (https://visualstudio.microsoft.com/license-terms/).
+
+The file shipped beside it, dxil.dll, is the DXIL signing library. It is
+proprietary Microsoft software rather than open source, is likewise
+redistributed unmodified out of the same Redist\D3D folder under those same
+Microsoft terms, and carries no open source attribution obligation, which is why
+no open source licence text for it appears here.
+
+Full text and the complete explanation are in
+ThirdPartyLicenses/DirectXShaderCompiler.txt.
+
+========================================================================
+14. MOBILE PLATFORM SDKs RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
 ========================================================================
 
-The components listed in sections 1-12 above are the ones that IceBoxCrew
+The components listed in sections 1-13 above are the ones that IceBoxCrew
 Studio redistributes as part of IceBox Engine. The Android game template
 additionally resolves the following packages from Google's Maven repository
 through the game developer's own Gradle build. They are not shipped inside
@@ -536,5 +631,57 @@ these are enabled:
     App Tracking Transparency on iOS, and for their own privacy policy.
 (c) The AndroidX and Kotlin components are Apache-2.0 and require the licence
     and any NOTICE file to be reproduced in the shipped application.
+
+========================================================================
+15. LINUX PACKAGING COMPONENTS RESOLVED AT BUILD TIME (NOT REDISTRIBUTED HERE)
+========================================================================
+
+One more component is resolved on the developer's machine rather than shipped
+by us, and it is listed here for the same reason as section 14: because it ends
+up inside something a developer distributes.
+
+Packaging a Linux game as an .AppImage is optional. Tools/BuildSystem/BuildGame/
+create_game_installer_linux.sh produces a Debian .deb by default; an .AppImage is
+built only when the developer passes --format appimage or --format both. When
+they do, the packer needs two files from the AppImage project:
+
+- appimagetool - https://github.com/AppImage/appimagetool
+- the AppImage type-2 runtime - https://github.com/AppImage/type2-runtime
+  (falling back to https://github.com/AppImage/AppImageKit release 13)
+
+Neither is shipped inside IceBox Engine, and no IceBox Engine installer contains
+either of them. The packer looks for them in
+Tools/BuildSystem/BuildGame/Templates/Linux/, then in
+~/.cache/IceBoxEngine/appimage/, and only then downloads them straight from the
+AppImage project's own release pages. Setting ICE_APPIMAGE_NO_DOWNLOAD=1 stops
+the download; --format deb avoids the whole matter.
+
+The distinction between the two matters:
+
+  (a) appimagetool is a build tool. It runs on the developer's machine and no
+      part of it ends up in the packaged game, so it carries no redistribution
+      obligation.
+
+  (b) The runtime DOES end up in the packaged game. Every .AppImage is that
+      runtime binary with a SquashFS image of the game appended to it, so a
+      developer who ships an .AppImage is redistributing it.
+
+AppImageKit and the type-2 runtime are published under the MIT licence, but the
+runtime is a static build that embeds further components of its own - squashfuse
+and its compression and FUSE dependencies among them - each under its own
+licence, and some of those have historically been copyleft. IceBoxCrew Studio
+neither builds nor redistributes that binary and cannot state which licence set
+applies to the particular build a developer's machine fetches.
+
+Obligations that follow the developer, not IceBoxCrew Studio, when the .AppImage
+format is chosen:
+
+  (a) Read the licence and notice files published with the runtime release you
+      actually shipped, and reproduce whatever they require alongside your game.
+  (b) If any embedded component turns out to be copyleft, satisfy that licence
+      as well - which for LGPL-style terms normally means a written offer of the
+      corresponding source, in the manner section 7 describes for FFmpeg.
+  (c) Nothing in this section applies to the .deb format, which embeds no
+      AppImage code at all.
 
 ========================================================================

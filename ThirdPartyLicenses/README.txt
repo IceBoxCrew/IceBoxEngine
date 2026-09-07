@@ -89,6 +89,10 @@ Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bund
 libcxx-LLVM.txt           LLVM libc++                  Apache-2.0 + LLVM-exception   Android NDK libc++_shared.so, copied into jniLibs/ by build_android.bat / build_android.sh
 Emscripten.txt            Emscripten (+ musl libc)     MIT OR NCSA          Emscripten runtime glue and system libraries linked into the .wasm / .js of a Web build
 
+-- Windows SDK redistributables shipped on Windows only (not from vcpkg) --
+
+DirectXShaderCompiler.txt DirectX Shader Compiler      NCSA (dxcompiler.dll) + Microsoft proprietary (dxil.dll)   Windows SDK Redist\D3D\<arch>, copied next to the engine binaries and next to a Windows game by CMakeLists.txt where the Direct3D 12 backend is available
+
 Windows additionally carries the Microsoft Visual C++ runtime (msvcp140*.dll,
 vcruntime140*.dll, concrt140.dll) next to the engine binaries and next to every
 Windows game built with it, so neither needs the Visual C++ Redistributable to be
@@ -98,6 +102,15 @@ they carry no open-source attribution obligation, which is why no licence file f
 them appears in this directory. The debug variants (msvcp140d.dll and friends) are
 not redistributable and are never shipped - the build stages release runtimes only.
 See https://visualstudio.microsoft.com/license-terms/
+
+dxcompiler.dll and dxil.dll come out of the same family of Microsoft terms - they
+are taken unmodified from the Windows SDK's own Redist\D3D folder - but
+dxcompiler.dll differs from the C++ runtime in one way that matters: it is
+Microsoft's build of the open source DirectX Shader Compiler, so the University of
+Illinois/NCSA licence applies to it in addition, and that licence does require a
+notice in a binary redistribution. DirectXShaderCompiler.txt is that notice.
+dxil.dll is proprietary Microsoft code with no open source obligation, and is
+covered in the same file so the pair is documented in one place.
 
 Linux and Apple platforms redistribute no C/C++ runtime of their own: the Debian
 package declares libstdc++6 and libgcc-s1 as dependencies and links the system
@@ -140,7 +153,19 @@ project by the developer. None of these are shipped inside IceBox Engine, so
 they carry no license file in this directory; they are licensed directly to
 the developer under Google's own terms. The resulting attribution and privacy
 duties fall on the developer of the game. See THIRD_PARTY_NOTICES.txt
-section 13 for the full list and the specific obligations.
+section 14 for the full list and the specific obligations.
+
+------------------------------------------------------------------------
+LINUX PACKAGING COMPONENTS (NOT REDISTRIBUTED HERE)
+------------------------------------------------------------------------
+
+Packaging a Linux game as an .AppImage instead of a .deb is optional, and when
+a developer chooses it the packer fetches appimagetool and the AppImage type-2
+runtime from the AppImage project on their own machine. Neither is shipped
+inside IceBox Engine and neither has a license file in this directory. The
+runtime binary does become part of every .AppImage produced, so the developer
+who ships one is redistributing it and inherits its notice obligations. See
+THIRD_PARTY_NOTICES.txt section 15.
 
 ------------------------------------------------------------------------
 NOTES
@@ -159,12 +184,17 @@ NOTES
 - Cooked video uses the royalty-free VP9 video codec (libvpx, which carries the
   WebM patent grant) with Opus audio in a WebM container; see libvpx.txt. No
   patent-encumbered codec is produced by the engine.
-- FFmpeg (LGPL-2.1) is the only copyleft component in the product. It is dynamically
+- FFmpeg (LGPL-2.1) is the only copyleft component IceBoxCrew Studio redistributes.
+  It is dynamically
   linked and shipped as separate replaceable shared libraries on every platform where
   it is included (Windows, Linux, macOS and Android), so it can be replaced/relinked
   freely without any further action. It is not included on iOS or Web, the two
   platforms that link every library statically, so a game shipped for iOS or Web
   carries no copyleft component at all. See THIRD_PARTY_NOTICES.txt section 7.
+  The one thing that can add a copyleft component to a game without passing through
+  us is the optional .AppImage packaging format, whose runtime the developer's own
+  machine fetches from the AppImage project; THIRD_PARTY_NOTICES.txt section 15
+  explains what that means and what it leaves for the developer to do.
 - SheenBidi (Apache-2.0) provides the Unicode Bidirectional Algorithm on every
   platform and is statically linked everywhere. It replaced GNU FriBidi (LGPL-2.1),
   which earlier versions of the engine used: static LGPL linkage on iOS and Web would
@@ -173,7 +203,12 @@ NOTES
   SheenBidi does not require. See THIRD_PARTY_NOTICES.txt section 6.
 - ANGLE ships only in macOS builds and MoltenVK only in macOS and iOS builds
   (iOS renders solely through MoltenVK); they are listed here so this attribution
-  set is complete across all six target platforms.
+  set is complete across all six target platforms. MoltenVK is the only entry in
+  Tools/BuildSystem/Vendor/ that an installer carries. The Google Mobile Ads iOS
+  SDK, which fetch_googlemobileads.sh places in that same directory on a developer's
+  machine, is licensed to that developer by Google and is never packaged: the
+  install rules exclude it by name, and audit_package.py refuses a package that
+  contains it.
 - enkiTS is statically linked into Windows, Linux, macOS, iOS and Android builds,
   where it runs the multithreaded Box2D solver. Web builds do not link it, because
   Emscripten defaults to a single-threaded runtime; there Box2D falls back to its

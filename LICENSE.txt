@@ -243,7 +243,15 @@ that:
           components we ship, and reverse engineer them for the purpose of
           debugging your modifications; or
 
-    (iii) you are debugging your own Product or Extension.
+    (iii) you are debugging your own Product or Extension; or
+
+    (iv)  you modify your own installed copy of the Software for your own use
+          and keep the result to yourself. The LGPL-2.1 requires us to permit
+          this for the combined work that contains FFmpeg (Section 12.3), and
+          we grant it for the whole of the Software rather than argue about
+          where that work ends. It permits no distribution of any kind -
+          paragraph (a) still forbids that - and it permits nothing that
+          paragraph (e) forbids.
 
 For the avoidance of doubt: this Section restricts what you may do with IceBox
 Engine itself. It does not restrict your Products or your Extensions. Creating,
@@ -418,7 +426,7 @@ while the Software is pre-release.
 12.4 Platform SDKs. Where you enable a feature that pulls in a Google or other
      platform SDK into your Product, that SDK is licensed to you directly by
      its owner under its own terms and is not covered by this License.
-     THIRD_PARTY_NOTICES.txt, Section 13, lists those SDKs and the obligations
+     THIRD_PARTY_NOTICES.txt, Section 14, lists those SDKs and the obligations
      that come with them.
 
 --------------------------------------------------------------------------------
