@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии PR-0.9.1
+### Актуальная для версии R-1.0.0
 
 > **IceBox Engine** использует **Lua** через библиотеку **sol2** для скриптинга игровой логики.
 > Скрипты встраиваются в файлы `.ice_class` (классы объектов), `.icemap` (скрипт уровня),
@@ -111,6 +111,8 @@
 61. [Draw — Немедленная отрисовка (Draw / Texture / RenderTarget)](#61-draw--немедленная-отрисовка-draw--texture--rendertarget)
 62. [Decal — Дырки от пуль, брызги крови, следы копоти](#62-decal--дырки-от-пуль-брызги-крови-следы-копоти)
 63. [Xbox — Экосистема Microsoft (сеть Xbox и Microsoft Store)](#63-xbox--экосистема-microsoft-сеть-xbox-и-microsoft-store)
+64. [Screenshot — Снимок экрана из игры](#64-screenshot--снимок-экрана-из-игры)
+65. [Screen — Размер окна и ориентация устройства](#65-screen--размер-окна-и-ориентация-устройства)
 
 ---
 
@@ -25551,5 +25553,251 @@ function OnStart()
     Xbox.SignIn(false)
 end
 ```
+
+---
+
+## 64. Screenshot — Снимок экрана из игры
+
+> **Тип:** Глобальные функции. Таблица `Screenshot`.
+>
+> Сохраняет в PNG то, что видит игрок, прямо из Lua — без диалогов и без участия
+> редактора. Пригодится для фоторежима, для карточки с итогами забега, которой
+> игрок захочет поделиться, для кнопки «сообщить об ошибке» и для автотеста,
+> которому нужно доказать, что именно было на экране.
+>
+> Захват **откладывается на конец текущего кадра**. Это не ограничение, а
+> единственно верный момент: когда работает ваш `OnUpdate`, нужный кадр ещё не
+> отрисован. Вы делаете запрос, и он срабатывает до вывода кадра на экран, поэтому
+> в PNG попадает всё нарисованное в этом кадре — включая то, что скрипт нарисовал
+> уже после вызова.
+>
+> **Что попадает в кадр.** В собранной игре — всё окно ровно так, как его видит
+> игрок, вместе с чёрными полями. В редакторе — только вьюпорт игры, без панелей,
+> тулбара и консоли, поэтому снимок, сделанный во время теста, совпадает с тем,
+> что выдаст собранная игра.
+>
+> **Куда сохраняется.** Пути ограничены записываемой областью сохранений по тому
+> же правилу, что и у `WriteFile`. `..` и буквы дисков отклоняются. Подпапки
+> создаются автоматически. Игра не может писать в произвольные места на диске
+> игрока — именно этого и хочется от того, что может вызвать мод или скачанный
+> уровень.
+
+### Как сделать снимок
+
+```lua
+-- Имя с меткой времени, выбранное за вас: screenshot_20260910_143512_004.png
+local path = Screenshot.Capture()
+
+-- Или задайте своё. Расширение .png добавится, если вы его не написали.
+Screenshot.Capture("runs/final_blow")
+
+-- Возвращается путь, по которому файл *будет* записан, либо "", если запрос
+-- отклонён (плохой путь или один снимок уже в очереди на этот кадр).
+if path == "" then
+    Print("снимок отклонён")
+end
+```
+
+### Как узнать, что снимок готов
+
+```lua
+if Screenshot.IsPending() then
+    -- ещё в очереди; файла пока нет
+    local queued = Screenshot.GetPendingPath()
+end
+
+-- После того как кадр выведен на экран:
+if Screenshot.DidLastSucceed() then
+    local file = Screenshot.GetLastPath()          -- абсолютный путь на диске
+    local w    = Screenshot.GetLastWidth()
+    local h    = Screenshot.GetLastHeight()
+    Print(string.format("сохранено %s (%dx%d)", file, w, h))
+end
+
+local total = Screenshot.GetCount()                -- снимков за сессию
+```
+
+### Всё остальное
+
+```lua
+Screenshot.Cancel()                                -- снять запрос из очереди
+local dir  = Screenshot.GetDirectory()             -- абсолютный путь папки Screenshots
+local name = Screenshot.MakeName("victory")        -- victory_20260910_143512_004.png
+```
+
+### Один снимок на кадр
+
+Одновременно в очереди только один захват. Второй `Capture()` в том же кадре
+вернёт `""` и напишет предупреждение, а не подменит первый молча: два запроса в
+одном кадре почти всегда означают недодавленный автоповтор клавиши.
+
+```lua
+function OnUpdate(dt)
+    if IsKeyJustPressed("f12") and not Screenshot.IsPending() then
+        Screenshot.Capture()
+    end
+end
+```
+
+### Фоторежим
+
+Спрячьте HUD на тот кадр, который снимаете, и верните его обратно. Поскольку
+захват происходит в конце кадра, пропущенный в этом кадре HUD — это ровно тот
+HUD, которого не будет в файле.
+
+```lua
+local photoMode = false
+local hideHudThisFrame = false
+
+function OnUpdate(dt)
+    if IsKeyJustPressed("f11") then photoMode = not photoMode end
+
+    if photoMode and IsKeyJustPressed("space") and not Screenshot.IsPending() then
+        hideHudThisFrame = true
+        Screenshot.Capture("photos/" .. os.date("%H%M%S"))
+    end
+
+    if not hideHudThisFrame then
+        DrawHud()
+    end
+    hideHudThisFrame = false
+end
+```
+
+### Карточка с итогами забега
+
+```lua
+function OnRunFinished(result)
+    -- сначала рисуем итоги, потом снимаем: оба действия попадают в один кадр
+    DrawResultsScreen(result)
+    local path = Screenshot.Capture("runs/" .. result.seed)
+    if path ~= "" then
+        SetGameString("LastRunCard", path)
+    end
+end
+```
+
+### Справочник
+
+| Функция | Возвращает | Примечания |
+| --- | --- | --- |
+| `Screenshot.Capture(name?)` | `string` | Ставит захват в очередь. Возвращает путь, по которому запишет, либо `""` при отказе. `name` необязателен и ограничен песочницей; `.png` добавляется, если его нет. |
+| `Screenshot.IsPending()` | `bool` | Запрос в очереди, файла ещё нет. |
+| `Screenshot.Cancel()` | — | Снимает запрос из очереди. |
+| `Screenshot.GetPendingPath()` | `string` | Путь запроса в очереди, `""` если очередь пуста. |
+| `Screenshot.GetLastPath()` | `string` | Абсолютный путь последнего попытанного снимка. |
+| `Screenshot.DidLastSucceed()` | `bool` | Был ли последний снимок записан. |
+| `Screenshot.GetLastWidth()` | `int` | Ширина последнего снимка в пикселях, `0` при неудаче. |
+| `Screenshot.GetLastHeight()` | `int` | Высота последнего снимка в пикселях, `0` при неудаче. |
+| `Screenshot.GetCount()` | `int` | Сколько снимков записано за сессию. |
+| `Screenshot.GetDirectory()` | `string` | Абсолютный путь папки Screenshots в песочнице. |
+| `Screenshot.MakeName(prefix?)` | `string` | Имя файла с меткой времени, уникальное до миллисекунды. |
+
+> **См. также:** в Python API редактора есть `editor.screenshot(path)` — тот же
+> захват, но из автоматизации редактора, и путь там *не* ограничен песочницей,
+> потому что это инструмент разработчика, а не то, что запускает собранная игра.
+
+---
+
+## 65. Screen — Размер окна и ориентация устройства
+
+> **Тип:** Глобальные функции. Таблица `Screen`.
+>
+> Размер в пикселях того, во что рисуется игра, и — на Android — управление тем,
+> в какую сторону устройству разрешено поворачиваться.
+>
+> Пригодится, чтобы верстать игру и под широкий экран, и под высокий, и чтобы
+> игрок мог выбрать альбомную или книжную ориентацию в настройках, а не сидел
+> запертым в том, что зашили в сборку.
+
+### Размер и форма
+
+```lua
+local w = Screen.GetWidth()      -- ширина окна в пикселях
+local h = Screen.GetHeight()     -- высота окна в пикселях
+local a = Screen.GetAspect()     -- w / h, 0 если окна ещё нет
+
+if Screen.IsPortrait() then
+    LayoutTall()
+else
+    LayoutWide()
+end
+```
+
+`IsLandscape()` истинна, когда ширина больше или равна высоте, поэтому идеально
+квадратное окно считается альбомным и ровно одна из двух функций всегда истинна.
+
+### Ориентация
+
+```lua
+Screen.SetOrientation("landscape")        -- запереть в альбомной
+Screen.SetOrientation("portrait")         -- запереть в книжной
+Screen.SetOrientation("sensorLandscape")  -- любая альбомная, по датчику
+Screen.SetOrientation("sensorPortrait")   -- любая книжная, по датчику
+Screen.SetOrientation("fullSensor")       -- любая из четырёх
+Screen.SetOrientation("unspecified")      -- вернуть выбор системе
+
+local current = Screen.GetOrientation()   -- что запрашивали последним
+```
+
+`SetOrientation` возвращает `true` только если платформа действительно
+отреагировала.
+
+**Где работает.** На Android — через `setRequestedOrientation` активности. На
+остальных платформах запрос запоминается и возвращается из `GetOrientation()`, но
+ничего не поворачивается: размер окна на десктопе задаёт игрок, а на iOS
+ориентация объявляется бандлом приложения. Спрашивайте, а не предполагайте:
+
+```lua
+if Screen.CanSetOrientation() then
+    ShowOrientationSetting()
+end
+```
+
+**Окно не меняет размер мгновенно.** Запрос уходит в ОС, та поворачивает
+устройство и только потом присылает событие изменения размера. Читайте
+`Screen.GetWidth()` на следующем кадре, а лучше — стройте вёрстку от размера
+каждый кадр, а не кэшируйте его один раз.
+
+### Настройка ориентации, которая ведёт себя правильно
+
+```lua
+local function applyOrientation(choice)
+    if not Screen.CanSetOrientation() then return end
+    Screen.SetOrientation(choice)
+    SetGameString("orientation", choice)
+end
+
+function OnInit()
+    -- восстановить выбор игрока при запуске
+    local saved = GetGameString("orientation")
+    if saved ~= "" then applyOrientation(saved) end
+end
+
+function OnUpdate(dt)
+    -- верстаем от живого размера, поэтому кадр после поворота уже правильный
+    local portrait = Screen.IsPortrait()
+    if portrait ~= wasPortrait then
+        RebuildHud(portrait)
+        wasPortrait = portrait
+    end
+end
+```
+
+### Справочник
+
+| Функция | Возвращает | Примечания |
+| --- | --- | --- |
+| `Screen.GetWidth()` | `int` | Ширина окна в пикселях, `0` пока окна нет. |
+| `Screen.GetHeight()` | `int` | Высота окна в пикселях. |
+| `Screen.GetAspect()` | `float` | Ширина, делённая на высоту, `0` при нулевой высоте. |
+| `Screen.IsLandscape()` | `bool` | Ширина >= высоты. |
+| `Screen.IsPortrait()` | `bool` | Высота > ширины. |
+| `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` только если платформа отреагировала. |
+| `Screen.GetOrientation()` | `string` | Последний запрошенный режим, `unspecified` если не задавали. |
+| `Screen.CanSetOrientation()` | `bool` | Поворачивает ли платформа по запросу. Сегодня — только Android. |
+
+> **См. также:** `Settings.IsMobile()` и `Settings.GetPlatform()`, чтобы решить,
+> нужен ли пункт ориентации в меню вообще.
 
 ---

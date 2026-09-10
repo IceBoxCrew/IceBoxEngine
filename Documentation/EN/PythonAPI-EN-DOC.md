@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.1 Version
+### Actual for R-1.0.0 Version
 
 > **IceBox Engine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
@@ -2527,6 +2527,72 @@ Checks if the viewport is focused.
 #### `editor.is_viewport_hovered()` → `bool`
 
 Checks if the mouse is over the viewport.
+
+#### `editor.screenshot(path="")` → `str`
+
+Captures the game viewport to a PNG and returns the path it will be written to,
+or an empty string if the request was refused.
+
+The capture happens **at the end of the current frame**, not inside the call: at
+the moment your script runs, the frame you want does not exist yet. So the file
+appears one frame later — poll `editor.is_screenshot_pending()` or come back on a
+timer before reading it.
+
+Only the game viewport is captured. Panels, the toolbar and the console are never
+in the image, so a screenshot taken from editor automation matches what the built
+game would produce.
+
+Paths are **not** sandboxed here — this is a maintainer tool. A relative path
+resolves against the project folder; an absolute path is used as given; an empty
+path writes a timestamped file into `<project>/Screenshots`. Missing folders are
+created, and `.png` is appended when the extension is missing.
+
+```python
+# timestamped, into <project>/Screenshots
+path = editor.screenshot()
+
+# named, relative to the project
+editor.screenshot('Docs/shots/boss_fight.png')
+
+# absolute
+editor.screenshot('D:/captures/frame.png')
+```
+
+Only one capture can be queued at a time. Asking for a second one in the same
+frame returns `''` and logs a warning rather than replacing the first.
+
+#### `editor.is_screenshot_pending()` → `bool`
+
+`True` while a queued capture has not been written yet.
+
+#### `editor.get_last_screenshot()` → `str`
+
+Absolute path of the most recent capture that was attempted. Empty until one has
+been.
+
+```python
+import os
+
+def shoot_then_check():
+    target = editor.screenshot('Docs/shots/proof.png')
+    if not target:
+        editor.log_error('screenshot refused')
+        return
+
+    def verify():
+        if editor.is_screenshot_pending():
+            editor.set_timer(0.1, verify)     # not written yet, come back
+            return
+        last = editor.get_last_screenshot()
+        editor.log_info(f'{last} exists: {os.path.exists(last)}')
+
+    editor.set_timer(0.1, verify)
+
+shoot_then_check()
+```
+
+> **See also:** games capture their own screen with the `Screenshot` table in the
+> Lua API, where paths are sandboxed to the writable saves area.
 
 ---
 

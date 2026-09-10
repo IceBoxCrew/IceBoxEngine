@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.1 Version
+### Actual for R-1.0.0 Version
 
 > **IceBox Engine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**

@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for PR-0.9.1 Version
+### Actual for R-1.0.0 Version
 
 > **IceBox Engine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -111,6 +111,8 @@
 61. [Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)](#61-draw--immediate-mode-rendering-draw--texture--rendertarget)
 62. [Decal — Bullet Holes, Blood Splatter, Scorch Marks](#62-decal--bullet-holes-blood-splatter-scorch-marks)
 63. [Xbox — Microsoft Ecosystem (Xbox network and Microsoft Store)](#63-xbox--microsoft-ecosystem-xbox-network-and-microsoft-store)
+64. [Screenshot — Capturing the Screen from a Game](#64-screenshot--capturing-the-screen-from-a-game)
+65. [Screen — Window Size and Device Orientation](#65-screen--window-size-and-device-orientation)
 
 ---
 
@@ -25504,5 +25506,249 @@ function OnStart()
     Xbox.SignIn(false)
 end
 ```
+
+---
+
+## 64. Screenshot — Capturing the Screen from a Game
+
+> **Type:** Global functions. `Screenshot` table.
+>
+> Saves what the player is looking at to a PNG, from Lua, with no dialog and no
+> editor involvement. Use it for a photo mode, for an end-of-run card the player
+> can share, for a bug-report button, or for an automated test that has to prove
+> what was actually on screen.
+>
+> The capture is **deferred to the end of the current frame**. That is not a
+> limitation, it is the only correct moment: when your `OnUpdate` runs, the frame
+> you want has not been rendered yet. Request it and it lands before the frame is
+> presented, so the PNG contains everything drawn that frame, including anything
+> your script drew after the call.
+>
+> **What is captured.** In a built game it is the whole window, exactly as the
+> player sees it, letterbox bars included. In the editor it is the game viewport
+> only — no panels, no toolbar, no console — so a screenshot taken while testing
+> matches what the shipped game would produce.
+>
+> **Where it goes.** Paths are sandboxed to the writable saves area, the same rule
+> `WriteFile` follows. `..` and drive letters are refused. Subfolders are created
+> for you. A game cannot write to arbitrary places on the player's disk, which is
+> exactly what you want from something a mod or a downloaded level could call.
+
+### Taking one
+
+```lua
+-- Timestamped name, chosen for you: screenshot_20260910_143512_004.png
+local path = Screenshot.Capture()
+
+-- Or name it yourself. The .png extension is added if you leave it off.
+Screenshot.Capture("runs/final_blow")
+
+-- The returned path is where the file *will* be written, or "" if the request
+-- was refused (bad path, or one is already queued for this frame).
+if path == "" then
+    Print("screenshot refused")
+end
+```
+
+### Knowing when it landed
+
+```lua
+if Screenshot.IsPending() then
+    -- still queued; the file does not exist yet
+    local queued = Screenshot.GetPendingPath()
+end
+
+-- After the frame has been presented:
+if Screenshot.DidLastSucceed() then
+    local file = Screenshot.GetLastPath()          -- absolute path on disk
+    local w    = Screenshot.GetLastWidth()
+    local h    = Screenshot.GetLastHeight()
+    Print(string.format("saved %s (%dx%d)", file, w, h))
+end
+
+local total = Screenshot.GetCount()                -- captures this session
+```
+
+### Everything else
+
+```lua
+Screenshot.Cancel()                                -- drop a queued request
+local dir  = Screenshot.GetDirectory()             -- absolute Screenshots folder
+local name = Screenshot.MakeName("victory")        -- victory_20260910_143512_004.png
+```
+
+### One per frame
+
+Only one capture is queued at a time. A second `Capture()` in the same frame
+returns `""` and logs a warning rather than silently replacing the first — two
+requests in one frame almost always means a key repeat that was not debounced.
+
+```lua
+function OnUpdate(dt)
+    if IsKeyJustPressed("f12") and not Screenshot.IsPending() then
+        Screenshot.Capture()
+    end
+end
+```
+
+### A photo mode
+
+Hide the HUD for the frame you capture, then bring it back. Because the capture
+happens at the end of the frame, the HUD you skipped this frame is the HUD that
+is missing from the file.
+
+```lua
+local photoMode = false
+local hideHudThisFrame = false
+
+function OnUpdate(dt)
+    if IsKeyJustPressed("f11") then photoMode = not photoMode end
+
+    if photoMode and IsKeyJustPressed("space") and not Screenshot.IsPending() then
+        hideHudThisFrame = true
+        Screenshot.Capture("photos/" .. os.date("%H%M%S"))
+    end
+
+    if not hideHudThisFrame then
+        DrawHud()
+    end
+    hideHudThisFrame = false
+end
+```
+
+### An end-of-run card
+
+```lua
+function OnRunFinished(result)
+    -- draw the summary first, capture second: both land in the same frame
+    DrawResultsScreen(result)
+    local path = Screenshot.Capture("runs/" .. result.seed)
+    if path ~= "" then
+        SetGameString("LastRunCard", path)
+    end
+end
+```
+
+### Reference
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Screenshot.Capture(name?)` | `string` | Queues the capture. Returns the path it will write, or `""` if refused. `name` is optional and sandboxed; `.png` is appended when missing. |
+| `Screenshot.IsPending()` | `bool` | A request is queued and the file does not exist yet. |
+| `Screenshot.Cancel()` | — | Drops the queued request. |
+| `Screenshot.GetPendingPath()` | `string` | Path of the queued request, `""` when nothing is queued. |
+| `Screenshot.GetLastPath()` | `string` | Absolute path of the last capture that was attempted. |
+| `Screenshot.DidLastSucceed()` | `bool` | Whether that last capture was written. |
+| `Screenshot.GetLastWidth()` | `int` | Pixel width of the last capture, `0` on failure. |
+| `Screenshot.GetLastHeight()` | `int` | Pixel height of the last capture, `0` on failure. |
+| `Screenshot.GetCount()` | `int` | How many captures were written this session. |
+| `Screenshot.GetDirectory()` | `string` | Absolute path of the sandboxed Screenshots folder. |
+| `Screenshot.MakeName(prefix?)` | `string` | A timestamped file name, unique to the millisecond. |
+
+> **See also:** the Python editor API has `editor.screenshot(path)` for the same
+> capture driven from editor automation, where the path is *not* sandboxed
+> because it is a maintainer tool rather than something a shipped game runs.
+
+---
+
+## 65. Screen — Window Size and Device Orientation
+
+> **Type:** Global functions. `Screen` table.
+>
+> The pixel size of what the game is being drawn into, and — on Android — control
+> over which way the device is allowed to turn.
+>
+> Use it to lay a game out for both a wide screen and a tall one, and to let the
+> player choose landscape or portrait from an options menu instead of being locked
+> to whatever the build was configured with.
+
+### Size and shape
+
+```lua
+local w = Screen.GetWidth()      -- window width in pixels
+local h = Screen.GetHeight()     -- window height in pixels
+local a = Screen.GetAspect()     -- w / h, 0 when there is no window yet
+
+if Screen.IsPortrait() then
+    LayoutTall()
+else
+    LayoutWide()
+end
+```
+
+`IsLandscape()` is true when width is greater than or equal to height, so a
+perfectly square window counts as landscape and exactly one of the two is always
+true.
+
+### Orientation
+
+```lua
+Screen.SetOrientation("landscape")        -- lock to landscape
+Screen.SetOrientation("portrait")         -- lock to portrait
+Screen.SetOrientation("sensorLandscape")  -- either landscape, follows the sensor
+Screen.SetOrientation("sensorPortrait")   -- either portrait, follows the sensor
+Screen.SetOrientation("fullSensor")       -- any of the four
+Screen.SetOrientation("unspecified")      -- hand the choice back to the system
+
+local current = Screen.GetOrientation()   -- what was last requested
+```
+
+`SetOrientation` returns `true` only when the platform actually acted on it.
+
+**Where it works.** Android, through the activity's `setRequestedOrientation`.
+Everywhere else the request is remembered and reported by `GetOrientation()`, but
+nothing rotates — desktop windows are sized by the player, and iOS needs the
+orientation declared by the app bundle. Ask before you assume:
+
+```lua
+if Screen.CanSetOrientation() then
+    ShowOrientationSetting()
+end
+```
+
+**The window does not resize instantly.** The request goes to the OS, which turns
+the device and then sends a resize. Read `Screen.GetWidth()` on a later frame, or
+better, drive the layout off the size every frame rather than caching it once.
+
+### An orientation setting that behaves
+
+```lua
+local function applyOrientation(choice)
+    if not Screen.CanSetOrientation() then return end
+    Screen.SetOrientation(choice)
+    SetGameString("orientation", choice)
+end
+
+function OnInit()
+    -- restore the player's choice on launch
+    local saved = GetGameString("orientation")
+    if saved ~= "" then applyOrientation(saved) end
+end
+
+function OnUpdate(dt)
+    -- lay out from the live size, so the frame after the rotation is already right
+    local portrait = Screen.IsPortrait()
+    if portrait ~= wasPortrait then
+        RebuildHud(portrait)
+        wasPortrait = portrait
+    end
+end
+```
+
+### Reference
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Screen.GetWidth()` | `int` | Window width in pixels, `0` before there is a window. |
+| `Screen.GetHeight()` | `int` | Window height in pixels. |
+| `Screen.GetAspect()` | `float` | Width divided by height, `0` when height is `0`. |
+| `Screen.IsLandscape()` | `bool` | Width >= height. |
+| `Screen.IsPortrait()` | `bool` | Height > width. |
+| `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` only if the platform acted. |
+| `Screen.GetOrientation()` | `string` | The last mode requested, `unspecified` if never set. |
+| `Screen.CanSetOrientation()` | `bool` | Whether this platform rotates on request. Android only today. |
+
+> **See also:** `Settings.IsMobile()` and `Settings.GetPlatform()` for deciding
+> whether an orientation control belongs in the menu at all.
 
 ---
