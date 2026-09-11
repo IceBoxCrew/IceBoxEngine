@@ -3483,6 +3483,12 @@ if IsMousePressed(1) then Shoot() end
 if IsMouseJustPressed(3) then Aim() end
 if IsMouseJustReleased(1) then StopShoot() end
 
+-- On a touch device SDL also reports every finger as a mouse click, so a game
+-- that reads both the touch API and the mouse API sees each tap twice. Ask
+-- whether the mouse state is really a finger, and skip the mouse branch when it
+-- is; on a desktop with a real mouse this is always false.
+if not IsMouseFromTouch() and IsMouseJustPressed(1) then Throw() end
+
 -- Mouse position (screen coordinates)
 local mx = GetMouseX()
 local my = GetMouseY()
@@ -25695,10 +25701,21 @@ local current = Screen.GetOrientation()   -- what was last requested
 
 `SetOrientation` returns `true` only when the platform actually acted on it.
 
-**Where it works.** Android, through the activity's `setRequestedOrientation`.
-Everywhere else the request is remembered and reported by `GetOrientation()`, but
-nothing rotates — desktop windows are sized by the player, and iOS needs the
-orientation declared by the app bundle. Ask before you assume:
+**Where it works.** Android and iOS.
+
+On Android it goes through the activity's `setRequestedOrientation`. On iOS it
+updates the supported set and asks the window scene to re-evaluate — through
+`requestGeometryUpdate` on iOS 16 and later, and through the device-orientation
+key plus `attemptRotationToDeviceOrientation` before that. The call is marshalled
+onto the main thread, so it is safe from anywhere.
+
+The app bundle still has to allow the orientation you ask for: iOS will not rotate
+to something `UISupportedInterfaceOrientations` forbids. Declare everything the
+game might want there and let this call narrow it at runtime.
+
+On desktop the request is remembered and reported by `GetOrientation()` but
+nothing rotates, because a desktop window is sized by the player. Ask before you
+assume:
 
 ```lua
 if Screen.CanSetOrientation() then
@@ -25746,7 +25763,7 @@ end
 | `Screen.IsPortrait()` | `bool` | Height > width. |
 | `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` only if the platform acted. |
 | `Screen.GetOrientation()` | `string` | The last mode requested, `unspecified` if never set. |
-| `Screen.CanSetOrientation()` | `bool` | Whether this platform rotates on request. Android only today. |
+| `Screen.CanSetOrientation()` | `bool` | Whether this platform rotates on request. True on Android and iOS. |
 
 > **See also:** `Settings.IsMobile()` and `Settings.GetPlatform()` for deciding
 > whether an orientation control belongs in the menu at all.

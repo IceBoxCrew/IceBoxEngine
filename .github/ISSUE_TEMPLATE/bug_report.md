@@ -29,5 +29,6 @@ If applicable, add screenshots or paste relevant log output.
 
 ## Environment
 
+- **Engine version:** (shown in the Launcher under the logo and on its **About** tab, e.g. `Release 1.0.0`)
 - **OS:** (e.g., Windows 11, Ubuntu 24.04)
 - **SYSTEM:** (GPU, CPU, RAM, etc.)

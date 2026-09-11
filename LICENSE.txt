@@ -360,16 +360,26 @@ publishing and selling those is expressly permitted by Sections 5 and 6.
     depend on it.
 
 --------------------------------------------------------------------------------
-10. Release SOFTWARE
+10. RELEASE VERSIONS AND CHANGES BETWEEN THEM
 --------------------------------------------------------------------------------
 
-While the version of the Software you have is marked Prototype, Alpha, Beta or
-Release - the marking is shown in the launcher and in the editor - it is
-Release software. It will change; features may be added, altered or
-removed between versions; and project, asset or save formats may change in
-ways that require you to migrate your work. Keep backups, and keep your
-projects under version control. Sections 15 and 16 apply with particular force
-while the Software is Release.
+The version of the Software you have is marked with its stage - the marking is
+shown in the launcher and in the editor. A version marked Release is finished
+software, supplied for building and shipping commercial Products.
+
+Release does not mean frozen. We go on developing the Software: features are
+added and improved, behaviour may be altered, and occasionally something may be
+removed between versions; project, asset or save formats may change in ways
+that ask you to migrate your work. We aim to keep such changes rare and to
+carry existing projects forward, but we do not warrant that every version reads
+every file written by every other version. Keep backups, keep your projects
+under version control, and prefer to finish a Product on the version you built
+it with rather than updating part-way through a release.
+
+A version marked Prototype, Alpha, Beta or Pre-Release is not Release software.
+It is supplied for evaluation and testing rather than for shipping, it may
+change more sharply between builds, and Sections 15 and 16 apply to it with
+particular force.
 
 --------------------------------------------------------------------------------
 11. UPDATES AND SUPPORT

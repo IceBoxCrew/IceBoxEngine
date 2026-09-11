@@ -274,6 +274,38 @@ Backend differences the renderer compensates for automatically:
 | **HDR float targets** | Native GLES/WebGL need `EXT_color_buffer_float` | Scene and ping-pong targets drop to `RGBA8` when it is missing. |
 | **Sampler LOD bias** | Metal samplers have no LOD-bias parameter | A positive per-texture LOD bias is applied through the sampler's LOD minimum; a negative bias is clamped to 0 and logged once at startup. Every other backend applies it natively. |
 
+**Suspend and resume on mobile.** Android and iOS take the drawing surface away while an
+app is in the background, and the two renderer families do not lose the same thing:
+
+* **GL family (OpenGL ES / WebGL).** SDL owns the `EGLSurface`, destroys it on
+  `surfaceDestroyed` and builds a new one on `surfaceChanged`, so the engine sees nothing
+  at all. The GL context is backed up and restored around the pause by SDL as well.
+* **Vulkan.** The `VkSurfaceKHR` belongs to the **application**, and on Android it wraps the
+  `ANativeWindow` that the OS releases when the activity pauses. Nothing SDL does can revive
+  it: after a resume that handle refers to a window that no longer exists, and every acquire,
+  present and capability query against it fails or reports a zero-sized extent — a black
+  screen with the game still running behind it. The engine therefore **rebuilds the whole
+  presentation chain** on the first frame after a resume: the swapchain and its views are
+  destroyed, the old surface is destroyed, a new one is created from the current native
+  window, its presentability is re-checked against the present queue family, and the
+  swapchain, per-image semaphores, MSAA and depth targets are recreated. `VK_ERROR_SURFACE_LOST_KHR`
+  from `vkAcquireNextImageKHR`, `vkQueuePresentKHR` or `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`
+  triggers the same rebuild on any platform. If the native window is not back yet the frame is
+  skipped and the attempt repeats on the next one. Drivers that report neither a lost surface nor
+  a usable extent are caught by a counter: on Android, eight consecutive unusable frames force a
+  rebuild anyway.
+* **Metal and MoltenVK.** A `CAMetalLayer` is owned by its `UIView` and survives
+  backgrounding, so there is no surface to lose; a drawable that is unavailable simply skips
+  the frame and marks the layer for reconfiguration.
+
+**No GPU work while backgrounded.** On Android and iOS the frame loop stops calling `Render()`
+between `SDL_EVENT_WILL_ENTER_BACKGROUND` and `SDL_EVENT_DID_ENTER_FOREGROUND` regardless of
+the *Suspend in background* preference or an active network session. Simulation, audio and
+networking keep ticking for the configurations that ask for it; only presentation stops. This is
+mandatory on iOS, where submitting a command buffer from the background gets the app terminated
+by the watchdog, and it is what keeps a paused Android app from drawing into a window the system
+has already torn down.
+
 ### 2.3 RHI capabilities
 
 The RHI exposes a modern feature set so the renderer can be GPU-driven:

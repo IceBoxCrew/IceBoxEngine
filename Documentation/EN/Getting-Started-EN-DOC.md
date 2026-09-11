@@ -247,6 +247,11 @@ into a friendly name for display:
 | `PR` | Pre-Release | `PR-0.9.1` | ↓ |
 | `R`  | Release     | `R-1.0.0`  | highest |
 
+> **IceBox Engine ships at the `R` (Release) stage.** The stages below it are the
+> ladder the engine climbed to get here. They stay in the scheme so that older tags
+> still compare correctly, and so that a preview build — if we ever hand one out —
+> is told apart from a shipping one at a glance.
+
 When comparing two versions, the **stage is weighed first** (a `R-` build always
 outranks any `B-` build, regardless of numbers), and only then the numeric
 `major.minor.patch`. So `B-0.8.4` is *newer* than `B-0.6.9`, and `R-1.0.0` is newer
@@ -387,7 +392,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 │   🧊 logo          │                                              │
 │ IceBox            │                                              │
 │ Engine™           │            Active tab content                │
-│ Release 1.0.0 │   (My Projects / New Project / Plugins &     │
+│ Release 1.0.0     │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
 │ New Project       │                                              │

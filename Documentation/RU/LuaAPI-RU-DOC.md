@@ -3485,6 +3485,12 @@ if IsMousePressed(1) then Shoot() end
 if IsMouseJustPressed(3) then Aim() end
 if IsMouseJustReleased(1) then StopShoot() end
 
+-- На сенсорном устройстве SDL сообщает о каждом пальце ещё и как о клике мыши,
+-- поэтому игра, читающая и тач-API, и мышь, видит каждое касание дважды.
+-- Спроси, не палец ли это на самом деле, и пропусти ветку мыши, если да;
+-- на десктопе с настоящей мышью это всегда false.
+if not IsMouseFromTouch() and IsMouseJustPressed(1) then Throw() end
+
 -- Позиция мыши (экранные координаты)
 local mx = GetMouseX()
 local my = GetMouseY()
@@ -25743,10 +25749,20 @@ local current = Screen.GetOrientation()   -- что запрашивали по�
 `SetOrientation` возвращает `true` только если платформа действительно
 отреагировала.
 
-**Где работает.** На Android — через `setRequestedOrientation` активности. На
-остальных платформах запрос запоминается и возвращается из `GetOrientation()`, но
-ничего не поворачивается: размер окна на десктопе задаёт игрок, а на iOS
-ориентация объявляется бандлом приложения. Спрашивайте, а не предполагайте:
+**Где работает.** На Android и iOS.
+
+На Android — через `setRequestedOrientation` активности. На iOS обновляется
+набор поддерживаемых ориентаций, и оконной сцене предлагается пересчитать себя:
+через `requestGeometryUpdate` на iOS 16 и новее и через ключ ориентации устройства
+плюс `attemptRotationToDeviceOrientation` до неё. Вызов переносится в главный
+поток, так что звать его можно откуда угодно.
+
+Бандл приложения всё равно должен разрешать ту ориентацию, которую вы просите:
+iOS не повернётся в то, что запрещено `UISupportedInterfaceOrientations`. Объявите
+там всё, что игре может понадобиться, и сужайте это уже в рантайме.
+
+На десктопе запрос запоминается и возвращается из `GetOrientation()`, но ничего не
+поворачивается: размер окна там задаёт игрок. Спрашивайте, а не предполагайте:
 
 ```lua
 if Screen.CanSetOrientation() then
@@ -25795,7 +25811,7 @@ end
 | `Screen.IsPortrait()` | `bool` | Высота > ширины. |
 | `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` только если платформа отреагировала. |
 | `Screen.GetOrientation()` | `string` | Последний запрошенный режим, `unspecified` если не задавали. |
-| `Screen.CanSetOrientation()` | `bool` | Поворачивает ли платформа по запросу. Сегодня — только Android. |
+| `Screen.CanSetOrientation()` | `bool` | Поворачивает ли платформа по запросу. True на Android и iOS. |
 
 > **См. также:** `Settings.IsMobile()` и `Settings.GetPlatform()`, чтобы решить,
 > нужен ли пункт ориентации в меню вообще.

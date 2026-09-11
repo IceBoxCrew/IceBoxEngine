@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Release-1.0-brightgreen?style=for-the-badge" alt="Release 1.0">
   <img src="https://img.shields.io/badge/C%2B%2B-26-blue?style=for-the-badge&logo=cplusplus" alt="C++26">
   <img src="https://img.shields.io/badge/CMake-4.3%2B-064F8C?style=for-the-badge&logo=cmake" alt="CMake 4.3+">
   <img src="https://img.shields.io/badge/vcpkg-Managed-purple?style=for-the-badge" alt="vcpkg">
@@ -99,9 +100,11 @@ IceBox Engine consists of several components:
 
 ---
 
-## 🚧 Project Status
+## ✅ Project Status
 
-**IceBox Engine is under active development.** Core systems, editor tools, and architecture are evolving continuously with new features and improvements.
+**IceBox Engine has reached Release.** The current stage is **Release 1.0** — the launcher, the editor, the updater and the runtime are stable, and the engine is ready to build and ship finished, commercial games on every platform it supports.
+
+Released does not mean finished. An engine never really is: new features, new tooling and continuous improvements keep arriving, and every one of them reaches you as a free update. What changed at 1.0 is how they arrive — as additions on top of a stable base, rather than as ground shifting under a project you are already building on.
 
 ---
 

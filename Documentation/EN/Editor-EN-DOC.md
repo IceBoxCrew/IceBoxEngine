@@ -130,7 +130,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame   Release 1.0.0 │
+│                             │ Remote Preview │ MyNewGame       Release 1.0.0 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
