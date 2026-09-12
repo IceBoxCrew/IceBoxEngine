@@ -33,7 +33,7 @@ IceBox Engine is a cross-platform 2D game engine designed for creating games of 
 
 **Scripting:**
 - **Lua** — game scripting language for gameplay classes, UI, levels and more
-- **Python** — engine-side scripting for editor tools and automation
+- **Python** — engine-side scripting for editor tools and automation, automation, unattended runs from the command line, and `pip`-installable libraries
 
 ---
 
@@ -548,7 +548,7 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all seven platforms, installers, DLC, headless servers. |
 | [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
 | [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference, opening with a full Lua course for beginners. |
-| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling. |
+| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling: entities, levels, panels, the console log, a bridge into the game Lua VM, project config, asset validation, installing PyPI packages with pip, and running the editor unattended from the command line. |
 
 Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.
 

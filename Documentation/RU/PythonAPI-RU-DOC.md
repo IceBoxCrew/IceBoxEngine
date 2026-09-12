@@ -63,12 +63,25 @@
    - 5.20 [Таймеры (Timers)](#520-таймеры-timers)
    - 5.21 [Логирование (Logging)](#521-логирование-logging)
    - 5.22 [Пользовательские скрипты и запуск файлов](#522-пользовательские-скрипты-и-запуск-файлов)
+   - 5.23 [Состояние сущности, трансформация и раскладка](#523-состояние-сущности-трансформация-и-раскладка)
+   - 5.24 [Уровни](#524-уровни)
+   - 5.25 [Гизмо и аутлайнер](#525-гизмо-и-аутлайнер)
+   - 5.26 [Приложение редактора и окно](#526-приложение-редактора-и-окно)
+   - 5.27 [Скриншоты](#527-скриншоты)
+   - 5.28 [Управление рантаймом Python](#528-управление-рантаймом-python)
+   - 5.29 [Самодокументирование API](#529-самодокументирование-api)
+   - 5.30 [Отладочные оверлеи вьюпорта](#530-отладочные-оверлеи-вьюпорта)
 6. [Модуль `scene` — Работа со сценами](#6-модуль-scene--работа-со-сценами)
+   - 6.1 [Состояние уровня и перезагрузка](#61-состояние-уровня-и-перезагрузка)
+   - 6.2 [Статистика и проверка](#62-статистика-и-проверка)
 7. [Модуль `engine` — Информация о движке](#7-модуль-engine--информация-о-движке)
    - 7.1 [Общая информация](#71-общая-информация)
    - 7.2 [Производительность и статистика](#72-производительность-и-статистика)
    - 7.3 [Ресурсы (Resources)](#73-ресурсы-resources)
    - 7.4 [Аудио (Audio)](#74-аудио-audio)
+   - 7.5 [Платформа, сборка и бэкенд рендеринга](#75-платформа-сборка-и-бэкенд-рендеринга)
+   - 7.6 [Окно редактора и приложение](#76-окно-редактора-и-приложение)
+   - 7.7 [Инвентарь ресурсов](#77-инвентарь-ресурсов)
 8. [Модуль `browser` — Браузер контента](#8-модуль-browser--браузер-контента)
    - 8.1 [Навигация](#81-навигация)
    - 8.2 [Файлы и папки](#82-файлы-и-папки)
@@ -79,11 +92,54 @@
    - 8.7 [Буфер обмена (Browser Clipboard)](#87-буфер-обмена-browser-clipboard)
    - 8.8 [Утилиты путей (Path Utilities)](#88-утилиты-путей-path-utilities)
    - 8.9 [Пакетные файловые операции](#89-пакетные-файловые-операции)
-9. [Модуль `icebox.log` — Системное логирование](#9-модуль-iceboxlog--системное-логирование)
-10. [Типы компонентов — Полный справочник](#10-типы-компонентов--полный-справочник)
-11. [Поддерживаемые типы ассетов](#11-поддерживаемые-типы-ассетов)
-12. [Практические примеры](#12-практические-примеры)
-13. [FAQ и решение проблем](#13-faq-и-решение-проблем)
+   - 8.10 [JSON, метаданные и контрольные суммы](#810-json-метаданные-и-контрольные-суммы)
+   - 8.11 [Деревья папок и создание файлов](#811-деревья-папок-и-создание-файлов)
+   - 8.12 [Открытие ассетов из браузера](#812-открытие-ассетов-из-браузера)
+9. [Модуль `console` — Консоль редактора и логи](#9-модуль-console--консоль-редактора-и-логи)
+   - 9.1 [Чтение лога](#91-чтение-лога)
+   - 9.2 [Подсчёт и сводка](#92-подсчёт-и-сводка)
+   - 9.3 [Запись в консоль](#93-запись-в-консоль)
+   - 9.4 [Управление буфером и панелью](#94-управление-буфером-и-панелью)
+   - 9.5 [Типовая проверка здоровья](#95-типовая-проверка-здоровья)
+10. [Модуль `lua` — Мост в игровую виртуальную машину Lua](#10-модуль-lua--мост-в-игровую-виртуальную-машину-lua)
+   - 10.1 [Выполнение и вычисление](#101-выполнение-и-вычисление)
+   - 10.2 [Проверка компиляции](#102-проверка-компиляции)
+   - 10.3 [Скрипт уровня](#103-скрипт-уровня)
+   - 10.4 [Скрипты, модули и события](#104-скрипты-модули-и-события)
+   - 10.5 [Инспекция ВМ](#105-инспекция-вм)
+   - 10.6 [Проверка скриптов по всему проекту](#106-проверка-скриптов-по-всему-проекту)
+11. [Модуль `project` — Проект, конфигурация, плагины и моды](#11-модуль-project--проект-конфигурация-плагины-и-моды)
+   - 11.1 [Раскладка](#111-раскладка)
+   - 11.2 [Файлы конфигурации](#112-файлы-конфигурации)
+   - 11.3 [Плагины и моды](#113-плагины-и-моды)
+   - 11.4 [Настройки сборки](#114-настройки-сборки)
+12. [Модуль `assets` — Создание, инспекция и проверка ассетов](#12-модуль-assets--создание-инспекция-и-проверка-ассетов)
+   - 12.1 [Типы](#121-типы)
+   - 12.2 [Создание ассетов](#122-создание-ассетов)
+   - 12.3 [Просмотр и статистика](#123-просмотр-и-статистика)
+   - 12.4 [Граф зависимостей](#124-граф-зависимостей)
+   - 12.5 [Проверки здоровья](#125-проверки-здоровья)
+   - 12.6 [Полный аудит контента](#126-полный-аудит-контента)
+13. [Модуль `packages` — Установка Python-библиотек (pip)](#13-модуль-packages--установка-python-библиотек-pip)
+   - 13.1 [Доступность](#131-доступность)
+   - 13.2 [Установка и удаление](#132-установка-и-удаление)
+   - 13.3 [Куда попадают пакеты](#133-куда-попадают-пакеты)
+   - 13.4 [Долгие установки без зависания редактора](#134-долгие-установки-без-зависания-редактора)
+   - 13.5 [Что установлено](#135-что-установлено)
+   - 13.6 [Импорт только что установленного](#136-импорт-только-что-установленного)
+   - 13.7 [Прямой доступ к pip](#137-прямой-доступ-к-pip)
+   - 13.8 [Что важно знать](#138-что-важно-знать)
+14. [Модуль `icebox.log` — Системное логирование](#14-модуль-iceboxlog--системное-логирование)
+15. [Типы компонентов — Полный справочник](#15-типы-компонентов--полный-справочник)
+16. [Поддерживаемые типы ассетов](#16-поддерживаемые-типы-ассетов)
+17. [Командная строка и автоматизация](#17-командная-строка-и-автоматизация)
+   - 17.1 [Флаги](#171-флаги)
+   - 17.2 [Код возврата](#172-код-возврата)
+   - 17.3 [Примеры](#173-примеры)
+   - 17.4 [Стартовые скрипты против командной строки](#174-стартовые-скрипты-против-командной-строки)
+   - 17.5 [Замечания по безопасности](#175-замечания-по-безопасности)
+18. [Практические примеры](#18-практические-примеры)
+19. [FAQ и решение проблем](#19-faq-и-решение-проблем)
 
 ---
 
@@ -126,7 +182,8 @@
 │       ▼            ▼            ▼            │
 │  ┌────────┐  ┌──────────┐  ┌─────────┐      │
 │  │ editor │  │  engine   │  │ browser │      │
-│  │ scene  │  │           │  │         │      │
+│  │ scene  │  │  console  │  │ assets  │      │
+│  │ lua    │  │  project  │  │ packages│      │
 │  └────────┘  └──────────┘  └─────────┘      │
 │   Сущности    Движок       Файлы            │
 │   Компоненты  Ресурсы      Ассеты           │
@@ -135,12 +192,17 @@
 └─────────────────────────────────────────────┘
 ```
 
+Тот же API доступен и без интерфейса: `IceBoxEngine --python script.py --quit-after-python`
+выполняет скрипт после запуска редактора и завершается с осмысленным кодом возврата — см.
+[17. Командная строка и автоматизация](#17-командная-строка-и-автоматизация).
+
 ### Ключевые технологии
 
 | Технология | Описание |
 |-----------|----------|
 | **pybind11** | C++ ↔ Python привязки, позволяющие вызывать C++ функции из Python |
-| **Модульная система** | API разделён на модули: `editor`, `scene`, `engine`, `browser` |
+| **Модульная система** | API разделён на модули: `editor`, `scene`, `engine`, `browser`, `console`, `lua`, `project`, `assets`, `packages` |
+| **Полный CPython 3.12** | С редактором поставляется вся стандартная библиотека — `socket`, `ssl`, `ctypes`, `sqlite3`, `zlib` — поэтому работают pip и любые пакеты с PyPI |
 | **ECS (EnTT)** | Entity Component System — данные сущностей хранятся в компонентах |
 
 ### Python API vs Lua API
@@ -153,6 +215,10 @@
 | **Undo/Redo** | ✅ Поддерживается | Нет |
 | **Файловые операции** | ✅ Полный доступ | Ограниченный |
 | **Пакетные операции** | ✅ Batch-функции | Нет |
+| **Чтение лога редактора** | ✅ Модуль `console` | Нет |
+| **Управление другим языком** | ✅ Модуль `lua` выполняет Lua | Нет |
+| **Автономный запуск** | ✅ Командная строка + код возврата | Нет |
+| **Сторонние библиотеки** | ✅ pip / PyPI через `packages` | Нет |
 
 ---
 
@@ -242,8 +308,9 @@
 
 Существует два пространства имён, и полезно понимать, в какое попадает ваш код:
 
-- **Интерактивная консоль** — кнопка **Запустить скрипт** *и* поле **Быстрая команда** — выполняется в **постоянном пространстве имён консоли**. Созданные там переменные, функции и импорты остаются доступными для следующих команд, пока вы не выберете **Показать консоль → Сбросить окружение**.
-- **Файлы скриптов** — найденные тул-скрипты, **Запустить Python-скрипт...**, **Запустить автостарт-скрипты** и `editor.execute_file()` — выполняются в главном пространстве имён (`__main__`).
+- **Интерактивная консоль** — кнопка **Запустить скрипт** *и* поле **Быстрая команда** — выполняется в **постоянном пространстве имён консоли**, которое при старте наполняется из глобального. Созданные там переменные, функции и импорты остаются доступными для следующих команд, пока вы не выберете **Консоль → Сбросить окружение** (или не вызовете `editor.reset_console_environment()`) — это очищает пространство и заново наполняет его из глобальной области. Из скрипта до него можно дотянуться через `editor.execute_in_console()`.
+- **Файлы скриптов** — найденные тул-скрипты, **Запустить Python-скрипт...**, **Запустить автостарт-скрипты**, `editor.execute_file()`, `editor.execute_string()` и всё, запущенное из командной строки — выполняются в главном пространстве имён (`__main__`). Пока файл выполняется, `__file__` указывает на его путь, а `sys.argv` начинается с этого пути.
+- Консоль ведёт себя как **REPL**: введите выражение — и его значение будет напечатано, ровно как в самом `python`. `editor.execute_in_console()` возвращает это значение в поле `result`.
 - В обоих случаях каждый запуск оборачивается в **один шаг отмены**: единственный вызов `editor.undo()` откатывает все изменения скрипта. **События и таймеры**, зарегистрированные из любой области, сохраняются (ими владеет движок), поэтому `Startup`-скрипт может установить обработчики, которые работают всю сессию.
 
 #### Папки тул-скриптов
@@ -252,6 +319,7 @@
 
 - `Tools/PythonScripts/` — ваши тул-скрипты. Каждая подпапка становится подменю-категорией.
 - `Tools/PythonScripts/Startup/` — скрипты, выполняющиеся один раз автоматически при запуске редактора.
+- `Tools/PythonScripts/Lib/` и `Tools/PythonScripts/Modules/` — импортируемые вспомогательные модули. Обе папки с самого старта находятся в `sys.path`, поэтому `import my_helpers` работает сразу.
 
 Соответствующий API (`run_user_script`, `rediscover_user_scripts`, `execute_file`, …) см. в разделе [5.22 Пользовательские скрипты и запуск файлов](#522-пользовательские-скрипты-и-запуск-файлов).
 
@@ -1160,11 +1228,20 @@ f-строки:   f'текст {переменная} текст {выражен
 
 | Модуль | Описание | Пример |
 |--------|----------|--------|
-| `editor` | Сущности, компоненты, трансформации, панели, камера, события | `editor.create_entity('Box')` |
-| `scene` | Сохранение/загрузка сцен, экспорт/импорт сущностей | `scene.save('Content/level.icemap')` |
-| `engine` | Версия движка, FPS, память, ресурсы, аудио | `engine.fps()` |
-| `browser` | Браузер контента, файлы, папки, ассеты | `browser.list_files()` |
+| `editor` | Сущности, компоненты, трансформации, панели, камера, уровни, события, рантайм Python | `editor.create_entity('Box')` |
+| `scene` | Сохранение/загрузка сцен, статистика, проверка, экспорт/импорт сущностей | `scene.save('Content/level.icemap')` |
+| `engine` | Версия движка, FPS, память, ресурсы, аудио, окно, платформа | `engine.fps()` |
+| `browser` | Браузер контента, файлы, папки, JSON, контрольные суммы | `browser.list_files()` |
+| `console` | Лог консоли редактора — чтение, поиск, фильтры, сохранение, запись | `console.get_errors()` |
+| `lua` | Мост в игровую ВМ Lua — выполнение, вычисление, проверка компиляции | `lua.compile_all()` |
+| `project` | Файлы конфигурации, плагины, моды, настройки сборки, раскладка проекта | `project.get_config('Engine')` |
+| `assets` | Создание ассетов, граф зависимостей, проверка | `assets.find_missing()` |
+| `packages` | Установка сторонних Python-библиотек через pip | `packages.install('requests')` |
 | `icebox.log` | Системное логирование в консоль движка | `icebox.log.info('Hello')` |
+
+Каждый модуль отвечает и сам за себя: `editor.api()`, `scene.api()`, `engine.api()`, `browser.api()`,
+`console.api()`, `lua.api()`, `project.api()`, `assets.api()` и `packages.api()` печатают
+сгруппированный список функций этого модуля, всегда соответствующий вашей сборке.
 
 ---
 
@@ -1339,7 +1416,7 @@ types = editor.get_component_types()
 #  'Replication', 'Hierarchy']
 ```
 
-> 26 типов. См. [матрицу поддержки добавления/удаления](#матрица-поддержки-добавленияудаления) — `Transform` и `Hierarchy` есть в этом списке, но их нельзя добавить или удалить.
+> 26 типов. О том, какие из них можно добавлять и удалять, см. [Виды компонентов](#виды-компонентов) — `editor.describe_components()` возвращает ту же таблицу в виде данных.
 
 ---
 
@@ -1511,22 +1588,62 @@ editor.add_component(uuid, 'SpriteRenderer')
 editor.remove_component(uuid, 'Rigidbody')
 ```
 
-#### Матрица поддержки добавления/удаления
+#### Виды компонентов
 
-`get_component_types()` возвращает все 25 типов, которые понимает API, но не каждый тип можно создать или удалить:
+Каждый компонент относится к одному из четырёх видов, и API сообщает, к какому именно:
 
-| Тип | `add_component` | `remove_component` | Почему |
-|-----|:---:|:---:|--------|
-| `Transform` | ❌ | ❌ | Есть у каждой сущности всегда |
-| `Hierarchy` | ❌ | ❌ | Создаётся и удаляется через `set_parent` / `clear_parent` |
-| `Stencil` | ✅ | ❌ | После добавления считается базовым компонентом |
-| `Replication` | ✅ | ❌ | После добавления считается базовым компонентом |
-| остальные 21 тип | ✅ | ✅ | |
+| Вид | `add_component` | `remove_component` | Типы |
+|-----|:---:|:---:|------|
+| **core** | ❌ | ❌ | `Transform`, `Tag`, `ID`, `Stencil`, `Replication` — есть у каждой сущности всегда |
+| **managed** | ❌ | ❌ | `Hierarchy` — создаётся и удаляется через `set_parent` / `clear_parent` |
+| **instanced** | ✅ | ✅ | `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Tilemap`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Joint`, `ClassComponent` |
+| **single** | ✅ | ✅ | `Camera`, `Rigidbody`, `Collider`, `Animator`, `Skeleton`, `Script`, `AI`, `Destructible`, `GameplayTag`, `Interface` |
 
 `add_component` возвращает `False`, если компонент уже есть или если тип нельзя добавить.
-`remove_component` возвращает `False` для перечисленных выше заблокированных типов и пишет предупреждение в лог.
+`remove_component` возвращает `False` для видов core и managed и пишет в лог предупреждение с объяснением.
 
-> ℹ️ `Tag` и `ID` — внутренние компоненты идентичности. Их нет в `get_component_types()`, и из Python их вообще нельзя тронуть.
+> `describe_components()` выдаёт 28 строк, а `get_component_types()` — 26: два компонента идентичности,
+> `Tag` и `ID`, читаются через `get_component()`, но не предлагаются как добавляемые типы.
+
+> **Добавление instanced-компонента создаёт и его первый инстанс** — ровно как пункт *Add Component* в
+> самом редакторе, поэтому `add_component(uuid, 'PointLight')` даёт видимый свет, а не пустой контейнер.
+> Дальнейшие инстансы добавляйте через `editor.add_instance()`.
+>
+> `PointLight` и `SpotLight` используют один компонент-хранилище, поэтому сущность может держать оба.
+> Удаление одного не трогает другой.
+
+#### `editor.describe_components()` → `list[dict]`
+
+Вся таблица выше в виде данных — `type`, `kind`, `addable`, `removable`, `multi_instance`, `notes`.
+
+```python
+for c in editor.describe_components():
+    flag = '+' if c['addable'] else ' '
+    print(f"{flag} {c['type']:<16} {c['kind']:<10} {c['notes']}")
+```
+
+#### `editor.describe_component(component_type)` → `dict`
+
+Одна строка этой таблицы или пустой словарь, если имя неизвестно.
+
+```python
+info = editor.describe_component('SpriteRenderer')
+print(info['kind'], info['multi_instance'])   # instanced True
+```
+
+#### `editor.get_addable_component_types()` → `list[str]`
+
+Только те типы, которые принимает `add_component()`.
+
+#### `editor.get_multi_instance_component_types()` → `list[str]`
+
+Только типы с несколькими инстансами — те, с которыми работают `add_instance()` / `get_instance_count()`.
+
+```python
+# Перебрать типы, которые вообще можно добавить
+for kind in editor.get_addable_component_types():
+    print(kind)
+```
 
 #### `editor.get_component(uuid, component_type)` → `dict`
 
@@ -2527,6 +2644,40 @@ world_x, world_y = editor.screen_to_world(400, 300)
 #### `editor.is_viewport_hovered()` → `bool`
 
 Проверяет, наведена ли мышь на вьюпорт.
+
+#### `editor.get_camera_rotation()` → `float`
+
+Поворот камеры редактора в градусах.
+
+#### `editor.set_camera_zoom(zoom)` → `bool`
+
+Меняет только зум, оставляя камеру на месте.
+
+```python
+editor.set_camera_zoom(editor.get_camera_zoom() * 0.5)   # отдалить в 2 раза
+```
+
+#### `editor.pan_camera(dx, dy)` → `bool`
+
+Сдвигает камеру редактора на дельту в мировых координатах.
+
+```python
+editor.pan_camera(0, 500)    # сдвинуть вверх
+```
+
+#### `editor.focus_position(x, y, z=0.0)` → `bool`
+
+Наводит камеру вьюпорта на мировую позицию (тот же запрос, что делает `editor.focus_entity()`).
+
+#### `editor.world_to_screen(world_x, world_y)` → `tuple`
+
+Обратная к `editor.screen_to_world()`: переводит мировые координаты в пиксели вьюпорта.
+
+```python
+uuid = editor.find_entity('Player')
+x, y, z = editor.get_position(uuid)
+print('игрок на экране в', editor.world_to_screen(x, y))
+```
 
 #### `editor.screenshot(path="")` → `str`
 
@@ -3555,10 +3706,28 @@ es = editor.get_editor_settings()
 
 #### `editor.set_editor_settings(data)` → `bool`
 
-Изменяет настройки редактора.
+Изменяет те настройки редактора, которые можно менять в рантайме. Возвращает `True`, если применён хотя бы
+один ключ; неизвестные и доступные только для чтения ключи сообщаются предупреждением в консоли.
+
+| Ключ | Тип | Действие |
+|------|-----|----------|
+| `level_dirty` | `bool` | Пометить уровень изменённым / чистым |
+| `show_grid` | `bool` | Видимость сетки вьюпорта (сохраняется в `Config/Editor.json`) |
+| `show_physics_colliders` | `bool` | Оверлей коллайдеров (тот же флаг, что `editor.set_debug_flag('ShowColliders', …)`) |
+| `show_nav_grid` | `bool` | Оверлей навигационной сетки |
+| `current_level_path` | `str` | Путь, по которому запишет следующее сохранение |
 
 ```python
 editor.set_editor_settings({'level_dirty': True})
+editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
+```
+
+Остальные ключи, возвращаемые `get_editor_settings()` (`grid_size`, `snap_to_grid`, размер вьюпорта,
+флаги фокуса, `last_opened_level`), доступны **только для чтения** — ими владеют панель настроек и
+вьюпорт. Постоянные значения меняйте через конфигурацию проекта:
+
+```python
+project.merge_config('Engine', {'Editor': {'GridSize': 64.0, 'SnapToGrid': True}})
 ```
 
 #### `editor.mark_dirty()` → `bool`
@@ -3715,6 +3884,30 @@ events = editor.get_events()
 print(events)  # ['entity_created', 'selection_changed']
 ```
 
+#### `editor.off_callback(event_name, callback)` → `bool`
+
+Отписывает **один** коллбэк, оставляя остальные. Возвращает `True`, если он был найден.
+
+```python
+def watcher(uuid, name):
+    print('создана', name)
+
+editor.on('entity_created', watcher)
+editor.off_callback('entity_created', watcher)   # только этот
+```
+
+#### `editor.get_event_count(event_name)` → `int`
+
+Сколько коллбэков подписано на событие.
+
+#### `editor.clear_events()`
+
+Удаляет все подписки на события одним вызовом — удобно в начале тул-скрипта, который ставит свои.
+
+```python
+editor.clear_events()
+```
+
 ---
 
 ### 5.20 Таймеры (Timers)
@@ -3757,6 +3950,29 @@ editor.cancel_timer(timer_id)
 
 ```python
 editor.clear_timers()
+```
+
+#### `editor.defer(callback)` → `int`
+
+Выполняет коллбэк на **следующем тике редактора** — идиоматичный способ дождаться того, что редактор
+делает между кадрами (отложенное переключение режима игры, скриншот, загрузка уровня). Возвращает id таймера.
+
+```python
+editor.screenshot_window('Screenshots/now.png')
+editor.defer(lambda: print('записано в', editor.get_last_screenshot()))
+```
+
+#### `editor.get_timers()` → `list[int]`
+
+Идентификаторы всех активных таймеров.
+
+#### `editor.has_timer(timer_id)` → `bool`
+
+Активен ли ещё этот таймер? Одноразовый таймер исчезает после срабатывания.
+
+```python
+tid = editor.set_timer(5.0, lambda: None)
+print(editor.has_timer(tid), editor.get_timers())
 ```
 
 ---
@@ -3890,6 +4106,397 @@ print([i for i in items if i.startswith('editor.batch_')])
 
 ---
 
+### 5.23 Состояние сущности, трансформация и раскладка
+
+Кроме отдельных `get_position` / `set_scale`, вся трансформация доступна одним словарём, а редакторские флаги состояния (видимость, включённость, отрисовка в игре) имеют прямые аксессоры.
+
+#### `editor.get_transform(uuid)` → `dict`
+
+Возвращает `position` (кортеж из 3), `scale` (кортеж из 2), `rotation`, `enabled`, `visible`, `render_in_game`.
+
+```python
+uuid = editor.find_entity('Player')
+t = editor.get_transform(uuid)
+print(t['position'], t['rotation'], t['visible'])
+```
+
+#### `editor.set_transform(uuid, data)` → `bool`
+
+Применяет любое подмножество тех же ключей одним шагом undo.
+
+```python
+editor.set_transform(uuid, {
+    'position': (100, 200, 0),
+    'scale': (2.0, 2.0),
+    'rotation': 45.0,
+    'visible': True,
+})
+```
+
+#### Видимость и включённость
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.set_visible(uuid, visible)` | `bool` | Показать/скрыть сущность во **вьюпорте редактора** |
+| `editor.is_visible(uuid)` | `bool` | Видна ли она в редакторе? |
+| `editor.set_enabled(uuid, enabled)` | `bool` | Включить/выключить сущность целиком |
+| `editor.is_enabled(uuid)` | `bool` | Включена ли она? |
+| `editor.set_render_in_game(uuid, render)` | `bool` | Отрисовывать ли её в режиме игры? |
+| `editor.get_render_in_game(uuid)` | `bool` | Отрисовывается ли она в режиме игры? |
+
+```python
+# Скрыть все вспомогательные маркеры на время работы с уровнем
+for uuid in editor.find_entities('Marker_.*'):
+    editor.set_visible(uuid, False)
+```
+
+#### Помощники раскладки
+
+#### `editor.align_entities(uuids, axis)` → `int`
+
+Выравнивает сущности. `axis` — одно из `'left'`, `'right'`, `'top'`, `'bottom'`, `'center_x'`, `'center_y'`
+(псевдонимы `'x_min'`, `'x_max'`, `'y_min'`, `'y_max'`, `'x'`, `'y'` тоже работают). Возвращает число перемещённых сущностей.
+
+```python
+editor.align_entities(editor.get_selected_uuids(), 'left')
+```
+
+#### `editor.distribute_entities(uuids, axis)` → `int`
+
+Равномерно распределяет сущности между двумя крайними по `'x'` / `'horizontal'` или `'y'` / `'vertical'`.
+Нужно минимум три сущности.
+
+```python
+editor.distribute_entities(editor.get_selected_uuids(), 'x')
+```
+
+#### `editor.snap_entities_to_grid(uuids, grid_size=0.0)` → `int`
+
+Округляет позиции по сетке. `grid_size=0` использует размер сетки редактора из настроек.
+
+```python
+editor.snap_entities_to_grid(editor.get_selected_uuids())       # сетка редактора
+editor.snap_entities_to_grid(editor.get_entity_uuids(), 64.0)   # явная сетка 64 px
+```
+
+#### `editor.get_selection_center()` → `tuple`
+
+Средняя точка `(x, y)` выделенных сущностей.
+
+#### `editor.get_scene_bounds()` → `dict`
+
+Габаритный прямоугольник по позициям всех сущностей: `count`, `min`, `max`, `center`, `size`.
+
+```python
+b = editor.get_scene_bounds()
+print(f"{b['count']} сущностей занимают {b['size'][0]:.0f} x {b['size'][1]:.0f}")
+```
+
+#### `editor.select_by_pattern(pattern)` → `int`
+
+Выделяет все сущности, чьи имена подходят под регулярное выражение, и возвращает их количество.
+
+```python
+editor.select_by_pattern('Enemy_.*')
+```
+
+#### `editor.get_entity_tree()` → `list[dict]`
+
+Вся иерархия вложенными словарями — `uuid`, `name`, `folder`, `children`.
+
+```python
+def walk(nodes, depth=0):
+    for node in nodes:
+        print('  ' * depth + node['name'])
+        walk(node['children'], depth + 1)
+
+walk(editor.get_entity_tree())
+```
+
+---
+
+### 5.24 Уровни
+
+Эти функции работают с самим файлом уровня. Они учитывают несохранённые изменения: если текущий уровень «грязный», редактор сначала покажет привычный диалог *Сохранить / Не сохранять / Отмена*.
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.open_level(path)` | `bool` | Открыть существующий `.icemap` |
+| `editor.new_level(path='Content/NewLevel.icemap')` | `bool` | Создать новый пустой уровень |
+| `editor.reload_level()` | `bool` | Перечитать текущий уровень с диска, **отбросив** несохранённые изменения |
+| `editor.get_level_path()` | `str` | Путь уровня, открытого в редакторе |
+
+```python
+editor.open_level('Content/Levels/Forest.icemap')
+print(editor.get_level_path())
+
+# Выбросить эксперимент
+editor.reload_level()
+```
+
+> ⚠️ `reload_level()` намеренно отбрасывает несохранённые изменения — в этом и смысл вызова. Сначала вызовите `scene.save()`, если хотите их сохранить.
+
+---
+
+### 5.25 Гизмо и аутлайнер
+
+#### `editor.get_gizmo_operation()` → `str`
+
+Текущий режим гизмо во вьюпорте: `'translate'`, `'scale'` или `'rotate'`.
+
+#### `editor.set_gizmo_operation(operation)` → `bool`
+
+Устанавливает его. Принимает `'translate'` / `'move'` / `'t'`, `'scale'` / `'s'`, `'rotate'` / `'r'`.
+
+```python
+editor.set_gizmo_operation('rotate')
+```
+
+#### `editor.get_outliner_filter()` / `editor.set_outliner_filter(filter)`
+
+Читают и пишут строку поиска панели Level Outliner — ровно так, как если бы пользователь набрал её сам.
+
+```python
+editor.set_outliner_filter('Enemy')   # в аутлайнере остаются только враги
+editor.set_outliner_filter('')        # очистить
+```
+
+---
+
+### 5.26 Приложение редактора и окно
+
+#### `editor.quit(save=False)` → `bool`
+
+Закрывает редактор. `save=True` сначала сохраняет текущий уровень, иначе несохранённые изменения отбрасываются без диалога.
+Именно это делает возможными автономные запуски — см. [17. Командная строка и автоматизация](#17-командная-строка-и-автоматизация).
+
+```python
+editor.quit()            # закрыть сейчас, изменения отбросить
+editor.quit(save=True)   # сохранить уровень и закрыть
+```
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.is_quitting()` | `bool` | Ожидается ли запрос на выход? |
+| `editor.cancel_quit()` | — | Отменить запрос на выход |
+| `editor.notify(message, seconds=5.0)` | `bool` | Показать всплывающее уведомление в редакторе |
+| `editor.focus_panel(panel_name)` | `bool` | Вывести панель на передний план (имена те же, что у `get_panel_names()`) |
+| `editor.get_open_assets()` | `list[dict]` | Ассеты, открытые в панелях редактора — `type`, `path` |
+| `editor.open_url(url)` | `bool` | Открыть URL в системном браузере |
+| `editor.show_in_explorer(path)` | `bool` | Показать файл или папку в файловом менеджере ОС |
+| `editor.get_available_locales()` | `list[str]` | Установленные языки интерфейса редактора |
+| `editor.get_stats()` | `dict` | Снимок состояния редактора одним вызовом |
+
+```python
+editor.notify('Пакетное переименование завершено')
+editor.focus_panel('Properties')
+
+stats = editor.get_stats()
+print(stats['entity_count'], stats['level_dirty'], stats['fps'])
+```
+
+`editor.get_stats()` возвращает `entity_count`, `selected_count`, `folder_count`, `world_asset_count`,
+`level_path`, `level_dirty`, `play_mode`, `paused`, `undo_count`, `redo_count`, `fps`.
+
+#### Счётчики undo / redo
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.get_undo_count()` | `int` | Доступных шагов undo сцены |
+| `editor.get_redo_count()` | `int` | Доступных шагов redo сцены |
+| `editor.get_file_undo_count()` | `int` | Шагов undo файловых операций контент-браузера |
+| `editor.get_file_redo_count()` | `int` | Шагов redo файловых операций контент-браузера |
+| `editor.undo_file()` | — | Отменить последнюю файловую операцию |
+| `editor.redo_file()` | — | Повторить последнюю отменённую файловую операцию |
+
+---
+
+### 5.27 Скриншоты
+
+`editor.screenshot()` снимает **вьюпорт** (только игровой вид). `editor.screenshot_window()` снимает **всё окно редактора**, вместе с панелями и меню — именно это нужно, когда требуется посмотреть на сам редактор.
+
+#### `editor.screenshot_window(path='')` → `str`
+
+Ставит в очередь снимок всего окна на следующий кадр и возвращает путь, куда он будет записан.
+Пустой путь создаёт файл с отметкой времени в `<проект>/Screenshots`.
+
+```python
+print(editor.screenshot_window())                          # с отметкой времени
+print(editor.screenshot_window('Screenshots/ui.png'))      # явный путь
+```
+
+#### `editor.screenshot_dir()` → `str`
+
+Папка по умолчанию для `editor.screenshot()` и `editor.screenshot_window()`.
+
+> Оба снимка ставятся в очередь и выполняются при рендере следующего кадра, поэтому `editor.is_screenshot_pending()` на мгновение становится `True`, а `editor.get_last_screenshot()` затем возвращает готовый путь. За один кадр можно поставить в очередь только один снимок.
+
+```python
+# Снять и подтвердить, что файл записан
+path = editor.screenshot_window('Screenshots/state.png')
+
+def confirm():
+    print('записано:', editor.get_last_screenshot())
+
+editor.set_timer(0.5, confirm)
+```
+
+---
+
+### 5.28 Управление рантаймом Python
+
+Эти функции управляют самим встроенным интерпретатором: откуда он импортирует, сколько может выполняться скрипт и что пошло не так в прошлый раз.
+
+#### `editor.get_python_info()` → `dict`
+
+Всё об интерпретаторе одним вызовом: `version`, `prefix`, `exec_prefix`, `search_paths`,
+`initialized`, `executing`, `execution_count`, `error_count`, `last_duration_ms`, `last_error`,
+`timeout`, `timer_count`, `event_count`, `user_script_count`.
+
+```python
+info = editor.get_python_info()
+print(info['version'], info['execution_count'], 'ошибок:', info['error_count'])
+```
+
+#### Пути импорта
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.get_python_paths()` | `list[str]` | Текущий `sys.path` |
+| `editor.add_python_path(directory)` | `bool` | Добавить папку в `sys.path` |
+| `editor.remove_python_path(directory)` | `bool` | Убрать папку из `sys.path` |
+| `editor.reload_module(module_name)` | `dict` | `importlib.reload()` модуля — `ok`, `error` |
+| `editor.get_imported_modules()` | `list[str]` | Всё, что есть в `sys.modules` |
+
+`Tools/PythonScripts`, `Tools/PythonScripts/Lib`, `Tools/PythonScripts/Modules` и корень проекта
+добавляются в `sys.path` автоматически при старте, поэтому вспомогательный модуль, положенный в
+`Tools/PythonScripts/Lib/`, импортируется сразу:
+
+```python
+import my_helpers          # Tools/PythonScripts/Lib/my_helpers.py
+editor.reload_module('my_helpers')   # подхватить последние правки
+```
+
+#### Запуск кода
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.execute_file(filepath)` | `dict` | Выполнить файл в глобальной области — `success`, `output`, `errors` |
+| `editor.execute_string(code)` | `dict` | Выполнить исходник в глобальной области — плюс `duration_ms` |
+| `editor.execute_in_console(code)` | `dict` | Выполнить в **пространстве консоли** с эхом REPL — плюс `result` |
+| `editor.run_script_file(path, args=[])` | `dict` | Выполнить файл с `sys.argv = [path] + args` |
+| `editor.reset_console_environment()` | `bool` | Очистить пространство консоли и пересоздать его из глобального |
+
+```python
+r = editor.execute_in_console('2 ** 10')
+print(r['result'])     # '1024'   (значение, как его показала бы консоль)
+print(r['output'])     # '1024\n' (что было напечатано)
+
+r = editor.run_script_file('Tools/PythonScripts/export.py', ['Content', '--dry-run'])
+print(r['success'], r['duration_ms'])
+```
+
+#### Защита от зависших скриптов
+
+#### `editor.set_script_timeout(seconds)` → `bool`
+
+Прерывает любое выполнение Python, которое длится дольше `seconds`, поднимая внутри него `KeyboardInterrupt`.
+`0` (по умолчанию) отключает защиту.
+
+```python
+editor.set_script_timeout(30)        # ничто не блокирует редактор дольше 30 с
+print(editor.get_script_timeout())   # 30.0
+editor.set_script_timeout(0)         # снова без ограничения
+```
+
+#### `editor.interrupt_script()` → `bool`
+
+Немедленно поднимает `KeyboardInterrupt` в выполняющемся скрипте. Полезно из таймера или коллбэка события.
+
+#### `editor.get_last_python_error()` → `str`
+
+Полный traceback последнего неудачного выполнения — тот же текст, что показала консоль.
+
+```python
+r = editor.execute_string('1 / 0')
+if not r['success']:
+    print(editor.get_last_python_error())
+```
+
+#### Пользовательские скрипты
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.get_user_script_paths()` | `list[dict]` | Найденные скрипты-инструменты — `name`, `path`, `category` |
+| `editor.list_user_scripts()` | `list[str]` | Только отображаемые имена |
+| `editor.run_user_script(name)` | `bool` | Запустить один по имени или пути |
+| `editor.rediscover_user_scripts()` | `int` | Пересканировать `Tools/PythonScripts` |
+| `editor.reload_autocomplete()` | — | Перестроить индекс автодополнения консоли |
+| `editor.get_autocomplete_items()` | `list[str]` | Текущие записи автодополнения |
+
+---
+
+### 5.29 Самодокументирование API
+
+Каждый модуль содержит сгруппированный список собственных функций. Это самый быстрый способ вспомнить
+имя, не выходя из редактора, и он всегда соответствует той сборке, которая у вас запущена.
+
+```python
+print(editor.api())
+print(scene.api()); print(engine.api()); print(browser.api())
+print(console.api()); print(lua.api()); print(project.api()); print(assets.api())
+```
+
+Те же списки доступны из меню **Помощь** консоли Python, а `help()` печатает обзорный экран.
+Обычная интроспекция Python тоже работает:
+
+```python
+help(editor.create_entity)     # docstring одной функции
+dir(assets)                    # все имена модуля
+len([f for f in dir(editor) if not f.startswith('_')])
+```
+---
+
+### 5.30 Отладочные оверлеи вьюпорта
+
+Отладочные оверлеи панели Statistics — формы коллайдеров, навигационная сетка, радиусы источников света,
+каркасный режим и прочие — полностью скриптуются. В связке с `editor.screenshot_window()` это самый
+быстрый способ *увидеть*, что на самом деле происходит на уровне.
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `editor.get_debug_flag_names()` | `list[str]` | Все имена флагов оверлеев |
+| `editor.get_debug_flags()` | `dict` | Все флаги и их текущее состояние |
+| `editor.get_debug_flag(name)` | `bool` | Включён ли этот оверлей? |
+| `editor.set_debug_flag(name, value)` | `bool` | Включить/выключить один оверлей |
+| `editor.set_debug_flags(data)` | `bool` | Применить сразу несколько из словаря |
+| `editor.clear_debug_flags()` | `bool` | Выключить все оверлеи |
+
+Имена флагов (23): `ShowColliders`, `ShowNavGrid`, `ShowEntityMarkers`, `ShowLightRadius`,
+`ShowAudioRange`, `ShowCameraFrustum`, `ShowJoints`, `ShowPhysicsContacts`, `ShowSleepingBodies`,
+`ShowVelocityVectors`, `ShowTilemapGrid`, `ShowFXBounds`, `ShowWidgetBounds`, `ShowZDepthColor`,
+`WireframeMode`, `FreezeCulling`, `ShowShadowMaps`, `ShowShadowEdges`, `ShowLightHeatmap`,
+`ShowNavGridHeatmap`, `ShowAIStateOverlay`, `ShowAIPerception`, `ShowAIPaths`.
+
+```python
+# Показать коллайдеры и джойнты, затем снять редактор
+editor.set_debug_flags({'ShowColliders': True, 'ShowJoints': True})
+editor.screenshot_window('Screenshots/physics.png')
+editor.defer(editor.clear_debug_flags)
+```
+
+```python
+# Что сейчас включено?
+print([name for name, on in editor.get_debug_flags().items() if on])
+```
+
+> Изменение флага записывается в `Config/Editor.json` точно так же, как переключение в панели Statistics,
+> поэтому состояние переживает перезапуск редактора. Неизвестные имена отклоняются с предупреждением,
+> а не игнорируются молча.
+
+
+---
+
 ## 6. Модуль `scene` — Работа со сценами
 
 #### `scene.get_entity_count()` → `int`
@@ -3984,6 +4591,63 @@ scene.save_entity(uuid, 'Content/Templates/player_template.json')
 ```python
 uuid = scene.load_entity('Content/Templates/player_template.json')
 ```
+
+---
+
+### 6.1 Состояние уровня и перезагрузка
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `scene.reload()` | `bool` | Перечитать текущий уровень с диска, отбросив несохранённые изменения |
+| `scene.is_dirty()` | `bool` | Есть ли у уровня несохранённые изменения? |
+| `scene.mark_dirty()` | `bool` | Пометить уровень как изменённый |
+| `scene.save_as(path)` | `bool` | Сохранить по новому пути и продолжить работу там |
+| `scene.clear()` | `int` | Удалить все сущности уровня (один шаг undo) |
+| `scene.copy_level(source, destination)` | `bool` | Скопировать файл уровня на диске |
+| `scene.read_level(path)` | `dict` \| `None` | Прочитать `.icemap` в данные Python **без** открытия в редакторе |
+
+```python
+if scene.is_dirty():
+    scene.save(scene.get_path())
+
+scene.copy_level('Content/Levels/Forest.icemap', 'Content/Levels/Forest_Backup')
+data = scene.read_level('Content/Levels/Forest.icemap')
+print(len(data.get('Entities', [])))
+```
+
+---
+
+### 6.2 Статистика и проверка
+
+#### `scene.stats()` → `dict`
+
+Статистика уровня одним вызовом: `entity_count`, `components` (гистограмма «тип компонента → количество»),
+`folder_count`, `root_entity_count`, `world_asset_count`, `path`, `dirty`.
+
+```python
+s = scene.stats()
+print(f"{s['entity_count']} сущностей в {s['path']}")
+for name, count in sorted(s['components'].items(), key=lambda kv: -kv[1]):
+    print(f'  {name:<20} {count}')
+```
+
+#### `scene.validate()` → `dict`
+
+Проходит по всем сущностям (включая все мульти-инстансные компоненты) и по всем мировым ассетам уровня и
+сообщает о каждой ссылке на ассет, которая не разрешается на диске. Возвращает `ok`, `checked_entities` и
+`problems` — список `{uuid, entity, reference}`.
+
+```python
+report = scene.validate()
+if report['ok']:
+    print('Уровень чистый')
+else:
+    for problem in report['problems']:
+        print(f"{problem['entity']}: отсутствует {problem['reference']}")
+```
+
+> Это самый полезный вызов перед выпуском уровня: он ловит спрайты, классы, материалы, тайлмапы, звуки и
+> виджеты, которые переименовали или удалили вне редактора.
 
 ---
 
@@ -4262,6 +4926,68 @@ info = engine.audio_info()
 #     'master_volume': 1.0,
 #     'quality': 'High'
 # }
+```
+
+---
+
+### 7.5 Платформа, сборка и бэкенд рендеринга
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `engine.platform()` | `str` | `'windows'`, `'macos'` или `'linux'` |
+| `engine.arch()` | `str` | `'64-bit'` или `'32-bit'` |
+| `engine.render_backend()` | `str` | Активный бэкенд, например `'OpenGL 4.6'`, `'Vulkan'`, `'Direct3D 12'`, `'Metal'` |
+| `engine.gpu_info()` | `dict` | `backend`, `driver`, `gpu_time_ms`, `gpu_timer_available`, `gpu_temperature_c`, `vram_mb`, `vram_total_mb` |
+| `engine.build_info()` | `dict` | `version`, `editor`, `configuration`, `compiled`, `python` |
+| `engine.python_version()` | `str` | Версия встроенного Python |
+| `engine.python_paths()` | `list[str]` | Текущий `sys.path` |
+| `engine.engine_dir()` | `str` | Папка установки редактора |
+| `engine.saved_dir()` | `str` | Папка сохранений, логов и скриншотов |
+| `engine.log_path()` | `str` | Папка, куда движок пишет файлы логов |
+| `engine.frame_count()` | `int` | Кадров отрисовано с момента запуска |
+| `engine.profiler_stats()` | `dict` | Счётчики CPU/GPU/рендера одним словарём |
+
+```python
+print(engine.build_info())
+print(engine.gpu_info()['driver'])
+print(f"кадр {engine.frame_count()} @ {engine.fps():.1f} fps")
+```
+
+---
+
+### 7.6 Окно редактора и приложение
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `engine.quit()` | `bool` | Закрыть редактор без сохранения |
+| `engine.window_size()` | `tuple` | Размер окна в логических точках |
+| `engine.window_pixel_size()` | `tuple` | Размер окна в физических пикселях |
+| `engine.set_window_size(width, height)` | `bool` | Изменить размер окна редактора |
+| `engine.window_title()` | `str` | Заголовок окна |
+| `engine.set_window_title(title)` | `bool` | Изменить заголовок окна |
+| `engine.is_fullscreen()` | `bool` | Полноэкранный ли режим? |
+| `engine.set_fullscreen(enabled)` | `bool` | Переключить полноэкранный режим |
+| `engine.focus_window()` | `bool` | Вывести окно редактора на передний план |
+| `engine.get_target_fps()` | `int` | Ограничение частоты кадров редактора (0 — без ограничения) |
+| `engine.set_target_fps(fps)` | `bool` | Изменить ограничение частоты кадров |
+
+```python
+engine.set_window_size(1920, 1080)     # детерминированный размер перед скриншотом
+engine.set_target_fps(0)               # без ограничения на время профилирования
+```
+
+---
+
+### 7.7 Инвентарь ресурсов
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `engine.list_resources()` | `dict` | `textures`, `shaders`, `sounds` — все загруженные имена |
+| `engine.reload_all_assets()` | `bool` | Перезагрузить все закэшированные ассеты с диска |
+
+```python
+res = engine.list_resources()
+print(len(res['textures']), 'текстур |', len(res['shaders']), 'шейдеров')
 ```
 
 ---
@@ -4724,7 +5450,794 @@ browser.batch_move(files, 'Content/Textures')
 
 ---
 
-## 9. Модуль `icebox.log` — Системное логирование
+### 8.10 JSON, метаданные и контрольные суммы
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `browser.read_json(path)` | `dict`/`list`/`None` | Разобрать JSON-файл в данные Python |
+| `browser.write_json(path, data, indent=4)` | `bool` | Записать данные Python как JSON (`indent=0` — компактно) |
+| `browser.file_info(path)` | `dict` | `path`, `name`, `stem`, `extension`, `exists`, `is_directory`, `size`, `modified_unix` |
+| `browser.checksum(path)` | `str` | 64-битный хеш FNV-1a в hex (пусто, если файл нечитаем) |
+| `browser.dir_size(path)` | `int` | Суммарный размер всех файлов в папке |
+| `browser.normalize(path)` | `str` | Прямые слэши, без сегментов `.` / `..` |
+| `browser.is_asset(path)` | `bool` | Похож ли путь на ассет движка? |
+
+```python
+data = browser.read_json('Content/Enemies/goblin.ice_class')
+data['Entity']['TagComponent']['Tag'] = 'Goblin'
+browser.write_json('Content/Enemies/goblin.ice_class', data)
+
+print(browser.checksum('Content/hero.png'))
+print(browser.dir_size('Content') / 1024 / 1024, 'МБ')
+```
+
+> `read_json` / `write_json` — безопасный способ править ассеты скриптом: они никогда не портят файл
+> строковыми правками, а `write_json` сохраняет ту же раскладку с отступом в 4 пробела, что пишет редактор.
+
+---
+
+### 8.11 Деревья папок и создание файлов
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `browser.list_tree(path='Content', include_directories=False)` | `list[str]` | Всё внутри папки, рекурсивно |
+| `browser.make_dirs(path)` | `bool` | Создать папку и все недостающие родительские |
+| `browser.append_file(path, content)` | `bool` | Дописать текст, создав файл при необходимости |
+| `browser.touch(path)` | `bool` | Создать пустой файл или обновить время изменения |
+
+```python
+browser.make_dirs('Content/Levels/Chapter2')
+browser.append_file('Saved/import.log', 'импортировано 42 спрайта\n')
+```
+
+---
+
+### 8.12 Открытие ассетов из браузера
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `browser.open(path)` | `bool` | Открыть ассет в его панели редактора (то же, что `editor.open_asset`) |
+| `browser.reveal(path)` | `bool` | Показать файл или папку в файловом менеджере ОС |
+
+```python
+browser.open('Content/Enemies/goblin.ice_class')
+browser.reveal('Content/Enemies')
+```
+
+---
+
+## 9. Модуль `console` — Консоль редактора и логи
+
+Модуль `console` даёт Python полный доступ на чтение и запись к панели Console редактора — тому самому
+буферу, где видны сообщения движка, ошибки Lua, предупреждения по ассетам и ваш собственный вывод `print()`.
+Это самый быстрый способ ответить на вопрос «что-нибудь сломалось?» из скрипта, и именно он делает
+автономные запуски осмысленными: headless-прогон может прочитать ровно то, что записал редактор.
+
+Уровни важности — целые числа: **0 trace, 1 info, 2 warn, 3 error**.
+
+---
+
+### 9.1 Чтение лога
+
+#### `console.get_logs(count=200, level=-1, filter='', category='')` → `list[dict]`
+
+Возвращает самые свежие записи. `count=0` возвращает весь буфер, `level=-1` — все уровни.
+Каждая запись — словарь с `message`, `level`, `level_name`, `category`, `repeat`, `timestamp_ms`.
+
+```python
+for entry in console.get_logs(20):
+    print(entry['level_name'], entry['message'])
+
+# Только ошибки и только из категории Lua
+for entry in console.get_logs(0, 3, category='Lua'):
+    print(entry['message'])
+```
+
+#### `console.get_messages(count=200, level=-1)` → `list[str]`
+
+То же самое, но обычными строками.
+
+#### `console.get_errors(count=100)` / `console.get_warnings(count=100)` → `list[str]`
+
+Сокращения для уровней 3 и 2.
+
+```python
+errors = console.get_errors()
+if errors:
+    print(f'{len(errors)} ошибок, последняя: {errors[-1]}')
+```
+
+#### `console.get_text(count=200, level=-1, timestamps=False)` → `str`
+
+Всё, склеенное в одну строку с метками `[INFO ]` / `[WARN ]` / `[ERROR]` — готово к вставке в баг-репорт.
+
+#### `console.find(pattern, regex=False, count=0)` → `list[dict]`
+
+Ищет по буферу. С `regex=True` шаблон — регулярное выражение без учёта регистра.
+
+```python
+console.find('texture')                       # подстрока
+console.find(r'failed|missing', regex=True)   # регулярка
+```
+
+---
+
+### 9.2 Подсчёт и сводка
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `console.get_count(level=-1)` | `int` | Записей в буфере, опционально по одному уровню |
+| `console.get_counts()` | `dict` | `trace`, `info`, `warn`, `error`, `total` |
+| `console.has_errors()` | `bool` | Была ли хотя бы одна ошибка? |
+| `console.has_warnings()` | `bool` | Было ли хотя бы одно предупреждение? |
+| `console.get_last_error()` | `str` | Последнее сообщение об ошибке или `''` |
+| `console.get_categories()` | `list[str]` | Все категории, присутствующие в буфере |
+| `console.summary()` | `dict` | Счётчики + последняя ошибка/предупреждение + состояние панели одним вызовом |
+
+```python
+s = console.summary()
+print(f"ошибок={s['error']} предупреждений={s['warn']} последняя={s['last_error']}")
+```
+
+---
+
+### 9.3 Запись в консоль
+
+| Функция | Описание |
+|---------|----------|
+| `console.write(message, level=1)` | Добавить сообщение любого уровня |
+| `console.trace(message)` | Уровень 0 |
+| `console.info(message)` | Уровень 1 |
+| `console.warn(message)` | Уровень 2 |
+| `console.error(message)` | Уровень 3 |
+
+```python
+console.info('Импорт завершён')
+console.warn('У 3 спрайтов нет пивота')
+console.error('Уровень ссылается на отсутствующий тайлсет')
+```
+
+> `console.write()` и `editor.log()` пишут в одно и то же место; `icebox.log.*` пишет в лог **движка**
+> (см. [13. Модуль `icebox.log`](#14-модуль-iceboxlog--системное-логирование)).
+
+---
+
+### 9.4 Управление буфером и панелью
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `console.clear()` | — | Очистить весь буфер |
+| `console.save(path, visible_only=False)` | `bool` | Записать лог в файл (`visible_only` — то, что сейчас показывает панель) |
+| `console.get_filter()` / `console.set_filter(filter)` | `str` / — | Текстовый фильтр панели |
+| `console.get_level_mask()` / `console.set_level_mask(mask)` | `int` / — | Битовая маска уровней (бит 0 trace … бит 3 error; `0xF` — всё) |
+| `console.is_paused()` / `console.set_paused(paused)` | `bool` / — | Пауза панели (новые логи буферизуются, а не теряются) |
+| `console.get_buffer_limit()` / `console.set_buffer_limit(limit)` | `int` / — | Максимум записей в буфере (100…50000) |
+| `console.get_language()` / `console.set_language(language)` | `str` / `bool` | Язык строки ввода консоли: `'lua'`, `'python'`, `'shell'` |
+| `console.execute(text)` | — | Выполнить строку через строку ввода консоли (учитывает язык и `/команды`) |
+
+```python
+console.set_level_mask(0b1100)          # показывать только предупреждения и ошибки
+console.save('Saved/session.log')
+console.clear()
+
+console.set_language('python')
+console.execute('print(engine.fps())')
+```
+
+---
+
+### 9.5 Типовая проверка здоровья
+
+```python
+console.clear()
+editor.reload_level()
+
+def report():
+    s = console.summary()
+    if s['has_errors']:
+        console.save('Saved/level_errors.log')
+        print('ОШИБКА —', s['error'], 'ошибок; лог сохранён')
+    else:
+        print('OK — после перезагрузки ошибок нет')
+
+editor.set_timer(1.0, report)
+```
+
+---
+
+## 10. Модуль `lua` — Мост в игровую виртуальную машину Lua
+
+Модуль `lua` позволяет редакторскому Python-скрипту общаться с **игровой** виртуальной машиной Lua:
+выполнять код, вычислять выражения, проверять компиляцию всех скриптов классов, смотреть стек вызовов и
+читать скрипт уровня. Именно это превращает Python API в настоящий тестовый стенд: Python управляет
+редактором, Lua отвечает за игру.
+
+> Сам Lua API (`Entity`, `Physics`, `Input`, …) описан отдельно в документации **Lua API**.
+> Эта глава охватывает только мост со стороны Python.
+
+---
+
+### 10.1 Выполнение и вычисление
+
+#### `lua.exec(code)` → `dict`
+
+Выполняет исходник Lua в окружении уровня. Возвращает `{'ok': bool, 'error': str}`.
+
+```python
+r = lua.exec('print("привет из Lua")')
+if not r['ok']:
+    print('Ошибка Lua:', r['error'])
+```
+
+#### `lua.eval(expression)` → `str`
+
+Вычисляет выражение Lua и возвращает его значение строкой. Ошибки приходят текстом `'Error: …'`,
+а не исключением.
+
+```python
+print(lua.eval('_VERSION'))
+print(lua.eval('Time.GetDeltaTime()'))
+```
+
+#### `lua.call_global(function_name)` → `bool`
+
+Вызывает глобальную функцию Lua без аргументов.
+
+---
+
+### 10.2 Проверка компиляции
+
+#### `lua.check(code)` → `dict`
+
+Компилирует исходник Lua **без выполнения**. Возвращает `{'ok': bool, 'error': str}`.
+
+#### `lua.check_file(path)` → `dict`
+
+То же для файла `.lua` на диске. Дополнительно возвращает `path`.
+
+#### `lua.compile_all()` → `list[dict]`
+
+Проверяет компиляцию **всех скриптов классов проекта**. Каждый элемент — `{'path', 'ok', 'error'}`.
+Это самая быстрая проверка корректности по всему проекту.
+
+```python
+broken = [r for r in lua.compile_all() if not r['ok']]
+for r in broken:
+    print(r['path'], '->', r['error'])
+print(f'{len(broken)} сломанных скриптов')
+```
+
+---
+
+### 10.3 Скрипт уровня
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `lua.get_level_script()` | `str` | Исходник Lua, загруженный в ВМ |
+| `lua.set_level_script(code)` | `bool` | Заменить исходник в движке скриптов (без перезагрузки) |
+| `lua.reload_level_script(code='')` | `bool` | Перезагрузить скрипт уровня в ВМ; пустая строка — перезагрузить текущий |
+| `lua.is_level_script_loaded()` | `bool` | Загружен ли скрипт уровня? |
+| `lua.has_level_function(name)` | `bool` | Определена ли такая функция в скрипте уровня? |
+| `lua.call_level_function(name)` | `str` | Вызвать её и вернуть результат строкой |
+
+```python
+if lua.has_level_function('OnLevelStart'):
+    print(lua.call_level_function('OnLevelStart'))
+```
+
+> `editor.get_level_script()` / `editor.set_level_script()` работают с **текстовым буфером редактора**
+> (тем, что показывает панель Level Script). `lua.*` работает с тем, что сейчас в **ВМ**. Правьте через
+> `editor.*`, проверяйте через `lua.check()`, применяйте через `lua.reload_level_script()`.
+
+---
+
+### 10.4 Скрипты, модули и события
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `lua.reload_all_scripts()` | — | Перезагрузить все скрипты сущностей активной сцены |
+| `lua.clear_module_cache()` | — | Сбросить кэш проектных модулей Lua, чтобы `require()` перечитал их |
+| `lua.emit_event(event_name, payload='')` | — | Отправить событие Lua со строковой полезной нагрузкой |
+| `lua.has_entity_data(entity_id, key)` | `bool` | Есть ли такой ключ в хранилище данных сущности Lua? |
+| `lua.clear_entity_data(entity_id)` | — | Очистить хранилище данных сущности |
+
+---
+
+### 10.5 Инспекция ВМ
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `lua.get_globals()` | `list[str]` | Все глобальные имена ВМ — вся поверхность Lua API |
+| `lua.get_call_stack()` | `list[dict]` | `function`, `source`, `line` |
+| `lua.get_locals(level=0)` | `list[dict]` | `name`, `value`, `type` |
+| `lua.get_upvalues(level=0)` | `list[dict]` | `name`, `value`, `type` |
+| `lua.get_environment(source_name)` | `list[dict]` | Переменные окружения одного скрипта |
+| `lua.get_table(expression, max_depth=2)` | `list[dict]` | Раскрыть выражение-таблицу Lua |
+| `lua.is_debug_paused()` | `bool` | Остановлен ли отладчик Lua на точке останова? |
+| `lua.is_debug_hook_active()` | `bool` | Установлен ли отладочный хук? |
+| `lua.is_runtime_active()` | `bool` | Привязан ли рантайм Lua к сцене (режим игры)? |
+| `lua.memory_kb()` | `float` | Использование памяти ВМ в КБ |
+| `lua.collect_garbage()` | — | Полный цикл сборки мусора Lua |
+| `lua.info()` | `dict` | Снимок ВМ: память, состояние скрипта уровня, отладчика, число глобалов |
+
+```python
+print(f"Lua даёт {len(lua.get_globals())} глобалов, занимает {lua.memory_kb():.0f} КБ")
+print(lua.info())
+```
+
+---
+
+### 10.6 Проверка скриптов по всему проекту
+
+```python
+console.clear()
+broken = [r for r in lua.compile_all() if not r['ok']]
+
+for r in broken:
+    console.error(f"{r['path']}: {r['error']}")
+
+print('Скрипты Lua в порядке' if not broken else f'{len(broken)} сломанных скриптов')
+```
+
+---
+
+## 11. Модуль `project` — Проект, конфигурация, плагины и моды
+
+Модуль `project` читает и пишет файлы, описывающие сам проект: `Config/*.json`, реестры плагинов и модов,
+настройки сборки и раскладку проекта.
+
+---
+
+### 11.1 Раскладка
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `project.name()` | `str` | Имя папки открытого проекта |
+| `project.path()` | `str` | Абсолютный путь проекта |
+| `project.content_path()` | `str` | Абсолютный путь папки `Content` |
+| `project.config_path()` | `str` | Абсолютный путь папки `Config` |
+| `project.engine_path()` | `str` | Папка установки движка |
+| `project.saved_path()` | `str` | Папка `Saved` (логи, скриншоты) |
+| `project.engine_version()` | `str` | Строка версии движка |
+| `project.scripting_mode()` | `str` | `'code'` или `'visual'` |
+| `project.get_levels()` | `list[str]` | Все `.icemap` проекта |
+| `project.get_locales()` | `list[str]` | Коды языков в `Config/Languages` |
+| `project.info()` | `dict` | Всё вышеперечисленное плюс текущий уровень и его флаг изменений |
+
+```python
+info = project.info()
+print(f"{info['name']} — {info['level_count']} уровней, движок {info['engine_version']}")
+```
+
+---
+
+### 11.2 Файлы конфигурации
+
+Файлы `Config/<имя>.json` читаются и пишутся как обычные данные Python.
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `project.list_configs()` | `list[str]` | Имена всех `Config/*.json` |
+| `project.get_config(name)` | `dict`/`list`/`None` | Прочитать один (без `.json`) |
+| `project.set_config(name, data)` | `bool` | **Заменить** его словарём |
+| `project.merge_config(name, data)` | `bool` | **Глубоко слить** словарь, сохранив нетронутые ключи |
+| `project.has_config(name)` | `bool` | Существует ли он? |
+| `project.backup_config(name, suffix='.bak')` | `bool` | Скопировать рядом с собой |
+| `project.get_editor_config()` | `dict` | Сырой `Config/Editor.json` |
+| `project.get_collision_groups()` | `dict` | Сырой `Config/CollisionGroups.json` |
+
+```python
+project.backup_config('Engine')
+project.merge_config('Engine', {'Physics': {'GravityY': -20.0}})
+print(project.get_config('Engine')['Physics']['GravityY'])
+```
+
+> ⚠️ Редактор переписывает `Config/Editor.json` при закрытии. Правка из Python в **запущенном** редакторе
+> сохранится; правка файла руками за спиной редактора будет перезаписана при выходе. `merge_config` —
+> безопасный способ изменить один ключ.
+
+---
+
+### 11.3 Плагины и моды
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
+| `project.set_plugin_enabled(name, enabled)` | `bool` | Включить/выключить и записать в `Config/Plugins.json` |
+| `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
+| `project.set_mod_enabled(name, enabled)` | `bool` | Включить/выключить и записать в `Config/Mods.json` |
+| `project.reload_plugin_config()` | — | Перечитать оба реестра с диска |
+
+```python
+for p in project.get_plugins():
+    state = 'вкл' if p['enabled'] else 'выкл'
+    print(f"[{state}] {p['name']} {p['version']} — {p['description']}")
+```
+
+> Включение плагина записывает конфиг; сам плагин загрузится при следующем старте редактора.
+
+---
+
+### 11.4 Настройки сборки
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `project.get_build_settings()` | `dict` | Конфигурация сборки из `Config/Editor.json` |
+| `project.open_build_panel()` | `bool` | Открыть панель **Build Game** |
+
+```python
+b = project.get_build_settings()
+print(b.get('BuildName'), b.get('BuildVersion'), b.get('BuildPlatform'))
+project.open_build_panel()
+```
+
+> Сама сборка намеренно **не** скриптуется: она выполняется асинхронно, стримит вывод в панель и может
+> запрашивать данные для подписи. Python настраивает её и открывает панель; запускает человек.
+
+---
+
+## 12. Модуль `assets` — Создание, инспекция и проверка ассетов
+
+Там, где `browser` работает с файлами, `assets` работает с **ассетами движка**: он знает таблицу типов,
+умеет создавать корректный пустой ассет любого типа, умеет прослеживать ссылки между ассетами и
+сообщать, что сломано.
+
+---
+
+### 12.1 Типы
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `assets.types()` | `list[str]` | Все имена типов, понятные модулю |
+| `assets.type_table()` | `list[dict]` | `type`, `extension`, `description`, `creatable` |
+| `assets.extension_for(type)` | `str` | `'sprite'` → `'.ice_sprite'` |
+| `assets.type_of(path)` | `str` | `'Content/x.ice_sprite'` → `'sprite'` |
+
+```python
+for row in assets.type_table():
+    mark = '+' if row['creatable'] else ' '
+    print(f"{mark} {row['type']:<18} {row['extension']:<18} {row['description']}")
+```
+
+Создаваемые типы: `class`, `sprite`, `flipbook`, `animation`, `skeleton`, `tileset`, `tilemap`,
+`material`, `material_instance`, `material_function`, `material_params`, `decal`, `fx`, `widget`,
+`view`, `cinema`, `ai`, `localization`, `lua`, `note`.
+Типы только для чтения (создаёт редактор): `level`, `texture`, `font`, `sound`, `video`.
+
+---
+
+### 12.2 Создание ассетов
+
+#### `assets.create(type, path, overwrite=False)` → `bool`
+
+Создаёт новый **корректный пустой** ассет. Расширение добавляется автоматически, родительские папки
+создаются, а содержимое файла точно совпадает с тем, что даёт пункт *Create* контент-браузера — поэтому
+ассет корректно открывается в своей панели.
+
+```python
+assets.create('class',    'Content/Enemies/CL_Goblin')
+assets.create('sprite',   'Content/Enemies/SP_Goblin')
+assets.create('material', 'Content/Materials/M_Water')
+
+# Сгенерировать папку вариантов
+for i in range(1, 6):
+    assets.create('sprite', f'Content/Tiles/SP_Tile_{i:02d}', overwrite=True)
+```
+
+---
+
+### 12.3 Просмотр и статистика
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `assets.list(type='', directory='Content', recursive=True)` | `list[str]` | Пути ассетов относительно проекта; пустой тип — все ассеты |
+| `assets.count(type)` | `int` | Сколько ассетов одного типа |
+| `assets.stats()` | `dict` | Количество по типам плюс `total` |
+| `assets.exists(path)` | `bool` | Существует ли файл? |
+| `assets.info(path)` | `dict` | `path`, `name`, `stem`, `extension`, `type`, `exists`, `is_directory`, `size`, `modified_unix` |
+| `assets.read(path)` | `dict`/`list`/`None` | Разобрать ассет на основе JSON |
+| `assets.write(path, data)` | `bool` | Перезаписать ассет на основе JSON (отступ 4 пробела) |
+| `assets.open(path)` | `bool` | Открыть его в панели редактора |
+| `assets.refresh()` | — | Перезагрузить все закэшированные ассеты |
+
+```python
+print(assets.stats())
+for path in assets.list('class'):
+    print(path, assets.info(path)['size'], 'байт')
+```
+
+---
+
+### 12.4 Граф зависимостей
+
+#### `assets.dependencies(path)` → `list[str]`
+
+Все пути ассетов, на которые ссылается файл — текстуры, материалы, спрайты, классы, скрипты. Работает
+как для JSON-ассетов, так и для файлов `.lua`.
+
+#### `assets.find_references(path, directory='Content')` → `list[str]`
+
+Обратная задача: все файлы внутри `directory`, которые ссылаются на данный ассет. Используйте перед
+переименованием или удалением.
+
+```python
+sprite = 'Content/Enemies/SP_Goblin.ice_sprite'
+users = assets.find_references(sprite)
+if users:
+    print(f'{sprite} используется в:')
+    for u in users:
+        print('  ', u)
+else:
+    print('Ничего не ссылается — можно удалять')
+```
+
+---
+
+### 12.5 Проверки здоровья
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `assets.validate(path)` | `dict` | `ok`, `errors`, `type`, `path` — разбирается, тип известен, ссылки разрешаются |
+| `assets.find_missing(directory='Content')` | `list[dict]` | Все битые ссылки — `file`, `reference` |
+| `assets.find_unused(directory='Content')` | `list[str]` | Ассеты, на которые ничего не ссылается (уровни и классы не сообщаются) |
+| `assets.find_duplicate_names(directory='Content')` | `list[dict]` | Имена файлов, встречающиеся более одного раза — `name`, `paths` |
+
+```python
+missing = assets.find_missing()
+for m in missing:
+    console.error(f"{m['file']} -> {m['reference']}")
+print('Контент чистый' if not missing else f'{len(missing)} битых ссылок')
+
+for dup in assets.find_duplicate_names():
+    print(dup['name'], '->', dup['paths'])
+```
+
+> `find_unused` — подсказка, а не приговор: ассет, который Lua создаёт по имени в рантайме, для
+> статического анализа выглядит неиспользуемым. Всегда проверяйте `find_references` перед удалением.
+
+---
+
+### 12.6 Полный аудит контента
+
+```python
+console.clear()
+
+missing = assets.find_missing()
+dups = assets.find_duplicate_names()
+broken_lua = [r for r in lua.compile_all() if not r['ok']]
+level = scene.validate()
+
+print(f'ассетов       : {assets.stats()["total"]}')
+print(f'битых ссылок  : {len(missing)}')
+print(f'дубликатов    : {len(dups)}')
+print(f'сломанных Lua : {len(broken_lua)}')
+print(f'проблем уровня: {len(level["problems"])}')
+
+console.save('Saved/content_audit.log')
+```
+
+---
+
+## 13. Модуль `packages` — Установка Python-библиотек (pip)
+
+Редактор поставляется с полноценным CPython 3.12 — стандартной библиотекой, нативными модулями
+расширения (`socket`, `ssl`, `ctypes`, `sqlite3`, `zlib`, `lzma`, …) и собственным исполняемым файлом
+`python`. Модуль `packages` использует их для запуска **pip**, поэтому любую библиотеку с PyPI можно
+установить прямо в интерпретатор редактора и импортировать в своих тул-скриптах.
+
+```python
+packages.install('requests')
+
+import requests
+print(requests.get('https://example.com').status_code)
+```
+
+Это весь рабочий процесс. Сам pip разворачивается автоматически при первой установке
+(из колеса, входящего в комплект Python, поэтому работает и без сети).
+
+---
+
+### 13.1 Доступность
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.is_available()` | `bool` | Может ли pip работать в этой сборке? |
+| `packages.unavailable_reason()` | `str` | Почему нет — пустая строка, если всё в порядке |
+| `packages.python_executable()` | `str` | Интерпретатор, которым запускается pip |
+| `packages.site_packages()` | `str` | `site-packages` встроенного интерпретатора |
+| `packages.pip_installed()` | `bool` | Развёрнут ли уже pip? |
+| `packages.info()` | `dict` | Всё вышеперечисленное плюс `target`, `busy`, `python_version` |
+
+```python
+if not packages.is_available():
+    print(packages.unavailable_reason())
+else:
+    print(packages.info())
+```
+
+> `is_available()` равно `False` только если в сборке нет интерпретатора или нет поддержки
+> `ssl`/`socket`. В обычной сборке редактора есть и то и другое.
+
+---
+
+### 13.2 Установка и удаление
+
+#### `packages.install(packages, upgrade=False, target='', index_url='', extra_args=[], timeout=600.0)` → `dict`
+
+Устанавливает один пакет или список пакетов и **блокирует** выполнение, пока pip не закончит. Принимает
+как строку, так и список. Возвращает словарь результата: `ok`, `finished`, `exit_code`, `command`,
+`output`, `duration_sec`.
+
+```python
+packages.install('numpy')
+packages.install(['pillow', 'requests'])
+packages.install('numpy', upgrade=True)
+packages.install('numpy', index_url='https://my-mirror/simple')
+packages.install('numpy', extra_args=['--no-deps'])
+
+r = packages.install('scipy', timeout=900)
+if not r['ok']:
+    print(r['output'])
+```
+
+`target` устанавливает в указанную папку через `pip install --target` вместо site-packages редактора;
+папка автоматически добавляется в `sys.path`:
+
+```python
+packages.install('rich', target='Tools/PythonScripts/Lib')
+```
+
+#### `packages.install_requirements(path, target='', timeout=900.0)` → `dict`
+
+Устанавливает всё, что перечислено в `requirements.txt`.
+
+```python
+packages.install_requirements('Tools/PythonScripts/requirements.txt')
+```
+
+#### `packages.uninstall(packages, timeout=300.0)` → `dict`
+
+Удаляет пакеты из site-packages редактора. (pip не умеет удалять из папки `--target` — такую папку
+удаляйте вручную.)
+
+```python
+packages.uninstall('requests')
+packages.uninstall(['six', 'idna'])
+```
+
+---
+
+### 13.3 Куда попадают пакеты
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.get_target()` | `str` | Папка, куда по умолчанию ставятся новые пакеты |
+| `packages.set_target(path='')` | `bool` | Переопределить её; пустая строка возвращает значение по умолчанию |
+
+По умолчанию это `Lib/site-packages` встроенного интерпретатора. Если эта папка **недоступна для
+записи** — например, движок установлен в `Program Files` — по умолчанию используется
+`<проект>/Tools/PythonScripts/Lib`, которая и так есть в `sys.path`. Установка цели сразу добавляет её
+в `sys.path`.
+
+```python
+packages.set_target('Tools/PythonScripts/Lib')   # оставить установку движка нетронутой
+print(packages.get_target())
+packages.set_target('')                          # вернуть значение по умолчанию
+```
+
+---
+
+### 13.4 Долгие установки без зависания редактора
+
+`install()` блокирует выполнение — это нормально для небольших пакетов. Для чего-то крупного запускайте
+в фоне и опрашивайте состояние:
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.start(args)` | `bool` | Запустить команду pip в фоне |
+| `packages.is_busy()` | `bool` | Всё ещё выполняется? |
+| `packages.poll()` | `dict` | `busy` плюс вывод, собранный к этому моменту |
+| `packages.wait(timeout=600.0)` | `dict` | Блокировать до завершения и вернуть результат |
+| `packages.last_result()` | `dict` | Результат последней операции |
+| `packages.reset()` | `bool` | Забыть последний результат и буфер вывода |
+
+```python
+packages.start(['install', 'numpy'])
+
+def watch():
+    state = packages.poll()
+    if state['busy']:
+        editor.set_timer(1.0, watch)
+    else:
+        print('готово:', state['ok'])
+        packages.refresh()
+
+editor.set_timer(1.0, watch)
+```
+
+Одновременно выполняется только одна операция; пока идёт другая, `start()` возвращает `False`.
+
+---
+
+### 13.5 Что установлено
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.list()` | `list[dict]` | Установленные дистрибутивы — `name`, `version`, `location` |
+| `packages.is_installed(name)` | `bool` | Установлен ли этот дистрибутив? |
+| `packages.version(name)` | `str` | Его версия или пустая строка |
+| `packages.freeze()` | `list[str]` | Строки `name==version`, как у `pip freeze` |
+
+```python
+for dist in packages.list():
+    print(f"{dist['name']:<24} {dist['version']}")
+
+if not packages.is_installed('numpy'):
+    packages.install('numpy')
+```
+
+---
+
+### 13.6 Импорт только что установленного
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.refresh()` | `bool` | Пересканировать папку установки, чтобы новые пакеты стали импортируемыми |
+| `packages.import_module(name)` | `dict` | Попробовать импортировать и вернуть `ok` / `error` вместо исключения |
+
+`install()` уже обновляет систему импорта, поэтому обычный `import` работает сразу после него.
+`refresh()` нужен, если пакет установили вне редактора.
+
+```python
+r = packages.import_module('numpy')
+if r['ok']:
+    import numpy
+    print(numpy.__version__)
+else:
+    print('не импортируется:', r['error'])
+```
+
+---
+
+### 13.7 Прямой доступ к pip
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `packages.ensure_pip(timeout=180.0)` | `dict` | Развернуть pip явно (офлайн, из входящего в комплект колеса) |
+| `packages.pip_version(timeout=60.0)` | `dict` | Выполнить `pip --version` |
+| `packages.run_pip(args, timeout=600.0)` | `dict` | Выполнить pip с произвольными аргументами |
+
+```python
+print(packages.run_pip(['list', '--outdated'])['output'])
+print(packages.run_pip(['show', 'requests'])['output'])
+print(packages.run_pip(['download', 'requests', '-d', 'Saved/wheels'])['output'])
+```
+
+---
+
+### 13.8 Что важно знать
+
+- **Установка пакета выполняет его код.** pip запускает хуки сборки, а сам пакет выполняется при
+  импорте. Ставьте только то, чему доверяете — то же правило, что и для любого Python-скрипта в редакторе.
+- **Пакеты живут вместе с движком, а не с игрой.** Это инструментарий редактора: они не попадают в
+  сборку игры, а в рантайме игры Python нет вообще. Для игровой логики используйте Lua.
+- **Бинарные колёса должны подходить под CPython 3.12 вашей платформы.** pip подбирает нужное колесо
+  сам; если подходящего нет, он собирает из исходников, и тогда нужен компилятор.
+- **Блокирующий `install()` подвешивает редактор** на всё время работы pip. Для крупных пакетов
+  используйте `start()` + `poll()`.
+- **Переустановка движка заменяет `Lib/site-packages`.** Держите `requirements.txt` в проекте и
+  повторяйте `packages.install_requirements(...)` либо используйте
+  `set_target('Tools/PythonScripts/Lib')`, чтобы пакеты лежали внутри проекта.
+
+```python
+# Пакеты внутри проекта переживут переустановку движка
+packages.set_target('Tools/PythonScripts/Lib')
+packages.install_requirements('Tools/PythonScripts/requirements.txt')
+```
+
+---
+
+## 14. Модуль `icebox.log` — Системное логирование
 
 Модуль `icebox.log` пишет сообщения напрямую в лог движка (output window), а не в Python-консоль редактора.
 
@@ -4752,11 +6265,19 @@ icebox.log.warn('Текстура не найдена')
 icebox.log.error('Критическая ошибка!')
 ```
 
+#### `icebox.log.trace(msg)`
+
+Трассировка — самый тихий уровень, для подробностей, нужных только при отладке.
+
+```python
+icebox.log.trace('вход в цикл импорта')
+```
+
 > ℹ️ В отличие от `editor.log_info()`, которая пишет в консоль редактора, `icebox.log.info()` пишет в системный лог движка. Оба варианта полезны для разных целей.
 
 ---
 
-## 10. Типы компонентов — Полный справочник
+## 15. Типы компонентов — Полный справочник
 
 ### Таблица всех компонентов
 
@@ -4918,7 +6439,7 @@ icebox.log.error('Критическая ошибка!')
 
 ---
 
-## 11. Поддерживаемые типы ассетов
+## 16. Поддерживаемые типы ассетов
 
 | Тип | Расширение | Описание |
 |-----|-----------|----------|
@@ -4956,7 +6477,136 @@ icebox.log.error('Критическая ошибка!')
 
 ---
 
-## 12. Практические примеры
+## 17. Командная строка и автоматизация
+
+Редактор умеет выполнять Python без участия человека в интерфейсе. Именно это делает Python API пригодным
+для сборочного сервера, bat-файла, git-хука — или помощника, которому нужно что-то для вас проверить.
+
+---
+
+### 17.1 Флаги
+
+```
+IceBoxEngine[.exe] [<путь проекта>] [флаги]
+```
+
+| Флаг | Аргумент | Описание |
+|------|----------|----------|
+| `--python` (`-py`) | `<файл.py>` | Выполнить Python-скрипт, когда редактор готов. Можно повторять |
+| `--python-cmd` | `<код>` | Выполнить встроенный исходник Python. Можно повторять |
+| `--python-arg` | `<значение>` | Добавить значение в `sys.argv` для этих скриптов. Можно повторять |
+| `--python-delay-frames` | `<n>` | Сколько кадров подождать перед запуском (по умолчанию **3**) |
+| `--quit-after-python` | — | Закрыть редактор, когда очередь скриптов отработает |
+
+Скрипты выполняются **в порядке указания**, в глобальном пространстве (`__main__`), после того как
+редактор инициализировался, загрузил последний уровень и отрисовал `--python-delay-frames` кадров —
+то есть вьюпорт, кэш ассетов и ВМ Lua уже живые к моменту запуска вашего кода.
+
+Внутри скрипта `__file__` — путь самого скрипта, а `sys.argv` — это
+`[путь скрипта] + все значения --python-arg`.
+
+---
+
+### 17.2 Код возврата
+
+С `--quit-after-python` процесс завершается со следующим кодом:
+
+| Код | Значение |
+|-----|----------|
+| `0` | Все скрипты отработали без необработанных исключений |
+| `1` | Хотя бы один скрипт упал |
+| `2` | В этой сборке Python недоступен |
+
+Это делает редактор пригодным в роли проверяющего в CI:
+
+```bash
+IceBoxEngine.exe . --python Tools/PythonScripts/CI/check_content.py --quit-after-python || exit 1
+```
+
+---
+
+### 17.3 Примеры
+
+**Снять скриншот уровня без участия человека:**
+
+```bash
+IceBoxEngine.exe MyGame --python-cmd "editor.open_level('Content/Levels/Forest.icemap')" --python-cmd "editor.screenshot_window('Screenshots/forest.png')" --python-delay-frames 60 --quit-after-python
+```
+
+**Контентный барьер — заваливает сборку при битой ссылке:**
+
+```python
+# Tools/PythonScripts/CI/check_content.py
+import sys
+
+problems = []
+problems += [f"{m['file']} -> {m['reference']}" for m in assets.find_missing()]
+problems += [f"{r['path']}: {r['error']}" for r in lua.compile_all() if not r['ok']]
+problems += [f"{p['entity']} -> {p['reference']}" for p in scene.validate()['problems']]
+
+for line in problems:
+    print('ПРОБЛЕМА:', line)
+
+console.save('Saved/ci_content.log')
+
+if problems:
+    raise SystemExit(f'{len(problems)} проблем с контентом')
+print('контент в порядке')
+```
+
+```bash
+IceBoxEngine.exe MyGame --python Tools/PythonScripts/CI/check_content.py --quit-after-python
+echo код возврата: %ERRORLEVEL%
+```
+
+**Передать аргументы скрипту:**
+
+```bash
+IceBoxEngine.exe MyGame --python Tools/PythonScripts/export.py --python-arg Content/Enemies --python-arg --dry-run --quit-after-python
+```
+
+```python
+# export.py
+import sys
+folder = sys.argv[1] if len(sys.argv) > 1 else 'Content'
+dry_run = '--dry-run' in sys.argv
+print('экспортирую', folder, '(вхолостую)' if dry_run else '')
+```
+
+---
+
+### 17.4 Стартовые скрипты против командной строки
+
+| | Стартовые скрипты | Командная строка |
+|---|---|---|
+| Где | `Tools/PythonScripts/Startup/*.py` | `--python` / `--python-cmd` |
+| Когда | При каждом старте редактора, во время инициализации | Один раз, после загрузки уровня и первых кадров |
+| Вьюпорт готов | Ещё нет | Да — скриншоты и запросы к вьюпорту работают |
+| Типичное применение | Установка обработчиков событий, регистрация инструментов | Разовые проверки, снимки, пакетные правки, CI |
+
+```python
+# Tools/PythonScripts/Startup/watch_errors.py — выполняется при каждом старте редактора
+def on_saved(path=None):
+    if console.has_errors():
+        console.warn('Уровень сохранён, но в логе есть ошибки')
+
+editor.on('scene_saved', on_saved)
+```
+
+---
+
+### 17.5 Замечания по безопасности
+
+- `--quit-after-python` закрывает редактор **без сохранения**. Вызывайте `scene.save(...)` или
+  `editor.quit(save=True)` сами, если скрипт должен сохранить свою работу.
+- Режим игры перезаписывает буфер скрипта уровня; не входите в режим игры из автономного скрипта,
+  который затем сохраняет уровень, если это не то, чего вы хотите.
+- В длинных автономных прогонах используйте `editor.set_script_timeout(n)`, чтобы зависший цикл не
+  заблокировал машину навсегда.
+
+---
+
+## 18. Практические примеры
 
 ### Пример 1: Массовое создание сущностей
 
@@ -5214,7 +6864,7 @@ print(f'Player импортирован: {new_uuid}')
 
 ---
 
-## 13. FAQ и решение проблем
+## 19. FAQ и решение проблем
 
 ### Часто задаваемые вопросы
 

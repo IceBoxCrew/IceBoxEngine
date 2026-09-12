@@ -63,12 +63,25 @@
    - 5.20 [Timers](#520-timers)
    - 5.21 [Logging](#521-logging)
    - 5.22 [User scripts & script execution](#522-user-scripts--script-execution)
+   - 5.23 [Entity state, transform & layout](#523-entity-state-transform--layout)
+   - 5.24 [Levels](#524-levels)
+   - 5.25 [Gizmo & outliner](#525-gizmo--outliner)
+   - 5.26 [Editor application & window](#526-editor-application--window)
+   - 5.27 [Screenshots](#527-screenshots)
+   - 5.28 [Python runtime control](#528-python-runtime-control)
+   - 5.29 [API self-documentation](#529-api-self-documentation)
+   - 5.30 [Viewport debug overlays](#530-viewport-debug-overlays)
 6. [`scene` module — Working with scenes](#6-scene-module--working-with-scenes)
+   - 6.1 [Level state and reloading](#61-level-state-and-reloading)
+   - 6.2 [Statistics and validation](#62-statistics-and-validation)
 7. [`engine` module — Engine information](#7-engine-module--engine-information)
    - 7.1 [General info](#71-general-info)
    - 7.2 [Performance and statistics](#72-performance-and-statistics)
    - 7.3 [Resources](#73-resources)
    - 7.4 [Audio](#74-audio)
+   - 7.5 [Platform, build and rendering backend](#75-platform-build-and-rendering-backend)
+   - 7.6 [Editor window and application](#76-editor-window-and-application)
+   - 7.7 [Resource inventory](#77-resource-inventory)
 8. [`browser` module — Content browser](#8-browser-module--content-browser)
    - 8.1 [Navigation](#81-navigation)
    - 8.2 [Files and folders](#82-files-and-folders)
@@ -79,11 +92,54 @@
    - 8.7 [Browser clipboard](#87-browser-clipboard)
    - 8.8 [Path utilities](#88-path-utilities)
    - 8.9 [Batch file operations](#89-batch-file-operations)
-9. [`icebox.log` module — System logging](#9-iceboxlog-module--system-logging)
-10. [Component types — Full reference](#10-component-types--full-reference)
-11. [Supported asset types](#11-supported-asset-types)
-12. [Practical examples](#12-practical-examples)
-13. [FAQ and troubleshooting](#13-faq-and-troubleshooting)
+   - 8.10 [JSON, metadata and checksums](#810-json-metadata-and-checksums)
+   - 8.11 [Folder trees and file creation](#811-folder-trees-and-file-creation)
+   - 8.12 [Opening assets from the browser](#812-opening-assets-from-the-browser)
+9. [`console` module — Editor console and logs](#9-console-module--editor-console-and-logs)
+   - 9.1 [Reading the log](#91-reading-the-log)
+   - 9.2 [Counting and summarising](#92-counting-and-summarising)
+   - 9.3 [Writing to the console](#93-writing-to-the-console)
+   - 9.4 [Managing the buffer and the panel](#94-managing-the-buffer-and-the-panel)
+   - 9.5 [A typical health check](#95-a-typical-health-check)
+10. [`lua` module — Bridge into the game Lua VM](#10-lua-module--bridge-into-the-game-lua-vm)
+   - 10.1 [Running and evaluating](#101-running-and-evaluating)
+   - 10.2 [Compile checking](#102-compile-checking)
+   - 10.3 [The level script](#103-the-level-script)
+   - 10.4 [Scripts, modules and events](#104-scripts-modules-and-events)
+   - 10.5 [Inspecting the VM](#105-inspecting-the-vm)
+   - 10.6 [A project-wide script check](#106-a-project-wide-script-check)
+11. [`project` module — Project, configuration, plugins and mods](#11-project-module--project-configuration-plugins-and-mods)
+   - 11.1 [Layout](#111-layout)
+   - 11.2 [Configuration files](#112-configuration-files)
+   - 11.3 [Plugins and mods](#113-plugins-and-mods)
+   - 11.4 [Build settings](#114-build-settings)
+12. [`assets` module — Creating, inspecting and validating assets](#12-assets-module--creating-inspecting-and-validating-assets)
+   - 12.1 [Types](#121-types)
+   - 12.2 [Creating assets](#122-creating-assets)
+   - 12.3 [Browsing and statistics](#123-browsing-and-statistics)
+   - 12.4 [The dependency graph](#124-the-dependency-graph)
+   - 12.5 [Health checks](#125-health-checks)
+   - 12.6 [A full content audit](#126-a-full-content-audit)
+13. [`packages` module — Installing Python libraries (pip)](#13-packages-module--installing-python-libraries-pip)
+   - 13.1 [Availability](#131-availability)
+   - 13.2 [Installing and removing](#132-installing-and-removing)
+   - 13.3 [Where packages go](#133-where-packages-go)
+   - 13.4 [Long installs without freezing the editor](#134-long-installs-without-freezing-the-editor)
+   - 13.5 [Querying what is installed](#135-querying-what-is-installed)
+   - 13.6 [Importing what you just installed](#136-importing-what-you-just-installed)
+   - 13.7 [Raw pip access](#137-raw-pip-access)
+   - 13.8 [Things worth knowing](#138-things-worth-knowing)
+14. [`icebox.log` module — System logging](#14-iceboxlog-module--system-logging)
+15. [Component types — Full reference](#15-component-types--full-reference)
+16. [Supported asset types](#16-supported-asset-types)
+17. [Command line & automation](#17-command-line--automation)
+   - 17.1 [Flags](#171-flags)
+   - 17.2 [Exit code](#172-exit-code)
+   - 17.3 [Examples](#173-examples)
+   - 17.4 [Startup scripts vs. the command line](#174-startup-scripts-vs-the-command-line)
+   - 17.5 [Safety notes](#175-safety-notes)
+18. [Practical examples](#18-practical-examples)
+19. [FAQ and troubleshooting](#19-faq-and-troubleshooting)
 
 ---
 
@@ -126,21 +182,30 @@
 │       ▼            ▼            ▼            │
 │  ┌────────┐  ┌──────────┐  ┌─────────┐      │
 │  │ editor │  │  engine   │  │ browser │      │
-│  │ scene  │  │           │  │         │      │
+│  │ scene  │  │  console  │  │ assets  │      │
+│  │ lua    │  │  project  │  │ packages│      │
 │  └────────┘  └──────────┘  └─────────┘      │
 │   Entities    Engine       Files            │
 │   Components  Resources    Assets           │
 │   Folders     Audio        Navigation       │
-│   Panels      Stats        Operations       │
+│   Panels      Stats        References       │
+│   Levels      Console log  Validation       │
+│   Lua bridge  Config       Creation         │
+│   Undo/Redo   Window       pip packages     │
 └─────────────────────────────────────────────┘
 ```
+
+The same API is reachable without the UI: `IceBoxEngine --python script.py --quit-after-python`
+runs a script after the editor is up and exits with a meaningful status code — see
+[17. Command line & automation](#17-command-line--automation).
 
 ### Key technologies
 
 | Technology | Description |
 |-----------|-------------|
 | **pybind11** | C++ ↔ Python bindings that allow calling C++ functions from Python |
-| **Modular system** | API split into modules: `editor`, `scene`, `engine`, `browser` |
+| **Modular system** | API split into modules: `editor`, `scene`, `engine`, `browser`, `console`, `lua`, `project`, `assets`, `packages` |
+| **Full CPython 3.12** | The complete standard library ships with the editor — `socket`, `ssl`, `ctypes`, `sqlite3`, `zlib` — so pip and any PyPI package work |
 | **ECS (EnTT)** | Entity Component System — entity data stored in components |
 
 ### Python API vs Lua API
@@ -153,6 +218,10 @@
 | **Undo/Redo** | ✅ Supported | No |
 | **File operations** | ✅ Full access | Limited |
 | **Batch operations** | ✅ Batch functions | No |
+| **Reads the editor log** | ✅ `console` module | No |
+| **Drives the other language** | ✅ `lua` module runs Lua | No |
+| **Runs unattended** | ✅ Command line + exit code | No |
+| **Third-party libraries** | ✅ pip / PyPI via `packages` | No |
 
 ---
 
@@ -242,8 +311,9 @@ For quick one-liners, use the **Quick Command** input at the bottom: type a comm
 
 There are two namespaces, and it is worth knowing which one your code lands in:
 
-- The **interactive console** — the **Run Script** button *and* the **Quick Command** field — runs in a **persistent console namespace**. Variables, functions, and imports you create there stay available for later commands until you choose **Show Console → Reset Environment**.
-- **Script files** — discovered tool scripts, **Run Python Script…**, **Run Startup Scripts**, and `editor.execute_file()` — run in the main (`__main__`) namespace.
+- The **interactive console** — the **Run Script** button *and* the **Quick Command** field — runs in a **persistent console namespace** that is seeded from the global one at startup. Variables, functions, and imports you create there stay available for later commands until you choose **Console → Reset Environment** (or call `editor.reset_console_environment()`), which wipes the namespace and re-seeds it from the global scope. From a script you can reach that namespace with `editor.execute_in_console()`.
+- **Script files** — discovered tool scripts, **Run Python Script…**, **Run Startup Scripts**, `editor.execute_file()`, `editor.execute_string()` and everything started from the command line — run in the main (`__main__`) namespace. While a file runs, `__file__` is set to its path and `sys.argv` starts with that path.
+- The console behaves like a **REPL**: type an expression and its value is echoed, exactly as in `python` itself. `editor.execute_in_console()` returns that value in its `result` field.
 - Either way, each run is wrapped as **one undo step**: a single `editor.undo()` reverts everything the script changed. **Events and timers** registered from any scope persist (they are owned by the engine), so a `Startup` script can install handlers that keep working for the whole session.
 
 #### Tool script folders
@@ -252,6 +322,7 @@ Two editor-only folders back this window. They are tooling, **not** game content
 
 - `Tools/PythonScripts/` — your tool scripts. Each subfolder becomes a category submenu.
 - `Tools/PythonScripts/Startup/` — scripts that run once automatically when the editor starts.
+- `Tools/PythonScripts/Lib/` and `Tools/PythonScripts/Modules/` — importable helper modules. Both are on `sys.path` from startup, so `import my_helpers` just works.
 
 See [5.22 User scripts & script execution](#522-user-scripts--script-execution) for the matching API (`run_user_script`, `rediscover_user_scripts`, `execute_file`, …).
 
@@ -1160,11 +1231,20 @@ Lists:       [item for item in iterable if condition]
 
 | Module | Description | Example |
 |--------|----------|--------|
-| `editor` | Entities, components, transforms, panels, camera, events | `editor.create_entity('Box')` |
-| `scene` | Saving/loading scenes, exporting/importing entities | `scene.save('Content/level.icemap')` |
-| `engine` | Engine version, FPS, memory, resources, audio | `engine.fps()` |
-| `browser` | Content browser, files, folders, assets | `browser.list_files()` |
+| `editor` | Entities, components, transforms, panels, camera, levels, events, Python runtime | `editor.create_entity('Box')` |
+| `scene` | Saving/loading scenes, statistics, validation, exporting/importing entities | `scene.save('Content/level.icemap')` |
+| `engine` | Engine version, FPS, memory, resources, audio, window, platform | `engine.fps()` |
+| `browser` | Content browser, files, folders, JSON, checksums | `browser.list_files()` |
+| `console` | Editor console log — read, search, filter, save, write | `console.get_errors()` |
+| `lua` | Bridge into the game Lua VM — run, evaluate, compile-check | `lua.compile_all()` |
+| `project` | Config files, plugins, mods, build settings, project layout | `project.get_config('Engine')` |
+| `assets` | Asset creation, dependency graph, validation | `assets.find_missing()` |
+| `packages` | Install third-party Python libraries with pip | `packages.install('requests')` |
 | `icebox.log` | System logging to engine console | `icebox.log.info('Hello')` |
+
+Every module also answers for itself: `editor.api()`, `scene.api()`, `engine.api()`, `browser.api()`,
+`console.api()`, `lua.api()`, `project.api()`, `assets.api()` and `packages.api()` each print a grouped
+listing of that module's functions, always matching the build you are running.
 
 ---
 
@@ -1339,7 +1419,7 @@ types = editor.get_component_types()
 #  'Replication', 'Hierarchy']
 ```
 
-> 26 types. See the [add / remove support matrix](#add--remove-support-matrix) — `Transform` and `Hierarchy` are in this list but cannot be added or removed.
+> 26 types. See [Component kinds](#component-kinds) for which of them can be added or removed — `editor.describe_components()` returns the same table as data.
 
 ---
 
@@ -1511,22 +1591,62 @@ Removes a component from the entity.
 editor.remove_component(uuid, 'Rigidbody')
 ```
 
-#### Add / remove support matrix
+#### Component kinds
 
-`get_component_types()` returns all 25 types the API understands, but not every type can be created or deleted:
+Every component falls into one of four kinds, and the API tells you which:
 
-| Type | `add_component` | `remove_component` | Why |
-|------|:---:|:---:|-----|
-| `Transform` | ❌ | ❌ | Every entity always has one |
-| `Hierarchy` | ❌ | ❌ | Created and destroyed by `set_parent` / `clear_parent` |
-| `Stencil` | ✅ | ❌ | Treated as a core component once added |
-| `Replication` | ✅ | ❌ | Treated as a core component once added |
-| all other 21 types | ✅ | ✅ | |
+| Kind | `add_component` | `remove_component` | Types |
+|------|:---:|:---:|-------|
+| **core** | ❌ | ❌ | `Transform`, `Tag`, `ID`, `Stencil`, `Replication` — every entity always has them |
+| **managed** | ❌ | ❌ | `Hierarchy` — created and destroyed by `set_parent` / `clear_parent` |
+| **instanced** | ✅ | ✅ | `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Tilemap`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Joint`, `ClassComponent` |
+| **single** | ✅ | ✅ | `Camera`, `Rigidbody`, `Collider`, `Animator`, `Skeleton`, `Script`, `AI`, `Destructible`, `GameplayTag`, `Interface` |
 
-`add_component` returns `False` if the component is already present, or if the type cannot be added.
-`remove_component` returns `False` for the blocked types above and logs a warning.
+`add_component` returns `False` when the component is already present or when the type cannot be added.
+`remove_component` returns `False` for core and managed types and logs a warning explaining why.
 
-> ℹ️ `Tag` and `ID` are internal identity components. They are not in `get_component_types()` and cannot be touched from Python at all.
+> `describe_components()` lists 28 rows while `get_component_types()` returns 26: the two identity
+> components `Tag` and `ID` are readable with `get_component()` but are not offered as addable types.
+
+> **Adding an instanced component also creates its first instance**, exactly like the editor's own
+> *Add Component* menu — so `add_component(uuid, 'PointLight')` gives you a light you can see, not an
+> empty holder. Use `editor.add_instance()` for further instances.
+>
+> `PointLight` and `SpotLight` share one storage component, so an entity can hold both. Removing one
+> leaves the other untouched.
+
+#### `editor.describe_components()` → `list[dict]`
+
+The whole table above as data — `type`, `kind`, `addable`, `removable`, `multi_instance`, `notes`.
+
+```python
+for c in editor.describe_components():
+    flag = '+' if c['addable'] else ' '
+    print(f"{flag} {c['type']:<16} {c['kind']:<10} {c['notes']}")
+```
+
+#### `editor.describe_component(component_type)` → `dict`
+
+One row of it, or an empty dict when the name is unknown.
+
+```python
+info = editor.describe_component('SpriteRenderer')
+print(info['kind'], info['multi_instance'])   # instanced True
+```
+
+#### `editor.get_addable_component_types()` → `list[str]`
+
+Only the types `add_component()` accepts.
+
+#### `editor.get_multi_instance_component_types()` → `list[str]`
+
+Only the types that hold several instances — the ones `add_instance()` / `get_instance_count()` work with.
+
+```python
+# Add every renderable component a tool needs, skipping the ones that cannot be added
+for kind in editor.get_addable_component_types():
+    print(kind)
+```
 
 #### `editor.get_component(uuid, component_type)` → `dict`
 
@@ -2527,6 +2647,40 @@ Checks if the viewport is focused.
 #### `editor.is_viewport_hovered()` → `bool`
 
 Checks if the mouse is over the viewport.
+
+#### `editor.get_camera_rotation()` → `float`
+
+Rotation of the editor camera in degrees.
+
+#### `editor.set_camera_zoom(zoom)` → `bool`
+
+Changes only the zoom, keeping the camera where it is.
+
+```python
+editor.set_camera_zoom(editor.get_camera_zoom() * 0.5)   # zoom out 2x
+```
+
+#### `editor.pan_camera(dx, dy)` → `bool`
+
+Moves the editor camera by a world-space delta.
+
+```python
+editor.pan_camera(0, 500)    # slide up
+```
+
+#### `editor.focus_position(x, y, z=0.0)` → `bool`
+
+Moves the viewport camera onto a world position (the same request `editor.focus_entity()` makes).
+
+#### `editor.world_to_screen(world_x, world_y)` → `tuple`
+
+The inverse of `editor.screen_to_world()`: converts world coordinates into viewport pixel coordinates.
+
+```python
+uuid = editor.find_entity('Player')
+x, y, z = editor.get_position(uuid)
+print('player is at screen', editor.world_to_screen(x, y))
+```
 
 #### `editor.screenshot(path="")` → `str`
 
@@ -3555,10 +3709,28 @@ es = editor.get_editor_settings()
 
 #### `editor.set_editor_settings(data)` → `bool`
 
-Changes editor settings.
+Changes the editor settings that can be changed at runtime. Returns `True` when at least one key was
+applied; unknown or read-only keys are reported as a warning in the console.
+
+| Key | Type | Effect |
+|-----|------|--------|
+| `level_dirty` | `bool` | Mark the level modified / clean |
+| `show_grid` | `bool` | Viewport grid visibility (saved to `Config/Editor.json`) |
+| `show_physics_colliders` | `bool` | Collider overlay (same flag as `editor.set_debug_flag('ShowColliders', …)`) |
+| `show_nav_grid` | `bool` | Nav-grid overlay |
+| `current_level_path` | `str` | Path the next save writes to |
 
 ```python
 editor.set_editor_settings({'level_dirty': True})
+editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
+```
+
+The remaining keys returned by `get_editor_settings()` (`grid_size`, `snap_to_grid`, viewport size,
+focus flags, `last_opened_level`) are **read-only** — they are owned by the Settings panel and the
+viewport. Change the persistent ones through the project config instead:
+
+```python
+project.merge_config('Engine', {'Editor': {'GridSize': 64.0, 'SnapToGrid': True}})
 ```
 
 #### `editor.mark_dirty()` → `bool`
@@ -3715,6 +3887,30 @@ events = editor.get_events()
 print(events)  # ['entity_created', 'selection_changed']
 ```
 
+#### `editor.off_callback(event_name, callback)` → `bool`
+
+Unsubscribes **one** callback while leaving the others in place. Returns `True` when it was found.
+
+```python
+def watcher(uuid, name):
+    print('created', name)
+
+editor.on('entity_created', watcher)
+editor.off_callback('entity_created', watcher)   # only this one
+```
+
+#### `editor.get_event_count(event_name)` → `int`
+
+How many callbacks are subscribed to an event.
+
+#### `editor.clear_events()`
+
+Removes every event subscription in one call — handy at the start of a tool script that installs its own.
+
+```python
+editor.clear_events()
+```
+
 ---
 
 ### 5.20 Timers
@@ -3757,6 +3953,29 @@ Cancels **all** active timers.
 
 ```python
 editor.clear_timers()
+```
+
+#### `editor.defer(callback)` → `int`
+
+Runs a callback on the **next editor tick** — the idiomatic way to wait for something the editor only
+does between frames (a queued play-mode switch, a screenshot, a level load). Returns a timer id.
+
+```python
+editor.screenshot_window('Screenshots/now.png')
+editor.defer(lambda: print('written to', editor.get_last_screenshot()))
+```
+
+#### `editor.get_timers()` → `list[int]`
+
+Ids of every active timer.
+
+#### `editor.has_timer(timer_id)` → `bool`
+
+Is this timer still active? A one-shot timer disappears after it fires.
+
+```python
+tid = editor.set_timer(5.0, lambda: None)
+print(editor.has_timer(tid), editor.get_timers())
 ```
 
 ---
@@ -3890,6 +4109,397 @@ print([i for i in items if i.startswith('editor.batch_')])
 
 ---
 
+### 5.23 Entity state, transform & layout
+
+Beyond the individual `get_position` / `set_scale` calls, the whole transform is available as one dictionary, and the editor-only state flags (visible, enabled, render in game) have direct accessors.
+
+#### `editor.get_transform(uuid)` → `dict`
+
+Returns `position` (3-tuple), `scale` (2-tuple), `rotation`, `enabled`, `visible`, `render_in_game`.
+
+```python
+uuid = editor.find_entity('Player')
+t = editor.get_transform(uuid)
+print(t['position'], t['rotation'], t['visible'])
+```
+
+#### `editor.set_transform(uuid, data)` → `bool`
+
+Applies any subset of the same keys in one undoable step.
+
+```python
+editor.set_transform(uuid, {
+    'position': (100, 200, 0),
+    'scale': (2.0, 2.0),
+    'rotation': 45.0,
+    'visible': True,
+})
+```
+
+#### Visibility and enabled state
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.set_visible(uuid, visible)` | `bool` | Show/hide the entity in the **editor viewport** |
+| `editor.is_visible(uuid)` | `bool` | Is it visible in the editor? |
+| `editor.set_enabled(uuid, enabled)` | `bool` | Enable/disable the entity entirely |
+| `editor.is_enabled(uuid)` | `bool` | Is it enabled? |
+| `editor.set_render_in_game(uuid, render)` | `bool` | Should it render in play mode? |
+| `editor.get_render_in_game(uuid)` | `bool` | Does it render in play mode? |
+
+```python
+# Hide every helper marker while you work on the level
+for uuid in editor.find_entities('Marker_.*'):
+    editor.set_visible(uuid, False)
+```
+
+#### Layout helpers
+
+#### `editor.align_entities(uuids, axis)` → `int`
+
+Aligns entities. `axis` is one of `'left'`, `'right'`, `'top'`, `'bottom'`, `'center_x'`, `'center_y'`
+(the aliases `'x_min'`, `'x_max'`, `'y_min'`, `'y_max'`, `'x'`, `'y'` also work). Returns the number of entities moved.
+
+```python
+editor.align_entities(editor.get_selected_uuids(), 'left')
+```
+
+#### `editor.distribute_entities(uuids, axis)` → `int`
+
+Spreads entities evenly between the two outermost ones along `'x'` / `'horizontal'` or `'y'` / `'vertical'`.
+Needs at least three entities.
+
+```python
+editor.distribute_entities(editor.get_selected_uuids(), 'x')
+```
+
+#### `editor.snap_entities_to_grid(uuids, grid_size=0.0)` → `int`
+
+Rounds positions to a grid. `grid_size=0` uses the editor's own grid size from Settings.
+
+```python
+editor.snap_entities_to_grid(editor.get_selected_uuids())       # editor grid
+editor.snap_entities_to_grid(editor.get_entity_uuids(), 64.0)   # explicit 64px grid
+```
+
+#### `editor.get_selection_center()` → `tuple`
+
+Average `(x, y)` of the selected entities.
+
+#### `editor.get_scene_bounds()` → `dict`
+
+Bounding box of every entity position: `count`, `min`, `max`, `center`, `size`.
+
+```python
+b = editor.get_scene_bounds()
+print(f"{b['count']} entities span {b['size'][0]:.0f} x {b['size'][1]:.0f}")
+```
+
+#### `editor.select_by_pattern(pattern)` → `int`
+
+Selects every entity whose name matches a regular expression and returns how many were selected.
+
+```python
+editor.select_by_pattern('Enemy_.*')
+```
+
+#### `editor.get_entity_tree()` → `list[dict]`
+
+The whole hierarchy as nested dictionaries — `uuid`, `name`, `folder`, `children`.
+
+```python
+def walk(nodes, depth=0):
+    for node in nodes:
+        print('  ' * depth + node['name'])
+        walk(node['children'], depth + 1)
+
+walk(editor.get_entity_tree())
+```
+
+---
+
+### 5.24 Levels
+
+These functions work on the level file itself. They respect unsaved changes: when the current level is dirty the editor shows its usual *Save / Don't save / Cancel* dialog first.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.open_level(path)` | `bool` | Open an existing `.icemap` |
+| `editor.new_level(path='Content/NewLevel.icemap')` | `bool` | Create a new empty level |
+| `editor.reload_level()` | `bool` | Re-read the current level from disk, **discarding** unsaved changes |
+| `editor.get_level_path()` | `str` | Path of the level open in the editor |
+
+```python
+editor.open_level('Content/Levels/Forest.icemap')
+print(editor.get_level_path())
+
+# Throw away an experiment
+editor.reload_level()
+```
+
+> ⚠️ `reload_level()` intentionally drops unsaved changes — that is the point of the call. Use `scene.save()` first if you want to keep them.
+
+---
+
+### 5.25 Gizmo & outliner
+
+#### `editor.get_gizmo_operation()` → `str`
+
+Current viewport gizmo mode: `'translate'`, `'scale'` or `'rotate'`.
+
+#### `editor.set_gizmo_operation(operation)` → `bool`
+
+Sets it. Accepts `'translate'` / `'move'` / `'t'`, `'scale'` / `'s'`, `'rotate'` / `'r'`.
+
+```python
+editor.set_gizmo_operation('rotate')
+```
+
+#### `editor.get_outliner_filter()` / `editor.set_outliner_filter(filter)`
+
+Reads and writes the search box of the Level Outliner panel, exactly as if the user had typed into it.
+
+```python
+editor.set_outliner_filter('Enemy')   # show only enemies in the outliner
+editor.set_outliner_filter('')        # clear
+```
+
+---
+
+### 5.26 Editor application & window
+
+#### `editor.quit(save=False)` → `bool`
+
+Closes the editor. `save=True` writes the current level first; otherwise unsaved changes are dropped without a dialog.
+This is what makes unattended runs possible — see [17. Command line & automation](#17-command-line--automation).
+
+```python
+editor.quit()            # close now, discard changes
+editor.quit(save=True)   # save the level, then close
+```
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.is_quitting()` | `bool` | Is a quit request pending? |
+| `editor.cancel_quit()` | — | Cancel a pending quit request |
+| `editor.notify(message, seconds=5.0)` | `bool` | Show a toast notification in the editor |
+| `editor.focus_panel(panel_name)` | `bool` | Bring a panel to the front (same names as `get_panel_names()`) |
+| `editor.get_open_assets()` | `list[dict]` | Assets open in editor panels — `type`, `path` |
+| `editor.open_url(url)` | `bool` | Open a URL in the system browser |
+| `editor.show_in_explorer(path)` | `bool` | Reveal a file or folder in the OS file browser |
+| `editor.get_available_locales()` | `list[str]` | Editor interface languages installed |
+| `editor.get_stats()` | `dict` | One-call editor snapshot |
+
+```python
+editor.notify('Batch rename finished')
+editor.focus_panel('Properties')
+
+stats = editor.get_stats()
+print(stats['entity_count'], stats['level_dirty'], stats['fps'])
+```
+
+`editor.get_stats()` returns `entity_count`, `selected_count`, `folder_count`, `world_asset_count`,
+`level_path`, `level_dirty`, `play_mode`, `paused`, `undo_count`, `redo_count`, `fps`.
+
+#### Undo / redo counters
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.get_undo_count()` | `int` | Scene undo steps available |
+| `editor.get_redo_count()` | `int` | Scene redo steps available |
+| `editor.get_file_undo_count()` | `int` | Content-browser file-operation undo steps |
+| `editor.get_file_redo_count()` | `int` | Content-browser file-operation redo steps |
+| `editor.undo_file()` | — | Undo the last file operation |
+| `editor.redo_file()` | — | Redo the last undone file operation |
+
+---
+
+### 5.27 Screenshots
+
+`editor.screenshot()` captures the **viewport** (the game view only). `editor.screenshot_window()` captures the **whole editor window**, panels and menus included — that is the one you want when you need to look at the editor itself.
+
+#### `editor.screenshot_window(path='')` → `str`
+
+Queues a full-window capture for the next rendered frame and returns the path it will be written to.
+An empty path writes a timestamped file into `<project>/Screenshots`.
+
+```python
+print(editor.screenshot_window())                          # timestamped
+print(editor.screenshot_window('Screenshots/ui.png'))      # explicit
+```
+
+#### `editor.screenshot_dir()` → `str`
+
+The default folder used by `editor.screenshot()` and `editor.screenshot_window()`.
+
+> Both captures are queued and resolved during the next frame's render, so `editor.is_screenshot_pending()` is `True` for a moment and `editor.get_last_screenshot()` returns the finished path afterwards. Only one capture can be queued per frame.
+
+```python
+# Capture, then confirm it landed
+path = editor.screenshot_window('Screenshots/state.png')
+
+def confirm():
+    print('written:', editor.get_last_screenshot())
+
+editor.set_timer(0.5, confirm)
+```
+
+---
+
+### 5.28 Python runtime control
+
+These functions manage the embedded interpreter itself: where it imports from, how long a script may run, and what went wrong last time.
+
+#### `editor.get_python_info()` → `dict`
+
+Everything about the interpreter in one call: `version`, `prefix`, `exec_prefix`, `search_paths`,
+`initialized`, `executing`, `execution_count`, `error_count`, `last_duration_ms`, `last_error`,
+`timeout`, `timer_count`, `event_count`, `user_script_count`.
+
+```python
+info = editor.get_python_info()
+print(info['version'], info['execution_count'], 'errors:', info['error_count'])
+```
+
+#### Import paths
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.get_python_paths()` | `list[str]` | Current `sys.path` |
+| `editor.add_python_path(directory)` | `bool` | Append a folder to `sys.path` |
+| `editor.remove_python_path(directory)` | `bool` | Remove a folder from `sys.path` |
+| `editor.reload_module(module_name)` | `dict` | `importlib.reload()` a module — `ok`, `error` |
+| `editor.get_imported_modules()` | `list[str]` | Everything in `sys.modules` |
+
+`Tools/PythonScripts`, `Tools/PythonScripts/Lib`, `Tools/PythonScripts/Modules` and the project root are
+added to `sys.path` automatically at startup, so a helper module you drop into `Tools/PythonScripts/Lib/`
+is importable straight away:
+
+```python
+import my_helpers          # Tools/PythonScripts/Lib/my_helpers.py
+editor.reload_module('my_helpers')   # picked up your latest edit
+```
+
+#### Running code
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.execute_file(filepath)` | `dict` | Run a file in the global scope — `success`, `output`, `errors` |
+| `editor.execute_string(code)` | `dict` | Run source in the global scope — adds `duration_ms` |
+| `editor.execute_in_console(code)` | `dict` | Run in the **console namespace** with REPL echo — adds `result` |
+| `editor.run_script_file(path, args=[])` | `dict` | Run a file with `sys.argv = [path] + args` |
+| `editor.reset_console_environment()` | `bool` | Wipe the console namespace and re-seed it from globals |
+
+```python
+r = editor.execute_in_console('2 ** 10')
+print(r['result'])     # '1024'   (the value, as the console would echo it)
+print(r['output'])     # '1024\n' (what was printed)
+
+r = editor.run_script_file('Tools/PythonScripts/export.py', ['Content', '--dry-run'])
+print(r['success'], r['duration_ms'])
+```
+
+#### Runaway-script protection
+
+#### `editor.set_script_timeout(seconds)` → `bool`
+
+Aborts any Python execution that runs longer than `seconds` by raising `KeyboardInterrupt` inside it.
+`0` (the default) disables the guard.
+
+```python
+editor.set_script_timeout(30)        # nothing may block the editor for over 30s
+print(editor.get_script_timeout())   # 30.0
+editor.set_script_timeout(0)         # back to no limit
+```
+
+#### `editor.interrupt_script()` → `bool`
+
+Raises `KeyboardInterrupt` in the running script immediately. Useful from a timer or an event callback.
+
+#### `editor.get_last_python_error()` → `str`
+
+Full traceback of the last failed execution — the same text the console showed.
+
+```python
+r = editor.execute_string('1 / 0')
+if not r['success']:
+    print(editor.get_last_python_error())
+```
+
+#### Tool scripts
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.get_user_script_paths()` | `list[dict]` | Discovered tool scripts — `name`, `path`, `category` |
+| `editor.list_user_scripts()` | `list[str]` | Just the display names |
+| `editor.run_user_script(name)` | `bool` | Run one by display name or path |
+| `editor.rediscover_user_scripts()` | `int` | Rescan `Tools/PythonScripts` |
+| `editor.reload_autocomplete()` | — | Rebuild the console autocomplete index |
+| `editor.get_autocomplete_items()` | `list[str]` | Current autocomplete entries |
+
+---
+
+### 5.29 API self-documentation
+
+Every module carries a grouped listing of its own functions. This is the fastest way to remember a name
+without leaving the editor, and it is always in sync with the build you are running.
+
+```python
+print(editor.api())
+print(scene.api()); print(engine.api()); print(browser.api())
+print(console.api()); print(lua.api()); print(project.api()); print(assets.api())
+```
+
+The same listings are available from the Python console's **Help** menu, and `help()` prints the
+overview screen. Python's own introspection works as usual:
+
+```python
+help(editor.create_entity)     # the docstring of one function
+dir(assets)                    # every name in a module
+len([f for f in dir(editor) if not f.startswith('_')])
+```
+---
+
+### 5.30 Viewport debug overlays
+
+The Statistics panel's debug overlays — collider shapes, the nav grid, light radii, wireframe mode and
+the rest — are fully scriptable. Combined with `editor.screenshot_window()` this is the fastest way to
+*see* what the level is actually doing.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `editor.get_debug_flag_names()` | `list[str]` | Every overlay flag name |
+| `editor.get_debug_flags()` | `dict` | Every flag and its current state |
+| `editor.get_debug_flag(name)` | `bool` | Is this overlay on? |
+| `editor.set_debug_flag(name, value)` | `bool` | Turn one overlay on or off |
+| `editor.set_debug_flags(data)` | `bool` | Apply several at once from a dict |
+| `editor.clear_debug_flags()` | `bool` | Turn every overlay off |
+
+Flag names (23): `ShowColliders`, `ShowNavGrid`, `ShowEntityMarkers`, `ShowLightRadius`,
+`ShowAudioRange`, `ShowCameraFrustum`, `ShowJoints`, `ShowPhysicsContacts`, `ShowSleepingBodies`,
+`ShowVelocityVectors`, `ShowTilemapGrid`, `ShowFXBounds`, `ShowWidgetBounds`, `ShowZDepthColor`,
+`WireframeMode`, `FreezeCulling`, `ShowShadowMaps`, `ShowShadowEdges`, `ShowLightHeatmap`,
+`ShowNavGridHeatmap`, `ShowAIStateOverlay`, `ShowAIPerception`, `ShowAIPaths`.
+
+```python
+# Show colliders and joints, then capture the editor
+editor.set_debug_flags({'ShowColliders': True, 'ShowJoints': True})
+editor.screenshot_window('Screenshots/physics.png')
+editor.defer(editor.clear_debug_flags)
+```
+
+```python
+# What is currently on?
+print([name for name, on in editor.get_debug_flags().items() if on])
+```
+
+> Changing a flag saves it into `Config/Editor.json`, exactly as toggling it in the Statistics panel does,
+> so the state survives an editor restart. Unknown names are refused with a warning rather than silently
+> ignored.
+
+
+---
+
 ## 6. `scene` module — Working with scenes
 
 #### `scene.get_entity_count()` → `int`
@@ -3984,6 +4594,63 @@ Loads an entity from a file. Returns UUID.
 ```python
 uuid = scene.load_entity('Content/Templates/player_template.json')
 ```
+
+---
+
+### 6.1 Level state and reloading
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `scene.reload()` | `bool` | Re-read the current level from disk, discarding unsaved changes |
+| `scene.is_dirty()` | `bool` | Does the level have unsaved changes? |
+| `scene.mark_dirty()` | `bool` | Mark the level as modified |
+| `scene.save_as(path)` | `bool` | Save to a new path and keep working there |
+| `scene.clear()` | `int` | Delete every entity in the level (one undo step) |
+| `scene.copy_level(source, destination)` | `bool` | Duplicate a level file on disk |
+| `scene.read_level(path)` | `dict` \| `None` | Read a `.icemap` into Python data **without** opening it |
+
+```python
+if scene.is_dirty():
+    scene.save(scene.get_path())
+
+scene.copy_level('Content/Levels/Forest.icemap', 'Content/Levels/Forest_Backup')
+data = scene.read_level('Content/Levels/Forest.icemap')
+print(len(data.get('Entities', [])))
+```
+
+---
+
+### 6.2 Statistics and validation
+
+#### `scene.stats()` → `dict`
+
+Level statistics in one call: `entity_count`, `components` (a histogram of component type → count),
+`folder_count`, `root_entity_count`, `world_asset_count`, `path`, `dirty`.
+
+```python
+s = scene.stats()
+print(f"{s['entity_count']} entities in {s['path']}")
+for name, count in sorted(s['components'].items(), key=lambda kv: -kv[1]):
+    print(f'  {name:<20} {count}')
+```
+
+#### `scene.validate()` → `dict`
+
+Walks every entity (including every multi-instance component) and every world asset on the level and
+reports any asset reference that does not resolve on disk. Returns `ok`, `checked_entities` and
+`problems` — a list of `{uuid, entity, reference}`.
+
+```python
+report = scene.validate()
+if report['ok']:
+    print('Level is clean')
+else:
+    for problem in report['problems']:
+        print(f"{problem['entity']}: missing {problem['reference']}")
+```
+
+> This is the single most useful call before shipping a level: it catches sprites, classes, materials,
+> tilemaps, sounds and widgets that were renamed or deleted outside the editor.
 
 ---
 
@@ -4262,6 +4929,68 @@ info = engine.audio_info()
 #     'master_volume': 1.0,
 #     'quality': 'High'
 # }
+```
+
+---
+
+### 7.5 Platform, build and rendering backend
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `engine.platform()` | `str` | `'windows'`, `'macos'` or `'linux'` |
+| `engine.arch()` | `str` | `'64-bit'` or `'32-bit'` |
+| `engine.render_backend()` | `str` | Active backend, e.g. `'OpenGL 4.6'`, `'Vulkan'`, `'Direct3D 12'`, `'Metal'` |
+| `engine.gpu_info()` | `dict` | `backend`, `driver`, `gpu_time_ms`, `gpu_timer_available`, `gpu_temperature_c`, `vram_mb`, `vram_total_mb` |
+| `engine.build_info()` | `dict` | `version`, `editor`, `configuration`, `compiled`, `python` |
+| `engine.python_version()` | `str` | Embedded Python version |
+| `engine.python_paths()` | `list[str]` | Current `sys.path` |
+| `engine.engine_dir()` | `str` | Folder the editor was installed into |
+| `engine.saved_dir()` | `str` | Folder holding saves, logs and screenshots |
+| `engine.log_path()` | `str` | Folder the engine writes log files into |
+| `engine.frame_count()` | `int` | Frames rendered since startup |
+| `engine.profiler_stats()` | `dict` | CPU/GPU/render counters in one dict |
+
+```python
+print(engine.build_info())
+print(engine.gpu_info()['driver'])
+print(f"frame {engine.frame_count()} @ {engine.fps():.1f} fps")
+```
+
+---
+
+### 7.6 Editor window and application
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `engine.quit()` | `bool` | Close the editor without saving |
+| `engine.window_size()` | `tuple` | Window size in logical points |
+| `engine.window_pixel_size()` | `tuple` | Window size in physical pixels |
+| `engine.set_window_size(width, height)` | `bool` | Resize the editor window |
+| `engine.window_title()` | `str` | Window title |
+| `engine.set_window_title(title)` | `bool` | Change the window title |
+| `engine.is_fullscreen()` | `bool` | Is the window fullscreen? |
+| `engine.set_fullscreen(enabled)` | `bool` | Toggle fullscreen |
+| `engine.focus_window()` | `bool` | Bring the editor window to the front |
+| `engine.get_target_fps()` | `int` | Editor frame-rate cap (0 = uncapped) |
+| `engine.set_target_fps(fps)` | `bool` | Change the frame-rate cap |
+
+```python
+engine.set_window_size(1920, 1080)     # deterministic size before a screenshot
+engine.set_target_fps(0)               # uncapped while profiling
+```
+
+---
+
+### 7.7 Resource inventory
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `engine.list_resources()` | `dict` | `textures`, `shaders`, `sounds` — every loaded name |
+| `engine.reload_all_assets()` | `bool` | Reload every cached asset from disk |
+
+```python
+res = engine.list_resources()
+print(len(res['textures']), 'textures |', len(res['shaders']), 'shaders')
 ```
 
 ---
@@ -4724,7 +5453,793 @@ Copies multiple files. Returns number copied.
 
 ---
 
-## 9. `icebox.log` module — System logging
+### 8.10 JSON, metadata and checksums
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `browser.read_json(path)` | `dict`/`list`/`None` | Parse a JSON file into Python data |
+| `browser.write_json(path, data, indent=4)` | `bool` | Write Python data as JSON (`indent=0` = compact) |
+| `browser.file_info(path)` | `dict` | `path`, `name`, `stem`, `extension`, `exists`, `is_directory`, `size`, `modified_unix` |
+| `browser.checksum(path)` | `str` | 64-bit FNV-1a hex digest (empty when unreadable) |
+| `browser.dir_size(path)` | `int` | Total byte size of everything under a folder |
+| `browser.normalize(path)` | `str` | Forward slashes, no `.` / `..` segments |
+| `browser.is_asset(path)` | `bool` | Does this path look like an engine asset? |
+
+```python
+data = browser.read_json('Content/Enemies/goblin.ice_class')
+data['Entity']['TagComponent']['Tag'] = 'Goblin'
+browser.write_json('Content/Enemies/goblin.ice_class', data)
+
+print(browser.checksum('Content/hero.png'))
+print(browser.dir_size('Content') / 1024 / 1024, 'MB')
+```
+
+> `read_json` / `write_json` are the safe way to script asset edits: they never corrupt a file through
+> string surgery, and `write_json` keeps the same 4-space layout the editor writes.
+
+---
+
+### 8.11 Folder trees and file creation
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `browser.list_tree(path='Content', include_directories=False)` | `list[str]` | Everything under a folder, recursively |
+| `browser.make_dirs(path)` | `bool` | Create a folder and every missing parent |
+| `browser.append_file(path, content)` | `bool` | Append text, creating the file when needed |
+| `browser.touch(path)` | `bool` | Create an empty file, or refresh its modification time |
+
+```python
+browser.make_dirs('Content/Levels/Chapter2')
+browser.append_file('Saved/import.log', 'imported 42 sprites\n')
+```
+
+---
+
+### 8.12 Opening assets from the browser
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `browser.open(path)` | `bool` | Open an asset in its editor panel (same as `editor.open_asset`) |
+| `browser.reveal(path)` | `bool` | Show the file or folder in the OS file browser |
+
+```python
+browser.open('Content/Enemies/goblin.ice_class')
+browser.reveal('Content/Enemies')
+```
+
+---
+
+## 9. `console` module — Editor console and logs
+
+The `console` module gives Python full read/write access to the editor's Console panel — the same buffer
+that shows engine messages, Lua errors, asset warnings and your own `print()` output. It is the fastest
+way to answer "did anything go wrong?" from a script, and it is what makes unattended runs meaningful:
+a headless pass can read back exactly what the editor logged.
+
+Severity levels are integers: **0 trace, 1 info, 2 warn, 3 error**.
+
+---
+
+### 9.1 Reading the log
+
+#### `console.get_logs(count=200, level=-1, filter='', category='')` → `list[dict]`
+
+Returns the newest entries. `count=0` returns everything in the buffer, `level=-1` returns every severity.
+Each entry is a dict with `message`, `level`, `level_name`, `category`, `repeat`, `timestamp_ms`.
+
+```python
+for entry in console.get_logs(20):
+    print(entry['level_name'], entry['message'])
+
+# Only errors, only from the Lua category
+for entry in console.get_logs(0, 3, category='Lua'):
+    print(entry['message'])
+```
+
+#### `console.get_messages(count=200, level=-1)` → `list[str]`
+
+The same, as plain strings.
+
+#### `console.get_errors(count=100)` / `console.get_warnings(count=100)` → `list[str]`
+
+Shortcuts for levels 3 and 2.
+
+```python
+errors = console.get_errors()
+if errors:
+    print(f'{len(errors)} error(s), newest: {errors[-1]}')
+```
+
+#### `console.get_text(count=200, level=-1, timestamps=False)` → `str`
+
+Everything joined into one string with `[INFO ]` / `[WARN ]` / `[ERROR]` tags — ready to paste into a
+bug report.
+
+#### `console.find(pattern, regex=False, count=0)` → `list[dict]`
+
+Searches the buffer. With `regex=True` the pattern is a case-insensitive regular expression.
+
+```python
+console.find('texture')                       # substring
+console.find(r'failed|missing', regex=True)   # regex
+```
+
+---
+
+### 9.2 Counting and summarising
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `console.get_count(level=-1)` | `int` | Buffered entries, optionally for one severity |
+| `console.get_counts()` | `dict` | `trace`, `info`, `warn`, `error`, `total` |
+| `console.has_errors()` | `bool` | Was at least one error logged? |
+| `console.has_warnings()` | `bool` | Was at least one warning logged? |
+| `console.get_last_error()` | `str` | Newest error message, or `''` |
+| `console.get_categories()` | `list[str]` | Every category present in the buffer |
+| `console.summary()` | `dict` | Counts + last error/warning + panel state, in one call |
+
+```python
+s = console.summary()
+print(f"errors={s['error']} warnings={s['warn']} last={s['last_error']}")
+```
+
+---
+
+### 9.3 Writing to the console
+
+| Function | Description |
+|----------|-------------|
+| `console.write(message, level=1)` | Append a message at any level |
+| `console.trace(message)` | Level 0 |
+| `console.info(message)` | Level 1 |
+| `console.warn(message)` | Level 2 |
+| `console.error(message)` | Level 3 |
+
+```python
+console.info('Import finished')
+console.warn('3 sprites had no pivot')
+console.error('Level references a missing tileset')
+```
+
+> `console.write()` and `editor.log()` write to the same place; `icebox.log.*` writes to the **engine**
+> log instead (see [13. `icebox.log` module](#14-iceboxlog-module--system-logging)).
+
+---
+
+### 9.4 Managing the buffer and the panel
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `console.clear()` | — | Clear every buffered entry |
+| `console.save(path, visible_only=False)` | `bool` | Write the log to a file (`visible_only` = what the panel currently shows) |
+| `console.get_filter()` / `console.set_filter(filter)` | `str` / — | The panel's text filter |
+| `console.get_level_mask()` / `console.set_level_mask(mask)` | `int` / — | Severity bitmask (bit 0 trace … bit 3 error; `0xF` shows everything) |
+| `console.is_paused()` / `console.set_paused(paused)` | `bool` / — | Pause the panel (new logs are buffered, not dropped) |
+| `console.get_buffer_limit()` / `console.set_buffer_limit(limit)` | `int` / — | Max buffered entries (100…50000) |
+| `console.get_language()` / `console.set_language(language)` | `str` / `bool` | Default language of the console input bar: `'lua'`, `'python'`, `'shell'` |
+| `console.execute(text)` | — | Run a line through the console input bar (obeys the language and `/commands`) |
+
+```python
+console.set_level_mask(0b1100)          # show only warnings and errors
+console.save('Saved/session.log')
+console.clear()
+
+console.set_language('python')
+console.execute('print(engine.fps())')
+```
+
+---
+
+### 9.5 A typical health check
+
+```python
+console.clear()
+editor.reload_level()
+
+def report():
+    s = console.summary()
+    if s['has_errors']:
+        console.save('Saved/level_errors.log')
+        print('FAILED —', s['error'], 'errors; log saved')
+    else:
+        print('OK — no errors after reload')
+
+editor.set_timer(1.0, report)
+```
+
+---
+
+## 10. `lua` module — Bridge into the game Lua VM
+
+The `lua` module lets an editor Python script talk to the **game's** Lua virtual machine: run code,
+evaluate expressions, compile-check every class script, inspect the call stack, and read the level
+script. It is the piece that turns the Python API into a real test harness — Python drives the editor,
+Lua answers for the game.
+
+> The Lua API itself (`Entity`, `Physics`, `Input`, …) is documented separately in the **Lua API**
+> documentation. This chapter only covers the Python-side bridge.
+
+---
+
+### 10.1 Running and evaluating
+
+#### `lua.exec(code)` → `dict`
+
+Runs Lua source in the level environment. Returns `{'ok': bool, 'error': str}`.
+
+```python
+r = lua.exec('print("hello from Lua")')
+if not r['ok']:
+    print('Lua error:', r['error'])
+```
+
+#### `lua.eval(expression)` → `str`
+
+Evaluates a Lua expression and returns its value rendered as a string. Errors come back as
+`'Error: …'` text rather than raising.
+
+```python
+print(lua.eval('_VERSION'))
+print(lua.eval('Time.GetDeltaTime()'))
+```
+
+#### `lua.call_global(function_name)` → `bool`
+
+Calls a global Lua function with no arguments.
+
+---
+
+### 10.2 Compile checking
+
+#### `lua.check(code)` → `dict`
+
+Compiles Lua source **without running it**. Returns `{'ok': bool, 'error': str}`.
+
+#### `lua.check_file(path)` → `dict`
+
+The same for a `.lua` file on disk. Adds `path`.
+
+#### `lua.compile_all()` → `list[dict]`
+
+Compile-checks **every class script in the project**. Each item is `{'path', 'ok', 'error'}`.
+This is the fastest project-wide correctness gate there is.
+
+```python
+broken = [r for r in lua.compile_all() if not r['ok']]
+for r in broken:
+    print(r['path'], '->', r['error'])
+print(f'{len(broken)} broken script(s)')
+```
+
+---
+
+### 10.3 The level script
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `lua.get_level_script()` | `str` | Lua source currently loaded into the VM |
+| `lua.set_level_script(code)` | `bool` | Replace the source held by the scripting engine (does not reload it) |
+| `lua.reload_level_script(code='')` | `bool` | Reload the level script into the VM; empty string reloads the current source |
+| `lua.is_level_script_loaded()` | `bool` | Is a level script loaded? |
+| `lua.has_level_function(name)` | `bool` | Does the level script define this function? |
+| `lua.call_level_function(name)` | `str` | Call it and return the result as a string |
+
+```python
+if lua.has_level_function('OnLevelStart'):
+    print(lua.call_level_function('OnLevelStart'))
+```
+
+> `editor.get_level_script()` / `editor.set_level_script()` work on the **editor's text buffer** (what the
+> Level Script panel shows). `lua.*` works on what the **VM** currently holds. Edit with `editor.*`, verify
+> with `lua.check()`, apply with `lua.reload_level_script()`.
+
+---
+
+### 10.4 Scripts, modules and events
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `lua.reload_all_scripts()` | — | Reload every entity script in the active scene |
+| `lua.clear_module_cache()` | — | Drop cached project Lua modules so `require()` re-reads them |
+| `lua.emit_event(event_name, payload='')` | — | Emit a Lua event with a string payload |
+| `lua.has_entity_data(entity_id, key)` | `bool` | Does the Lua entity data store hold this key? |
+| `lua.clear_entity_data(entity_id)` | — | Clear an entity's Lua data store |
+
+---
+
+### 10.5 Inspecting the VM
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `lua.get_globals()` | `list[str]` | Every global name in the VM — the whole Lua API surface |
+| `lua.get_call_stack()` | `list[dict]` | `function`, `source`, `line` |
+| `lua.get_locals(level=0)` | `list[dict]` | `name`, `value`, `type` |
+| `lua.get_upvalues(level=0)` | `list[dict]` | `name`, `value`, `type` |
+| `lua.get_environment(source_name)` | `list[dict]` | Variables of one script environment |
+| `lua.get_table(expression, max_depth=2)` | `list[dict]` | Expand a Lua table expression |
+| `lua.is_debug_paused()` | `bool` | Is the Lua debugger stopped on a breakpoint? |
+| `lua.is_debug_hook_active()` | `bool` | Is a debug hook installed? |
+| `lua.is_runtime_active()` | `bool` | Is the Lua runtime bound to a scene (play mode)? |
+| `lua.memory_kb()` | `float` | VM memory usage in KB |
+| `lua.collect_garbage()` | — | Run a full Lua GC cycle |
+| `lua.info()` | `dict` | VM snapshot: memory, level-script state, debugger state, global count |
+
+```python
+print(f"Lua exposes {len(lua.get_globals())} globals, using {lua.memory_kb():.0f} KB")
+print(lua.info())
+```
+
+---
+
+### 10.6 A project-wide script check
+
+```python
+console.clear()
+broken = [r for r in lua.compile_all() if not r['ok']]
+
+for r in broken:
+    console.error(f"{r['path']}: {r['error']}")
+
+print('Lua scripts OK' if not broken else f'{len(broken)} broken script(s)')
+```
+
+---
+
+## 11. `project` module — Project, configuration, plugins and mods
+
+The `project` module reads and writes the files that describe the project itself: the `Config/*.json`
+files, the plugin and mod registries, the build settings and the project layout.
+
+---
+
+### 11.1 Layout
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `project.name()` | `str` | Folder name of the open project |
+| `project.path()` | `str` | Absolute project path |
+| `project.content_path()` | `str` | Absolute `Content` path |
+| `project.config_path()` | `str` | Absolute `Config` path |
+| `project.engine_path()` | `str` | Engine installation folder |
+| `project.saved_path()` | `str` | `Saved` folder (logs, screenshots) |
+| `project.engine_version()` | `str` | Engine version string |
+| `project.scripting_mode()` | `str` | `'code'` or `'visual'` |
+| `project.get_levels()` | `list[str]` | Every `.icemap` in the project |
+| `project.get_locales()` | `list[str]` | Language codes in `Config/Languages` |
+| `project.info()` | `dict` | All of the above plus the current level and its dirty flag |
+
+```python
+info = project.info()
+print(f"{info['name']} — {info['level_count']} levels, engine {info['engine_version']}")
+```
+
+---
+
+### 11.2 Configuration files
+
+`Config/<name>.json` files are read and written as ordinary Python data.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `project.list_configs()` | `list[str]` | Names of every `Config/*.json` |
+| `project.get_config(name)` | `dict`/`list`/`None` | Read one (without the `.json`) |
+| `project.set_config(name, data)` | `bool` | **Replace** it with a dict |
+| `project.merge_config(name, data)` | `bool` | **Deep-merge** a dict into it, keeping untouched keys |
+| `project.has_config(name)` | `bool` | Does it exist? |
+| `project.backup_config(name, suffix='.bak')` | `bool` | Copy it next to itself |
+| `project.get_editor_config()` | `dict` | Raw `Config/Editor.json` |
+| `project.get_collision_groups()` | `dict` | Raw `Config/CollisionGroups.json` |
+
+```python
+project.backup_config('Engine')
+project.merge_config('Engine', {'Physics': {'GravityY': -20.0}})
+print(project.get_config('Engine')['Physics']['GravityY'])
+```
+
+> ⚠️ The editor writes `Config/Editor.json` back out when it closes. Edit it from Python while the
+> editor is **running** and your change survives; edit the file by hand behind the editor's back and it
+> is overwritten on exit. `merge_config` is the safe way to change one key.
+
+---
+
+### 11.3 Plugins and mods
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
+| `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json` |
+| `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
+| `project.set_mod_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Mods.json` |
+| `project.reload_plugin_config()` | — | Re-read both registries from disk |
+
+```python
+for p in project.get_plugins():
+    state = 'on ' if p['enabled'] else 'off'
+    print(f"[{state}] {p['name']} {p['version']} — {p['description']}")
+```
+
+> Enabling a plugin writes the config; the plugin itself is loaded on the next editor start.
+
+---
+
+### 11.4 Build settings
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `project.get_build_settings()` | `dict` | Build configuration stored in `Config/Editor.json` |
+| `project.open_build_panel()` | `bool` | Open the **Build Game** panel |
+
+```python
+b = project.get_build_settings()
+print(b.get('BuildName'), b.get('BuildVersion'), b.get('BuildPlatform'))
+project.open_build_panel()
+```
+
+> The build itself is deliberately **not** scriptable: it runs asynchronously, streams output into the
+> panel and can prompt for signing credentials. Python configures it and opens the panel; a human starts it.
+
+---
+
+## 12. `assets` module — Creating, inspecting and validating assets
+
+Where `browser` deals in files, `assets` deals in **engine assets**: it knows the type table, can create
+a valid empty asset of any type, can follow references between assets, and can tell you what is broken.
+
+---
+
+### 12.1 Types
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `assets.types()` | `list[str]` | Every type name this module understands |
+| `assets.type_table()` | `list[dict]` | `type`, `extension`, `description`, `creatable` |
+| `assets.extension_for(type)` | `str` | `'sprite'` → `'.ice_sprite'` |
+| `assets.type_of(path)` | `str` | `'Content/x.ice_sprite'` → `'sprite'` |
+
+```python
+for row in assets.type_table():
+    mark = '+' if row['creatable'] else ' '
+    print(f"{mark} {row['type']:<18} {row['extension']:<18} {row['description']}")
+```
+
+Creatable types: `class`, `sprite`, `flipbook`, `animation`, `skeleton`, `tileset`, `tilemap`,
+`material`, `material_instance`, `material_function`, `material_params`, `decal`, `fx`, `widget`,
+`view`, `cinema`, `ai`, `localization`, `lua`, `note`.
+Read-only types (produced by the editor): `level`, `texture`, `font`, `sound`, `video`.
+
+---
+
+### 12.2 Creating assets
+
+#### `assets.create(type, path, overwrite=False)` → `bool`
+
+Creates a new, **valid, empty** asset. The extension is appended automatically when missing, parent
+folders are created, and the file is written with exactly the same default content the content browser's
+*Create* menu produces — so the asset opens correctly in its editor panel.
+
+```python
+assets.create('class',    'Content/Enemies/CL_Goblin')
+assets.create('sprite',   'Content/Enemies/SP_Goblin')
+assets.create('material', 'Content/Materials/M_Water')
+
+# Generate a folder of variants
+for i in range(1, 6):
+    assets.create('sprite', f'Content/Tiles/SP_Tile_{i:02d}', overwrite=True)
+```
+
+---
+
+### 12.3 Browsing and statistics
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `assets.list(type='', directory='Content', recursive=True)` | `list[str]` | Project-relative asset paths; empty type = every asset |
+| `assets.count(type)` | `int` | How many of one type |
+| `assets.stats()` | `dict` | Counts per type plus `total` |
+| `assets.exists(path)` | `bool` | Does the file exist? |
+| `assets.info(path)` | `dict` | `path`, `name`, `stem`, `extension`, `type`, `exists`, `is_directory`, `size`, `modified_unix` |
+| `assets.read(path)` | `dict`/`list`/`None` | Parse a JSON-backed asset |
+| `assets.write(path, data)` | `bool` | Overwrite a JSON-backed asset (4-space indent) |
+| `assets.open(path)` | `bool` | Open it in its editor panel |
+| `assets.refresh()` | — | Reload every cached asset |
+
+```python
+print(assets.stats())
+for path in assets.list('class'):
+    print(path, assets.info(path)['size'], 'bytes')
+```
+
+---
+
+### 12.4 The dependency graph
+
+#### `assets.dependencies(path)` → `list[str]`
+
+Every asset path referenced by this file — textures, materials, sprites, classes, scripts. Works for
+JSON assets and for `.lua` files.
+
+#### `assets.find_references(path, directory='Content')` → `list[str]`
+
+The inverse: every file under `directory` that references the given asset. Use it before renaming or
+deleting anything.
+
+```python
+sprite = 'Content/Enemies/SP_Goblin.ice_sprite'
+users = assets.find_references(sprite)
+if users:
+    print(f'{sprite} is used by:')
+    for u in users:
+        print('  ', u)
+else:
+    print('Nothing references it — safe to delete')
+```
+
+---
+
+### 12.5 Health checks
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `assets.validate(path)` | `dict` | `ok`, `errors`, `type`, `path` — parseable, known type, references resolve |
+| `assets.find_missing(directory='Content')` | `list[dict]` | Every broken reference — `file`, `reference` |
+| `assets.find_unused(directory='Content')` | `list[str]` | Assets nothing references (levels and classes are never reported) |
+| `assets.find_duplicate_names(directory='Content')` | `list[dict]` | File names that appear more than once — `name`, `paths` |
+
+```python
+missing = assets.find_missing()
+for m in missing:
+    console.error(f"{m['file']} -> {m['reference']}")
+print('Content is clean' if not missing else f'{len(missing)} broken reference(s)')
+
+for dup in assets.find_duplicate_names():
+    print(dup['name'], '->', dup['paths'])
+```
+
+> `find_unused` is a hint, not a verdict: an asset spawned by name from Lua at runtime looks unused to a
+> static scan. Always check `find_references` before deleting.
+
+---
+
+### 12.6 A full content audit
+
+```python
+console.clear()
+
+missing = assets.find_missing()
+dups = assets.find_duplicate_names()
+broken_lua = [r for r in lua.compile_all() if not r['ok']]
+level = scene.validate()
+
+print(f'assets       : {assets.stats()["total"]}')
+print(f'broken refs  : {len(missing)}')
+print(f'duplicates   : {len(dups)}')
+print(f'broken Lua   : {len(broken_lua)}')
+print(f'level issues : {len(level["problems"])}')
+
+console.save('Saved/content_audit.log')
+```
+
+---
+
+## 13. `packages` module — Installing Python libraries (pip)
+
+The editor ships a complete CPython 3.12 — standard library, native extension modules (`socket`, `ssl`,
+`ctypes`, `sqlite3`, `zlib`, `lzma`, …) and its own `python` executable. The `packages` module uses them
+to run **pip**, so any library from PyPI can be installed straight into the editor's interpreter and
+imported by your tool scripts.
+
+```python
+packages.install('requests')
+
+import requests
+print(requests.get('https://example.com').status_code)
+```
+
+That is the whole workflow. pip itself is bootstrapped automatically the first time you install
+something (from the wheel bundled with Python, so it works offline).
+
+---
+
+### 13.1 Availability
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.is_available()` | `bool` | Can pip run in this build? |
+| `packages.unavailable_reason()` | `str` | Why not — empty string when everything is fine |
+| `packages.python_executable()` | `str` | The interpreter used to run pip |
+| `packages.site_packages()` | `str` | `site-packages` of the embedded interpreter |
+| `packages.pip_installed()` | `bool` | Is pip already bootstrapped? |
+| `packages.info()` | `dict` | Everything above plus `target`, `busy`, `python_version` |
+
+```python
+if not packages.is_available():
+    print(packages.unavailable_reason())
+else:
+    print(packages.info())
+```
+
+> `is_available()` is `False` only when the build has no shipped interpreter or no `ssl`/`socket`
+> support. A normal editor build has both.
+
+---
+
+### 13.2 Installing and removing
+
+#### `packages.install(packages, upgrade=False, target='', index_url='', extra_args=[], timeout=600.0)` → `dict`
+
+Installs one package or a list of them and **blocks** until pip finishes. Accepts a plain string or a
+list. Returns a result dict: `ok`, `finished`, `exit_code`, `command`, `output`, `duration_sec`.
+
+```python
+packages.install('numpy')
+packages.install(['pillow', 'requests'])
+packages.install('numpy', upgrade=True)
+packages.install('numpy', index_url='https://my-mirror/simple')
+packages.install('numpy', extra_args=['--no-deps'])
+
+r = packages.install('scipy', timeout=900)
+if not r['ok']:
+    print(r['output'])
+```
+
+`target` installs into a specific folder with `pip install --target` instead of the editor
+site-packages; the folder is added to `sys.path` automatically:
+
+```python
+packages.install('rich', target='Tools/PythonScripts/Lib')
+```
+
+#### `packages.install_requirements(path, target='', timeout=900.0)` → `dict`
+
+Installs everything listed in a `requirements.txt`.
+
+```python
+packages.install_requirements('Tools/PythonScripts/requirements.txt')
+```
+
+#### `packages.uninstall(packages, timeout=300.0)` → `dict`
+
+Removes packages from the editor site-packages. (pip cannot uninstall from a `--target` folder — delete
+that folder yourself.)
+
+```python
+packages.uninstall('requests')
+packages.uninstall(['six', 'idna'])
+```
+
+---
+
+### 13.3 Where packages go
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.get_target()` | `str` | Folder new packages are installed into by default |
+| `packages.set_target(path='')` | `bool` | Override it; empty string restores the default |
+
+The default is the embedded interpreter's `Lib/site-packages`. If that folder is **not writable** — an
+engine installed under `Program Files`, for example — the default becomes
+`<project>/Tools/PythonScripts/Lib`, which is already on `sys.path`. Setting a target also puts it on
+`sys.path` immediately.
+
+```python
+packages.set_target('Tools/PythonScripts/Lib')   # keep the engine install pristine
+print(packages.get_target())
+packages.set_target('')                          # back to the default
+```
+
+---
+
+### 13.4 Long installs without freezing the editor
+
+`install()` blocks, which is fine for small packages. For something large, start it in the background
+and poll:
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.start(args)` | `bool` | Start a pip command in the background |
+| `packages.is_busy()` | `bool` | Is it still running? |
+| `packages.poll()` | `dict` | `busy` plus the output collected so far |
+| `packages.wait(timeout=600.0)` | `dict` | Block until it finishes and return the result |
+| `packages.last_result()` | `dict` | Result of the most recent operation |
+| `packages.reset()` | `bool` | Forget the last result and buffered output |
+
+```python
+packages.start(['install', 'numpy'])
+
+def watch():
+    state = packages.poll()
+    if state['busy']:
+        editor.set_timer(1.0, watch)
+    else:
+        print('done:', state['ok'])
+        packages.refresh()
+
+editor.set_timer(1.0, watch)
+```
+
+Only one package operation runs at a time; `start()` returns `False` while another is in flight.
+
+---
+
+### 13.5 Querying what is installed
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.list()` | `list[dict]` | Installed distributions — `name`, `version`, `location` |
+| `packages.is_installed(name)` | `bool` | Is this distribution installed? |
+| `packages.version(name)` | `str` | Its version, or an empty string |
+| `packages.freeze()` | `list[str]` | `name==version` lines, like `pip freeze` |
+
+```python
+for dist in packages.list():
+    print(f"{dist['name']:<24} {dist['version']}")
+
+if not packages.is_installed('numpy'):
+    packages.install('numpy')
+```
+
+---
+
+### 13.6 Importing what you just installed
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.refresh()` | `bool` | Re-scan the install folder so new packages become importable |
+| `packages.import_module(name)` | `dict` | Try to import and report `ok` / `error` instead of raising |
+
+`install()` already refreshes the import system, so a plain `import` works right after it. Use
+`refresh()` when something was installed outside the editor.
+
+```python
+r = packages.import_module('numpy')
+if r['ok']:
+    import numpy
+    print(numpy.__version__)
+else:
+    print('not importable:', r['error'])
+```
+
+---
+
+### 13.7 Raw pip access
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `packages.ensure_pip(timeout=180.0)` | `dict` | Bootstrap pip explicitly (offline, from the bundled wheel) |
+| `packages.pip_version(timeout=60.0)` | `dict` | Run `pip --version` |
+| `packages.run_pip(args, timeout=600.0)` | `dict` | Run pip with arbitrary arguments |
+
+```python
+print(packages.run_pip(['list', '--outdated'])['output'])
+print(packages.run_pip(['show', 'requests'])['output'])
+print(packages.run_pip(['download', 'requests', '-d', 'Saved/wheels'])['output'])
+```
+
+---
+
+### 13.8 Things worth knowing
+
+- **Installing a package runs its code.** pip executes build hooks and the package itself once you
+  import it. Install only what you trust — the same rule as running any Python script in the editor.
+- **Packages live with the engine, not the game.** They are editor tooling: they are not cooked into a
+  build and the game runtime has no Python. Use Lua for anything the game itself needs.
+- **Binary wheels must match CPython 3.12 on your platform.** pip picks the right wheel automatically;
+  a package with no matching wheel falls back to building from source, which needs a compiler.
+- **A blocking `install()` freezes the editor** for as long as pip runs. Use `start()` + `poll()` for
+  anything big.
+- **Reinstalling the engine replaces `Lib/site-packages`.** Keep a `requirements.txt` in the project
+  and re-run `packages.install_requirements(...)`, or use `set_target('Tools/PythonScripts/Lib')` so the
+  packages live inside the project instead.
+
+```python
+# Project-local packages that survive an engine reinstall
+packages.set_target('Tools/PythonScripts/Lib')
+packages.install_requirements('Tools/PythonScripts/requirements.txt')
+```
+
+---
+
+## 14. `icebox.log` module — System logging
 
 The `icebox.log` module writes messages directly to the engine log (output window), not the editor Python console.
 
@@ -4752,11 +6267,19 @@ Error message.
 icebox.log.error('Critical error!')
 ```
 
+#### `icebox.log.trace(msg)`
+
+Trace message — the quietest level, for detail you only want while debugging.
+
+```python
+icebox.log.trace('entering import loop')
+```
+
 > ℹ️ Unlike `editor.log_info()`, which writes to the editor console (visible to the user), `icebox.log.info()` writes to the engine system log. Both are useful for different purposes.
 
 ---
 
-## 10. Component types — Full reference
+## 15. Component types — Full reference
 
 ### Table of all components
 
@@ -4918,7 +6441,7 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 
 ---
 
-## 11. Supported asset types
+## 16. Supported asset types
 
 | Type | Extension | Description |
 |-----|-----------|----------|
@@ -4956,7 +6479,136 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 
 ---
 
-## 12. Practical examples
+## 17. Command line & automation
+
+The editor can run Python without anyone touching the UI. That is what makes the Python API usable from
+a build server, a batch file, a git hook — or an assistant that needs to check something for you.
+
+---
+
+### 17.1 Flags
+
+```
+IceBoxEngine[.exe] [<project path>] [flags]
+```
+
+| Flag | Argument | Description |
+|------|----------|-------------|
+| `--python` (`-py`) | `<file.py>` | Run a Python script once the editor is ready. May be repeated |
+| `--python-cmd` | `<code>` | Run inline Python source. May be repeated |
+| `--python-arg` | `<value>` | Append a value to `sys.argv` for those scripts. May be repeated |
+| `--python-delay-frames` | `<n>` | Frames to wait before running (default **3**) |
+| `--quit-after-python` | — | Close the editor when the queued scripts finish |
+
+Scripts run **in the order given**, in the global (`__main__`) namespace, after the editor has
+initialised, loaded the last level and rendered `--python-delay-frames` frames — so the viewport,
+the asset cache and the Lua VM are all live by the time your code runs.
+
+Inside the script, `__file__` is the script's own path and `sys.argv` is
+`[script path] + every --python-arg value`.
+
+---
+
+### 17.2 Exit code
+
+With `--quit-after-python` the process exits with:
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every queued script finished without an uncaught exception |
+| `1` | At least one script raised |
+| `2` | Python was unavailable in this build |
+
+That makes the editor usable as a checker in CI:
+
+```bash
+IceBoxEngine.exe . --python Tools/PythonScripts/CI/check_content.py --quit-after-python || exit 1
+```
+
+---
+
+### 17.3 Examples
+
+**Screenshot a level, unattended:**
+
+```bash
+IceBoxEngine.exe MyGame --python-cmd "editor.open_level('Content/Levels/Forest.icemap')" --python-cmd "editor.screenshot_window('Screenshots/forest.png')" --python-delay-frames 60 --quit-after-python
+```
+
+**Content gate — fails the build on a broken reference:**
+
+```python
+# Tools/PythonScripts/CI/check_content.py
+import sys
+
+problems = []
+problems += [f"{m['file']} -> {m['reference']}" for m in assets.find_missing()]
+problems += [f"{r['path']}: {r['error']}" for r in lua.compile_all() if not r['ok']]
+problems += [f"{p['entity']} -> {p['reference']}" for p in scene.validate()['problems']]
+
+for line in problems:
+    print('PROBLEM:', line)
+
+console.save('Saved/ci_content.log')
+
+if problems:
+    raise SystemExit(f'{len(problems)} content problem(s)')
+print('content OK')
+```
+
+```bash
+IceBoxEngine.exe MyGame --python Tools/PythonScripts/CI/check_content.py --quit-after-python
+echo exit code: %ERRORLEVEL%
+```
+
+**Pass arguments to a script:**
+
+```bash
+IceBoxEngine.exe MyGame --python Tools/PythonScripts/export.py --python-arg Content/Enemies --python-arg --dry-run --quit-after-python
+```
+
+```python
+# export.py
+import sys
+folder = sys.argv[1] if len(sys.argv) > 1 else 'Content'
+dry_run = '--dry-run' in sys.argv
+print('exporting', folder, '(dry run)' if dry_run else '')
+```
+
+---
+
+### 17.4 Startup scripts vs. the command line
+
+| | Startup scripts | Command line |
+|---|---|---|
+| Where | `Tools/PythonScripts/Startup/*.py` | `--python` / `--python-cmd` |
+| When | Every editor start, during initialisation | Once, after the level has loaded and the first frames rendered |
+| Viewport ready | Not yet | Yes — screenshots and viewport queries work |
+| Typical use | Install event handlers, register tools | One-shot checks, captures, batch edits, CI |
+
+```python
+# Tools/PythonScripts/Startup/watch_errors.py — runs at every editor start
+def on_saved(path=None):
+    if console.has_errors():
+        console.warn('Level saved with errors in the log')
+
+editor.on('scene_saved', on_saved)
+```
+
+---
+
+### 17.5 Safety notes
+
+- `--quit-after-python` closes the editor **without saving**. Call `scene.save(...)` or
+  `editor.quit(save=True)` yourself when a script is supposed to persist its work.
+- Play mode rewrites the level script buffer; do **not** enter play mode from an unattended script that
+  also saves the level unless that is exactly what you want.
+- Use `editor.set_script_timeout(n)` in long unattended runs so a hung loop cannot block the machine
+  forever.
+
+---
+
+## 18. Practical examples
 
 ### Example 1: Mass entity creation
 
@@ -5214,7 +6866,7 @@ print(f'Player imported: {new_uuid}')
 
 ---
 
-## 13. FAQ and troubleshooting
+## 19. FAQ and troubleshooting
 
 ### Frequently asked questions
 
