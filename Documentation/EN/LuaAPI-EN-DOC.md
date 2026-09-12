@@ -24593,7 +24593,7 @@ end
   sprite — or the flipbook's material override — so it looks exactly like the same flipbook on an entity. A material set
   with `Draw.SetMaterial` still takes precedence.
 - Frame lookups are cached per flipbook and frame, so a call costs a table lookup, not file access. The cache is cleared
-  when the level stops.
+  when the level stops and when assets are refreshed in the editor.
 
 #### Draw.Skeleton — a skeleton through Draw
 
