@@ -24112,10 +24112,15 @@ Draw.ClearMaterial()              -- same thing
 Returns `false` and logs a warning if the name matches neither a loaded dynamic instance nor a material asset, and the
 state is left cleared, so a typo degrades to the default shader instead of drawing nothing.
 
-> **Cost.** Quads submitted under one material are batched: every consecutive quad that shares the material, the
-> texture and the rest of the draw state goes out in a **single** draw call, so ten thousand quads under one material
-> cost one draw call, not ten thousand. Changing material, texture, blend mode, space or render target starts a new
-> batch, so group by material rather than interleaving.
+> **Cost.** Quads submitted under one material are batched: every consecutive quad that shares the material and the
+> rest of the draw state goes out in a **single** draw call, so ten thousand quads under one material cost one draw
+> call, not ten thousand. Changing material, blend mode, shading mode, space or render target starts a new batch, so
+> group by those rather than interleaving.
+>
+> Changing the **texture** does not: the renderer binds several textures to slots within one batch (see *Multi-texture
+> batching* in the Graphics doc), so ten different sprites cost the same one call as ten copies of the same sprite. The
+> thing to group by is the blend mode. Drawing a hundred actors as halo/body/glow, halo/body/glow, ... costs three
+> hundred draw calls; drawing all hundred halos, then all hundred bodies, then all hundred glows costs three.
 >
 > A `Draw.Mesh` under a material is one draw call per mesh — that is already the natural granularity, but it means a
 > thousand small meshes cost a thousand calls where a thousand quads would cost one. Prefer quads, or merge the geometry
