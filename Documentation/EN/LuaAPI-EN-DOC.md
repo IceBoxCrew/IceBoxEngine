@@ -5773,10 +5773,13 @@ local f = GetFlipbookFrameRegion()      -- optional flipbook index
 -- f.texture  -- resolved texture file, ready for Draw.Region / Draw.SetTexture
 -- f.x, f.y, f.w, f.h        -- source rectangle in pixels
 -- f.width, f.height         -- full texture size in pixels
--- f.pivotX, f.pivotY        -- pivot the renderer uses, normalized
+-- f.pivotX, f.pivotY        -- pivot the renderer uses, normalized; pivotY is measured from the BOTTOM
 
 local s = GetSpriteFrameRegion()        -- same shape, same fields
 ```
+
+`Draw` measures the pivot's `py` from the **top**, so pass `1 - f.pivotY` to `Draw.SetPivot` (or as the `py` field of
+`Draw.Quad`). To draw a flipbook asset with no entity behind it, use `Draw.Flipbook` (see the Draw chapter).
 
 This closes the loop for animated billboards in a raycaster: a flipbook is just a sprite animation, so an animated enemy
 is drawn exactly like a static one — you only swap the source rectangle each frame.
@@ -5790,7 +5793,7 @@ function DrawEnemy(enemyId, screenX, height, distance)
     local shade = math.max(0.2, 1 - distance / 20)
     Draw.SetSpace("screen")
     Draw.SetColor(shade, shade, shade, 1)
-    Draw.SetPivot(f.pivotX, f.pivotY)
+    Draw.SetPivot(f.pivotX, 1 - f.pivotY)
     Draw.Region(f.texture, screenX, 180, height * (f.w / f.h), height,
                 f.x, f.y, f.w, f.h, 0, -distance)
 end
@@ -14141,6 +14144,16 @@ local rows      = GetTilesetRows(tilesetIdx)
 local total     = GetTilesetTileCount(tilesetIdx)      -- cols * rows
 local texPath   = GetTilesetTexturePath(tilesetIdx)
 
+-- Everything Draw needs to render a single tile yourself (minimaps, previews, level editors)
+local r = GetTileRegion(GetTileGrid(tx, ty, layer), layer)   -- tile value, optional layer, optional instance
+-- r.valid              -- false for an empty cell (-1) or a tileset that is not loaded
+-- r.texture            -- tileset texture, ready for Draw.Region / Draw.SetTexture
+-- r.x, r.y, r.w, r.h   -- source rectangle in pixels
+-- r.width, r.height    -- full texture size in pixels
+-- r.tileset, r.tile    -- decoded tileset index and tile id
+-- r.rotation           -- rotation steps stored in the value; r.rotationDegrees is ready for Draw
+-- r.animated           -- true for an animated-tile placeholder (its frames come from a flipbook)
+
 -- Per-tile metadata from the tileset asset (TileData)
 local meta = GetTileMeta(tilesetIdx, tileId)
 -- meta = {
@@ -14156,6 +14169,24 @@ local meta = GetTileMeta(tilesetIdx, tileId)
 
 -- All take an optional trailing instance index
 local total = GetTilesetTileCount(0, 0)
+```
+
+Pass the layer to `GetTileRegion` for plain tile ids: a layer can use its own tileset (`SetLayerTilesetPath`), and only
+the layer says which tileset a plain id belongs to. Encoded values (`EncodeTile`) carry their tileset index and ignore
+the layer.
+
+```lua
+-- A minimap: every cell of layer 0 drawn at 4x4 pixels.
+local size = GetTilemapSize()
+Draw.SetSpace("screen")
+for ty = 0, size.height - 1 do
+    for tx = 0, size.width - 1 do
+        local r = GetTileRegion(GetTileGrid(tx, ty, 0), 0)
+        if r.valid and not r.animated then
+            Draw.Region(r.texture, 20 + tx * 4, 20 + ty * 4, 4, 4, r.x, r.y, r.w, r.h, r.rotationDegrees)
+        end
+    end
+end
 ```
 
 ### Bulk tile editing
@@ -24024,7 +24055,7 @@ The `Draw` API follows the engine conventions exactly:
 - **Rotation** is in degrees; **positive is clockwise**, negative is counter-clockwise (same as `SetSpriteLocalRotation`).
 - **Z+** is toward the viewer (foreground), **Z-** is away (background) — same as `SetSpriteOrder`.
   World-space draws are depth-tested against sprites, tilemaps and everything else in the scene, so Z gives you
-  correct per-pixel occlusion for free.
+  correct per-pixel occlusion for free (for translucent scene content such as decals and particles, see *Layers*).
 - **Pivot** `px, py` is normalized `0..1`, and **`py` is measured from the top** — identical to `SetSpritePivot`.
   The default pivot is `0.5, 0.5` (centre), so `x, y` is the centre of the quad unless you change it.
 - **UV** `u, v, uw, vh` is normalized `0..1` in exactly the same space as `SetSpriteRegion` divided by the texture size:
@@ -24041,8 +24072,8 @@ Draw.SetSpace("screen")  -- screen pixels, origin at the BOTTOM-LEFT, no depth t
 local space = Draw.GetSpace()
 ```
 
-`world` geometry is rendered together with the scene (after particles, before fog of war and widgets), so it is affected by
-post-processing and participates in the depth buffer.
+`world` geometry is rendered together with the scene (on the default layer: after particles, before fog of war and
+widgets — see *Layers*), so it is affected by post-processing and participates in the depth buffer.
 `screen` geometry ignores the camera and is drawn in submission order.
 
 **Depth in screen space.** By default `world` geometry is depth-tested and `screen` geometry is not — that is what
@@ -24055,6 +24086,25 @@ The setting is part of the draw state, so `Draw.Push` / `Draw.Pop` / `Draw.Reset
 > Screen space uses its own depth range (`-100000 .. 100000`), which is not the same scale as the camera's. Enable
 > screen-space depth for a self-contained pseudo-3D view where **every** primitive goes through `Draw`; do not rely on it
 > to sort script geometry against ordinary scene sprites.
+
+### Layers
+
+```lua
+Draw.SetLayer("scene")        -- default: drawn after the scene's tilemaps, sprites, decals and particles
+Draw.SetLayer("background")   -- drawn before all of them, right after the frame is cleared
+local layer = Draw.GetLayer()
+```
+
+World-space geometry is depth-tested on both layers, so for **opaque and masked** content the layer changes nothing —
+Z decides what covers what. It matters for **translucent and additive** content: decals, particles and translucent
+sprites do not write depth, so an opaque floor or backdrop drawn afterwards on the default layer paints over them even
+where it is further back. Put floors, skies, parallax backdrops and anything else the scene *stands on* into the
+`background` layer: it is drawn first, and the scene's own translucent content then blends over it as it should.
+
+- Screen-space geometry on the `background` layer (with the default depth test) sits behind the whole world and behind
+  background widgets — a sky or a gradient that never hides anything.
+- The layer is part of the draw state (`Push` / `Pop` / `Reset`). Geometry drawn into a render target ignores it.
+- Background geometry is post-processed like the rest of the scene and takes lighting when its shading is `lit`.
 
 ### Draw state
 
@@ -24071,23 +24121,116 @@ Draw.SetAlphaClip(0.5)                        -- alpha cutout threshold used by 
 Draw.SetTarget(nil)                           -- nil = screen, or a RenderTarget name
 Draw.SetDepthTest("auto")                     -- "auto" (default) | true / "on" | false / "off"
 Draw.SetMaterial(nil)                         -- nil = none, or a material asset / dynamic instance name
+Draw.SetLayer("scene")                        -- "scene" (default) | "background" — see Layers above
+Draw.SetReceiveShadows(true)                  -- lit geometry receives 2D shadows (default true)
+Draw.SetClip(x, y, w, h)                      -- clip to a rectangle; Draw.ClearClip() removes it
+Draw.SetTransform(x, y, rot, sx, sy)          -- local coordinate system; Draw.ResetTransform() removes it
 
 Draw.GetTexture(); Draw.GetColor(); Draw.GetZ(); Draw.GetPivot()
 Draw.GetBlend(); Draw.GetShading(); Draw.GetAlphaClip(); Draw.GetTarget()
-Draw.GetDepthTest(); Draw.GetMaterial()
+Draw.GetDepthTest(); Draw.GetMaterial(); Draw.GetLayer(); Draw.GetReceiveShadows()
+Draw.GetClip(); Draw.GetTransform()
 
 Draw.Push()   -- save the whole draw state (max depth 64)
 Draw.Pop()    -- restore it
 Draw.Reset()  -- back to defaults and clear the state stack
 ```
 
+The stack belongs to a frame. If a frame ends with `Push` calls still on it — typically a script error between a `Push`
+and its `Pop` — the next frame starts from the state saved by the first unmatched `Push`, so one failed frame cannot leave
+a render target, clip or transform switched on for the rest of the game.
+
+The whole state is reset to its defaults whenever a level starts or stops, so a texture, render target or material name
+from the previous level never carries over into the next one.
+
 > **Lighting immediate-mode geometry.** `Draw.SetShading("lit")` runs your quads and meshes through the same lighting
 > the scene uses — point and spot lights, the directional light, 2D shadows and the ray tracer all apply, because
-> lighting is computed from the geometry's world position. That works in **world space**, which is what you want for a
-> lit pseudo-3D floor or wall.
+> lighting is computed from the geometry's world position. In **world space** that is the position you submitted,
+> which is what you want for a lit pseudo-3D floor or wall.
 >
-> In `screen` space the coordinates you submit are viewport pixels, and the lighting would treat them as world
-> positions, so keep screen-space geometry `unlit` and light the world-space geometry instead.
+> In **screen space** every pixel is lit by the part of the world the camera shows underneath it — the same rule
+> screen-space widgets follow — so a lit HUD panel darkens over a shadow and brightens next to a torch. Screen-space
+> geometry drawn into a render target is lit the same way, with the camera view stretched over the target.
+>
+> `Draw.SetReceiveShadows(false)` keeps lit geometry lit but out of 2D shadows; the lights still apply. `Draw.Text` with
+> `lit = true` receives shadows only when you also pass `receiveShadows = true` — the same default text has in widgets.
+
+### Clipping
+
+`Draw.SetClip` restricts everything drawn afterwards to a rectangle — a scrolling list, a minimap window, a dialogue box
+that text must not spill out of, a bar filled with a texture. Pixels outside the rectangle are left untouched.
+
+```lua
+Draw.SetSpace("screen")
+Draw.SetClip(panelX, panelY, panelW, panelH)   -- same units and origin as the current space
+for i, line in ipairs(chatLog) do
+    Draw.Text(line, panelX + 8, panelY + panelH - i * 20 + scroll, 16)
+end
+Draw.ClearClip()
+
+local c = Draw.GetClip()   -- { enabled, x, y, w, h }
+```
+
+- `x, y, w, h` are in the **current space**: viewport pixels from the bottom-left corner in `screen` space, world units
+  in `world` space, and the target's own pixels while drawing into a render target in screen space.
+- In world space the rectangle moves with the camera. If the camera is rotated, the clip is the screen-aligned box
+  around the rotated rectangle.
+- A `w` or `h` of `0` or less clips everything.
+- The clip is part of the draw state (`Push` / `Pop` / `Reset`) and applies to quads, meshes, shapes and text alike. It
+  is **not** moved by `Draw.SetTransform` — it stays exactly where you put it.
+- In split-screen the clip is combined with the player's view, so it can never draw into another player's area.
+- Changing the clip starts a new batch; draw everything that shares one clip together.
+- A material that samples the scene colour only sees the scene inside the clip.
+
+### Transform stack
+
+`Draw.SetTransform` gives everything submitted afterwards its own local coordinate system: an offset, a rotation and a
+scale are applied to every primitive before it reaches the batch. A whole HUD can be scaled to fit the window, a
+sub-scene can be drawn around a moving origin, a mirrored copy can be made with a negative scale — without recomputing a
+single coordinate in Lua.
+
+```lua
+Draw.SetTransform(x, y, rotation, scaleX, scaleY)   -- replace the current transform
+Draw.ResetTransform()                               -- back to identity
+
+Draw.PushTransform(x, y, rotation, scaleX, scaleY)  -- save the draw state, then append a child transform
+Draw.PopTransform()                                 -- restore it (the same stack as Draw.Push / Draw.Pop)
+
+local t = Draw.GetTransform()                       -- { x, y, rotation, scaleX, scaleY, identity }
+local wx, wy = Draw.TransformPoint(lx, ly)          -- where a local point lands in the current space
+```
+
+- Every argument is optional: `x, y` default to `0`, `rotation` to `0` (degrees, clockwise positive), `scaleX` to `1`
+  and `scaleY` to `scaleX`.
+- `PushTransform` composes like a scene hierarchy: the child's offset is placed by the parent, rotations add up and
+  scales multiply. `PopTransform` restores the **whole** saved state, exactly like `Pop`.
+- The transform applies to `Quad`, `Quads`, `QuadsPacked`, `QuadsBuffer`, `Sprite`, `Region`, `Rect`, `RectOutline`,
+  `Line`, `PolyLine`, `NineSlice`, `Mesh`, `Circle`, `Ring`, `Polygon`, `Flipbook`, `Skeleton` and the position of `Text`.
+- Meshes and shapes are transformed per vertex and are always exact. A quad keeps its shape — its pivot point is
+  transformed, its size scaled and its rotation added — which is exact for a uniform scale. A quad cannot shear, so a
+  non-uniform scale on a rotated quad is an approximation; use `Draw.Mesh` where that matters.
+- `Draw.Text` is moved and its size scaled by `|scaleY|`, but it is not rotated.
+- With the identity transform (the default) nothing extra is computed.
+
+```lua
+-- A HUD laid out in 1280x720 units, scaled to whatever the window is.
+local vp = Draw.GetViewportSize()
+local s = math.min(vp.width / 1280, vp.height / 720)
+
+Draw.SetSpace("screen")
+Draw.PushTransform((vp.width - 1280 * s) * 0.5, (vp.height - 720 * s) * 0.5, 0, s)
+    DrawHud()                          -- every coordinate in here is in 1280x720 units
+Draw.PopTransform()
+
+-- A planet orbiting a sun, carrying its own moon.
+Draw.PushTransform(sunX, sunY, time * 20)
+    Draw.Circle(0, 0, 40, { r = 1, g = 0.8, b = 0.2 })
+    Draw.PushTransform(160, 0, time * 90)
+        Draw.Circle(0, 0, 16, { r = 0.3, g = 0.5, b = 1 })
+        Draw.Circle(36, 0, 5)
+    Draw.PopTransform()
+Draw.PopTransform()
+```
 
 
 ### Materials on immediate-mode geometry
@@ -24114,8 +24257,8 @@ state is left cleared, so a typo degrades to the default shader instead of drawi
 
 > **Cost.** Quads submitted under one material are batched: every consecutive quad that shares the material and the
 > rest of the draw state goes out in a **single** draw call, so ten thousand quads under one material cost one draw
-> call, not ten thousand. Changing material, blend mode, shading mode, space or render target starts a new batch, so
-> group by those rather than interleaving.
+> call, not ten thousand. Changing material, blend mode, shading mode, space, layer, clip or render target starts a new
+> batch, so group by those rather than interleaving.
 >
 > Changing the **texture** does not: the renderer binds several textures to slots within one batch (see *Multi-texture
 > batching* in the Graphics doc), so ten different sprites cost the same one call as ten copies of the same sprite. The
@@ -24149,11 +24292,12 @@ Draw.Text("HP", x, y, 18, {
     z = 10,
     rtl = false,                                 -- force right-to-left layout
     lit = false,                                 -- take scene lighting
+    receiveShadows = false,                      -- lit text also darkens inside 2D shadows
 })
 
--- Measure before you place. Returns width, height and the font's line height,
--- all already scaled to the pixel size you pass in.
-local m = Draw.MeasureText("Score: 1200", 24)
+-- Measure before you place. Returns the width of the widest line, the height, the font's
+-- line height, the number of lines and their total height, all scaled to the pixel size you pass in.
+local m = Draw.MeasureText("Score: 1200", 24)   -- { width, height, lineHeight, lines, totalHeight }
 Draw.Text("Score: 1200", (Draw.GetViewportSize().width - m.width) * 0.5, y, 24)
 
 Draw.GetTextCount()          -- strings submitted this frame
@@ -24165,7 +24309,9 @@ Draw.GetMaxTexts()
 - In `world` space the text rolls and scales with the camera; in `screen` space it is fixed to the viewport.
 - Text is drawn in submission order and is **not** depth-tested, so it always lands on top of the geometry submitted
   before it in the same space.
-- One call per line: split on `\n` yourself, using `MeasureText(...).lineHeight` for the step.
+- `\n` starts a new line one `lineHeight` below the previous one, and `align` is applied to each line separately, so a
+  whole paragraph is one call. `MeasureText` reports the widest line as `width` and the block as `lines` / `totalHeight`.
+- Text honours the clip and moves with the transform (see *Clipping* and *Transform stack*).
 
 ```lua
 -- A text-grid renderer: one call per row, whole screen in 50 calls.
@@ -24212,6 +24358,62 @@ Draw.Region("Content/Textures/atlas.png", x, y, w, h, sx, sy, sw, sh, rotation, 
 Draw.Line(x1, y1, x2, y2, thickness, r, g, b, a, z)
 ```
 
+### Shapes
+
+```lua
+-- Rectangle border. x, y is the BOTTOM-LEFT corner; the border grows inward.
+Draw.RectOutline(x, y, w, h, thickness, r, g, b, a, z)
+
+-- Connected segments through a flat { x1, y1, x2, y2, ... } array.
+Draw.PolyLine(points, thickness, {
+    closed = false,      -- also join the last point back to the first
+    joints = "none",     -- "none" (default): one quad per segment | "round": filled, rounded joints
+    r = 1, g = 1, b = 1, a = 1, z = 0,
+})
+
+-- Filled circle; with start / sweep it becomes a pie slice.
+Draw.Circle(x, y, radius, {
+    segments = 0,        -- 0 = chosen from the radius (12..128)
+    start = 0,           -- degrees; 0 points right, positive is clockwise
+    sweep = 360,         -- degrees covered from start, positive is clockwise
+    texture = "Content/Textures/orb.png",   -- mapped over the whole disc (default: Draw.SetTexture, else white)
+    r = 1, g = 1, b = 1, a = 1, z = 0,
+    blend = "translucent", shading = "unlit", alphaClip = 0.5,   -- overrides of the draw state for this call
+})
+
+-- Ring or arc: radius is the outer edge and the band grows inward by thickness. Same options as Circle;
+-- a texture runs along the arc (u) and across the band (v = 0 on the outer edge).
+Draw.Ring(x, y, radius, thickness, options)
+
+-- Any simple polygon, convex or concave, from a flat { x1, y1, x2, y2, ... } array.
+Draw.Polygon(points, {
+    texture = "Content/Textures/rock.png",  -- mapped over the polygon's bounding box, upright
+    u = 0, v = 0, uw = 1, vh = 1,           -- the part of the texture that box shows
+    r = 1, g = 1, b = 1, a = 1, z = 0,
+    blend = "masked", shading = "lit", alphaClip = 0.5,
+})
+
+-- Nine-slice panel: corners keep their size, edges stretch along one axis, the centre along both.
+Draw.NineSlice("Content/UI/Panel.png", x, y, w, h, left, right, top, bottom, {
+    sx = 0, sy = 0, sw = 48, sh = 48,  -- source rectangle in pixels (default: the whole texture)
+    borderScale = 1,                   -- on-screen size of one texel of border
+    fillCenter = true,                 -- false draws only the frame
+    r = 1, g = 1, b = 1, a = 1, z = 0,
+})
+```
+
+- `RectOutline`, `NineSlice` and `PolyLine` return how many primitives they submitted; `Circle`, `Ring` and `Polygon`
+  return `true` when the shape was submitted.
+- `NineSlice` insets `left, right, top, bottom` are **texels of the source rectangle**. On screen each border is
+  `borderScale` times that size — a 16 px border drawn with `borderScale = 2` is 32 units wide — and `x, y` is the
+  bottom-left corner. When the panel is smaller than its borders, they shrink proportionally instead of being cut.
+- `Polygon` must not cross itself; its winding does not matter. Convex polygons become a triangle fan and concave ones
+  are ear-clipped, on the CPU on every call — for a large shape that never changes, triangulate it once and submit it
+  with `Draw.Mesh`.
+- `Circle`, `Ring`, `Polygon` and a `PolyLine` with round joints are meshes; `Rect`, `Line`, `RectOutline`, `NineSlice`
+  and a plain `PolyLine` are quads. Consecutive meshes batch together and consecutive quads batch together, but each
+  switch between the two starts a new batch — draw your shapes as a group.
+
 ### Bulk submission
 
 ```lua
@@ -24253,6 +24455,36 @@ Draw.QuadsPacked("Content/Textures/wall.png", data)   -- 320 columns, one Lua ca
 ```
 
 An optional third argument limits how many quads are read: `Draw.QuadsPacked(path, data, count)`.
+
+#### QuadBuffer — quads kept in engine memory
+
+`QuadBuffer` stores quads natively in the same 14-value layout. Writing a quad is one call, and `Draw.QuadsBuffer` reads
+the buffer directly instead of looking up 14 table fields per quad, which makes it the cheapest path for particle pools,
+shattered sprites and anything else that rewrites many quads every frame.
+
+```lua
+local shards = QuadBuffer.new(900)             -- capacity in quads (up to 1 000 000)
+
+shards:Set(i, x, y, w, h, z, rot, u, v, uw, vh, r, g, b, a)   -- i is 1-based; everything after h is optional
+shards:SetRect(i, x, y, w, h, z, rot)          -- z and rot keep their current value when omitted
+shards:SetUV(i, u, v, uw, vh)
+shards:SetColor(i, r, g, b, a)                 -- a defaults to 1
+shards:SetZ(i, z); shards:SetAlpha(i, a); shards:SetRotation(i, rot)
+
+shards:Count()                                 -- highest index written so far
+shards:Capacity()
+shards:Clear()                                 -- Count back to 0; stored values stay
+shards:Reset()                                 -- Count back to 0 and every slot back to its defaults
+
+Draw.QuadsBuffer("Content/Textures/Shards.png", shards)   -- draws quads 1..Count()
+Draw.QuadsBuffer("", shards, 200)                          -- "" = the Draw.SetTexture texture; at most 200 quads
+```
+
+- A fresh slot (and every slot after `Reset`) is an untinted quad over the whole texture with zero size, so `SetRect`
+  alone is enough to draw it. `Set` fills omitted values with those same defaults.
+- Writes outside `1..Capacity()` do nothing and return `false`.
+- Like `QuadsPacked`, the quads take their pivot, space, blend mode, clip, transform and every other setting from the
+  current draw state.
 
 ### Meshes
 
@@ -24307,6 +24539,129 @@ Draw.Mesh("Content/Textures/road.png",
 
 Consecutive meshes that share the same texture and state are batched into a single draw call.
 
+### Flipbooks, skeletons and tiles
+
+Everything the engine animates can also go through `Draw` — and with it into render targets, clips, transforms and the
+materials of your choice.
+
+#### Draw.Flipbook — flipbook assets without an entity
+
+```lua
+local frame = Draw.Flipbook("Content/FX/Explosion.ice_flipbook", x, y, time, {
+    w = 64, h = 64,          -- size; give only one of them and the other follows the frame's aspect ratio
+    scale = 1,               -- used when neither w nor h is given (default: the frame's pixel size)
+    rot = 0, z = 0,
+    px = 0.5, py = 0.5,      -- pivot, py from the top (default: the pivot stored in the frame's sprite)
+    frame = 3,               -- draw this frame index instead of sampling time
+    loop = true,             -- default: the flipbook asset's own setting
+    flipX = false, flipY = false,
+    r = 1, g = 1, b = 1, a = 1,
+    useAssetBlend = true,    -- false: ignore the asset's blend, shading, alpha clip and material; use the draw state
+})
+-- frame: the index of the frame that was drawn (0-based), or -1 when nothing was drawn
+
+local info = Draw.FlipbookInfo("Content/FX/Explosion.ice_flipbook")
+-- info.valid, info.frames, info.fps, info.duration (seconds), info.loop
+```
+
+`time` is in seconds since the animation started and picks the frame exactly like a `FlipbookComponent` does, including
+per-frame durations; a non-looping flipbook holds its last frame once `time` passes `duration`. Hundreds of explosions,
+each with its own start time, need no entities at all:
+
+```lua
+local EXPLOSION = "Content/FX/Explosion.ice_flipbook"
+local LIFE = Draw.FlipbookInfo(EXPLOSION).duration
+local explosions, now = {}, 0
+
+function OnUpdate(dt)
+    now = now + dt
+    Draw.SetSpace("world")
+    Draw.SetBlend("additive")
+    for i = #explosions, 1, -1 do
+        local e = explosions[i]
+        local age = now - e.startTime
+        if age >= LIFE then
+            table.remove(explosions, i)
+        else
+            Draw.Flipbook(EXPLOSION, e.x, e.y, age, { scale = e.size, loop = false, useAssetBlend = false })
+        end
+    end
+end
+```
+
+- With `useAssetBlend` (the default) each frame is drawn with the blend mode, shading, alpha clip **and material** of its
+  sprite — or the flipbook's material override — so it looks exactly like the same flipbook on an entity. A material set
+  with `Draw.SetMaterial` still takes precedence.
+- Frame lookups are cached per flipbook and frame, so a call costs a table lookup, not file access. The cache is cleared
+  when the level stops.
+
+#### Draw.Skeleton — a skeleton through Draw
+
+```lua
+local parts = Draw.Skeleton(entityId, {
+    x = 0, y = 0, rot = 0,       -- default: the entity's own transform
+    scale = 1,                   -- or scaleX / scaleY separately
+    z = 0,                       -- depth of the backmost part (default: the entity's Z)
+    zStep = 0.01,                -- depth added per part, back to front — the engine's own spacing
+    flipX = false, flipY = true, -- default: the skeleton's own flip settings
+    r = 1, g = 1, b = 1, a = 1,  -- multiplies the skeleton's colours and the Draw.SetColor colour
+    useAssetBlend = true,        -- false: ignore the skeleton's blend, shading, alpha clip and material
+    blend = "additive", shading = "unlit", alphaClip = 0.5,   -- force these on every part
+})
+-- parts: how many attachments (quads and meshes) were submitted
+```
+
+`Draw.Skeleton` takes the pose the skeleton has already computed — every slot, attachment, mesh deformation, skin, slot
+colour and ragdoll body — and submits it through `Draw`. That turns a skeleton into something you can render into a
+target (portraits, paper-doll inventory screens), draw again with another material (a silhouette behind walls, a hit
+flash, a petrified variant), repeat as an afterimage trail, mirror in water or show on a HUD in screen space.
+
+```lua
+-- A fading afterimage trail behind a dashing hero.
+local trail = {}
+function OnUpdate(dt)
+    table.insert(trail, 1, { x = heroX, y = heroY })
+    if #trail > 6 then trail[#trail] = nil end
+
+    Draw.SetSpace("world")
+    for i = #trail, 2, -1 do
+        Draw.Skeleton(heroId, {
+            x = trail[i].x, y = trail[i].y, z = -1 - i * 0.2,
+            r = 0.4, g = 0.8, b = 1, a = 0.5 * (1 - i / #trail),
+            blend = "additive",
+        })
+    end
+end
+```
+
+- By default each part keeps the blend mode, shading, alpha clip and material the engine itself would use. A material set
+  with `Draw.SetMaterial` replaces it on every part, and `blend` / `shading` / `alphaClip` force those values.
+- Target, space, layer, clip, depth test, shadows and the transform come from the draw state as usual.
+- While the skeleton is a ragdoll its parts are already in world space, so `x`, `y`, `rot` and `scale` are ignored — move
+  it with `Draw.PushTransform` instead.
+- Scripts run before animation in every frame, so `Draw.Skeleton` submits the pose from the previous frame — one frame
+  behind what the entity itself draws this frame. When you replace the entity's own drawing (`SetSkeletonVisible(false)`
+  and draw it only through `Draw`; a hidden skeleton keeps animating), every part shares that pose and nothing is out of
+  step. Trails and portraits never notice either way.
+
+#### Sprites, flipbook entities and tiles
+
+For things that already live on an entity, three calls return the texture and the pixel rectangle the renderer is using
+right now, ready for `Draw.Region`:
+
+```lua
+local s = GetSpriteFrameRegion()                     -- a sprite (optional sprite index)
+local f = GetFlipbookFrameRegion()                   -- a flipbook (optional flipbook index)
+local t = GetTileRegion(GetTileGrid(tx, ty, layer), layer)   -- one cell of a tilemap
+
+if t.valid and not t.animated then
+    Draw.Region(t.texture, cx, cy, cell, cell, t.x, t.y, t.w, t.h, t.rotationDegrees)
+end
+```
+
+The fields are described under *Billboarding a flipbook* in the Flipbook chapter and *Tileset introspection* in the
+Tilemap chapter.
+
 ### Budgets and statistics
 
 ```lua
@@ -24329,8 +24684,9 @@ The list is cleared automatically at the start of every frame, and whenever the 
 
 ### Texture — script-created textures
 
-Textures created here are registered under their name, so **every API that takes a texture path accepts the name**:
-`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, `Draw.SetTexture`, widgets, and so on.
+Textures created here are registered under their name, and the name works wherever a raw texture path is accepted:
+`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, every `Draw` call that takes a texture, and the
+texture variants of a `.ice_decal` asset. (Widgets and flipbooks display sprite assets, not raw textures.)
 
 ```lua
 Texture.Create("minimap", 256, 256, {
@@ -24357,6 +24713,14 @@ Texture.GenerateMipmaps("minimap")
 
 `SetPixels` and `SetPixelBytes` expect the region row by row, 4 components per pixel, starting at `x, y`.
 This is the classic software-renderer path: build a pixel buffer in Lua, upload it once, draw it as a single quad.
+
+**Replacing and destroying.** Calling `Texture.Create` or `RenderTarget.Create` again with a name that already exists
+replaces that texture, and everything that was showing the old one — sprites set with `SetSpriteTexture`, material and
+post-process parameters set with `Material.SetTexture` / `PP.SetCustomMaterialTexture`, decals — switches to the new one
+by itself, so recreating a render target at a new resolution needs no bookkeeping. `Destroy` detaches the texture from
+all of them instead: those sprites become empty, those material parameters fall back to the material's own texture, and
+anything already submitted to `Draw` this frame that samples or targets it is dropped. Both are real GPU allocations, so
+do them when something changes, not every frame.
 
 `SetPixelBytes` accepts **three** kinds of source, in increasing order of speed:
 
@@ -24683,6 +25047,27 @@ The **Decal Data** node exposes the state of the decal being drawn:
 
 Drive `Random` into a hue shift to make every splatter slightly different, or `Normalized Age` into a
 lerp between fresh and dried blood.
+
+### Decals and Draw
+
+Decals are part of the scene, and world-space `Draw` geometry on its default layer is drawn after the scene. Both use the
+depth buffer, but a translucent decal does not write depth, so an opaque floor, wall or backdrop that you draw with `Draw`
+paints over decals — even decals in front of it. Draw such surfaces on the background layer and decals land on them
+correctly:
+
+```lua
+Draw.SetLayer("background")          -- drawn before tilemaps, sprites, decals and particles
+Draw.Mesh(FLOOR_TEX, floorPositions, floorUVs, floorIndices, { z = -10 })
+Draw.SetLayer("scene")
+
+Decal.SpawnOnHit(DECAL_HOLE, hit.x, hit.y, hit.normalX, hit.normalY)   -- sits on the Draw floor
+```
+
+- A decal's texture variant may name a script texture or render target (`Texture.Create`, `RenderTarget.Create`), so a
+  mark can be generated at runtime; recreating that texture under the same name updates every live decal showing it.
+- Marks that are redrawn every frame anyway — a telegraph circle under an enemy, a laser scorch that follows the beam —
+  are lighter as plain `Draw` geometry (`Draw.Circle`, `Draw.Quad`). Use `Decal` when marks must persist, fade out and
+  stay within a budget.
 
 ### Complete example — a shooter's impact reaction
 
