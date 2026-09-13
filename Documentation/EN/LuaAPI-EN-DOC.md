@@ -22947,8 +22947,19 @@ end
 
 > **Type:** Global functions. `Video` table.
 >
-> Full-screen video playback for intros, cutscenes, and in-game cinematics.
-> The video overlays the entire game screen with correct aspect ratio (letterbox/pillarbox).
+> Video playback for intros, cutscenes, in-game cinematics **and videos inside the world** (a TV, a cinema screen,
+> a billboard, a security monitor). Every playing video lives in a **channel**:
+>
+> - the **main channel** (`"main"`) is what every call without a channel name uses. It is shown **full screen** over
+>   the game with the correct aspect ratio (letterbox/pillarbox) — the classic intro/cutscene player;
+> - **named channels** (`Video.Play(path, { name = "tv" })`) play side by side with it, each with its own clock, audio,
+>   volume and looping. They are not shown full screen by default — you put their picture wherever you need it.
+>
+> Every channel publishes its current frame as a **texture** (`Video.GetTexture(channel)`, e.g. `"video:tv"`), and
+> that name works wherever a raw texture is accepted: `SetSpriteTexture`, `Draw.Sprite` / `Draw.Quad` / `Draw.Mesh`,
+> `Material.SetTexture`, `PP.SetCustomMaterialTexture` and the texture variants of a `.ice_decal`. So a video can be
+> placed in world space at any position, size, rotation and depth.
+>
 > Supports skip input (ESC / Space / Enter / Gamepad A / Start), audio, volume control, looping,
 > and the `VideoFinished` Lua event for scene transitions.
 >
@@ -22958,14 +22969,15 @@ end
 > **Note:** Available on all seven platforms. **Windows**, **Linux**, **macOS**, **Android** and **Xbox** decode through
 > FFmpeg; **iOS** plays through AVFoundation (H.264/HEVC only — WebM/VP9 is not decodable there, so video
 > cooking falls back to PassThrough for iOS builds); **Web** plays through the browser's `<video>` element.
+> Channels, textures and the presentation settings below behave the same on every platform.
 
 ### Playback
 
 ```lua
--- Play a video (path relative to Content/)
+-- Play a video (path relative to Content/) on the main, full-screen channel
 local ok = Video.Play("Videos/intro.mp4")
 
--- Stop the current video
+-- Stop the current video and release its decoder, audio and texture
 Video.Stop()
 
 -- Pause / Resume
@@ -22976,6 +22988,42 @@ Video.Resume()
 Video.Skip()
 ```
 
+### Play options and channels
+
+`Video.Play` takes an optional table. Every field is optional and is applied right after the video starts:
+
+```lua
+Video.Play("Videos/news.mp4", {
+    name          = "tv",    -- channel name; omitted / "" = the main channel ("main")
+    fullscreen    = false,   -- draw it full screen? default: true for "main", false for named channels
+    loop          = true,    -- same as Video.SetLooping
+    skippable     = false,   -- same as Video.SetSkippable
+    volume        = 0.5,     -- same as Video.SetVolume (0.0–1.0)
+    postProcessed = nil,     -- override the asset's IsPostProcessed for this playback (true/false)
+    lit           = nil,     -- override the asset's IsLit for this playback (true/false)
+})
+```
+
+Every other function takes the **channel name as its last, optional argument**. Without it the call works on the main
+channel exactly as before, so existing scripts keep working unchanged:
+
+```lua
+Video.Pause("tv")
+Video.SetVolume(0.2, "tv")
+local t = Video.GetTime("tv")
+
+Video.StopAll()      -- stop every channel, including the main one
+Video.PauseAll()     -- pause every playing channel (e.g. when the pause menu opens)
+Video.ResumeAll()    -- resume them
+
+local channels = Video.GetChannels()   -- { "main", "tv", ... } — channels that currently hold a video
+```
+
+Calling `Video.Play` on a channel that is already playing replaces its video. Playback settings (`loop`, `skippable`,
+`volume`, `fullscreen`, `postProcessed`, `lit`) are reset on every `Play`, so set them in the options table or after
+the call. `Video.Stop(channel)` releases the channel completely; a finished video keeps its last frame on the texture
+until you stop it or play something else.
+
 ### State checks
 
 ```lua
@@ -22983,8 +23031,26 @@ local playing  = Video.IsPlaying()    -- true while video is playing
 local paused   = Video.IsPaused()     -- true if paused
 local finished = Video.IsFinished()   -- true after video ends or is skipped
 local active   = Video.HasActiveVideo() -- true if playing or paused
+local ready    = Video.IsReady()      -- true once the first frame of the video is on its texture
 local path     = Video.GetPath()      -- current video file path
+local w, h     = Video.GetWidth(), Video.GetHeight()   -- frame size in pixels (0 until known)
 ```
+
+`IsReady` matters on **Web** and **iOS**, where the browser / AVFoundation open the file asynchronously: `Play` returns
+`true` immediately, and the first frame arrives a moment later. On the FFmpeg platforms it is already `true` when
+`Play` returns.
+
+### Reading a video's info without playing it
+
+```lua
+local info = Video.GetInfo("Videos/news.mp4")
+-- info.valid          -- false when the .ice_video sidecar is missing or unreadable
+-- info.width, info.height, info.fps, info.duration
+-- info.postProcessed, info.lit   -- the asset's presentation settings
+```
+
+The values come from the video's `.ice_video` sidecar, which the editor writes on import — handy for sizing a screen
+to the video's aspect ratio before it starts.
 
 ### Time and progress
 
@@ -23013,14 +23079,140 @@ Video.SetLooping(true)
 local loops = Video.IsLooping()
 ```
 
+Skip input is checked per channel, and it is off by default for every channel — a looping TV in the background never
+reacts to Escape unless you make it skippable.
+
+### Full-screen presentation: post-processing and lighting
+
+How a full-screen channel is drawn is decided by two settings of the video asset, edited in the editor's
+**Video Player** panel and stored in the `.ice_video` sidecar. Both are **off by default**:
+
+| Setting | Off (default) | On |
+| ------- | ------------- | -- |
+| **Is Post Processed** | The video is composited **after** post-processing: bloom, colour grading, vignette, film grain, tonemapping and the rest never touch it, so it keeps its original colours. | The video is drawn inside the scene, before post-processing, and receives every active effect. |
+| **Is Lit** | The video is shown at full brightness. | The video is shaded by the scene lighting — ambient, directional, point and spot lights — and receives 2D shadows. Each pixel is lit by the part of the world the camera shows underneath it (the same rule screen-space widgets and screen-space `Draw` geometry follow). |
+
+A script can override either setting for one playback:
+
+```lua
+Video.Play("Videos/dream.mp4", { postProcessed = true, lit = false })
+
+Video.SetPostProcessed(true)          -- main channel
+Video.SetLit(true, "cutscene")        -- a named full-screen channel
+local pp  = Video.IsPostProcessed()   -- effective value: the override if set, otherwise the asset's setting
+local lit = Video.IsLit("cutscene")
+```
+
+Overrides are cleared by the next `Play`. Saving the asset in the editor while the game runs applies the new asset
+values to the videos already playing (their script overrides stay).
+
+Good to know:
+
+- **Is Post Processed** only makes a difference in frames where post-processing is actually active (a post-process
+  volume, HDR10 output, FXAA or an accessibility colour filter). Without it there is nothing to apply and both values
+  look the same.
+- A full-screen video covers the scene, `Draw` geometry and post-processed widgets. Widgets that are **not**
+  post-processed are composited last while post-processing is active, so they stay above the video; in frames without
+  post-processing the video covers every widget. A `Cinema` fade is always drawn over the video.
+- **Is Lit** needs the scene lighting mode to be `Lit`; with `SetLightingMode("Unlit")` the video is shown unlit.
+- Every full-screen channel fills the whole screen (with black bars), so show one at a time. When several are full
+  screen, non-post-processed channels are drawn above post-processed ones, otherwise in the order the channels were
+  created (the main channel first).
+- In split-screen every player's viewport shows the full-screen video letterboxed to that viewport.
+
+### Videos in the world — TVs, screens, monitors
+
+A channel's texture can be shown on anything that accepts a texture. The texture exists as soon as `Video.Play`
+returns `true`, its name is `"video:" .. channel` (`Video.GetTexture(channel)` builds it for you), and the player
+updates it every frame by itself.
+
+**On a sprite entity** — place a TV entity in the level, give it a sprite for the screen, and swap the sprite's texture
+from its class script. The sprite keeps everything it normally has: transform, sorting, stencil, material, lighting
+(`Lit`/`Unlit` shading of the sprite) and post-processing with the rest of the scene.
+
+```lua
+function OnStart()
+    if Video.Play("Videos/news.mp4", { name = "tv_lobby", loop = true, volume = 0.4 }) then
+        SetSpriteTexture(Video.GetTexture("tv_lobby"))   -- sprite instance 0 of this entity
+    end
+end
+
+function OnDestroy()
+    Video.Stop("tv_lobby")
+end
+```
+
+The sprite is as large as the video frame times the entity scale (a 1920×1080 video at scale `0.2` is 384×216 world
+units).
+
+**With `Draw`** — any position, size, rotation and depth, every frame:
+
+```lua
+function OnStart()
+    Video.Play("Videos/ads.mp4", { name = "billboard", loop = true })
+end
+
+function OnUpdate(dt)
+    Draw.Push()
+    Draw.SetSpace("world")
+    Draw.SetShading("lit")                     -- optional: the screen reacts to the room's lights
+    Draw.Sprite(Video.GetTexture("billboard"), 640, 360, 320, 180, 0, 5)   -- x, y, w, h, rotation, z
+    Draw.Pop()
+end
+```
+
+**Picture-in-picture** — keep the main channel off the full screen and draw it into a corner:
+
+```lua
+function OnStart()
+    Video.Play("Videos/briefing.mp4", { fullscreen = false })
+end
+
+function OnUpdate(dt)
+    if not Video.HasActiveVideo() then return end
+    local vp = Draw.GetViewportSize()
+    Draw.Push()
+    Draw.SetSpace("screen")
+    Draw.SetPivot(1, 1)                                            -- right edge, bottom edge (py is measured from the top)
+    Draw.Sprite(Video.GetTexture(), vp.width - 16, 16, 480, 270)   -- bottom-right corner, 16 px margin
+    Draw.Pop()
+end
+```
+
+The texture also works with `Material.SetTexture` (a CRT shader over the picture), `PP.SetCustomMaterialTexture` and
+decals. A sprite, a material parameter or a decal takes the texture at the moment you assign it (or spawn the decal), so
+start the channel first.
+
+Rules of the video textures:
+
+- Lighting and post-processing of a video placed this way follow **the surface it is drawn on**: the sprite's shading,
+  `Draw.SetShading`, the material. The asset's *Is Post Processed* / *Is Lit* settings describe the engine's own
+  full-screen presentation.
+- `Video.Stop(channel)` destroys the texture: sprites using it become empty and material parameters fall back to their
+  default texture, exactly like `Texture.Destroy`; after playing the channel again, call `SetSpriteTexture` /
+  `Material.SetTexture` again. `Pause` keeps the current frame on the texture, and so does a video that finished.
+  Playing another video on a channel that was not stopped keeps every sprite and material attached, even when the new
+  video has a different resolution (a `Play` that fails releases the channel, the same as `Stop`).
+- A new channel's texture holds opaque black until the first frame arrives; a channel that switches to another video
+  keeps its last picture instead. On Web and iOS the first frame takes a moment (see `IsReady`), and until then a new
+  texture has the size stored in the video's `.ice_video` sidecar (16×9 without one).
+- Names starting with `video:` are reserved: `Texture.Create` / `RenderTarget.Create` refuse them, and `Texture.Destroy`,
+  `Texture.Fill` and `Texture.SetPixels*` refuse to modify a video texture. `Texture.Exists`, `Texture.GetSize`,
+  `Texture.SetFilter` and `Texture.SetWrap` work on it; the filter and wrap you set stay for the channel until it is
+  stopped.
+- Audio is not positional: to make a TV quieter with distance, compute a volume in `OnUpdate` and call
+  `Video.SetVolume(volume, channel)`.
+
 ### VideoFinished event
 
-When a video finishes naturally or is skipped, the engine emits the `VideoFinished` event.
-Use the event system to listen for it and trigger scene transitions:
+When a video finishes naturally or is skipped, the engine emits the `VideoFinished` event with the video path and the
+channel name. A looping video never finishes on its own. Use the event system to listen for it and trigger scene
+transitions:
 
 ```lua
 function OnInit()
-    On("VideoFinished", function(videoPath)
+    On("VideoFinished", function(videoPath, channel)
+        if channel ~= Video.MAIN_CHANNEL then return end   -- ignore TVs and other named channels
         Print("Video finished: " .. videoPath)
         LoadLevel("Content/Maps/Level1.icemap")
     end)
@@ -23031,6 +23223,9 @@ function OnStart()
     Video.SetSkippable(true)
 end
 ```
+
+The event is also emitted when a video cannot be opened after `Play` already returned `true` — on Web and iOS, where
+the file is opened asynchronously.
 
 ### Practical example — intro with fade transition
 
@@ -23076,33 +23271,52 @@ end
 
 ### API reference
 
+`channel` is optional everywhere: omitted or `""` means the main channel. A named channel that holds no video is
+ignored: setters do nothing and getters return `false`, `0` or `""` (`GetVolume` returns `1.0`).
+
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `Video.Play(path)` | `bool` | Start video playback. Path is relative to `Content/`. Returns `true` on success |
-| `Video.Stop()` | — | Stop and reset the current video |
-| `Video.Pause()` | — | Pause playback |
-| `Video.Resume()` | — | Resume playback |
-| `Video.Skip()` | — | Skip the video (emits `VideoFinished` event) |
-| `Video.IsPlaying()` | `bool` | `true` while video is actively playing |
-| `Video.IsPaused()` | `bool` | `true` if video is paused |
-| `Video.IsFinished()` | `bool` | `true` after the video ends or is skipped |
-| `Video.GetTime()` | `float` | Current playback time in seconds |
-| `Video.GetDuration()` | `float` | Total video duration in seconds |
-| `Video.GetProgress()` | `float` | Playback progress (0.0–1.0) |
-| `Video.SetVolume(volume)` | — | Set audio volume (0.0–1.0) |
-| `Video.GetVolume()` | `float` | Get current audio volume |
-| `Video.SetSkippable(bool)` | — | Allow/disallow skip via input (ESC, Space, Enter, Gamepad A/Start) |
-| `Video.IsSkippable()` | `bool` | Check if the video can be skipped |
-| `Video.SetLooping(bool)` | — | Enable/disable video looping |
-| `Video.IsLooping()` | `bool` | Check if looping is enabled |
-| `Video.GetPath()` | `string` | Get the path of the current video |
-| `Video.HasActiveVideo()` | `bool` | `true` if a video is currently playing or paused |
+| `Video.Play(path, [options])` | `bool` | Start video playback. Path is relative to `Content/`. `options`: `name`, `fullscreen`, `loop`, `skippable`, `volume`, `postProcessed`, `lit`. Returns `true` on success |
+| `Video.Stop([channel])` | — | Stop the video and release the channel: decoder, audio and texture |
+| `Video.Pause([channel])` | — | Pause playback |
+| `Video.Resume([channel])` | — | Resume playback |
+| `Video.Skip([channel])` | — | Skip the video (emits `VideoFinished` event) |
+| `Video.StopAll()` | — | Stop every channel |
+| `Video.PauseAll()` | — | Pause every playing channel |
+| `Video.ResumeAll()` | — | Resume every paused channel |
+| `Video.IsPlaying([channel])` | `bool` | `true` while video is actively playing |
+| `Video.IsPaused([channel])` | `bool` | `true` if video is paused |
+| `Video.IsFinished([channel])` | `bool` | `true` after the video ends or is skipped |
+| `Video.IsReady([channel])` | `bool` | `true` once the first frame is on the channel's texture |
+| `Video.GetTime([channel])` | `float` | Current playback time in seconds |
+| `Video.GetDuration([channel])` | `float` | Total video duration in seconds |
+| `Video.GetProgress([channel])` | `float` | Playback progress (0.0–1.0) |
+| `Video.SetVolume(volume, [channel])` | — | Set audio volume (0.0–1.0) |
+| `Video.GetVolume([channel])` | `float` | Get current audio volume |
+| `Video.SetSkippable(bool, [channel])` | — | Allow/disallow skip via input (ESC, Space, Enter, Gamepad A/Start) |
+| `Video.IsSkippable([channel])` | `bool` | Check if the video can be skipped |
+| `Video.SetLooping(bool, [channel])` | — | Enable/disable video looping |
+| `Video.IsLooping([channel])` | `bool` | Check if looping is enabled |
+| `Video.SetFullscreen(bool, [channel])` | — | Show the channel full screen over the game, or only through its texture |
+| `Video.IsFullscreen([channel])` | `bool` | Check if the channel is shown full screen |
+| `Video.SetPostProcessed(bool, [channel])` | — | Override the asset's *Is Post Processed* setting for this playback |
+| `Video.IsPostProcessed([channel])` | `bool` | Effective *Is Post Processed* value (override or asset setting) |
+| `Video.SetLit(bool, [channel])` | — | Override the asset's *Is Lit* setting for this playback |
+| `Video.IsLit([channel])` | `bool` | Effective *Is Lit* value (override or asset setting) |
+| `Video.GetTexture([channel])` | `string` | Texture name of the channel (`"video:" .. channel`) for sprites, `Draw`, materials and decals |
+| `Video.GetWidth([channel])` | `int` | Frame width in pixels (0 until known) |
+| `Video.GetHeight([channel])` | `int` | Frame height in pixels (0 until known) |
+| `Video.GetPath([channel])` | `string` | Get the path of the current video |
+| `Video.HasActiveVideo([channel])` | `bool` | `true` if a video is currently playing or paused |
+| `Video.GetChannels()` | `table` | Names of the channels that currently hold a video |
+| `Video.GetInfo(path)` | `table` | `{ valid, width, height, fps, duration, postProcessed, lit }` read from the `.ice_video` sidecar |
+| `Video.MAIN_CHANNEL` | `string` | Name of the main channel: `"main"` |
 
 ### Events
 
 | Event | Parameters | Description |
 |-------|------------|-------------|
-| `VideoFinished` | `path` (string) | Emitted when a video finishes playback or is skipped |
+| `VideoFinished` | `path` (string), `channel` (string) | Emitted when a video finishes playback, is skipped, or fails to open on Web/iOS |
 
 ---
 
@@ -24721,6 +24935,13 @@ by itself, so recreating a render target at a new resolution needs no bookkeepin
 all of them instead: those sprites become empty, those material parameters fall back to the material's own texture, and
 anything already submitted to `Draw` this frame that samples or targets it is dropped. Both are real GPU allocations, so
 do them when something changes, not every frame.
+
+**Video textures.** Every video channel that is playing owns a texture named `video:<channel>`
+(`Video.GetTexture(channel)`), and that name works in all the places listed above — this is how a video is put on a TV
+in the world ([Video](#56-video--runtime-video-playback)). Names starting with `video:` are reserved: `Texture.Create`
+and `RenderTarget.Create` refuse them, and `Texture.Destroy`, `Texture.Fill` and the `Texture.SetPixel*` functions
+refuse to touch a video texture, because the video player owns it and rewrites it every frame. `Texture.Exists`,
+`Texture.GetSize`, `Texture.SetFilter` and `Texture.SetWrap` work on it as usual.
 
 `SetPixelBytes` accepts **three** kinds of source, in increasing order of speed:
 

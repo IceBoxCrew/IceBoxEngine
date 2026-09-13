@@ -2803,7 +2803,7 @@ editor.open_asset('Content/Sprites/hero.ice_sprite')
 editor.save_panel('ClassEditor')
 ```
 
-> Сохранять можно только панели редакторов ассетов. У `SpritesheetSlicer` и `VideoPlayer` сохранять нечего — они вернут `False`, как и любое имя, не относящееся к панели ассета.
+> Сохранять можно только панели редакторов ассетов. У `SpritesheetSlicer` сохранять нечего — она вернёт `False`, как и любое имя, не относящееся к панели ассета. `VideoPlayer` сохраняет настройки видео **Is Post Processed** / **Is Lit** в его сайдкар `.ice_video`.
 
 #### `editor.close_panel(panel_name)` → `bool`
 
@@ -6465,7 +6465,7 @@ icebox.log.trace('вход в цикл импорта')
 | TextureSettings | `.ice_texture` | Настройки текстуры (сайдкар для изображений) |
 | FontAsset | `.ice_font` | Настройки шрифта (сайдкар для шрифтов) |
 | Localization | `.ice_localization` | Таблица локализации |
-| VideoSettings | `.ice_video` | Настройки видео (сайдкар для видео) |
+| VideoSettings | `.ice_video` | Настройки видео (сайдкар для видео): считанные метаданные плюс `IsPostProcessed` / `IsLit` |
 | Texture | `.png`, `.jpg`, `.jpeg` | Растровые изображения |
 | Audio | `.wav`, `.mp3`, `.ogg`, `.flac` | Аудиофайлы |
 | Font | `.ttf`, `.otf` | Шрифты |

@@ -175,7 +175,7 @@ shares its base name with a different extension.
 | `T_Hero.png` | `T_Hero.ice_texture` | Filtering, wrapping, mipmaps, sRGB, max size, pixel format, atlas flag … |
 | `S_Jump.wav` | `S_Jump.ice_sound` | Volume, pitch, group, 3D attenuation, filters, reverb … |
 | `F_Title.ttf` | `F_Title.ice_font` | Default size, antialias, glyph ranges, atlas size … |
-| `V_Intro.mp4` | `V_Intro.ice_video` | Width, height, FPS, duration (probed metadata) |
+| `V_Intro.mp4` | `V_Intro.ice_video` | Width, height, FPS, duration (probed metadata), Is Post Processed, Is Lit |
 
 Sidecars are **hidden** in the Content Browser — you never see `.ice_texture` /
 `.ice_sound` / `.ice_font` / `.ice_video` entries. Instead you see the source file
@@ -934,12 +934,37 @@ text. The declared glyph ranges also drive font **subsetting** when cooking.
 
 Video decoding uses **FFmpeg**. On import the engine probes the file and writes the
 sidecar with **Width, Height, FPS** and **Duration**. Videos can be played back in-game as
-full-screen movies or as textures on surfaces (driven from script).
+full-screen movies or as textures on sprites, `Draw` geometry, materials and decals — all
+driven from script (see the [Lua API](LuaAPI-EN-DOC.md#56-video--runtime-video-playback)).
+
+Next to the probed metadata the sidecar stores how the engine presents the video when a
+script plays it **full screen**:
+
+| Setting | Default | Notes |
+| ------- | ------- | ----- |
+| **Is Post Processed** | Off | **On** draws the video inside the scene, so it receives the active post-processing (bloom, colour grading, vignette …). **Off** composites it after post-processing, keeping its original colours. |
+| **Is Lit** | Off | **On** shades the video with the scene lighting and 2D shadows, the same way lit screen-space UI is shaded. **Off** shows it at full brightness. |
+
+A script can override either setting for a single playback (the `Video.Play` options,
+`Video.SetPostProcessed`, `Video.SetLit`). A video placed on a sprite or drawn with `Draw` does
+not use them — it follows the lighting and post-processing of that surface.
 
 **The Video Player panel** decodes and plays the clip in the editor with a **Play/Pause**
-button, and shows an **Info** block with the resolution, frame rate and duration read from
-the sidecar. The Content Browser uses the same decoder to pull the **first frame** for the
-tile thumbnail.
+button and a seek bar, and shows an **Info** block with the resolution, frame rate and
+duration. Below it, **Runtime Settings** holds the **Is Post Processed** and **Is Lit**
+checkboxes (both with tooltips):
+
+* The panel follows the [common editor behavior](#common-editor-behavior): changes mark it
+  unsaved (`*` in the title), `Ctrl+Z` / `Ctrl+Y` undo and redo them, and closing it with
+  unsaved changes asks whether to save.
+* **Save** writes the sidecar; **Reset to Defaults** turns both settings off.
+  **Update All Assets** (`Ctrl+R`) saves the panel together with the other asset editors.
+* Saving while the game runs in the editor applies the new settings to the videos that are
+  already playing.
+
+Re-importing the video or replacing the file refreshes the probed metadata and keeps
+**Is Post Processed** and **Is Lit**. The Content Browser uses the same decoder to pull the
+**first frame** for the tile thumbnail.
 
 > Video cooking (re-encode to VP9) is build-time and platform-restricted — see
 > [Section 6](#6-asset-cooking--overview).
@@ -2641,7 +2666,7 @@ plugin declares; double-clicking one calls the plugin's own open handler.
 | `.png` / `.jpg` / `.jpeg` | `.ice_texture` | Texture import settings |
 | `.wav` / `.mp3` / `.ogg` / `.flac` | `.ice_sound` | Sound definition |
 | `.ttf` / `.otf` | `.ice_font` | Font settings |
-| `.mp4` / `.avi` / `.mkv` / `.mov` / `.webm` | `.ice_video` | Video metadata |
+| `.mp4` / `.avi` / `.mkv` / `.mov` / `.webm` | `.ice_video` | Video metadata and presentation settings |
 | (moved/renamed asset) | `.ice_redirect` in `Saved/Redirectors/` | Path redirector |
 
 ### 7.3 Auto-prefixes on import

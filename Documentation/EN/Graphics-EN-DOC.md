@@ -503,7 +503,8 @@ A single rendered frame proceeds roughly as:
 3. **Split-screen.** In local multiplayer, compute each player's viewport rectangle
    from their camera, clear the whole window to the **divider colour**, and then render
    the following steps once per player with a scissored viewport. Secondary players get
-   their own `PostProcessor` instance and their own widget-overlay framebuffer.
+   their own `PostProcessor` instance and their own widget-overlay and video-overlay
+   framebuffers.
 4. **Evaluate post-process volumes** for the camera centre (blending volumes by
    priority), and decide whether post-processing is active this frame — it is when a
    volume is active, HDR10 output is live, FXAA is selected, or an accessibility colour
@@ -521,10 +522,13 @@ A single rendered frame proceeds roughly as:
    particles, fog of war, foreground UI and debug overlays
    ([3.3](#33-the-scene-drawing-chain)).
 8. **Execute the post-process graph** → PostProcess (or Composite) → `FinalColor`.
-9. **Composite the widget overlay.** When post-processing is on, UI drawn after the
-   scene is rendered into its own full-resolution framebuffer and composited over the
-   post-processed image, so the UI stays crisp at reduced **Render Scale** and is not
-   distorted by scene effects.
+9. **Composite the video and widget overlays.** When post-processing is on, full-screen
+   videos whose asset is not **Is Post Processed** are rendered (with the `Cinema` fade on
+   top of them) into their own full-resolution video-overlay framebuffer and composited
+   over the post-processed image first. Then UI drawn after the scene, rendered into its
+   own full-resolution framebuffer, is composited over that, so the UI stays crisp at
+   reduced **Render Scale** and is not distorted by scene effects. Both composites are
+   HDR10-aware.
 10. **Finalize split-screen** — each player's image is blitted into its window rectangle.
 11. **Render the editor UI** (ImGui, gizmos) on top — in a shipped game this step is
     absent and the final image is presented directly.
@@ -549,7 +553,8 @@ post-process graph takes over:
 | 8 | `FX.Update` / `FX.Render` | after the graph | Particle simulation and drawing (see below). |
 | 9 | `FogOfWar` | after the graph | The fog-of-war overlay, in Play mode only. |
 | 10 | `Widgets` | after the graph | Foreground UI widgets, plus the overlay capture described in [3.2](#32-the-frame-step-by-step). |
-| 11 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
+| 11 | `Video` / `Video.Overlay` | after the graph | Full-screen video channels in Play mode, letterboxed over a black background, then the `Cinema` fade. Videos marked **Is Post Processed** (and every video while post-processing is off) are drawn here into the scene; the rest go to the video overlay from [3.2](#32-the-frame-step-by-step). **Is Lit** videos use the same screen-space lit path as UI. |
+| 12 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
 
 Particles are simulated and drawn once per frame even in split-screen (the first view
 owns the update), while every view redraws the geometry it can see.
@@ -1364,8 +1369,8 @@ correct SDR rather than emitting a washed-out PQ signal.
   into its own viewport rectangle within the window, computed from the player count and
   index. The window is first cleared to a configurable **divider colour** so the seams
   between views are visible, each view is scissored to its rectangle, secondary views
-  use their camera's own background colour and their own post-processor and
-  widget-overlay framebuffer, and the finished views are blitted into place at the end
+  use their camera's own background colour and their own post-processor,
+  widget-overlay and video-overlay framebuffers, and the finished views are blitted into place at the end
   of the frame. Split-screen resources are released as soon as it is switched off.
 * **Widget player filtering** lets UI be shown only in the view of the player it
   belongs to.

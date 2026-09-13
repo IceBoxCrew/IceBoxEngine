@@ -2806,7 +2806,7 @@ Saves the currently open asset in the panel. If several instances of that panel 
 editor.save_panel('ClassEditor')
 ```
 
-> Only asset editor panels can be saved. `SpritesheetSlicer` and `VideoPlayer` have nothing to save, so they return `False`, as does any name that is not an asset panel.
+> Only asset editor panels can be saved. `SpritesheetSlicer` has nothing to save, so it returns `False`, as does any name that is not an asset panel. `VideoPlayer` saves the video's **Is Post Processed** / **Is Lit** settings to its `.ice_video` sidecar.
 
 #### `editor.close_panel(panel_name)` → `bool`
 
@@ -6467,7 +6467,7 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | TextureSettings | `.ice_texture` | Texture settings (sidecar for images) |
 | FontAsset | `.ice_font` | Font settings (sidecar for fonts) |
 | Localization | `.ice_localization` | Localization table |
-| VideoSettings | `.ice_video` | Video settings (sidecar for video) |
+| VideoSettings | `.ice_video` | Video settings (sidecar for video): probed metadata plus `IsPostProcessed` / `IsLit` |
 | Texture | `.png`, `.jpg`, `.jpeg` | Raster images |
 | Audio | `.wav`, `.mp3`, `.ogg`, `.flac` | Audio files |
 | Font | `.ttf`, `.otf` | Fonts |
