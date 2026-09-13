@@ -1,7 +1,7 @@
 DirectX Shader Compiler (dxcompiler.dll) and DXIL signing library (dxil.dll)
 
 Redistributed on Windows only, next to the engine binaries and next to a
-Windows game built with IceBox Engine, whenever the Direct3D 12 backend is
+Windows game built with IceBoxEngine, whenever the Direct3D 12 backend is
 available. They compile HLSL to DXIL at shader model 6.x, which is what the
 Direct3D 12 backend and hardware ray tracing need; without them that backend
 falls back to the legacy FXC compiler at shader model 5.1.
@@ -31,7 +31,7 @@ The project is released under the University of Illinois/NCSA Open Source
 License, whose verbatim text follows. Its Section 2 requires that a binary
 redistribution reproduce the copyright notice, the list of conditions and the
 disclaimer in the documentation or other materials distributed with it; this
-file is that reproduction, and it is shipped inside every IceBox Engine
+file is that reproduction, and it is shipped inside every IceBoxEngine
 installation and inside every game built with the engine.
 
 ==============================================================================

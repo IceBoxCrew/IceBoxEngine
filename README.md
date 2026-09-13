@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="logoIceBox.png" alt="IceBox Engine Logo" width="200">
+  <img src="logoIceBox.png" alt="IceBoxEngine Logo" width="200">
 </p>
 
-<h1 align="center">🧊 IceBox Engine™</h1>
+<h1 align="center">🧊 IceBoxEngine™</h1>
 
 <p align="center">
   <strong>🇬🇧 English</strong> &nbsp;•&nbsp; <a href="README.ru.md">🇷🇺 Русский</a>
@@ -29,7 +29,7 @@
 
 ## 🧊 About
 
-IceBox Engine is a cross-platform 2D game engine designed for creating games of any visual style — from simple pixel-art projects to high-resolution 4K HD 2D games with rich visual effects. The engine includes a full-featured visual editor, a project launcher, an automatic updater, and a lightweight runtime for shipping finished games to players.
+IceBoxEngine is a cross-platform 2D game engine designed for creating games of any visual style — from simple pixel-art projects to high-resolution 4K HD 2D games with rich visual effects. The engine includes a full-featured visual editor, a project launcher, an automatic updater, and a lightweight runtime for shipping finished games to players.
 
 **Scripting:**
 - **Lua** — game scripting language for gameplay classes, UI, levels and more
@@ -89,20 +89,20 @@ Windows machine is needed, the same way macOS and iOS report that they need a Ma
 
 ## 🏗️ Architecture
 
-IceBox Engine consists of several components:
+IceBoxEngine consists of several components:
 
 | Component | Binary | Description |
 |-----------|--------|-------------|
-| **Launcher** | `IceBoxLauncher` | Entry point for users. Manages projects (create, open, delete), checks for engine updates, and launches the editor for the selected project. |
+| **Launcher** | `IceBoxEngineLauncher` | Entry point for users. Manages projects (create, open, delete), checks for engine updates, and launches the editor for the selected project. |
 | **Editor** | `IceBoxEngine` | The main visual editor. Scene editing, asset management, tilemap editor, animation tools, scripting workspace, and game build pipeline (Tools → Build Game). |
-| **Updater** | `IceBoxUpdater` | Standalone update app. Checks the update manifest for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
-| **Runtime** | `IceBoxRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
+| **Updater** | `IceBoxEngineUpdater` | Standalone update app. Checks the update manifest for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
+| **Runtime** | `IceBoxEngineRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
 
 ---
 
 ## ✅ Project Status
 
-**IceBox Engine has reached Release.** The current stage is **Release 1.0** — the launcher, the editor, the updater and the runtime are stable, and the engine is ready to build and ship finished, commercial games on every platform it supports.
+**IceBoxEngine has reached Release.** The current stage is **Release 1.0** — the launcher, the editor, the updater and the runtime are stable, and the engine is ready to build and ship finished, commercial games on every platform it supports.
 
 Released does not mean finished. An engine never really is: new features, new tooling and continuous improvements keep arriving, and every one of them reaches you as a free update. What changed at 1.0 is how they arrive — as additions on top of a stable base, rather than as ground shifting under a project you are already building on.
 
@@ -184,7 +184,7 @@ Run the installer for your platform: an NSIS `…-Setup.exe` on Windows, a `…-
 
 ### 2. Launch and activate
 
-Start **IceBox Launcher** — from the desktop shortcut, the Start-menu / application-menu entry, or `IceBoxLauncher` in the install folder. On a computer that is not activated yet the launcher opens the activation screen: paste your license key and press **Activate**. That is a one-off step per computer; afterwards the launcher, the editor and the updater all open straight away.
+Start **IceBoxEngineLauncher** — from the desktop shortcut, the Start-menu / application-menu entry, or `IceBoxEngineLauncher` in the install folder. On a computer that is not activated yet the launcher opens the activation screen: paste your license key and press **Activate**. That is a one-off step per computer; afterwards the launcher, the editor and the updater all open straight away.
 
 ### 3. Create a project
 
@@ -564,7 +564,7 @@ What is transmitted, why, how long it is kept and what your rights are: **[PRIVA
 
 ## 📚 Third-Party Libraries
 
-IceBox Engine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg, which is dynamically linked so it can be replaced freely and is not part of iOS or Web builds). Games you ship for iOS and Web contain no copyleft component at all.
+IceBoxEngine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg, which is dynamically linked so it can be replaced freely and is not part of iOS or Web builds). Games you ship for iOS and Web contain no copyleft component at all.
 
 Full list of libraries and their licenses: **[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)**
 
@@ -595,7 +595,7 @@ Who it covers, where it applies, how reports are handled and what enforcement lo
 
 ## 📄 License
 
-**IceBox Engine** is proprietary software.  
+**IceBoxEngine** is proprietary software.  
 All rights reserved by **IceBoxCrew Studio** © 2026.
 
 What that means for you:

@@ -1,24 +1,24 @@
 ================================================================================
-                     ICEBOX ENGINE - LICENSE AGREEMENT
+                     IceBoxEngine - LICENSE AGREEMENT
 ================================================================================
 
 Version:        1.0.0
 Effective date: 2026-08-16
-Applies to:     IceBox Engine (editor), IceBox Launcher, IceBox Updater,
-                IceBox Runtime, and everything distributed with them
+Applies to:     IceBoxEngineEditor, IceBoxEngineLauncher, IceBoxEngineUpdater,
+                IceBoxEngineRuntime, and everything distributed with them
 
 Copyright (c) 2026 IceBoxCrew Studio. All rights reserved.
 
 This License Agreement ("License") is a legal agreement between you, either an
 individual or a single legal entity ("You"), and IceBoxCrew Studio, of Israel
 ("IceBoxCrew Studio", "Licensor", "we", "us", "our"), governing your use of
-IceBox Engine and everything we ship with it (the "Software").
+IceBoxEngine and everything we ship with it (the "Software").
 
 --------------------------------------------------------------------------------
 IN PLAIN LANGUAGE
 --------------------------------------------------------------------------------
 
-  * Everything you make with IceBox Engine is yours. Your games, your code,
+  * Everything you make with IceBoxEngine is yours. Your games, your code,
     your art, your scripts, your plugins and your mods belong to you. We claim
     no ownership of them and assert no rights in them.
 
@@ -37,7 +37,7 @@ IN PLAIN LANGUAGE
     editor, the launcher and the updater only; it is not compiled into games.
 
   * What you may not do is resell the engine. Do not sell, give away, publish
-    or repackage IceBox Engine itself, modified or not, and do not present it
+    or repackage IceBoxEngine itself, modified or not, and do not present it
     as your own engine. That is the one thing this License exists to protect.
 
 This box is a summary, written for convenience. It is not the agreement. The
@@ -48,17 +48,17 @@ differently.
 1. DEFINITIONS
 --------------------------------------------------------------------------------
 
-"Software" means IceBox Engine in every form in which we supply it: the
+"Software" means IceBoxEngine in every form in which we supply it: the
 editor, the launcher, the updater, the runtime, the prebuilt core libraries,
 the public SDK headers, the build tools and scripts, the Sample Content, the
 bundled configuration files and assets, and the documentation - together with
 every update we supply for them.
 
-"Editor Tools" means IceBox Engine (the editor), IceBox Launcher and IceBox
+"Editor Tools" means IceBoxEngineEditor, IceBoxEngineLauncher and IceBox
 Updater.
 
 "Runtime Components" means the parts of the Software that are linked into or
-packaged with a Product so that the Product can run: IceBox Runtime, the
+packaged with a Product so that the Product can run: IceBoxEngineRuntime, the
 prebuilt core libraries in lib/IceBoxCore, the shared libraries we ship
 alongside them, and the engine data files a built Product needs.
 
@@ -152,7 +152,7 @@ Extensions, which are yours - see Sections 5 and 6.
     under any business model, with no royalties, revenue share or per-title
     fees owed to us.
 
-5.3 No credit required. You do not have to credit IceBox Engine in your
+5.3 No credit required. You do not have to credit IceBoxEngine in your
     Product. The Software adds no splash screen, watermark, logo or attribution
     of ours to anything you build. If you want to credit us anyway, Section 14
     tells you how.
@@ -193,7 +193,7 @@ Extensions, which are yours - see Sections 5 and 6.
         without their own Key - a recipient still needs their own licensed
         copy of the Software in order to use it; and
 
-    (c) the Extension is not presented as IceBox Engine, as a version or
+    (c) the Extension is not presented as IceBoxEngine, as a version or
         edition of it, or as coming from us.
 
 6.4 Configuration and localization. Editing the configuration and localization
@@ -385,7 +385,7 @@ particular force.
 11. UPDATES AND SUPPORT
 --------------------------------------------------------------------------------
 
-11.1 Updates. Updates are delivered through IceBox Updater. We intend to keep
+11.1 Updates. Updates are delivered through IceBoxEngineUpdater. We intend to keep
      improving the Software, but we do not promise any particular update,
      feature, release date or support period.
 
@@ -394,7 +394,7 @@ particular force.
      publish for it, at no additional charge and with no further payment of any
      kind. That applies across major versions too: there is no paid upgrade,
      no separate 1.0 edition to buy again, and no version at which your Key
-     stops working. You buy IceBox Engine once and you keep every version of
+     stops working. You buy IceBoxEngine once and you keep every version of
      it that follows.
 
 11.3 Support. Support is offered as a courtesy at the address in Section 21.
@@ -458,12 +458,12 @@ how long it is kept, and what your rights are.
 14. TRADEMARKS AND CREDIT
 --------------------------------------------------------------------------------
 
-14.1 Our marks. "IceBox Engine", "IceBoxCrew Studio", the IceBox logo and our
+14.1 Our marks. "IceBoxEngine", "IceBoxCrew Studio", the IceBox logo and our
      other names and logos are our trademarks. This License grants you no
      rights in them except those in Section 14.2.
 
 14.2 Credit is permitted and welcome. You may state truthfully that your
-     Product was made with IceBox Engine, and you may use our name and our
+     Product was made with IceBoxEngine, and you may use our name and our
      unmodified logo to say so - in your credits, on your splash or title
      screen, in your store listing, in your press material and on your
      website. You are not required to, and nothing you build is treated
@@ -591,7 +591,7 @@ how long it is kept, and what your rights are.
      new holder.
 
 18.5 We may assign this License as part of a transfer of our business or of
-     IceBox Engine, provided that your rights under it are not reduced.
+     IceBoxEngine, provided that your rights under it are not reduced.
 
 --------------------------------------------------------------------------------
 19. GOVERNING LAW AND JURISDICTION

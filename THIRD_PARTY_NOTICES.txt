@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES
 ========================================================================
 
 This software includes third-party open source software components.
-The main license of IceBox Engine (proprietary) does NOT apply to these
+The main license of IceBoxEngine (proprietary) does NOT apply to these
 components. They are distributed under their respective licenses listed below.
 
 ========================================================================
@@ -233,7 +233,7 @@ court finds them in conflict with the GPLv2 in a combined work. Its verbatim
 text is in ThirdPartyLicenses/libcxx-LLVM.txt and applies only to that
 component.
 
-SheenBidi is statically linked into IceBox Engine and into every Product built
+SheenBidi is statically linked into IceBoxEngine and into every Product built
 with it, on every platform. The Apache License 2.0 permits that without any
 relinking or source-disclosure obligation; the notice above, together with the
 verbatim licence text in ThirdPartyLicenses/SheenBidi.txt, is the whole of what
@@ -247,7 +247,7 @@ statically, namely iOS and Web (WebAssembly).
 Used by:
 - FFmpeg (libavcodec, libavdevice, libavfilter, libavformat, libavutil, libswresample, libswscale) - https://ffmpeg.org/legal.html
 
-The FFmpeg libraries are used under the LGPL-2.1. IceBox Engine does NOT enable
+The FFmpeg libraries are used under the LGPL-2.1. IceBoxEngine does NOT enable
 any GPL or non-free FFmpeg component, and does NOT enable any external patent-
 encumbered codec library such as an H.264/AVC (x264), H.265/HEVC (x265) or AAC
 (fdk-aac) encoder. The engine only ever PRODUCES royalty-free output: the VP9
@@ -277,7 +277,7 @@ In accordance with the LGPL-2.1, the complete corresponding source code of the
 FFmpeg build shipped here is available as set out below. FFmpeg is dynamically
 linked and shipped as separate shared libraries (avcodec / avdevice / avfilter /
 avformat / avutil / swresample / swscale, as *.dll / libav*.so* / libsw*.so* /
-libav*.dylib / libsw*.dylib) alongside IceBox Engine and any Product built with
+libav*.dylib / libsw*.dylib) alongside IceBoxEngine and any Product built with
 it, so the end user can replace them with modified versions without relinking.
 Depending on the target platform and toolchain, a build ships either the complete
 set or the subset its binaries link against; either way every FFmpeg library that
@@ -296,13 +296,13 @@ script, its build system and its command-line tools. That patch set originates
 from the Microsoft vcpkg registry (https://github.com/microsoft/vcpkg); IceBoxCrew
 Studio adds to it a single build-configuration change, which selects the correct
 target when compiling for ARM64 MinGW-w64. The patches and the complete build
-recipe travel verbatim inside every IceBox Engine installation, in
+recipe travel verbatim inside every IceBoxEngine installation, in
 Tools/BuildSystem/Utilities/vcpkg-overlay-ports/ffmpeg/; the vcpkg.json and
 portfile.cmake in that same directory record the exact upstream version and the
 full list of patches actually applied, and govern in case this notice is ever out
 of date.
 
-If you received a Product built with IceBox Engine rather than the engine itself,
+If you received a Product built with IceBoxEngine rather than the engine itself,
 and therefore do not have that directory, IceBoxCrew Studio will provide the
 complete corresponding source code of the FFmpeg build contained in that Product -
 the upstream release together with the applied patches and the build recipe - to
@@ -582,10 +582,10 @@ ThirdPartyLicenses/DirectXShaderCompiler.txt.
 ========================================================================
 
 The components listed in sections 1-13 above are the ones that IceBoxCrew
-Studio redistributes as part of IceBox Engine. The Android game template
+Studio redistributes as part of IceBoxEngine. The Android game template
 additionally resolves the following packages from Google's Maven repository
 through the game developer's own Gradle build. They are not shipped inside
-IceBox Engine, they are downloaded by and licensed directly to the developer,
+IceBoxEngine, they are downloaded by and licensed directly to the developer,
 and they are governed by their own terms rather than by this file.
 
 Added to every Android build:
@@ -649,7 +649,7 @@ they do, the packer needs two files from the AppImage project:
 - the AppImage type-2 runtime - https://github.com/AppImage/type2-runtime
   (falling back to https://github.com/AppImage/AppImageKit release 13)
 
-Neither is shipped inside IceBox Engine, and no IceBox Engine installer contains
+Neither is shipped inside IceBoxEngine, and no IceBoxEngine installer contains
 either of them. The packer looks for them in
 Tools/BuildSystem/BuildGame/Templates/Linux/, then in
 ~/.cache/IceBoxEngine/appimage/, and only then downloads them straight from the

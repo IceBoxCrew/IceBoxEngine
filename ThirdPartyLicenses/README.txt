@@ -2,7 +2,7 @@ THIRD-PARTY LICENSES
 ========================================================================
 
 This directory contains the full license text of every third-party open
-source component that is redistributed in IceBox Engine and in games built
+source component that is redistributed in IceBoxEngine and in games built
 with it. It accompanies the summary in ../THIRD_PARTY_NOTICES.txt and
 satisfies the attribution requirements of the licenses below.
 
@@ -149,7 +149,7 @@ The Android game template resolves AndroidX, the Kotlin standard library and
 packages (Ads/AdMob, Billing, Play Games, the UMP consent SDK, In-App Review,
 Firebase) from Google's Maven repository through the developer's own Gradle
 build. On iOS the Google Mobile Ads SDK is added to the generated Xcode
-project by the developer. None of these are shipped inside IceBox Engine, so
+project by the developer. None of these are shipped inside IceBoxEngine, so
 they carry no license file in this directory; they are licensed directly to
 the developer under Google's own terms. The resulting attribution and privacy
 duties fall on the developer of the game. See THIRD_PARTY_NOTICES.txt
@@ -162,7 +162,7 @@ LINUX PACKAGING COMPONENTS (NOT REDISTRIBUTED HERE)
 Packaging a Linux game as an .AppImage instead of a .deb is optional, and when
 a developer chooses it the packer fetches appimagetool and the AppImage type-2
 runtime from the AppImage project on their own machine. Neither is shipped
-inside IceBox Engine and neither has a license file in this directory. The
+inside IceBoxEngine and neither has a license file in this directory. The
 runtime binary does become part of every .AppImage produced, so the developer
 who ships one is redistributing it and inherits its notice obligations. See
 THIRD_PARTY_NOTICES.txt section 15.

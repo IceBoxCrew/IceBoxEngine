@@ -1,10 +1,10 @@
-# 🚀 IceBox Engine — Profiling & Building Games
+# 🚀 IceBoxEngine — Profiling & Building Games
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> This document covers two production-critical workflows of **IceBox Engine**:
+> This document covers two production-critical workflows of **IceBoxEngine**:
 >
 > * **Profiling** — measuring and visualizing performance, both in the **editor**
 >   (Statistics panel, Advanced Profiler, viewport debug draw) and at **runtime**
@@ -810,7 +810,7 @@ Consolidate redirectors
         │
         ▼
 Invoke platform build script  (Tools/BuildSystem/BuildGame/build_<platform>.bat|.sh)
-        │   → CMake + toolchain compile IceBoxRuntime with your Content embedded/referenced
+        │   → CMake + toolchain compile IceBoxEngineRuntime with your Content embedded/referenced
         ▼
 Collect output → your chosen output folder
         │
@@ -1631,13 +1631,13 @@ re-signed:
 1. **Validation** — game name and output path must be set; the output `<path>/<name>`
    folder is cleaned and recreated.
 2. **Script & artifact names** are chosen for the platform (e.g. `build_windows.bat`,
-   runtime `IceBoxRuntime.exe`, game file `<Name>.exe`).
+   runtime `IceBoxEngineRuntime.exe`, game file `<Name>.exe`).
 3. **Argument assembly** — all dialog settings become command-line flags (see
    [Section 12](#12-build-scripts-reference)); keystore passwords go through temp files.
 4. **Pre-cook** (mobile/web, if Cook Assets is on) → cooked content directory; on failure
    the build aborts.
 5. **Consolidate redirectors** so references resolve cleanly in the build.
-6. **Run the build script** asynchronously — CMake configures and builds `IceBoxRuntime`
+6. **Run the build script** asynchronously — CMake configures and builds `IceBoxEngineRuntime`
    with your content; the dialog shows a live progress bar and a **Stop** button, and
    streams script output to the log.
 7. **Collect output** — locate the built runtime (in `out/gamebuild/…`, or the per-user
@@ -1773,8 +1773,8 @@ engine cannot do, so the Build Game scripts are the supported path.
 **What a build script does** (Windows example): initializes the MSVC environment
 (`vcvarsall`), locates **vcpkg**, requires **CMake** + **Ninja**, configures the engine
 with `ICE_RUNTIME_BUILD=ON` (editor and Python off), Tracy on for Debug / off for Release,
-and your content/version/backend options, builds the `IceBoxRuntime` target, and writes
-the result to `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxRuntime.exe`.
+and your content/version/backend options, builds the `IceBoxEngineRuntime` target, and writes
+the result to `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxEngineRuntime.exe`.
 
 The render backend is patched into the build's `Config/Engine.json` as
 `Rendering.RenderBackend`:
@@ -1800,13 +1800,13 @@ The render backend is patched into the build's `Config/Engine.json` as
 
 | Platform | Built runtime location (intermediate) |
 | -------- | ------------------------------------- |
-| Windows | `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxRuntime.exe` |
-| Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxRuntime` |
-| macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxRuntime.app` |
+| Windows | `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxEngineRuntime.exe` |
+| Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxEngineRuntime` |
+| macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxEngineRuntime.app` |
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` or `iphonesimulator`) |
 | Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web-wasm32.html` (wasm64: `out/build/Web-wasm64/bin/Web/…-Web-wasm64.html`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
-| Xbox | `out/gamebuild/Xbox-<family>-<config>/bin/Xbox/IceBoxRuntime.exe` (`<family>` = `Desktop`, `XboxOne` or `Scarlett`) |
+| Xbox | `out/gamebuild/Xbox-<family>-<config>/bin/Xbox/IceBoxEngineRuntime.exe` (`<family>` = `Desktop`, `XboxOne` or `Scarlett`) |
 
 The finished product is copied into a subfolder of **your chosen Output Path**, alongside
 `game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`, `Config/`,
@@ -2028,7 +2028,7 @@ Any normal game build doubles as a dedicated server. Start the runtime with `--h
 (`-headless` also works):
 
 ```bash
-IceBoxRuntime --headless
+IceBoxEngineRuntime --headless
 ```
 
 No window is created, no graphics context is made, and the audio device is never opened.

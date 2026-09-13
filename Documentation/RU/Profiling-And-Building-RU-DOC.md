@@ -1,11 +1,11 @@
-# 🚀 IceBox Engine — Профайлинг и сборка игр
+# 🚀 IceBoxEngine — Профайлинг и сборка игр
 
 ## Полная документация на русском языке
 
 ### Актуальная для версии R-1.0.0
 
 > Этот документ охватывает два критически важных для продакшена рабочих процесса
-> **IceBox Engine**:
+> **IceBoxEngine**:
 >
 > * **Профайлинг** — измерение и визуализация производительности как в **редакторе**
 >   (панель Statistics, Advanced Profiler, отладочная отрисовка во вьюпорте), так и в
@@ -831,7 +831,7 @@ Render Passes, а также выключатели *профилировани�
         │
         ▼
 Запуск платформенного скрипта  (Tools/BuildSystem/BuildGame/build_<platform>.bat|.sh)
-        │   → CMake + тулчейн компилируют IceBoxRuntime с вашим Content (встроен/по ссылке)
+        │   → CMake + тулчейн компилируют IceBoxEngineRuntime с вашим Content (встроен/по ссылке)
         ▼
 Сбор результата → в выбранную папку вывода
         │
@@ -1669,14 +1669,14 @@ x64 может собрать `.AppImage` под arm64.
 1. **Валидация** — имя игры и путь вывода должны быть заданы; папка вывода `<path>/<name>`
    очищается и создаётся заново.
 2. **Имена скрипта и артефактов** выбираются под платформу (например, `build_windows.bat`,
-   рантайм `IceBoxRuntime.exe`, файл игры `<Name>.exe`).
+   рантайм `IceBoxEngineRuntime.exe`, файл игры `<Name>.exe`).
 3. **Сборка аргументов** — все настройки диалога превращаются во флаги командной строки
    (см. [Раздел 12](#12-справочник-скриптов-сборки)); пароли keystore идут через временные
    файлы.
 4. **Предварительная подготовка** (mobile/web, если включён Cook Assets) → папка
    подготовленного контента; при ошибке сборка прерывается.
 5. **Консолидация редиректоров**, чтобы ссылки чисто разрешались в сборке.
-6. **Запуск скрипта сборки** асинхронно — CMake конфигурирует и собирает `IceBoxRuntime` с
+6. **Запуск скрипта сборки** асинхронно — CMake конфигурирует и собирает `IceBoxEngineRuntime` с
    вашим контентом; диалог показывает живую полосу прогресса и кнопку **Stop** и стримит
    вывод скрипта в лог.
 7. **Сбор результата** — найти собранный рантайм (в `out/gamebuild/…` или в откате на
@@ -1815,8 +1815,8 @@ Xbox собирается только на Windows.
 **Что делает скрипт сборки** (пример Windows): инициализирует окружение MSVC
 (`vcvarsall`), находит **vcpkg**, требует **CMake** + **Ninja**, конфигурирует движок с
 `ICE_RUNTIME_BUILD=ON` (редактор и Python выключены), Tracy включён для Debug и выключен
-для Release, и вашими опциями контента/версии/бэкенда, собирает цель `IceBoxRuntime` и
-пишет результат в `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxRuntime.exe`.
+для Release, и вашими опциями контента/версии/бэкенда, собирает цель `IceBoxEngineRuntime` и
+пишет результат в `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxEngineRuntime.exe`.
 
 Графический бэкенд прописывается в `Config/Engine.json` сборки как
 `Rendering.RenderBackend`:
@@ -1842,13 +1842,13 @@ Xbox собирается только на Windows.
 
 | Платформа | Расположение собранного рантайма (промежуточное) |
 | --------- | ------------------------------------------------ |
-| Windows | `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxRuntime.exe` |
-| Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxRuntime` |
-| macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxRuntime.app` |
+| Windows | `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxEngineRuntime.exe` |
+| Linux | `out/gamebuild/Linux-<arch>-<config>/bin/Linux/IceBoxEngineRuntime` |
+| macOS | `out/gamebuild/macOS-<arch>-<config>/bin/macOS/IceBoxEngineRuntime.app` |
 | iOS | `out/gamebuild/iOS-arm64-<sdk>-<config>/bin/iOS/…` (`<sdk>` = `iphoneos` или `iphonesimulator`) |
 | Web | `out/build/Web/bin/Web/<Name>-<version>-<config>-Web-wasm32.html` (wasm64: `out/build/Web-wasm64/bin/Web/…-Web-wasm64.html`) |
 | Android | `out/gamebuild/Android/project/app/build/outputs/apk(\|bundle)/<config>/app-<config>.apk\|.aab` |
-| Xbox | `out/gamebuild/Xbox-<family>-<config>/bin/Xbox/IceBoxRuntime.exe` (`<family>` — `Desktop`, `XboxOne` или `Scarlett`) |
+| Xbox | `out/gamebuild/Xbox-<family>-<config>/bin/Xbox/IceBoxEngineRuntime.exe` (`<family>` — `Desktop`, `XboxOne` или `Scarlett`) |
 
 Готовый продукт копируется в подпапку **выбранной вами Output Path** вместе с
 `game.json`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `ThirdPartyLicenses/`,
@@ -2069,7 +2069,7 @@ Server* (порт 8085) и перезапустите движок — см. [2.
 с `--headless` (работает и `-headless`):
 
 ```bash
-IceBoxRuntime --headless
+IceBoxEngineRuntime --headless
 ```
 
 Окно не создаётся, графический контекст не создаётся, аудиоустройство не открывается.

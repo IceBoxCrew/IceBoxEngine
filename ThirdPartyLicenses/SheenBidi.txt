@@ -1,7 +1,7 @@
 SheenBidi - Unicode Bidirectional Algorithm implementation
 Used by the engine text stack to resolve bidirectional (Arabic, Hebrew,
 Persian, Urdu, ...) run order and bracket mirroring before HarfBuzz shaping.
-Statically linked into IceBox Engine and into every Product built with it, on
+Statically linked into IceBoxEngine and into every Product built with it, on
 every target platform.
 https://github.com/Tehreer/SheenBidi
 

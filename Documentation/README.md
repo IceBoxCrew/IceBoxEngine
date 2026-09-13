@@ -1,6 +1,6 @@
-# IceBox Engine — Documentation
+# IceBoxEngine — Documentation
 
-Official technical documentation for **IceBox Engine**, a modular 2D game engine built with modern C++ and open-source libraries.
+Official technical documentation for **IceBoxEngine**, a modular 2D game engine built with modern C++ and open-source libraries.
 
 The documentation is available in two languages:
 

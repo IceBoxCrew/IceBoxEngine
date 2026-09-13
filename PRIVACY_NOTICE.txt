@@ -1,12 +1,12 @@
 ================================================================================
-                        ICEBOX ENGINE - PRIVACY NOTICE
+                        IceBoxEngine - PRIVACY NOTICE
                  (CRASH REPORTS AND LICENSE ACTIVATION)
 ================================================================================
 
 Version:        1.0.0
 Effective date: 2026-08-16
-Applies to:     IceBox Engine Editor, IceBox Launcher, IceBox Updater
-Does NOT apply: to games built with IceBox Engine (see sections 8 and 9)
+Applies to:     IceBoxEngine Editor, IceBoxEngineLauncher, IceBoxEngineUpdater
+Does NOT apply: to games built with IceBoxEngine (see sections 8 and 9)
 
 Sections 1 to 8 cover crash reports. Section 9 covers the one-time license
 activation check. Those are the only two things these tools ever transmit that
@@ -34,7 +34,7 @@ No personal data is transmitted automatically. Nothing about you, your machine
 or your work leaves your computer unless you press a button.
 
 There is one automatic outbound request, and it carries nothing about you: when
-IceBox Updater starts, it asks our release manifest whether a newer version of
+IceBoxEngineUpdater starts, it asks our release manifest whether a newer version of
 the engine exists. The request contains no license key, no device identifier,
 no account, no file path and no usage data - it only asks for the list of
 releases. Your IP address is visible to the receiving service as it is for any
@@ -134,7 +134,7 @@ stored in the report body.
 --------------------------------------------------------------------------------
 
 Purpose
-    To diagnose and fix defects in IceBox Engine. Reports are read by the
+    To diagnose and fix defects in IceBoxEngine. Reports are read by the
     engine's maintainers only, and are used for no other purpose. They are not
     used for profiling, advertising, or automated decision-making.
 
@@ -181,7 +181,7 @@ press Send. The report stays on your disk, you can read it, and you can send it
 to the address in section 7 by whatever means you prefer - or not at all. The
 engine works exactly the same either way.
 
-If you build IceBox Engine yourself and point
+If you build IceBoxEngine yourself and point
 Source/Engine/Core/CrashReportConfig.h at your own endpoint, the recipient is
 whoever operates that endpoint, and this section no longer describes your setup.
 
@@ -204,13 +204,13 @@ contain no account identifier, please include the approximate date and time of
 the crash and the engine version so the report can be located.
 
 --------------------------------------------------------------------------------
-8. GAMES BUILT WITH ICEBOX ENGINE - READ THIS IF YOU SHIP A GAME
+8. GAMES BUILT WITH IceBoxEngine - READ THIS IF YOU SHIP A GAME
 --------------------------------------------------------------------------------
 
 A packaged game NEVER sends crash reports to IceBoxCrew Studio.
 
 The engine's built-in endpoint and contact address are compiled into the editor,
-launcher and updater only. They are compiled out of IceBoxRuntime and
+launcher and updater only. They are compiled out of IceBoxEngineRuntime and
 IceBoxCore, which are what a packaged game is built from. A game with no
 endpoint configured writes the report to the player's device and sends nothing,
 anywhere.
@@ -322,7 +322,7 @@ to iceboxcrew057@gmail.com.
 
 A packaged game NEVER performs a license activation check. The licensing module
 is compiled into the editor, the launcher and the updater only; it is not part
-of IceBoxRuntime or IceBoxCore, which are what a packaged game is built from.
+of IceBoxEngineRuntime or IceBoxCore, which are what a packaged game is built from.
 
 --------------------------------------------------------------------------------
 10. CHANGES

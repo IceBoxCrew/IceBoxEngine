@@ -1,10 +1,10 @@
-# 🧩 IceBox Engine — Plugins & Mods
+# 🧩 IceBoxEngine — Plugins & Mods
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> **IceBox Engine** is extensible in two complementary ways:
+> **IceBoxEngine** is extensible in two complementary ways:
 >
 > * **Plugins** — native **C++** modules that extend the **editor** and/or the
 >   **runtime** through a stable C ABI. Use them to add panels, tools, menu items,
@@ -578,8 +578,8 @@ Notes:
   shows the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for
   multi-config generators). That is also the directory a game build packages from, so
   a plugin that ignores it will not ship.
-* Add `add_dependencies(IceBoxRuntime <plugin>)` — guarded by
-  `if(TARGET IceBoxRuntime)` — so your plugin is rebuilt as part of every game build
+* Add `add_dependencies(IceBoxEngineRuntime <plugin>)` — guarded by
+  `if(TARGET IceBoxEngineRuntime)` — so your plugin is rebuilt as part of every game build
   that includes it. `Plugins/AIHelper/CMakeLists.txt.example` also guards an
   `add_dependencies(IceBoxEngine <plugin>)` the same way; that target only exists in an
   engine source tree, so the guard simply skips it everywhere else. Keeping both makes

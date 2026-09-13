@@ -1,17 +1,17 @@
-# 🧊 IceBox Engine — Getting Started: Launcher & Updater
+# 🧊 IceBoxEngine — Getting Started: Launcher & Updater
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> This is the **first stop** for anyone who has just installed **IceBox Engine**.
+> This is the **first stop** for anyone who has just installed **IceBoxEngine**.
 > Before you ever open the editor you meet two small companion applications, and
 > this document is the complete reference for both:
 >
-> * **The Launcher** (`IceBoxLauncher`) — the front door to the engine. It lists
+> * **The Launcher** (`IceBoxEngineLauncher`) — the front door to the engine. It lists
 >   your projects, creates new ones, attaches plugins and mods, carries your
 >   language/font/theme preferences, and opens a project in the editor.
-> * **The Updater** (`IceBoxUpdater`) — keeps your installation current. It checks
+> * **The Updater** (`IceBoxEngineUpdater`) — keeps your installation current. It checks
 >   the project's published releases, compares them to the version you have, downloads
 >   the correct installer for your platform, verifies it, installs it, and reopens
 >   itself afterwards to tell you how it went.
@@ -61,14 +61,14 @@
 
 ## 1. Introduction
 
-IceBox Engine is delivered as **three separate programs** that live side by side in
+IceBoxEngine is delivered as **three separate programs** that live side by side in
 one installation folder:
 
 | Program | Executable | What it is for |
 | ------- | ---------- | -------------- |
-| **Launcher** | `IceBoxLauncher` | Pick, create and configure projects; the program you start day-to-day. |
+| **Launcher** | `IceBoxEngineLauncher` | Pick, create and configure projects; the program you start day-to-day. |
 | **Editor** | `IceBoxEngine` | The actual game editor; normally opened *through* the launcher. |
-| **Updater** | `IceBoxUpdater` | Check for, download and install new engine versions. |
+| **Updater** | `IceBoxEngineUpdater` | Check for, download and install new engine versions. |
 
 You almost never run the editor directly. The intended flow is **Launcher → pick a
 project → editor opens**, and **Updater whenever you want to move to a newer engine
@@ -104,23 +104,23 @@ IceBoxEngine-1.0.0-Release-macOS-x64-Setup.pkg
 administrator rights. It walks you through: *Welcome* → *License agreement*
 (`LICENSE.txt`) → *Install folder* → *Components* → *Installing* → *Finish*. The
 installer itself speaks **English or Russian**. The finish page offers a
-**Launch IceBox Launcher** checkbox.
+**Launch IceBoxEngineLauncher** checkbox.
 
 The **Components** page lets you turn parts of the install on and off:
 
 | Component | What it does |
 | --------- | ------------ |
-| **IceBox Engine (required)** | The editor, launcher, updater, content, config, documentation, tools and SDK. Cannot be unticked. |
-| **Desktop Shortcut** | Creates *IceBox Launcher* on the desktop. |
-| **Start Menu Shortcuts** | Creates the *IceBox Engine* group with *IceBox Launcher*, *IceBox Updater*, *Documentation* and *Uninstall*. |
+| **IceBoxEngine (required)** | The editor, launcher, updater, content, config, documentation, tools and SDK. Cannot be unticked. |
+| **Desktop Shortcut** | Creates *IceBoxEngineLauncher* on the desktop. |
+| **Start Menu Shortcuts** | Creates the *IceBoxEngine* group with *IceBoxEngineLauncher*, *IceBoxEngineUpdater*, *Documentation* and *Uninstall*. |
 | **Register .iceproject Extension** | Associates `.iceproject` files so a double-click opens the **editor** directly, with the engine icon. |
 
 The 64-bit installer refuses to run on a 32-bit system and points you at the x86
 build instead; the **arm64** installer likewise refuses to run on anything that is
 not Windows on ARM and points you at the x64 build. Installing **on top of** an existing installation is handled for
 you: the installer offers to uninstall the previous version first, and in silent
-mode (`/S`) it closes any running `IceBoxEngine`, `IceBoxLauncher` and
-`IceBoxUpdater`, removes the old version and installs into the same folder — which
+mode (`/S`) it closes any running `IceBoxEngine`, `IceBoxEngineLauncher` and
+`IceBoxEngineUpdater`, removes the old version and installs into the same folder — which
 is exactly what the updater triggers under the hood
 ([4.6](#46-per-platform-install-behavior)).
 
@@ -131,8 +131,8 @@ Windows installs also write a small amount of registry state:
 folder, both shortcut sets, the file association and all of that state.
 
 **Linux.** The `.deb` package installs into `/opt/iceboxengine`, symlinks
-`IceBoxLauncher`, `IceBoxEngine` and `IceBoxUpdater` into `/usr/bin`, installs
-`iceboxlauncher.desktop`, `iceboxengine.desktop` and `iceboxupdater.desktop` into
+`IceBoxEngineLauncher`, `IceBoxEngine` and `IceBoxEngineUpdater` into `/usr/bin`, installs
+`IceBoxEngineLauncher.desktop`, `iceboxengine.desktop` and `IceBoxEngineUpdater.desktop` into
 `/usr/share/applications` and registers the `application/x-iceproject` MIME type
 for `*.iceproject`.
 It depends on `libgl1`, `libx11-6` and `zenity`, and recommends
@@ -143,8 +143,8 @@ desktop and MIME databases.
 
 **macOS.** The `.pkg` is a `productbuild` package that installs system-wide into
 `/Applications/IceBoxEngine`, where the three programs live as `.app` bundles
-(`IceBoxLauncher.app`, `IceBoxEngine.app`, `IceBoxUpdater.app`). Its post-install
-script places an **IceBox Launcher** alias on the desktop of the logged-in user and
+(`IceBoxEngineLauncher.app`, `IceBoxEngine.app`, `IceBoxEngineUpdater.app`). Its post-install
+script places an **IceBoxEngineLauncher** alias on the desktop of the logged-in user and
 re-registers the bundles with LaunchServices.
 
 ### 2.2 What gets installed, and where
@@ -160,8 +160,8 @@ Whatever the platform, the layout inside that folder is the same:
 ```
 <install root>/
 ├── IceBoxEngine(.exe)       ← editor
-├── IceBoxLauncher(.exe)     ← launcher
-├── IceBoxUpdater(.exe)      ← updater
+├── IceBoxEngineLauncher(.exe)     ← launcher
+├── IceBoxEngineUpdater(.exe)      ← updater
 ├── *.dll / *.so             ← shared libraries
 ├── Config/                  ← engine + updater configuration, fonts, languages
 │   ├── Updater.json         ← current engine version + updater settings
@@ -191,9 +191,9 @@ personal settings live in the user-data folder
 There is no wrong way to start them:
 
 * **Launcher** — the desktop shortcut/alias, the Start-Menu or application-menu
-  entry, or `IceBoxLauncher` in the install folder. The finish page of the Windows
+  entry, or `IceBoxEngineLauncher` in the install folder. The finish page of the Windows
   installer can also launch it for you.
-* **Updater** — the *IceBox Updater* Start-Menu entry, `IceBoxUpdater` in the
+* **Updater** — the *IceBoxEngineUpdater* Start-Menu entry, `IceBoxEngineUpdater` in the
   install folder, or the **Updater** button in the launcher's sidebar
   ([3.1](#31-the-window-at-a-glance)).
 
@@ -247,7 +247,7 @@ into a friendly name for display:
 | `PR` | Pre-Release | `PR-0.9.1` | ↓ |
 | `R`  | Release     | `R-1.0.0`  | highest |
 
-> **IceBox Engine ships at the `R` (Release) stage.** The stages below it are the
+> **IceBoxEngine ships at the `R` (Release) stage.** The stages below it are the
 > ladder the engine climbed to get here. They stay in the scheme so that older tags
 > still compare correctly, and so that a preview build — if we ever hand one out —
 > is told apart from a shipping one at a glance.
@@ -276,12 +276,12 @@ version, and far more than the updater reads it:
 
 ### 2.5 Activating the engine
 
-A distributed IceBox Engine build asks for a **license key** the first time you
+A distributed IceBoxEngine build asks for a **license key** the first time you
 start it. Activation is a one-off step per computer: after it succeeds the
 launcher, the editor and the updater all open straight away, and reinstalling the
 engine does **not** ask again.
 
-**The activation screen.** Start **IceBoxLauncher**. If the machine is not
+**The activation screen.** Start **IceBoxEngineLauncher**. If the machine is not
 activated yet, the launcher opens on a single centred card instead of the project
 hub:
 
@@ -373,7 +373,7 @@ Device ID, with a **Copy activation details** button for support requests.
 | *This key is already activated on another computer* | A single-machine key that the activation server has already bound to a different machine. If you changed computers, contact support with the key id. |
 | *The activation server could not be reached* | No internet, or the endpoint is temporarily down. Connect and press **Activate** again, or ask support for a key that activates offline. |
 | *The activation server refused this key* | The server rejected the key for a reason other than the seat being taken. Contact support with the key id. |
-| *This key requires a newer version of IceBox Engine* | A single-machine key on a build that predates them. Update the engine, then activate. |
+| *This key requires a newer version of IceBoxEngine* | A single-machine key on a build that predates them. Update the engine, then activate. |
 | *This key has expired* / *has been revoked* | Contact support with the key id. |
 | *The activation could not be saved* | No storage location was writable. Start the launcher once as administrator (Windows) or check the home-directory permissions. |
 | *This activation belongs to a different computer* | A record copied from another machine was found. Enter your own key to activate this one. |
@@ -407,13 +407,13 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 ```
 
 The sidebar is 240 px wide and always shows the **engine logo**, the
-**IceBox Engine™** name, and the **installed version** read from
+**IceBoxEngine™** name, and the **installed version** read from
 `Config/Updater.json`. Below them are the five tabs (the **My Projects** tab also
 shows a live project count, e.g. *My Projects (3)*), and two buttons pinned to the
 bottom corner: an amber **Updater** button and a red **Exit** button. Switching
 tabs cross-fades the content area over ~0.18 s.
 
-**Updater** starts the separate `IceBoxUpdater` app (resolved as a sibling of the
+**Updater** starts the separate `IceBoxEngineUpdater` app (resolved as a sibling of the
 launcher, the same way the editor is) so you do not have to open the install folder
 to reach it. The launcher stays open and nothing is updated by pressing it — every
 check, download and install still happens inside the updater window, exactly as
@@ -626,7 +626,7 @@ exception to your own license, alongside the SPDX header:
 
 ```
 As a special exception, the copyright holders of this program give you permission
-to link it with the IceBox Engine runtime and the prebuilt IceBox Engine core
+to link it with the IceBoxEngine runtime and the prebuilt IceBoxEngine core
 libraries (lib/IceBoxCore), and to distribute the resulting executable, without
 this permission extending the requirements of the GNU General Public License to
 those components. You must obey the GNU General Public License in all respects for
@@ -866,7 +866,7 @@ and direction, is launcher-only and lives in `launcher_settings.json` next to it
 
 ### 3.6 About
 
-The **About IceBox Engine** page shows the studio name, the **installed engine
+The **About IceBoxEngine** page shows the studio name, the **installed engine
 version**, a short tagline, copyright, contact, and clickable links — **Website**
 (`https://www.ice-box-crew.com/`), **Email** (`iceboxcrew057@gmail.com`), and
 **Issues** (`https://github.com/IceBoxCrew/IceBoxEngine/issues`) — plus a summary of
@@ -901,7 +901,7 @@ architecture, and with a clear report once it is done.
 
 ### 4.1 The window at a glance
 
-Under the **IceBox Updater** title and logo, the main view shows:
+Under the **IceBoxEngineUpdater** title and logo, the main view shows:
 
 * A colored **result banner** at the very top, but only right after an update was
   installed: green **Update installed successfully** with the version you are now on,
@@ -1045,8 +1045,8 @@ The final install step is tailored to each OS:
 | Platform | How the update is installed |
 | -------- | --------------------------- |
 | **Windows** | A small `run_installer.bat` shim is dropped next to the download and started detached and hidden; if Windows demands elevation it is relaunched through UAC. The updater shows *Installer started…* for a couple of seconds and **exits**, so its own files can be replaced. The shim waits about four seconds, then launches the **NSIS** installer silently into the same folder (`"<asset>" /S /D=<install dir>`) — or, for an `.msi`, runs `msiexec /i … /qn /norestart INSTALLDIR=…`. When the installer returns, the shim **starts the freshly installed updater again**: with `--post-update=<tag>` on success (exit code 0, or 3010 "reboot pending" for an `.msi`), or with `--update-failed=<tag> --update-code=<n>` on failure. Finally it deletes the temporary download folder. |
-| **macOS** | A `.dmg` is mounted read-only on a temporary mount point, its `.app` is copied into place with `ditto` and unmounted again; a `.pkg` is installed with `installer -pkg … -target /` after an administrator prompt; a `.zip` is expanded with `ditto -x -k`; a `.tar.gz` is untarred. The quarantine flag is cleared so the app runs without a Gatekeeper warning. The install runs to completion inside the updater, which then **reopens the newly installed `IceBoxUpdater.app`** with `--post-update=<tag>` and closes itself. |
-| **Linux** | A `.deb` is installed with `dpkg -i` (falling back to `apt-get install -f` to pull dependencies); an `.AppImage` is copied to `<install>/IceBoxEngine.AppImage` and made executable; a `.tar.gz` is extracted into the install folder. Elevation is obtained through `pkexec`, then `sudo`, then a graphical `sudo -A` askpass helper. As on macOS, the updater then **reopens the newly installed `IceBoxUpdater`** with `--post-update=<tag>` and closes itself. |
+| **macOS** | A `.dmg` is mounted read-only on a temporary mount point, its `.app` is copied into place with `ditto` and unmounted again; a `.pkg` is installed with `installer -pkg … -target /` after an administrator prompt; a `.zip` is expanded with `ditto -x -k`; a `.tar.gz` is untarred. The quarantine flag is cleared so the app runs without a Gatekeeper warning. The install runs to completion inside the updater, which then **reopens the newly installed `IceBoxEngineUpdater.app`** with `--post-update=<tag>` and closes itself. |
+| **Linux** | A `.deb` is installed with `dpkg -i` (falling back to `apt-get install -f` to pull dependencies); an `.AppImage` is copied to `<install>/IceBoxEngine.AppImage` and made executable; a `.tar.gz` is extracted into the install folder. Elevation is obtained through `pkexec`, then `sudo`, then a graphical `sudo -A` askpass helper. As on macOS, the updater then **reopens the newly installed `IceBoxEngineUpdater`** with `--post-update=<tag>` and closes itself. |
 
 So the visible behaviour is the same on all three systems: the updater goes away for
 a moment, and the **new** updater comes back on its own with a green banner naming
@@ -1092,7 +1092,7 @@ the project.
 
 **Moving to a newer engine build.**
 1. Open the **Updater** — the launcher's amber **Updater** button, or Start Menu →
-   *IceBox Updater*.
+   *IceBoxEngineUpdater*.
 2. It checks automatically (or press **Check for Updates**).
 3. If it says **New version available**, read the **Release Notes** and press
    **Install Update**.
@@ -1112,7 +1112,7 @@ the project.
 
 | Path | What lives there |
 | ---- | ---------------- |
-| `<install>/IceBoxLauncher`, `IceBoxUpdater`, `IceBoxEngine` | The three programs, side by side. |
+| `<install>/IceBoxEngineLauncher`, `IceBoxEngineUpdater`, `IceBoxEngine` | The three programs, side by side. |
 | `<install>/Config/Updater.json` | The canonical engine **version** the launcher and editor display. |
 | `<install>/Config/Fonts/`, `Config/Languages/` | Fonts and the 14 language files shared by all three apps. |
 | `<install>/Plugins/`, `Mods/` | Engine-level packages the launcher can attach to projects. |

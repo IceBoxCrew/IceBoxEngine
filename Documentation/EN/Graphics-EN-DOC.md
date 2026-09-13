@@ -1,10 +1,10 @@
-# 🎨 IceBox Engine — Graphics, Rendering & Physics
+# 🎨 IceBoxEngine — Graphics, Rendering & Physics
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> **IceBox Engine** renders 2D worlds through a modern, backend-agnostic graphics
+> **IceBoxEngine** renders 2D worlds through a modern, backend-agnostic graphics
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
 > OpenGL 4.6, OpenGL 3.3, OpenGL ES 3.2, WebGL 2.0, Vulkan, Direct3D 12, Metal,
 > Metal (ANGLE), Metal (MoltenVK), WebGPU, plus a **Null** renderer for headless servers —

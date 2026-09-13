@@ -2,7 +2,7 @@ libvpx (VP8/VP9 video codec) - The WebM Project
 License: BSD-3-Clause, with an additional royalty-free patent grant (PATENTS)
 Source: https://github.com/webmproject/libvpx
 
-Used by IceBox Engine via FFmpeg (the "vpx" feature) as the royalty-free VP9
+Used by IceBoxEngine via FFmpeg (the "vpx" feature) as the royalty-free VP9
 video encoder applied when cooking video assets. VP9 decoding at runtime uses
 FFmpeg's own native VP9 decoder and does not require libvpx.
 

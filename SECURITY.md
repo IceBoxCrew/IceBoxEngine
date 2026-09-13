@@ -1,10 +1,10 @@
 # Security Policy
 
-This policy covers **IceBox Engine** and everything shipped with it: the editor,
+This policy covers **IceBoxEngine** and everything shipped with it: the editor,
 the launcher, the updater, the runtime that goes into a built game, the prebuilt
 core libraries, the build tooling and the bundled sample content.
 
-IceBox Engine is proprietary software published by IceBoxCrew Studio. It is
+IceBoxEngine is proprietary software published by IceBoxCrew Studio. It is
 distributed as an installer, not as source, so the source tree is not public and
 you are not expected to have read it in order to report something. A clear
 description of what you observed is enough.
@@ -70,7 +70,7 @@ reminder — a missed report is far more likely than a deliberate silence.
 
 If you make a good-faith effort to follow this policy, we will treat your
 research as authorised. We will not pursue or support legal action against you
-over it, and we will not treat it as a breach of the IceBox Engine License
+over it, and we will not treat it as a breach of the IceBoxEngine License
 Agreement — including its restriction on reverse engineering, which does not
 apply to security research carried out under this policy.
 
@@ -93,8 +93,8 @@ handle you asked for, unless you asked for anonymity.
 
 ## Supported versions
 
-Security fixes go into **the current release of IceBox Engine**, and that release
-is delivered to everyone through IceBox Updater.
+Security fixes go into **the current release of IceBoxEngine**, and that release
+is delivered to everyone through IceBoxEngineUpdater.
 
 Every update is free for every licence holder, forever, across major versions —
 that is a term of the licence, not a promotion. There is therefore no such thing

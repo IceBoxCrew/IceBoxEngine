@@ -1,10 +1,10 @@
-# 🧩 IceBox Engine — Плагины и Моды
+# 🧩 IceBoxEngine — Плагины и Моды
 
 ## Полная документация на русском языке
 
 ### Актуальная для версии R-1.0.0
 
-> **IceBox Engine** расширяется двумя взаимодополняющими способами:
+> **IceBoxEngine** расширяется двумя взаимодополняющими способами:
 >
 > * **Плагины** — нативные **C++**-модули, расширяющие **редактор** и/или **рантайм**
 >   через стабильный C-ABI. Используйте их для добавления панелей, инструментов, пунктов
@@ -587,7 +587,7 @@ endif()
   `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` для мультиконфигурационных генераторов).
   Из этой же папки сборка игры берёт плагин в дистрибутив — плагин, игнорирующий
   `ICE_PLUGIN_OUTPUT_DIR`, в поставку не попадёт.
-* Добавьте `add_dependencies(IceBoxRuntime <plugin>)` под `if(TARGET IceBoxRuntime)`,
+* Добавьте `add_dependencies(IceBoxEngineRuntime <plugin>)` под `if(TARGET IceBoxEngineRuntime)`,
   чтобы плагин пересобирался в каждой сборке игры, которая его включает. В
   `Plugins/AIHelper/CMakeLists.txt.example` точно так же закрыт
   `add_dependencies(IceBoxEngine <plugin>)`: такая цель существует только в дереве

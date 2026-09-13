@@ -1,6 +1,6 @@
 # Code of Conduct
 
-IceBox Engine is a commercial, proprietary 2D game engine made by IceBoxCrew
+IceBoxEngine is a commercial, proprietary 2D game engine made by IceBoxCrew
 Studio. Its source is not public. What is public is a GitHub repository, an email
 address, and the people who turn up in them — licensees reporting bugs, people
 deciding whether to buy, security researchers, and us.
@@ -52,19 +52,19 @@ Everyone in the spaces listed below, on the same terms:
 | **The public repository** — [IceBoxCrew/IceBoxEngine](https://github.com/IceBoxCrew/IceBoxEngine) | [Issues](https://github.com/IceBoxCrew/IceBoxEngine/issues), [Discussions](https://github.com/IceBoxCrew/IceBoxEngine/discussions) (announcements, questions, ideas, show-and-tell), documentation pull requests, security advisories, the README and the documentation |
 | **Our private development repository** | Where the engine is actually built. Access is granted by us; if you have it, this document applies to you there as well |
 | **Email** — [iceboxcrew057@gmail.com](mailto:iceboxcrew057@gmail.com) | Support, licensing, security reports, and reports under this document |
-| **Anywhere someone speaks for the project** | Using our name, our logo or an official account to represent IceBox Engine |
+| **Anywhere someone speaks for the project** | Using our name, our logo or an official account to represent IceBoxEngine |
 
 What you do elsewhere is not our business — until it is aimed at someone because
 of these spaces. Harassment that starts in an issue and continues by DM, on
 another platform, or in a storefront review is still harassment we will act on.
 Conversely, we do not police your own game's community, your Discord, or an
-argument you had somewhere unrelated to IceBox Engine.
+argument you had somewhere unrelated to IceBoxEngine.
 
 ---
 
 ## Our pledge
 
-We pledge to make taking part in the IceBox Engine project a harassment-free
+We pledge to make taking part in the IceBoxEngine project a harassment-free
 experience for everyone, regardless of age, body size, visible or invisible
 disability, ethnicity, sex characteristics, gender identity and expression, level
 of experience, education, socio-economic status, nationality, personal
@@ -303,7 +303,7 @@ left vague:
   that you are not free to hand over.
 - **Sending it grants us the right to use it.** If we use what you send, you
   grant IceBoxCrew Studio a worldwide, perpetual, irrevocable, royalty-free right
-  to use, modify, publish and distribute it as part of IceBox Engine and its
+  to use, modify, publish and distribute it as part of IceBoxEngine and its
   documentation, including in the commercial product. You keep your own copyright
   — you are licensing it to us, not giving it away.
 - **There is no payment unless we agreed one in writing beforehand.** Send work

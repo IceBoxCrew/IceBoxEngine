@@ -8,7 +8,7 @@ https://emscripten.org  -  https://github.com/emscripten-core/emscripten
 
 Emscripten also bundles musl libc (MIT) and portions of Node.js (MIT); both are
 covered by the MIT text below. Code under Emscripten's third_party/ directory
-carries other licenses and is not used by IceBox Engine.
+carries other licenses and is not used by IceBoxEngine.
 
 The verbatim upstream LICENSE follows.
 

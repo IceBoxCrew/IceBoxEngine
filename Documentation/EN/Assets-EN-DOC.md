@@ -1,10 +1,10 @@
-# 📦 IceBox Engine — Assets & Content Browser
+# 📦 IceBoxEngine — Assets & Content Browser
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> **IceBox Engine** organizes every piece of game data — textures, sounds, sprites,
+> **IceBoxEngine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
 > that live inside your project's `Content/` folder and are managed through the
 > built-in **Content Browser**.
@@ -100,7 +100,7 @@
 
 ## 1. Introduction & the asset model
 
-In IceBox Engine an **asset** is any reusable piece of game content stored as a file
+In IceBoxEngine an **asset** is any reusable piece of game content stored as a file
 inside your project's `Content/` directory. Levels reference assets, assets reference
 other assets, and the engine loads them on demand at edit time and at runtime.
 

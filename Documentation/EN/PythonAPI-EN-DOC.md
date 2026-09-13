@@ -1,10 +1,10 @@
-# 🐍 IceBox Engine — Python API
+# 🐍 IceBoxEngine — Python API
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> **IceBox Engine** integrates **Python** via **pybind11** for editor scripting.
+> **IceBoxEngine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
 > components, project files, panels, and much more — right from the built-in Python console.
 >
@@ -145,9 +145,9 @@
 
 ## 1. Introduction and architecture
 
-### What is the Python API in IceBox Engine?
+### What is the Python API in IceBoxEngine?
 
-**Python API** is a scripting interface for the **IceBox Engine editor**. Unlike the Lua API, which is used for game logic (object scripts, widgets, cinematics), the Python API is designed for:
+**Python API** is a scripting interface for the **IceBoxEngine editor**. Unlike the Lua API, which is used for game logic (object scripts, widgets, cinematics), the Python API is designed for:
 
 - **Automating routine tasks** in the editor
 - **Batch operations** on entities (bulk rename, move, delete)
@@ -160,7 +160,7 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│              IceBox Editor                   │
+│              IceBoxEngineEditor                   │
 │                                             │
 │  ┌──────────────────────────────────────┐   │
 │  │         Python Console               │   │
@@ -358,7 +358,7 @@ print(names)
 
 ## 3. Python basics — Guide for beginners
 
-> This section is a short but complete reference of basic Python. If you already know Python — feel free to jump to [section 4](#4-api-modules--overview). If not — read this section, and you will be able to confidently write scripts in the IceBox Engine Python console.
+> This section is a short but complete reference of basic Python. If you already know Python — feel free to jump to [section 4](#4-api-modules--overview). If not — read this section, and you will be able to confidently write scripts in the IceBoxEngine Python console.
 
 ---
 
@@ -6871,7 +6871,7 @@ print(f'Player imported: {new_uuid}')
 ### Frequently asked questions
 
 **Q: Where is the Python console?**
-A: In the IceBox Engine editor, open it via **`Tools → Run Python Script`**. See [Opening the "Run Python Script" window](#opening-the-run-python-script-window) for a full tour of the panel.
+A: In the IceBoxEngine editor, open it via **`Tools → Run Python Script`**. See [Opening the "Run Python Script" window](#opening-the-run-python-script-window) for a full tour of the panel.
 
 **Q: Why does `editor.create_entity()` return 0?**
 A: Most likely there is no active scene. Check with `engine.has_scene()`.

@@ -1,10 +1,10 @@
-# 🛠️ IceBox Engine — Editor & Interface
+# 🛠️ IceBoxEngine — Editor & Interface
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> **IceBox Engine** ships as a single editor application: a dockable, multi-panel
+> **IceBoxEngine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
 > tune the world, run your game in-place, and ship it.
 >
@@ -102,7 +102,7 @@
 
 ## 1. Introduction
 
-The IceBox editor is the program you launch to make a game. It is a **single
+The IceBoxEngineEditor is the program you launch to make a game. It is a **single
 window** divided into dockable panels, with a menu bar and a toolbar across the
 top. Everything you do — building a level, editing an entity, tuning physics,
 testing gameplay — happens inside this window.
@@ -340,7 +340,7 @@ the rest link to their dedicated references.
 | ---- | ------ |
 | **Hot-Keys** | Opens the **Hot-Keys** panel — a tabbed reference of every editor shortcut. See [Section 13.1](#131-hot-keys). |
 | **Documentation** | Opens the in-editor **Documentation** reader (this very document set). See [Section 13.2](#132-documentation). |
-| **About** | Opens the **About IceBox Engine** window — version, studio, links and license. See [Section 13.3](#133-about). |
+| **About** | Opens the **About IceBoxEngine** window — version, studio, links and license. See [Section 13.3](#133-about). |
 
 ---
 
@@ -1350,7 +1350,7 @@ documentation set. It provides:
 
 ### 13.3 About
 
-**Help → About** opens the **About IceBox Engine** window: the studio name, the
+**Help → About** opens the **About IceBoxEngine** window: the studio name, the
 engine name and version, a tagline, the copyright, clickable links (website,
 contact email, issue tracker — each opens in your browser or mail client and shows
 the target as a tooltip), and a short license summary. Close it with the **Close**

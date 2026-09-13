@@ -1,10 +1,10 @@
-# ⚙️ IceBox Engine — Engine, Multiplayer & Physics
+# ⚙️ IceBoxEngine — Engine, Multiplayer & Physics
 
 ## Full documentation in English
 
 ### Actual for R-1.0.0 Version
 
-> This document covers the parts of **IceBox Engine** that live *below* the editor and
+> This document covers the parts of **IceBoxEngine** that live *below* the editor and
 > *beside* the scripting API: how the runtime is put together, how **multiplayer** works
 > (both **split-screen / local** and **online**), and the parts of **physics** that the
 > graphics document does not reach.
