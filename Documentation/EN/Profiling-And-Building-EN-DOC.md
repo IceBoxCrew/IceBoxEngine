@@ -138,7 +138,7 @@ Every frame the profiler can collect:
 | **Memory** | RAM current / peak / total (MB), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
 | **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
-| **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
+| **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners, mixer voices, streams, limiter reduction in dB), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
 | **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
 | **Hitches** | Automatically captured stall frames with their full scope tree. See [2.5](#25-hitch-detection). |
 
@@ -215,6 +215,16 @@ profiler coverage of its own systems without touching the profiler.
 
 Counters that stopped being updated are marked **stale** (greyed out) rather than silently
 showing an old value.
+
+**Audio counters.** The `Audio` group is the first place to look when sound misbehaves:
+
+| Counter | Meaning |
+| ------- | ------- |
+| **Playing Voices** | Audio component instances that are currently playing. |
+| **Listeners** | Listener slots the audio engine provides. |
+| **Mixer Voices** | Every voice the mixer is rendering right now — component sounds, sounds played from script, music, and sounds still fading out. |
+| **Streams** | Loaded sounds that are streamed on the background thread instead of being held in memory ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)). |
+| **Limiter Reduction (dB)** | How hard the output limiter pulled the mix down in the last audio block. Values that regularly exceed the 6 dB budget mean the mix itself is too loud — lower group or sound volumes rather than leaning on the limiter. |
 
 ### 2.4 Script (Lua) profiling
 
@@ -1378,6 +1388,17 @@ that texture is stored losslessly instead, so cooked builds match uncooked ones 
 pixel. The summary line reports how many textures were **kept lossless**, and each one is
 logged with its measured error. Override per texture with **Compression** in the texture
 sidecar (`Lossless` to never compress, `Always Compressed` to skip the check).
+
+**Audio cooking** keeps every file's name, so paths in sidecars, components and scripts stay
+valid — the runtime recognises cooked Vorbis or Opus data by its contents, not by the
+extension. Both encoders end the clip where the source ends instead of padding the last block
+with silence, so a cooked loop does not gain a gap. Opus always stores 48 kHz audio: sources at
+other rates are resampled with a high-quality filter at cook time, and a 48 kHz output
+device (the default **Sound Quality**) plays it with no resampling at all. Opus is encoded
+with unconstrained VBR at the highest encoder complexity, so the selected bitrate is an
+average and transients get the bits they need. Whatever the format, short sounds are decoded
+into memory when they load and long ones are streamed ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)).
+Audio cooked by an earlier engine version is re-encoded once, on the next cook.
 
 **Platform restrictions:** WebP textures are not available on the **iOS** and **Web**
 runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only);

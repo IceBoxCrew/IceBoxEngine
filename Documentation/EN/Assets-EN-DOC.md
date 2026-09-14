@@ -884,9 +884,24 @@ The sound sidecar is a full per-clip mixing and DSP definition:
 **The Sound Settings panel** starts with a **Preview** block: a Play/Stop button, a
 progress bar following the playhead, and a line with the clip's **duration, sample rate and
 channel count**. The preview uses your current (unsaved) settings, so trim points, fades,
-pitch and the DSP chain can be auditioned before saving. The rest of the panel is the
-grouped settings list — Playback, Group, Randomization, Trim & fades, Spatial and Effects —
-followed by **Save** and **Reset to Defaults**.
+randomization, pitch and the DSP chain can be auditioned before saving. It plays through the
+game's own mixer — exactly the playback path a build uses — so its group volume and the
+[editor audio monitor](Editor-EN-DOC.md#42-editor-audio-monitor) apply, and it is always
+non-spatial. While it plays, **Volume**, **Pitch**, **Pan**, **Loop** and every **effect**
+follow the sliders live; trim, fades, randomization and **Force Mono** take effect the next
+time you press **Play**, and **Stop** uses the **Fade Out** time (press it again to cut the
+fade short). The rest of the panel is
+the grouped settings list — Playback, Group, Randomization, Trim & fades, Spatial and
+Effects — followed by **Save** and **Reset to Defaults**.
+
+A few settings behave in ways worth knowing:
+
+* **Start Time / End Time** edges get a 5 ms fade so a cut in the middle of a waveform does
+  not click; leave both at `0` for a seamless loop of the whole file.
+* **Force Mono** downmixes the clip when it loads, which also halves its memory.
+* Clips whose decoded audio is longer than 30 seconds are streamed instead of being held in
+  memory ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)); every setting works the same
+  either way.
 
 > The Content Browser has its own one-click preview on the audio tile itself
 > ([3.5](#35-thumbnails--live-previews)); it always plays non-spatial and non-looping so a

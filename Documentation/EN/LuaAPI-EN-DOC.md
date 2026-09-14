@@ -6796,6 +6796,30 @@ Audio.PauseAllSounds()
 Audio.ResumeAllSounds()
 ```
 
+### Playback behavior
+
+Every call below is click-free — the engine ramps the signal instead of cutting it:
+
+* `PlaySound` on a sound that is already playing restarts it from its **Start Time** with a
+  short crossfade and picks new random volume/pitch/pan variations.
+* `StopSound` fades out over the asset's **Fade Out** time, or over a 6 ms ramp when that
+  time is `0`. During an asset fade-out `IsSoundPlaying` still returns `true`; calling
+  `StopSound` again never makes a running fade longer.
+* `PauseSound` / `ResumeSound` continue from the same position; `SeekSound` on a playing
+  sound jumps with a crossfade.
+* `FadeOut` is `StopSound` with your own duration (a paused sound is simply stopped).
+  `FadeSound` changes the level of a playing sound; the next `PlaySound` starts at full
+  volume again — use `FadeIn` to start a sound from silence.
+* `PauseAllSounds` pauses only what is playing and remembers it, and `ResumeAllSounds`
+  resumes exactly those sounds. Calling `PauseAllSounds` twice is safe, and a sound you play,
+  stop, pause or resume yourself in between is left alone.
+* `GetSoundCurrentTime`, `GetSoundDuration` and `SeekSound` use seconds of the source file,
+  so a trimmed sound starts at its **Start Time**.
+* Effect setters (`SetSoundLowPassFilter`, `SetSoundReverb`, …) glide to their new values
+  while the sound plays, and delay/reverb tails keep ringing after `StopSound`.
+* Sounds with more than 30 seconds of decoded audio are streamed automatically. A shorter
+  sound is decoded when `LoadSound` runs, so load sounds before gameplay needs them.
+
 ### Entity sounds (AudioComponent)
 
 ```lua

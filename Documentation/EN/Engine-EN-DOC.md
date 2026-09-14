@@ -136,22 +136,26 @@ One iteration of the main loop, in order:
    nothing.
 4. **`Update()`** — gameplay: scene simulation, replication, UI, cameras
    ([2.3](#23-inside-the-scene-update)).
-5. **Prewarm tick** — the [project prewarm](Graphics-EN-DOC.md#24-the-shader-pipeline--caches)
+5. **`Audio.Update`** — the [audio engine](#6-the-audio-engine) housekeeping: sounds whose
+   fade-out or effect tail has finished are released, a lost or interrupted output device is
+   restarted, the Android output buffer is tuned, and streaming sounds are refilled on
+   platforms without a streaming thread. Mixing itself never waits for this step.
+6. **Prewarm tick** — the [project prewarm](Graphics-EN-DOC.md#24-the-shader-pipeline--caches)
    consumes its per-frame time budget.
-6. **Pending texture flush** — textures decoded on worker threads are uploaded to the GPU
+7. **Pending texture flush** — textures decoded on worker threads are uploaded to the GPU
    on the main thread, where a GPU context exists.
-7. **`Render()`** — the render graphs execute ([Graphics → 3.2](Graphics-EN-DOC.md#32-the-frame-step-by-step)).
+8. **`Render()`** — the render graphs execute ([Graphics → 3.2](Graphics-EN-DOC.md#32-the-frame-step-by-step)).
    In headless mode this step is replaced by an FX-only update so particle lifetimes still
    expire.
-8. **Input roll-over** — per-frame edge state (*just pressed* / *just released*), scroll
+9. **Input roll-over** — per-frame edge state (*just pressed* / *just released*), scroll
    and touch deltas are rolled over for the next frame.
-9. **Counters** — entity/component statistics and the profiler are updated.
-10. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
+10. **Counters** — entity/component statistics and the profiler are updated.
+11. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
     order, followed by the network profiler in Debug builds.
-11. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
+12. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
     planes, backend, lighting) into the engine; a level's rendering override is re-applied
     if it is enabled.
-12. **Frame pacing** — if a target FPS is set, the loop sleeps the remaining time. On
+13. **Frame pacing** — if a target FPS is set, the loop sleeps the remaining time. On
     desktop it sleeps to within ~1.5 ms and then spins to hit the deadline precisely; on
     Android and iOS it sleeps the whole remainder; on Web the browser owns the cadence and
     the limiter is skipped.
@@ -192,7 +196,7 @@ The scene simulation itself runs these stages, each of which appears by name in 
 | **`Update.BehaviorTree`** | AI behavior trees tick. |
 | **`Update.Perception`** | AI perception (sight/hearing) updates — parallelized across worker threads at 8 or more perceiving agents. |
 | **`Update.Hierarchy`** | Parent→child transforms are propagated. |
-| **`Update.Audio`** | Listener position(s) and every spatial audio source position are pushed to the audio engine ([4.3](#43-cameras-ui--audio-per-player), [6](#6-the-audio-engine)). |
+| **`Update.Audio`** | Listener position(s) and every spatial audio source position — the entity transform combined with the instance's local offset — are pushed to the audio engine ([4.3](#43-cameras-ui--audio-per-player), [6](#6-the-audio-engine)). |
 | **`Update.Debris`** | Destruction fragments age, fade and expire. |
 | *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. |
 | **`Update.SocketAttachments`** | Entities attached to bones/sockets are placed. |
@@ -1056,20 +1060,32 @@ Defaults live in `Config/Engine.json` and are edited in
 
 ## 6. The audio engine
 
-Audio is a **miniaudio** engine created once at startup. It plays the source formats the
-editor imports — `.wav`, `.ogg`, `.mp3`, `.flac` — and the engine registers an additional
-**Opus** decoding backend so [cooked Opus audio](Profiling-And-Building-EN-DOC.md#9-asset-cooking)
-plays back with no special case. Sounds are registered by **name**, which is the handle
-every later call uses.
+Audio is a **miniaudio** mixer created once at startup, driving its own low-latency output
+device. It plays the source formats the editor imports — `.wav`, `.ogg`, `.mp3`, `.flac` —
+and the engine registers an additional **Opus** decoding backend so
+[cooked Opus audio](Profiling-And-Building-EN-DOC.md#9-asset-cooking) plays back with no
+special case. The file type is recognised from its contents, not its extension, so a cooked
+file that keeps its original name decodes correctly. Sounds are registered by **name**,
+which is the handle every later call uses.
 
 **Groups and volume.** Every sound belongs to a group — **Master**, **Music**, **SFX**,
 **Voice**, **Ambient** or **UI**. A sound's audible level is its own volume × its group's
 volume × the master volume × the global gain, and any group (or the master) can be muted
 independently. The mixer is configured in [Preferences → Audio](Editor-EN-DOC.md#107-audio).
 
-**Streaming vs. resident.** The distinction is *how you load it*, not a per-asset setting:
-anything loaded as a **sound** is decoded into memory, while anything loaded as **music** is
-**streamed** from disk (and defaults to the Music group and to looping). Assets that live
+**Streaming vs. resident.** Nothing is ever decoded on the audio thread, which is what keeps
+playback free of crackles on slow devices:
+
+| Loaded as | Decoded audio up to 30 s (and 24 MB of samples) | Longer |
+| --------- | ----------------------------------------------- | ------ |
+| **Sound** | Decoded **once, when it is loaded**, into memory. Every sound loaded from the same file at the same settings shares that memory. | **Streamed** automatically on a background streaming thread with a ¾-second buffer. |
+| **Music** | Always **streamed** (and defaults to the Music group and to looping). | Always streamed. |
+
+Loading a short sound therefore costs its decode time up front — load sounds with the
+level or behind a loading screen rather than in the middle of a hot loop. A file whose sample
+rate differs from the engine's is converted with a high-quality filter at that moment; a sound
+loaded with **Loop** on is converted as a continuous loop, and streamed loops wrap without
+resetting the converter, so the loop point stays seamless either way. Assets that live
 inside a packed build are read through the virtual file system and decoded from a memory
 buffer, so packing changes nothing about playback.
 
@@ -1080,23 +1096,59 @@ outer angle, outer volume). The engine supports **multiple listeners**, which is
 listener is active and it follows the primary camera. Global defaults for distance, rolloff,
 speed of sound and Doppler are engine-wide settings.
 
-**Per-sound effects.** Each sound can carry its own DSP chain, rebuilt on demand: a
-**low-pass** and **high-pass** filter, **low-shelf** and **high-shelf** EQ, a **delay**
-(time, decay, wet, dry) and a **reverb** (decay, wet, room size, damping). Fades — fade to
-a target volume over a duration, fade in, fade out — are handled by the engine rather than
-by your update loop.
+**Per-sound effects.** Each sound can carry its own effect chain: a **low-pass** and
+**high-pass** filter, **low-shelf** and **high-shelf** EQ, a **delay** (time, decay, wet,
+dry) and a **reverb** (decay, wet, room size, damping). Changing a setting while the sound
+plays glides to the new value instead of jumping, switching an effect on or off crossfades
+over about 10 ms, and the delay and reverb **tails keep ringing** after the sound stops.
+Cutoff frequencies are kept safely below the Nyquist limit of the current sample rate, and
+a chain that ever produces invalid samples resets itself to silence instead of exploding.
+Fades — fade to a target volume over a duration, fade in, fade out — are handled by the
+engine rather than by your update loop.
+
+**Click-free playback.** Every discontinuity is smoothed at the sample level: stopping,
+pausing, resuming and seeking apply a 5–6 ms ramp (a sound started from its beginning keeps
+its attack exactly as authored); playing a sound that is already playing restarts it with a
+short **crossfade**; trimmed **Start Time / End Time** edges are
+faded so a cut in the middle of a waveform does not click; volume and pan changes glide; and
+3D sources that pass through the listener fade their left/right panning out inside the
+**Min Distance** instead of flipping sides. Stopping a sound applies its asset's
+**Fade Out** time.
+
+**Output stage.** The final mix passes through a master stage before it reaches the device:
+the accessibility **Force Mono** downmix, a smoothly ramped master gain (global gain × the
+editor monitor volume) and a transparent **peak limiter** at about −0.5 dBFS with 1.5 ms of
+look-ahead. Many loud sounds overlapping are held just under full scale instead of clipping
+into distortion, and invalid samples are replaced with silence.
 
 **Quality.** The **Sound Quality** preset selects the engine sample rate (from 8 kHz to
 96 kHz). Changing it re-creates the audio engine and **restores every loaded sound** —
-including whether it was playing, its cursor position, volume, pitch, pan, loop flag and 3D
-placement — so a settings menu can change audio quality without interrupting the game.
+including whether it was playing or paused, its cursor position, volume, pitch, pan, loop
+flag, effects and 3D placement — so a settings menu can change audio quality without
+interrupting the game.
+
+**Devices & platforms.** The mixer renders whatever block size the platform asks for, so
+it never has to produce oversized blocks at once. On **Android** it uses a low-latency
+AAudio stream (OpenSL ES on older systems) and grows the output buffer automatically if the
+system reports an underrun. On **iOS** the audio session uses the *Playback* category, so
+Bluetooth headphones keep their high-quality stereo profile, and playback restarts by itself
+after an interruption such as a phone call. If the output device disappears or refuses to
+start — headphones unplugged, a Bluetooth switch — the engine keeps retrying in the
+background and resumes without any action from the game. On **Web**, browsers start audio
+only after the first user interaction, and streamed music keeps being fed while the tab is in
+the background (unless the game suspends itself when it loses focus).
 
 **Suspend & the editor monitor.** Audio is suspended and resumed with the app
-([2.6](#26-time-pause--suspend)). In the editor, a separate **monitor volume and mute**
-scale what *you* hear while editing without touching project settings — the toolbar control
-described in [Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). Editor builds can
-also tap the output for [Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio
-streaming.
+([2.6](#26-time-pause--suspend)); suspending fades the output to silence first and resuming
+fades it back in, so neither makes a pop. In the editor, a separate **monitor volume and
+mute** scale what *you* hear while editing — game audio in Play mode and every sound preview —
+without touching project settings — the toolbar control described in
+[Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). Editor builds can also tap the
+output for [Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio streaming.
+
+The live state of the mixer — voices, streams and limiter activity — is published as
+**Audio** counters in the profiler
+([Profiling & Building → 2.3](Profiling-And-Building-EN-DOC.md#23-counters)).
 
 The scripting API is [Lua API → Audio](LuaAPI-EN-DOC.md#12-audio--sound-and-music); sound
 assets and their per-asset settings are in
