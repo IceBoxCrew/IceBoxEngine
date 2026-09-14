@@ -18921,7 +18921,7 @@ This is what lets **Steam Workshop** content act as mods without copying anythin
 item into its own folder, and you hand those folders to the mod system directly.
 
 ```lua
--- Level script or startup manager, with the Steam plugin enabled.
+-- Level script or startup manager, with the IceBoxStorefront plugin enabled.
 function MountWorkshopMods()
     if not Storefront.IsAvailable() then return end
 

@@ -160,27 +160,27 @@ desktop-файлов и MIME.
 
 ```
 <корень установки>/
-├── IceBoxEngine(.exe)       ← редактор
-├── IceBoxEngineLauncher(.exe)     ← лаунчер
-├── IceBoxEngineUpdater(.exe)      ← апдейтер
-├── *.dll / *.so             ← общие библиотеки
-├── Config/                  ← конфигурация движка и апдейтера, шрифты, языки
-│   ├── Updater.json         ← текущая версия движка и настройки апдейтера
-│   ├── Engine.json          ← настройки движка/редактора (рендеринг, звук, доступность…)
-│   ├── Editor.json          ← настройки редактора и сборки
-│   ├── Plugins.json  Mods.json      ← какие пакеты включает движок
+├── IceBoxEngine(.exe)           ← редактор
+├── IceBoxEngineLauncher(.exe)   ← лаунчер
+├── IceBoxEngineUpdater(.exe)    ← апдейтер
+├── *.dll / *.so                 ← общие библиотеки
+├── Config/                      ← конфигурация движка и апдейтера, шрифты, языки
+│   ├── Updater.json             ← текущая версия движка и настройки апдейтера
+│   ├── Engine.json              ← настройки движка/редактора (рендеринг, звук, доступность…)
+│   ├── Editor.json              ← настройки редактора и сборки
+│   ├── Plugins.json  Mods.json  ← какие пакеты включает движок
 │   ├── CollisionGroups.json  VisualScriptAPI.json  DebugBreakpoints.json
-│   ├── Fonts/               ← NotoSans и начертания для CJK/арабского/иврита/деванагари
-│   └── Languages/           ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he
+│   ├── Fonts/                   ← NotoSans и начертания для CJK/арабского/иврита/деванагари
+│   └── Languages/               ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he
 ├── Content/
-│   └── Examples/            ← встроенные примеры и каталог Examples.json
-├── Documentation/           ← этот набор документации (EN/ и RU/)
-├── Plugins/  Mods/          ← пакеты уровня движка для добавления в проекты
-├── Tools/                   ← система сборки, утилиты (лого/иконки), приложение предпросмотра, Python-скрипты
-├── Source/  lib/            ← заголовки SDK и предсобранные core-библиотеки для сборки игр
+│   └── Examples/                ← встроенные примеры и каталог Examples.json
+├── Documentation/               ← этот набор документации (EN/ и RU/)
+├── Plugins/  Mods/              ← пакеты уровня движка для добавления в проекты
+├── Tools/                       ← система сборки, утилиты (лого/иконки), приложение предпросмотра, Python-скрипты
+├── Source/  lib/                ← заголовки SDK и предсобранные core-библиотеки для сборки игр
 ├── CMakeLists.txt  vcpkg.json
 ├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  ThirdPartyLicenses/
-└── Uninstall.exe            ← только Windows
+└── Uninstall.exe                ← только Windows
 ```
 
 Ничего из того, что вы создаёте, сюда не попадает: проекты живут там, где вы их
@@ -401,8 +401,7 @@ MoltenVK, а затем на ANGLE; контекст OpenGL 4.6 при неуд�
 ```
 ┌───────────────────┬──────────────────────────────────────────────┐
 │ 🧊 лого           │                                              │
-│ IceBox            │                                              │
-│ Engine™           │                                              │
+│ IceBoxEngine™     │                                              │
 │ Release 1.0.0     │          Содержимое активной вкладки         │
 │ ───────────────── │   (Мои проекты / Новый проект / Плагины и    │
 │ Мои проекты       │    моды / Настройки / О программе)           │

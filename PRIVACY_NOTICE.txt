@@ -5,7 +5,7 @@
 
 Version:        1.0.0
 Effective date: 2026-08-16
-Applies to:     IceBoxEngine Editor, IceBoxEngineLauncher, IceBoxEngineUpdater
+Applies to:     IceBoxEngineEditor, IceBoxEngineLauncher, IceBoxEngineUpdater
 Does NOT apply: to games built with IceBoxEngine (see sections 8 and 9)
 
 Sections 1 to 8 cover crash reports. Section 9 covers the one-time license

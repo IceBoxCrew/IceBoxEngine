@@ -415,10 +415,10 @@ ICE_PLUGIN_ENTRY(MyPlugin)   // at file scope, after the class definition
   loader picks the library **named after the plugin**: it matches each `.dll` (Windows) or
   `.so`/`.dylib` (Unix) in the folder against the manifest `Name` and the folder name, with
   or without a `lib` prefix. That is what lets a plugin ship its own runtime libraries
-  beside itself — `Steam.dll` is picked over `steam_api64.dll`, `Steam.so` over
-  `libsteam_api.so`. If nothing matches the plugin name the loader falls back to the
-  alphabetically first library and logs a warning, so **name your plugin library after your
-  plugin**.
+  beside itself — `IceBoxStorefront.dll` is picked over `steam_api64.dll`,
+  `IceBoxStorefront.so` over `libsteam_api.so`. If nothing matches the plugin name the
+  loader falls back to the alphabetically first library and logs a warning, so **name your
+  plugin library after your plugin**.
 * **Static** — on platforms without dynamic loading (**Web**, **iOS**), or when you opt
   in, the engine builds plugins with `ICE_PLUGIN_STATIC_BUILD`. The same macro then
   **registers the plugin in a static registry** at startup, and the engine links it
@@ -1047,8 +1047,8 @@ Mods.Refresh()
 ```
 
 Extra search paths are what let mods live outside the game folder — most usefully **Steam Workshop** items, which
-Steam installs into its own per-item directories. With the Steam plugin enabled, hand those directories to the mod
-system and rescan; nothing is copied:
+Steam installs into its own per-item directories. With the IceBoxStorefront plugin enabled, hand those directories
+to the mod system and rescan; nothing is copied:
 
 ```lua
 Mods.ClearSearchPaths()

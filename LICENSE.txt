@@ -54,8 +54,8 @@ the public SDK headers, the build tools and scripts, the Sample Content, the
 bundled configuration files and assets, and the documentation - together with
 every update we supply for them.
 
-"Editor Tools" means IceBoxEngineEditor, IceBoxEngineLauncher and IceBox
-Updater.
+"Editor Tools" means IceBoxEngineEditor, IceBoxEngineLauncher and
+IceBoxEngineUpdater.
 
 "Runtime Components" means the parts of the Software that are linked into or
 packaged with a Product so that the Product can run: IceBoxEngineRuntime, the
@@ -253,9 +253,10 @@ that:
           paragraph (a) still forbids that - and it permits nothing that
           paragraph (e) forbids.
 
-For the avoidance of doubt: this Section restricts what you may do with IceBox
-Engine itself. It does not restrict your Products or your Extensions. Creating,
-publishing and selling those is expressly permitted by Sections 5 and 6.
+For the avoidance of doubt: this Section restricts what you may do with
+IceBoxEngine itself. It does not restrict your Products or your Extensions.
+Creating, publishing and selling those is expressly permitted by Sections 5
+and 6.
 
 --------------------------------------------------------------------------------
 8. DISTRIBUTION OF THE RUNTIME
@@ -329,10 +330,10 @@ publishing and selling those is expressly permitted by Sections 5 and 6.
     share it, resell it or post it anywhere.
 
 9.6 Your Products never check anything. The licensing code is compiled into
-    the editor, the launcher and the updater only. It is not part of IceBox
-    Runtime or of the prebuilt core libraries. A Product you build therefore
-    contains no license check, no key, no device identifier and no activation
-    code, and never contacts us - not on first run, not ever. See
+    the editor, the launcher and the updater only. It is not part of
+    IceBoxEngineRuntime or of the prebuilt core libraries. A Product you build
+    therefore contains no license check, no key, no device identifier and no
+    activation code, and never contacts us - not on first run, not ever. See
     PRIVACY_NOTICE.txt.
 
 9.7 When we may revoke a Key. We may deactivate or revoke a Key only where:

@@ -159,27 +159,27 @@ Whatever the platform, the layout inside that folder is the same:
 
 ```
 <install root>/
-├── IceBoxEngine(.exe)       ← editor
-├── IceBoxEngineLauncher(.exe)     ← launcher
-├── IceBoxEngineUpdater(.exe)      ← updater
-├── *.dll / *.so             ← shared libraries
-├── Config/                  ← engine + updater configuration, fonts, languages
-│   ├── Updater.json         ← current engine version + updater settings
-│   ├── Engine.json          ← engine/editor defaults (rendering, audio, accessibility…)
-│   ├── Editor.json          ← editor + build settings
-│   ├── Plugins.json  Mods.json      ← which packages the engine enables
+├── IceBoxEngine(.exe)           ← editor
+├── IceBoxEngineLauncher(.exe)   ← launcher
+├── IceBoxEngineUpdater(.exe)    ← updater
+├── *.dll / *.so                 ← shared libraries
+├── Config/                      ← engine + updater configuration, fonts, languages
+│   ├── Updater.json             ← current engine version + updater settings
+│   ├── Engine.json              ← engine/editor defaults (rendering, audio, accessibility…)
+│   ├── Editor.json              ← editor + build settings
+│   ├── Plugins.json  Mods.json  ← which packages the engine enables
 │   ├── CollisionGroups.json  VisualScriptAPI.json  DebugBreakpoints.json
-│   ├── Fonts/               ← NotoSans + the CJK/Arabic/Hebrew/Devanagari faces
-│   └── Languages/           ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he
+│   ├── Fonts/                   ← NotoSans + the CJK/Arabic/Hebrew/Devanagari faces
+│   └── Languages/               ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he
 ├── Content/
-│   └── Examples/            ← bundled examples + the Examples.json catalog
-├── Documentation/           ← this documentation set (EN/ and RU/)
-├── Plugins/  Mods/          ← engine-level packages you can add to projects
-├── Tools/                   ← build system, helpers (logo/icons), preview app, Python scripts
-├── Source/  lib/            ← the SDK headers and prebuilt core libraries used to build games
+│   └── Examples/                ← bundled examples + the Examples.json catalog
+├── Documentation/               ← this documentation set (EN/ and RU/)
+├── Plugins/  Mods/              ← engine-level packages you can add to projects
+├── Tools/                       ← build system, helpers (logo/icons), preview app, Python scripts
+├── Source/  lib/                ← the SDK headers and prebuilt core libraries used to build games
 ├── CMakeLists.txt  vcpkg.json
 ├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  ThirdPartyLicenses/
-└── Uninstall.exe            ← Windows only
+└── Uninstall.exe                ← Windows only
 ```
 
 Nothing you create ever lands here: projects live wherever you put them, and your
@@ -390,8 +390,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 ```
 ┌───────────────────┬──────────────────────────────────────────────┐
 │   🧊 logo          │                                              │
-│ IceBox            │                                              │
-│ Engine™           │            Active tab content                │
+│ IceBoxEngine™     │            Active tab content                │
 │ Release 1.0.0     │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
