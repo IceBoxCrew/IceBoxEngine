@@ -99,7 +99,7 @@
 
 ## 1. Overview & philosophy
 
-IceBox is a **2D** engine, but its renderer is built like a modern 3D one:
+IceBoxEngine is a **2D** engine, but its renderer is built like a modern 3D one:
 
 | Principle | What it means |
 | --------- | ------------- |
@@ -756,7 +756,7 @@ stencil buffer is part of the depth/stencil attachment and is cleared with the f
 
 ## 5. Materials & shaders
 
-A **material** in IceBox is a **node graph** that compiles to a runtime shader. You
+A **material** in IceBoxEngine is a **node graph** that compiles to a runtime shader. You
 build the look by wiring nodes (texture samples, math, generators, parameters,
 material-function calls, custom expressions) into a **Material Output**, choosing a
 **Shading Mode** (Lit/Unlit), **Blend Mode**, **Domain** (Surface, PostProcess or Decal)
@@ -1047,7 +1047,7 @@ resolution and a per-light **shadow-map preview** strip — are in the
 
 ## 8. Ray-traced global illumination
 
-For richer lighting, IceBox includes an optional **2D ray-traced global
+For richer lighting, IceBoxEngine includes an optional **2D ray-traced global
 illumination** system (`Raytracer2D`) — soft, bounced light and color bleed driven
 by a compute shader. It is enabled in
 [Preferences → Rendering](Editor-EN-DOC.md#105-rendering) (or per level) and only
@@ -1432,7 +1432,7 @@ and the `NetworkProfiler.*` functions) is listed in the editor's
 
 ## 13. Physics
 
-IceBox simulates 2D physics with **Box2D (v3)**. Each running scene owns a physics
+IceBoxEngine simulates 2D physics with **Box2D (v3)**. Each running scene owns a physics
 **world**; bodies, shapes and joints are created from the entity's physics
 components when Play mode (or the runtime) starts.
 

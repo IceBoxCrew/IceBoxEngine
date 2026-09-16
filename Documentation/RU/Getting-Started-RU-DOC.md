@@ -271,7 +271,7 @@ MoltenVK, а затем на ANGLE; контекст OpenGL 4.6 при неуд�
 
 * лаунчер показывает её под логотипом (например, **Release 1.0.0**) и на странице
   **О программе**, редактор отображает её тоже;
-* каждая программа IceBox дополнительно несёт её вкомпилированной как запасной
+* каждая программа IceBoxEngine дополнительно несёт её вкомпилированной как запасной
   вариант, поэтому версия отображается верно, даже если файл отсутствует или его
   не удалось прочитать;
 * апдейтер использует её как эталон для каждого сравнения
@@ -347,9 +347,9 @@ MoltenVK, а затем на ANGLE; контекст OpenGL 4.6 при неуд�
 
 | Платформа | Расположения |
 | --------- | ------------ |
-| Windows | `%ProgramData%\IceBoxCrew\IceBoxEngine\`, `%LOCALAPPDATA%\IceBoxCrew\IceBoxEngine\`, `%APPDATA%\IceBoxEngine\`, `%USERPROFILE%\.icebox\` и реестр `HKCU\Software\IceBoxCrew\IceBoxEngine` (плюс `HKLM`, если лаунчер запущен с правами администратора) |
-| Linux | `/var/lib/IceBoxCrew/IceBoxEngine/` (если доступно на запись), `~/.config/IceBoxEngine/`, `~/.local/share/IceBoxCrew/IceBoxEngine/`, `~/.icebox/` |
-| macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.icebox/` |
+| Windows | `%ProgramData%\IceBoxCrew\IceBoxEngine\`, `%LOCALAPPDATA%\IceBoxCrew\IceBoxEngine\`, `%APPDATA%\IceBoxEngine\`, `%USERPROFILE%\.iceboxengine\` и реестр `HKCU\Software\IceBoxCrew\IceBoxEngine` (плюс `HKLM`, если лаунчер запущен с правами администратора) |
+| Linux | `/var/lib/IceBoxCrew/IceBoxEngine/` (если доступно на запись), `~/.config/IceBoxEngine/`, `~/.local/share/IceBoxCrew/IceBoxEngine/`, `~/.iceboxengine/` |
+| macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.iceboxengine/` |
 
 Ни одно из них не лежит внутри папки установки, поэтому **удаление и повторная
 установка движка — как и обновление — активацию сохраняют**. Полная очистка
@@ -377,7 +377,7 @@ MoltenVK, а затем на ANGLE; контекст OpenGL 4.6 при неуд�
 
 | Сообщение | Что значит |
 | --------- | ---------- |
-| *Это не похоже на лицензионный ключ IceBox* | Ключ скопирован не полностью — скопируйте весь блок заново. |
+| *Это не похоже на лицензионный ключ IceBoxEngine* | Ключ скопирован не полностью — скопируйте весь блок заново. |
 | *Этот ключ не является подлинным* | Подпись не сходится: ключ изменён или выдан не IceBoxCrew. |
 | *Этот ключ выдан для другого компьютера* | Ключ, привязанный к машине, введён не на той машине. Отправьте свой ID устройства в поддержку. |
 | *Этот ключ активирует один компьютер…* | Это не ошибка. Ключ на один компьютер распознан, а сервер активации недоступен: отправьте показанный ниже запрос `ICEQ-` в поддержку и вставьте пришедший в ответ ключ. |
@@ -951,7 +951,7 @@ all of the code used other than those components.
 при запуске**, и всякий раз, когда вы нажимаете **Проверить обновления**. Под капотом
 апдейтер:
 
-1. Запрашивает у сервиса обновлений IceBox список опубликованных релизов. Его адрес
+1. Запрашивает у сервиса обновлений IceBoxEngine список опубликованных релизов. Его адрес
    является частью установленного движка, настраивать ничего не нужно.
 2. Игнорирует **черновые** (draft) релизы и релизы без тега версии, затем сортирует
    остальные по правилам версий из [2.4](#24-схема-версий-движка) и берёт новейший.

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logoIceBox.png" alt="IceBoxEngine Logo" width="200">
+  <img src="logoIceBoxEngine.png" alt="IceBoxEngine Logo" width="200">
 </p>
 
 <h1 align="center">🧊 IceBoxEngine™</h1>

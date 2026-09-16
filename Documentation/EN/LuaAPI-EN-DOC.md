@@ -124,7 +124,7 @@
 
 ### Scripting modes: Code and Visual
 
-IceBox offers two ways to author gameplay logic. The mode is chosen **once when you create a project** (in the launcher) and applies to all scripted assets — `.ice_class`, `.ice_widget` and `.icemap`.
+IceBoxEngine offers two ways to author gameplay logic. The mode is chosen **once when you create a project** (in the launcher) and applies to all scripted assets — `.ice_class`, `.ice_widget` and `.icemap`.
 
 | Mode | What you do | Editor |
 |------|-------------|--------|
@@ -189,7 +189,7 @@ The chosen mode is stored as `"ScriptingMode": "Code"` or `"Visual"` in the proj
 
 ### Class inheritance
 
-IceBox supports **class inheritance**. If `.ice_class` has a `ParentClass` field, then:
+IceBoxEngine supports **class inheritance**. If `.ice_class` has a `ParentClass` field, then:
 - Parent components are inherited
 - Parent Lua functions are available via the `Parent` table
 
@@ -546,7 +546,7 @@ Inside the `Class Editor` there is a built-in Lua script editor for `.ice_class`
 - Fast — one of the fastest scripting languages
 - Easy to embed into C/C++ engines
 
-**Which Lua does IceBox run?** The engine embeds **Lua 5.5.1**, bound to C++ through sol2. Everything in the reference
+**Which Lua does IceBoxEngine run?** The engine embeds **Lua 5.5.1**, bound to C++ through sol2. Everything in the reference
 manual for 5.5 applies, including integer/float subtypes, bitwise operators, `//` integer division, `goto`, the `utf8`
 library and the `<const>` / `<close>` variable attributes — with the sandbox restrictions listed under
 [Standard libraries](#standard-libraries). Native plugins that touch `lua_State*` must link the **same** Lua 5.5 the
@@ -925,7 +925,7 @@ end
 Print("Let's go!")
 
 -- ⚠️ Be careful! If the condition never becomes false — infinite loop!
--- In IceBox this will freeze the game!
+-- In IceBoxEngine this will freeze the game!
 ```
 
 #### repeat...until
@@ -2210,7 +2210,7 @@ ExecuteCommand("heal")
 
 ```lua
 -- Variables without local inside OnConstruct/OnCreate persist between frames
--- This is the primary way to store state in IceBox scripts
+-- This is the primary way to store state in IceBoxEngine scripts
 --
 -- NOTE: OnConstruct runs in the editor too.
 -- Variables set in OnConstruct will configure the entity at edit time.
@@ -2374,7 +2374,7 @@ collectgarbage("restart")   -- Resume GC
 
 ### Standard libraries
 
-IceBox opens exactly these Lua standard libraries, in **both** script states (entity/level/mod
+IceBoxEngine opens exactly these Lua standard libraries, in **both** script states (entity/level/mod
 scripts and widget scripts):
 
 | Library | Available | Notes |
@@ -12824,7 +12824,7 @@ runs, daily challenges and replays.
 RNG.SetSeed(12345)
 
 -- String seed (full 64-bit entropy — best for shareable seed codes / daily seeds)
-RNG.SetSeed("ICEBOX-DAILY-2026-06-10")
+RNG.SetSeed("ICEBOXENGINE-DAILY-2026-06-10")
 
 -- 2nd argument (default = true) also reseeds the Perlin/Simplex noise tables,
 -- so noise-based terrain is reproducible from the same master seed.
@@ -13533,7 +13533,7 @@ ClearDebugDraw()
 
 ### Lua Script Debugger (Text and Visual)
 
-IceBox ships **two source-level debuggers** that attach to the live Lua VM during Play Mode. They share one runtime backend but are **mutually exclusive** — only one is ever attached, so they never fight over the VM:
+IceBoxEngine ships **two source-level debuggers** that attach to the live Lua VM during Play Mode. They share one runtime backend but are **mutually exclusive** — only one is ever attached, so they never fight over the VM:
 
 | Debugger | For projects in… | Breakpoints on… | Where it lives |
 |----------|------------------|-----------------|----------------|
@@ -18633,7 +18633,7 @@ Mods/
 ```json
 {
     "Name": "MyMod",
-    "Description": "My first IceBox mod",
+    "Description": "My first IceBoxEngine mod",
     "Author": "PlayerName",
     "Version": "1.0.0",
     "Icon": "icon.png",
@@ -21277,7 +21277,7 @@ Bluetooth.SendToAll(data)         -- Send a string to all connected peers
 
 ```lua
 -- Send to everyone
-Bluetooth.SendToAll("Hello from IceBox!")
+Bluetooth.SendToAll("Hello from IceBoxEngine!")
 
 -- Send to a specific peer
 Bluetooth.SendTo("AA:BB:CC:DD:EE:FF", "Private message")

@@ -264,7 +264,7 @@ version, and far more than the updater reads it:
 
 * the launcher shows it under the logo (e.g. **Release 1.0.0**) and on its **About**
   page, and the editor displays it too;
-* every IceBox program also carries it as a compiled-in fallback, so the version
+* every IceBoxEngine program also carries it as a compiled-in fallback, so the version
   still displays correctly if the file is missing or unreadable;
 * the updater uses it as the baseline for every comparison
   ([4.5](#45-where-the-version-is-recorded)).
@@ -338,9 +338,9 @@ them does not cost you the activation:
 
 | Platform | Locations |
 | -------- | --------- |
-| Windows | `%ProgramData%\IceBoxCrew\IceBoxEngine\`, `%LOCALAPPDATA%\IceBoxCrew\IceBoxEngine\`, `%APPDATA%\IceBoxEngine\`, `%USERPROFILE%\.icebox\`, and the registry under `HKCU\Software\IceBoxCrew\IceBoxEngine` (plus `HKLM` when the launcher runs elevated) |
-| Linux | `/var/lib/IceBoxCrew/IceBoxEngine/` (when writable), `~/.config/IceBoxEngine/`, `~/.local/share/IceBoxCrew/IceBoxEngine/`, `~/.icebox/` |
-| macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.icebox/` |
+| Windows | `%ProgramData%\IceBoxCrew\IceBoxEngine\`, `%LOCALAPPDATA%\IceBoxCrew\IceBoxEngine\`, `%APPDATA%\IceBoxEngine\`, `%USERPROFILE%\.iceboxengine\`, and the registry under `HKCU\Software\IceBoxCrew\IceBoxEngine` (plus `HKLM` when the launcher runs elevated) |
+| Linux | `/var/lib/IceBoxCrew/IceBoxEngine/` (when writable), `~/.config/IceBoxEngine/`, `~/.local/share/IceBoxCrew/IceBoxEngine/`, `~/.iceboxengine/` |
+| macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.iceboxengine/` |
 
 None of these live inside the install folder, so **uninstalling and reinstalling
 the engine — or updating it — keeps the activation**. Wiping the machine (a fresh
@@ -366,7 +366,7 @@ Device ID, with a **Copy activation details** button for support requests.
 
 | Message | Meaning |
 | ------- | ------- |
-| *That does not look like an IceBox license key* | Part of the key is missing — copy the whole block again. |
+| *That does not look like an IceBoxEngine license key* | Part of the key is missing — copy the whole block again. |
 | *This key is not genuine* | The signature does not verify. The key was altered or did not come from IceBoxCrew. |
 | *This key was issued for a different computer* | A machine-locked key on the wrong machine. Send your Device ID to support. |
 | *This key unlocks one computer…* | Not an error. A single-machine key was recognised and the activation server was not reachable; send the `ICEQ-` activation request shown underneath to support and paste the key that comes back. |
@@ -929,7 +929,7 @@ A **Settings** button (bottom-left) toggles the settings screen, and **Exit**
 A check runs automatically on startup if **Check for updates on startup** is
 enabled, and any time you press **Check for Updates**. Under the hood the updater:
 
-1. Asks the IceBox update service for the list of published releases. The address is
+1. Asks the IceBoxEngine update service for the list of published releases. The address is
    part of the installed engine, so there is nothing to configure.
 2. Ignores **draft** releases and releases without a version tag, then sorts the rest
    by the version rules from [2.4](#24-the-engine-version-scheme) and takes the newest.

@@ -459,7 +459,7 @@ how long it is kept, and what your rights are.
 14. TRADEMARKS AND CREDIT
 --------------------------------------------------------------------------------
 
-14.1 Our marks. "IceBoxEngine", "IceBoxCrew Studio", the IceBox logo and our
+14.1 Our marks. "IceBoxEngine", "IceBoxCrew Studio", the IceBoxEngine logo and our
      other names and logos are our trademarks. This License grants you no
      rights in them except those in Section 14.2.
 
@@ -473,7 +473,7 @@ how long it is kept, and what your rights are.
 14.3 What you may not do with them. You may not use our names or logos in a
      way that suggests that we made your Product, that we endorse, sponsor or
      are affiliated with you or your Product, or that your Product is an
-     official IceBox product. You may not use them in your own product name,
+     official IceBoxEngine product. You may not use them in your own product name,
      company name, domain name or app-store title, and you may not register
      them, or anything confusingly similar to them, as a trademark.
 

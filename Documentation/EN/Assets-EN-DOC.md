@@ -193,7 +193,7 @@ moved, copied, renamed and deleted **together** with its source file
 ### 2.3 Asset references & redirectors
 
 Because assets reference each other by **path**, moving or renaming an asset would
-normally break every asset that points at it. IceBox prevents this with the
+normally break every asset that points at it. IceBoxEngine prevents this with the
 **Asset Redirector** system.
 
 When you move or rename an asset through the Content Browser, the engine:
@@ -730,7 +730,7 @@ Multi-selections are dragged as a group (the drag preview shows how many items).
 ### 3.16 Migrating assets to another project
 
 **Migrate To...** (item context menu) copies the selected assets — **together with
-everything they depend on** — into another IceBox project, keeping their folder layout.
+everything they depend on** — into another IceBoxEngine project, keeping their folder layout.
 
 1. Select any mix of assets and folders and choose **Migrate To...**. Folders are expanded
    into the assets they contain.
@@ -2077,7 +2077,7 @@ Supporting systems: the **Blackboard** (typed key/value memory), **EQS**
 
 **Editor:** Class Editor
 
-A **class** is IceBox's **reusable game object**: an entity definition
+A **class** is IceBoxEngine's **reusable game object**: an entity definition
 with components, scripting and **inheritance**. Drop a class into a level (drag from the
 browser) to instantiate it as an entity; create a **child class** to specialize a parent.
 

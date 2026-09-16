@@ -1286,7 +1286,7 @@ The panel shows:
 2. Detects an authorized device (and tells you if the USB-debugging prompt is still
    pending).
 3. Runs `adb reverse` for the bound port.
-4. Makes sure the **IceBox Preview** companion APK is present — the engine normally
+4. Makes sure the **IceBoxEngine Preview** companion APK is present — the engine normally
    ships it pre-built in `Tools/IceBoxPreview`, and only builds it there itself
    (which needs an Android SDK and can take a few minutes) when no pre-built one
    is available — then installs or updates it on the device, reinstalling from

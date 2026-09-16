@@ -174,7 +174,7 @@ otherwise, that itself is a report worth sending.
 Being straight about these is more useful than implying protection that is not
 there.
 
-- **A project is executable code.** Opening someone else's IceBox project runs
+- **A project is executable code.** Opening someone else's IceBoxEngine project runs
   their Lua and Python scripts with your user's privileges, exactly as opening a
   project in any other engine does. Treat a project from a stranger the way you
   would treat a program from a stranger. A crafted project that escapes *your own*

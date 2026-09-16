@@ -233,7 +233,7 @@ All Python tooling lives in a single dockable panel. Open it from the main menu:
 
 > **`Tools → Run Python Script`**
 
-This opens the panel titled **Python Console** — the central surface for everything in this guide. From here you write and run Python, pull in ready-made snippets, save and load script files, and read the built-in API reference. In practice, almost all day-to-day Python work in IceBox happens in this one window.
+This opens the panel titled **Python Console** — the central surface for everything in this guide. From here you write and run Python, pull in ready-made snippets, save and load script files, and read the built-in API reference. In practice, almost all day-to-day Python work in IceBoxEngine happens in this one window.
 
 #### Window layout
 
@@ -495,7 +495,7 @@ not (a > 100)          # True — a is NOT greater than 100
 
 ### 3.4 Strings (str)
 
-Strings are one of the most used types. In the IceBox console you constantly work with strings (entity names, file paths, components).
+Strings are one of the most used types. In the IceBoxEngine console you constantly work with strings (entity names, file paths, components).
 
 #### Creating strings
 
@@ -519,10 +519,10 @@ name.endswith('er')    # True
 name.replace('Player', 'Enemy')  # 'Enemy'
 
 # Concatenation
-first = 'Ice'
-second = 'Box'
-full = first + second       # 'IceBox'
-full = first + ' ' + second # 'Ice Box'
+first = 'Player'
+second = 'One'
+full = first + second       # 'PlayerOne'
+full = first + ' ' + second # 'Player One'
 
 # Repetition
 line = '-' * 20   # '--------------------'
@@ -675,7 +675,7 @@ a.extend(b)        # a is now [1, 2, 3, 4, 5, 6]
 
 ### 3.6 Tuples (tuple)
 
-Tuple is like a list, but **immutable**. Many IceBox API functions return tuples (for example, position `(x, y, z)`).
+Tuple is like a list, but **immutable**. Many IceBoxEngine API functions return tuples (for example, position `(x, y, z)`).
 
 ```python
 # Creation
@@ -690,7 +690,7 @@ pos[1]    # 200.0
 x, y, z = pos         # x=100.0, y=200.0, z=0.0
 width, height = size  # width=1920, height=1080
 
-# Unpacking from IceBox API functions
+# Unpacking from IceBoxEngine API functions
 x, y, z = editor.get_position(uuid)
 sx, sy = editor.get_scale(uuid)
 cam_x, cam_y = editor.get_camera_position()
@@ -702,7 +702,7 @@ cam_x, cam_y = editor.get_camera_position()
 
 ### 3.7 Dictionaries (dict)
 
-Dictionary is a collection of key-value pairs. IceBox API uses dictionaries heavily for component data.
+Dictionary is a collection of key-value pairs. IceBoxEngine API uses dictionaries heavily for component data.
 
 #### Creation and access
 
@@ -754,7 +754,7 @@ settings.keys()     # dict_keys(['show_grid', 'snap_to_grid', 'grid_size'])
 settings.values()   # dict_values([True, False, 32])
 ```
 
-#### Using with IceBox API
+#### Using with IceBoxEngine API
 
 ```python
 # Get component data (returns a dict)
@@ -806,7 +806,7 @@ else:
     print('Player is dead')
 ```
 
-#### Practical examples with IceBox
+#### Practical examples with IceBoxEngine
 
 ```python
 # Check if entity exists before working with it
@@ -863,7 +863,7 @@ for i in range(0, 20, 5): # 0, 5, 10, 15 (step 5)
     print(i)
 ```
 
-#### Practical examples with IceBox
+#### Practical examples with IceBoxEngine
 
 ```python
 # Iterate all entities
@@ -954,7 +954,7 @@ create_enemy('Dragon', 500)       # Created Dragon with HP=500
 create_enemy(health=200)          # Created Slime with HP=200
 ```
 
-#### Practical functions for IceBox
+#### Practical functions for IceBoxEngine
 
 ```python
 # Function to create a configured entity
@@ -993,7 +993,7 @@ square = lambda x: x * x
 
 print(square(5))   # 25
 
-# Use with IceBox timers
+# Use with IceBoxEngine timers
 editor.set_timer(3.0, lambda: print('3 seconds passed!'))
 editor.set_timer(5.0, lambda: editor.log_info('Timer fired'))
 ```
@@ -1002,7 +1002,7 @@ editor.set_timer(5.0, lambda: editor.log_info('Timer fired'))
 
 ### 3.11 Importing modules
 
-Python has a rich standard library. The most useful modules for IceBox:
+Python has a rich standard library. The most useful modules for IceBoxEngine:
 
 ```python
 # Math
@@ -1140,7 +1140,7 @@ even = [i for i in range(20) if i % 2 == 0]
 # [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
 ```
 
-#### Using with IceBox
+#### Using with IceBoxEngine
 
 ```python
 # Get names of all entities with physics

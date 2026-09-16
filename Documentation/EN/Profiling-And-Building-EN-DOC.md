@@ -106,7 +106,7 @@
 
 Two things stand between a working project and a polished, shippable game: knowing
 *where the frame time goes* and being able to *package the project for every platform
-you target*. IceBox provides first-class tooling for both, built into the editor and
+you target*. IceBoxEngine provides first-class tooling for both, built into the editor and
 the engine itself.
 
 * **Profiling** runs in the same engine you ship — the profiler lives in the engine
