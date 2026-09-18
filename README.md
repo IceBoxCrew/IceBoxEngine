@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Editor-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey?style=flat-square" alt="Editor">
   <img src="https://img.shields.io/badge/Runtime-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20iOS%20%7C%20Android%20%7C%20Web%20%7C%20Xbox-green?style=flat-square" alt="Runtime">
 </p>
 
@@ -64,7 +64,7 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 - **Assets** — 25 asset types, each with its own editor, hidden sidecars for import settings, redirectors, a reference viewer, bulk editing, Aseprite and GIF importers, and **asset cooking** (WebP / KTX2 / Opus / Vorbis / VP9 / font subsetting) with a lossless guard that leaves hard-edged pixel art untouched.
 - **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
 - **Extensibility** — Drop-in **plugin** system and **mod** support, with a **Plugin Builder** that compiles native plugins on their own, without an engine build.
-- **Building** — One-click **Build Game** for all seven platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, Xbox `MicrosoftGame.config` layouts and `.msixvc` / `.xvc` packages via the Microsoft GDK, DLC paks that mount over the base game, and headless dedicated servers.
+- **Building** — One-click **Build Game** for all seven platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, Xbox `MicrosoftGame.config` layouts and `.msixvc` / `.xvc` packages via the Microsoft GDK, DLC paks that mount over the base game, and headless dedicated servers. The **Android editor** builds signed `.apk` files on the phone itself, with no PC in the loop.
 - **Tooling** — Built-in Tracy profiler, a frame profiler with recorded traces, per-pass GPU timings, memory and VRAM tracking and hitch detection, **23 debug overlays** (colliders, nav grids, light heatmaps, shadow edges, Z-depth, frozen culling and more), stats overlays, a developer console with commands and CVars, a crash reporter that reports only to an endpoint you configure, **Remote Preview** to an Android device over USB, and a hot-key reference.
 
 ---
@@ -76,14 +76,43 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 | **Windows** | ✅ | ✅ |
 | **Linux** | ✅ | ✅ |
 | **macOS** | ✅ | ✅ |
+| **Android** | ✅ *(Android games only)* | ✅ |
 | **iOS** | ❌ | ✅ |
-| **Android** | ❌ | ✅ |
 | **Web** | ❌ | ✅ |
 | **Xbox** *(Microsoft GDK)* | ❌ | ✅ |
 
 Xbox games are **built on Windows only** — the Microsoft GDK, its MSVC integration and
 `MakePkg` exist for Windows alone. Picking Xbox on a Linux or macOS host reports that a
 Windows machine is needed, the same way macOS and iOS report that they need a Mac.
+
+**Android is a development platform too.** The engine ships an Android APK that carries the
+launcher, the full editor and the game runtime in one app, so a phone or a tablet makes games
+on its own. It is a desktop install in every way that matters — the same launcher, the same
+editor, the same panels, the same Lua scripting and the same asset pipeline — with four
+deliberate differences:
+
+- **Build Game targets Android only.** The target platform selector is locked to Android,
+  because cross-compiling Windows, Linux, macOS, iOS, Web or Xbox binaries needs toolchains
+  that do not exist on a phone. Everything else in the Build Game window works as it does on
+  desktop.
+- **There is no Updater.** Android apps update through the store or the `.apk` you install,
+  so the engine ships no updater there and the Launcher hides its button.
+- **There is no Remote Preview.** It streams the editor viewport *to* an Android device;
+  on the device itself Play mode already is the preview.
+- **No Python scripting.** CPython has no Android build in the engine's dependency set, so
+  the Android editor is Lua + Visual Scripting. Games built from it behave identically —
+  Python is an editor tool, never a runtime one.
+
+An on-device build packages the engine, your content, your Lua scripts and your plugins' and
+mods' assets. The Play/AdMob/Firebase service integrations and the `.aab` bundle format are
+produced by the Gradle build and still need a desktop install; the Android editor says so in
+the Build Game window instead of offering options it cannot honour.
+
+A project moves between the phone and a PC as a single archive. **Build Game → Project Export →
+Export Project (.zip)** packs the whole open project into `IceBoxExports/` and into the phone's
+**Downloads** folder, ready to unpack on a PC and carry on there; the launcher's **Import
+Project (.zip)…** unpacks such an archive back into `IceBoxProjects/`, checks that it really
+holds an `.iceproject`, and adds it to the project list.
 
 ---
 
@@ -97,6 +126,10 @@ IceBoxEngine consists of several components:
 | **Editor** | `IceBoxEngine` | The main visual editor. Scene editing, asset management, tilemap editor, animation tools, scripting workspace, and game build pipeline (Tools → Build Game). |
 | **Updater** | `IceBoxEngineUpdater` | Standalone update app. Checks the update manifest for a newer engine version, then downloads, verifies and installs it — always on your explicit confirmation, never silently — and reopens itself afterwards to report the result. |
 | **Runtime** | `IceBoxEngineRuntime` | Lightweight, editor-free executable shipped with built games. Runs the game project directly on the target platform. |
+
+On **Android** the Launcher and the Editor are the same process inside one APK: the launcher
+screen opens first, and picking a project hands it straight to the editor without starting a
+second executable. The Updater is not built for Android at all.
 
 ---
 
@@ -134,6 +167,16 @@ Released does not mean finished. An engine never really is: new features, new to
 | **OS** | Android 7.0+ (API 24) |
 | **GPU** | OpenGL ES 3.2/3.0 or Vulkan 1.1-1.4|
 
+### Engine & Editor — Android
+
+| | |
+|-|-|
+| **OS** | Android 8.0+ (API 26). Editor ABIs: `arm64-v8a` (phones and tablets), `x86_64` (emulators, Chromebooks), `armeabi-v7a` and `x86` (32-bit devices) |
+| **RAM** | 4 GB (6 GB recommended — an editor keeps the whole project in memory) |
+| **GPU** | Vulkan 1.1-1.4, or OpenGL ES 3.2 with an automatic fallback to OpenGL ES 3.0 |
+| **Storage** | 2 GB free — the app unpacks its engine data on first run. Projects, builds, exports and keystores live in `/storage/emulated/0/IceBoxEngine/` once the app is granted All Files Access, so a file manager and a PC over USB can reach them |
+| **Input** | Touch; a keyboard and a mouse over USB or Bluetooth work too and are handled as ordinary input |
+
 ### Runtime — Web
 
 | | |
@@ -170,7 +213,7 @@ Building a game runs the native toolchain of the target platform on your machine
 | 🐧 **Linux** | WSL2 (if building from Windows) or native GCC/Clang + Ninja |
 | 🍎 **macOS** | macOS host with Xcode 15+ Command Line Tools, Python 3.12+ **with development headers** (Homebrew — the bundled system Python 3.9 is too old), vcpkg with `arm64-osx` / `x64-osx` triplets. Building the x86_64 (Intel) target **on an Apple Silicon host** additionally needs Rosetta 2 — `softwareupdate --install-rosetta --agree-to-license` — because CPython's `configure` and CMake's `FindPython` execute freshly built x86_64 binaries |
 | 📱 **iOS** | macOS host with Xcode 15+ (full IDE, not just CLI tools), vcpkg with `arm64-ios` triplet, Apple Developer account **only** for on-device deployment (compiling needs no account) |
-| 🤖 **Android** | Android SDK 37+, NDK 29+, Java JDK 25+, Gradle 9.7.0 *(auto-downloaded)* |
+| 🤖 **Android** | Android SDK 37+, NDK 29+, Java JDK 25+, Gradle 9.7.0 *(auto-downloaded)*. On the **Android editor** nothing extra is needed — it repacks the runtime template that ships inside the APK and signs the result itself |
 | 🌐 **Web** | [Emscripten SDK](https://emscripten.org/) — plus Node.js 24+ if you build the `wasm64` memory model |
 | 🎮 **Xbox** | **Windows host only.** The [Microsoft GDK](https://github.com/microsoft/GDK/releases) (its installer sets `GameDK`, `GameDKLatest`, `GRDKLatest`) plus the Windows 11 SDK with Direct3D 12 and the DirectX Shader Compiler. The **Xbox One** and **Xbox Series** device families additionally need the private **GDKX** from Partner Center (ID@Xbox / Xbox Managed, which sets `GXDKLatest`) and a devkit to run on; their vcpkg triplets and GDK toolchain files ship with the engine in `Tools/BuildSystem/Utilities/`. The **PC** family (`Gaming.Desktop.x64`) needs nothing beyond the public GDK, and reuses the same `x64-windows` dependencies as the Windows target |
 

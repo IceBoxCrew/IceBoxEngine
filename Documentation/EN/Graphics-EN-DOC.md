@@ -180,6 +180,12 @@ The **seven** target platforms and the renderers each one offers:
 | **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) |
 | **Xbox** | Direct3D 12 | Direct3D 12 (no fallback — it is the only API an Xbox title may present with) |
 
+The **Android editor** runs on that same Android chain: the launcher, the editor and Play mode
+all render through Vulkan 1.1-1.4 when the device exposes it, and fall back to OpenGL ES 3.2,
+then OpenGL ES 3.0, exactly as a shipped Android game does. The renderer a *built game* uses is
+still chosen in Build Game → **Render backend**, independently of what the editor itself runs
+on.
+
 Every chain runs top-down: the entry that is asked for is tried first, and each failure
 steps exactly one rung down, never sideways and never back up.
 

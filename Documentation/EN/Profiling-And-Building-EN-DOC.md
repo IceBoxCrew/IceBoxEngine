@@ -77,6 +77,7 @@
    - 8.5 [macOS](#85-macos)
    - 8.6 [iOS](#86-ios)
    - 8.7 [Xbox (Microsoft GDK)](#87-xbox-microsoft-gdk)
+   - 8.8 [Building on Android itself](#88-building-on-android-itself)
 9. [Asset cooking](#9-asset-cooking)
 10. [Distribution: manifest, packing & installers](#10-distribution-manifest-packing--installers)
     - 10.1 [Build manifest](#101-build-manifest)
@@ -987,6 +988,11 @@ runtime (with fallbacks).
 
 ### 8.3 Android
 
+Everything below describes a build started from a **desktop** install (Windows, Linux or
+macOS). The engine also ships an Android APK that carries the editor itself; building a game
+**on the phone** is the same dialog with a smaller set of options, and
+[8.8](#88-building-on-android-itself) lists exactly what differs.
+
 * **Output:** `.apk` package, or `.aab` **App Bundle** for Google Play.
 * **ABI:** `arm64-v8a` (default, 64-bit ARM), `armeabi-v7a` (32-bit ARM, older devices),
   `x86_64` (64-bit emulators), or `x86` (32-bit legacy emulators).
@@ -1364,6 +1370,115 @@ them with `Tools\BuildSystem\BuildEngine\prebuild_core_libs_xbox.bat --device-fa
 or as part of a full run with `build_windows_prebuilts.bat xbox`. The Xbox target is
 **opt-in** in the aggregate script: `build_windows_prebuilts.bat all` leaves it out,
 because the GDK is a separate install and the console families need the GDKX.
+
+---
+
+### 8.8 Building on Android itself
+
+The Android APK of the engine is a full development install: launcher, editor and runtime in
+one app. Its **Build Game** dialog is the same one, with the target platform locked to
+Android, because cross-compiling a Windows, Linux, macOS, iOS, Web or Xbox binary needs
+toolchains that do not exist on a phone.
+
+**How an on-device build works.** There is no NDK, no CMake and no Gradle on the device, so
+nothing is compiled there. The editor APK ships a **runtime template APK** — the ordinary
+Android game runtime for this ABI, built by `build_android.sh --runtime-template` when the
+editor APK was packaged. Pressing **Build**:
+
+1. cooks the project's content if **Cook Assets** is on, exactly as on desktop;
+2. stages `Content/`, `Config/` (with the editor and network sections stripped and the render
+   backend pinned), the enabled `Plugins/` and `Mods/`, the `.iceproject`, `LICENSE.txt`, the
+   third-party notices and a generated `game.json` into an assets folder;
+3. repacks the runtime template: the staged assets replace `assets/`, the launcher icons are
+   re-rendered from your icon at every mipmap density, and the binary `AndroidManifest.xml` is
+   rewritten with your package name, version code and name, min/target SDK, screen
+   orientation, application label and deep-link scheme. The content-provider authority and
+   the package-scoped permission the runtime declares follow the new package name too, so two
+   games built on the same phone install side by side instead of blocking each other;
+4. signs the result with your keystore using APK Signature Scheme v1 + v2 + v3 and writes it
+   to the output folder.
+
+A cold build is typically 20–60 seconds on a modern phone — it is a repack and a signature,
+not a compile.
+
+**Settings that behave differently:**
+
+| Setting | On the Android editor |
+|---------|----------------------|
+| **Target platform** | Locked to Android |
+| **Target ABI** | Locked to the ABI of the device — the template is the runtime this app was installed with |
+| **Output** | `.apk` only; an `.aab` bundle is produced by Gradle and needs a desktop install |
+| **Services** (Ads, IAP, Play Games, Consent, Review, Notifications, Bluetooth, Firebase, Saved Games, LAN) | Not offered — each one adds a Play/Firebase dependency and manifest entries that only the Gradle build can produce. Build the game once from a desktop install when you need them |
+| **Extra Permissions** | Not offered, for the same reason |
+| **Signing** | Automatic. If no keystore is set when you press **Build**, the editor creates a development one (PKCS#12, RSA-2048, 30 years) in `IceBoxKeystores/`, fills the Signing fields with it and keeps building — the same thing a desktop build does with the debug key, so an APK is always installable. **Generate keystore…** makes one up front, and a keystore made by `keytool` on a PC works too, as long as it is PKCS#12 — JDK 9+ writes that by default. Use your own keystore for anything you publish |
+| **Deep Link URL Scheme** | Works; left empty it falls back to the package name, as on desktop |
+| **Everything else** | Identical: game name, icon, version, orientation, min/target SDK, publisher, cook settings, plugins and mods |
+
+**Where builds land.** `/storage/emulated/0/IceBoxEngine/IceBoxBuilds/<Name>-<version>-<Config>-Android-<abi>/`
+by default — a folder any file manager opens. The **Output Path** field takes any folder, and the
+`…` button next to it opens the system folder picker.
+After a successful build the dialog shows two extra buttons:
+
+* **Install APK** — hands the file to the system installer. Android asks once for permission
+  to install apps from IceBoxEngine; this is the ordinary "unknown sources" prompt every
+  sideloaded APK gets.
+* **Share APK** — sends it to any other app: a messenger, a cloud drive, or your PC over a
+  cable or Wi-Fi share.
+
+**Moving a project between the phone and a PC.** The same dialog carries a **Project Export**
+section that does not depend on a build and is available at any time:
+
+* **Export Project (.zip)** packs the whole project you have open — scenes, assets, scripts,
+  `Config/`, the project's `Plugins/` and `Mods/`, the `.iceproject` and everything else in the
+  folder — into the folder shown in **Export Folder** (`IceBoxExports/` by default; the `…`
+  button picks any other one) as `<Project>-<date>.zip`, and drops a second copy into the
+  phone's **Downloads** folder.
+  Only regenerable clutter is left out: `.git`, `.svn`, `.hg`, `.vs`, `.gradle`, `.cache`,
+  `__pycache__`, `node_modules` and `*.pyc` / `*.pyo`. Nothing else is filtered, and the
+  archive holds one top-level folder named after the project.
+* **Share Project .zip** sends that archive straight to a messenger, a cloud drive or your PC.
+
+On Android 10 and newer the Downloads copy needs no permission at all. On Android 8 and 9 the
+app asks for storage access the first time; until you grant it the archive still lands in
+`IceBoxExports/` and **Share Project .zip** still works.
+
+Unpack it anywhere on the PC and add the folder from the desktop launcher — it is an ordinary
+project folder. Coming back the other way, zip the project folder on the PC, copy the `.zip` to
+the phone, and use **Import Project (.zip)…** on the launcher's *My Projects* tab: it unpacks
+into `IceBoxProjects/`, refuses an archive that holds no `.iceproject`, never writes outside the
+destination folder, and adds the result to the project list ready to open. If a folder of that
+name already exists the import lands beside it as `<Name>-2`, so nothing is ever overwritten.
+
+**Plugins with native code.** An on-device build packages every enabled plugin's assets,
+scripts and descriptors, but it cannot compile a plugin's native library — there is no
+compiler on the device. When such a plugin is enabled the build log says so by name and
+carries on; build that game from a desktop install if it needs the plugin's native part.
+
+**Where your files live.** Everything you work with sits in ordinary shared storage, so a file
+manager on the phone and a PC over USB both reach it without special tools:
+
+```
+/storage/emulated/0/IceBoxEngine/
+├── IceBoxProjects/      # your projects — the launcher's default location
+├── IceBoxBuilds/        # built APKs
+├── IceBoxKeystores/     # signing keystores generated on the device
+└── IceBoxExports/       # screenshots, console logs and exported project archives
+
+Android/data/com.iceboxengine.editor/files/
+├── Engine/              # engine data unpacked from the APK on first run (Config, Content, Documentation, Plugins, Mods, the runtime template)
+└── UserData/            # launcher project list and editor preferences
+```
+
+The shared folder needs **All Files Access**, which the app asks for on first start; the
+launcher keeps an **Allow All Files Access…** button on its *My Projects* tab while the
+permission is missing. Without it everything falls back into
+`Android/data/com.iceboxengine.editor/files/`, exactly where earlier versions kept it, and the
+launcher still lists projects left there, so nothing is lost either way.
+
+`Engine/` is re-unpacked whenever the app is updated, so nothing inside it is yours to keep:
+your editor preferences - language, font, theme and the renderer that was picked - live in
+`UserData/Config/Engine.json` beside the launcher's project list, and survive every update.
+Everything outside `Engine/` is yours and is never touched.
 
 ---
 

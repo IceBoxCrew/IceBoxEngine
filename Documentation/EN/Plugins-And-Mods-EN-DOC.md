@@ -1182,6 +1182,7 @@ Per-platform placement:
 | Windows / Linux | `<Output>/Plugins/<Name>/` | `<Output>/Mods/<Name>/` |
 | macOS | `<Game>.app/Contents/Resources/Plugins/` | `<Game>.app/Contents/Resources/Mods/` |
 | Android | `.so` → the APK's `jniLibs/<ABI>/`, the rest of the folder → `assets/Plugins/<Name>/` | staged into the APK's `assets/Mods` |
+| Android *(built on the device)* | assets, scripts and `plugin.json` → `assets/Plugins/<Name>/`; a native `.so` cannot be produced — there is no compiler on a phone, and the build log names every enabled plugin that has native sources | staged into the APK's `assets/Mods` |
 | iOS | statically linked; `plugin.json` + data folders staged into the signed `.app` | staged into the `.app` bundle |
 | Web | statically linked into the runtime | embedded into the Emscripten `.data` via `--preload-file` |
 

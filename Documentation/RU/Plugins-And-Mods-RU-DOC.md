@@ -1204,6 +1204,7 @@ Mods.Refresh()
 | Windows / Linux | `<Вывод>/Plugins/<Name>/` | `<Вывод>/Mods/<Name>/` |
 | macOS | `<Игра>.app/Contents/Resources/Plugins/` | `<Игра>.app/Contents/Resources/Mods/` |
 | Android | `.so` → `jniLibs/<ABI>/` внутри APK, остальная папка → `assets/Plugins/<Name>/` | стейджатся в `assets/Mods` внутри APK |
+| Android *(сборка на устройстве)* | ассеты, скрипты и `plugin.json` → `assets/Plugins/<Name>/`; нативную `.so` собрать нельзя — на телефоне нет компилятора, и лог сборки называет каждый включённый плагин с нативными исходниками | стейджатся в `assets/Mods` внутри APK |
 | iOS | линкуются статически; `plugin.json` + папки данных кладутся в подписанный `.app` | кладутся в бандл `.app` |
 | Web | линкуются статически в рантайм | встраиваются в `.data` Emscripten через `--preload-file` |
 

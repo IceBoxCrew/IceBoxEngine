@@ -245,7 +245,7 @@ Portuguese, Japanese, French, German, Italian, Polish and Hebrew.
 * Panels fade in and out over a fraction of a second when they open and close;
   this is purely cosmetic and needs no configuration.
 
-Font file, size and colour, plus the UI scale (1×–4×), are also on the
+Font file, size and colour, plus the UI scale (1×–4×, or `0.60×`–`2.00×` on Android), are also on the
 [Editor](#104-editor) tab. Changing the font or the language rebuilds the font
 atlas.
 
@@ -316,11 +316,11 @@ Separators group the list as: the four main panels, then **World Settings**, the
 
 | Item | Documented in | Notes |
 | ---- | ------------- | ----- |
-| **Run Python Script** | [Python API](PythonAPI-EN-DOC.md) | Opens the **Python Console** panel — a script editor plus a command line for editor automation. |
+| **Run Python Script** | [Python API](PythonAPI-EN-DOC.md) | Opens the **Python Console** panel — a script editor plus a command line for editor automation. **Not shown on Android** — that build carries no CPython. |
 | **Network Manager (ENet)** | *This document, [Section 11](#11-network-manager-enet)* | Live multiplayer test client/host, chat, voice, rollback diagnostics and the network profiler. |
 | **Build Game…** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The packaging/cooking/installer pipeline for all seven platforms. |
 | **DLC Packager** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | Builds add-on content packages. |
-| **Remote Preview** | *This document, [Section 12](#12-remote-preview)* | Streams the running game to an Android device over ADB. **Not shown on macOS.** |
+| **Remote Preview** | *This document, [Section 12](#12-remote-preview)* | Streams the running game to an Android device over ADB. **Not shown on macOS or on the Android editor** — on the device itself, Play mode already is the preview. |
 | **Profiler (Tracy)** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The advanced frame profiler. |
 | **Lua Script Debugger** | [Lua API](LuaAPI-EN-DOC.md) | Breakpoints and stepping for gameplay Lua. Visual Script graphs have their own debugger, driven from the graph editor. |
 | **Plugins & Mods** | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) | Manage installed plugins and mods. |
@@ -328,6 +328,86 @@ Separators group the list as: the four main panels, then **World Settings**, the
 
 Only **Network Manager** and **Remote Preview** are explained in this document;
 the rest link to their dedicated references.
+
+### The editor on Android
+
+The engine also ships as an Android APK that carries the launcher, the editor and the runtime
+in one app, so a phone or a tablet is a development install of its own. It is the same editor
+— the same panels, the same docking, the same shortcuts, the same Lua and Visual Scripting —
+adjusted for a touch screen and for what a phone can actually do:
+
+* **Touch-sized UI.** Fonts, paddings, scrollbars and grab handles scale with the screen
+  density, hit areas are enlarged, and dragging a panel scrolls it — anywhere in the panel, not
+  only its empty part — with a flick coasting on after you lift the finger. Tapping a text field
+  opens the system keyboard automatically; a Bluetooth or USB keyboard and mouse work as ordinary
+  input. The divider between two docked panels is thick enough to catch with a finger, so the
+  panels can be resized by dragging it. **Settings → Editor → UI Scale** rides on top of the
+  size the engine picks for the screen: `1.00x` keeps that size, lower values fit more on screen,
+  higher values make everything bigger, and the change applies as you drag. The range on Android
+  is `0.60x`–`2.00x`; on a desktop the same setting is the plain `1.0x`–`4.0x` HiDPI multiplier.
+* **Right click without a mouse.** Hold one finger where you want the menu and tap with a second
+  finger — the tap has to land and lift within half a second, and neither finger may slide. That
+  is a right click at the first finger's position, which puts every context menu within reach:
+  **Create Asset** in the Content Browser, the entity menu with **Delete** in the Level Outliner,
+  the Viewport menu, the node menus in Visual Scripting, the project menu on the launcher's
+  *My Projects* list, and the rest.
+* **Play mode keeps the touch screen.** On a desktop, Play grabs the pointer so a game can read
+  raw mouse movement. On Android it does not — there is no pointer to grab — so the toolbar, the
+  panels and the running game all keep taking taps, and **Stop** is just another button.
+* **Long press to pick up and to multi-select.** Press an item and hold it still for about a
+  third of a second: it joins the selection and is picked up, so carrying on into a drag moves
+  it. Long-press three assets in turn, then drag any one of them, and all three travel together
+  into the folder you drop them on; entities in the Level Outliner work the same way. Dragging
+  without the hold scrolls the panel instead, and while a drag is in flight, holding near the top
+  or the bottom edge of a list scrolls it so a target that is off screen is still reachable. A
+  short tap keeps its usual meaning and selects just the item you tapped.
+* **A layout that follows the screen.** On a narrow screen the launcher turns its side bar into
+  a strip of tabs across the top so the project list gets the full width, and the editor moves
+  its toolbar — gizmo modes, audio monitor, grid, Screenshot, Pause, Play, Eject — onto its own
+  row under the menu bar. The default docking is chosen for the shape of the screen: in portrait
+  the Viewport sits on top with Level Outliner / Properties / World Settings and then Content
+  Browser / Console / Statistics stacked below it as tabs, and on a wide screen it is the desktop
+  arrangement with the panels down the side. Rotating the device rebuilds the default layout only
+  when the new shape calls for the other one — a rotation that does not change which layout fits
+  leaves your own arrangement alone.
+* **Moving the viewport camera.** Drag with two fingers to pan and pinch to zoom around the point
+  between them. One finger can pan too: hold it still on empty space for about a third of a
+  second and then drag — the hold is what separates a pan from a rubber-band selection, and the
+  gesture that turned into a pan no longer changes the selection when you lift the finger. A
+  short press keeps its usual meaning: select, drag a gizmo, rubber-band a selection. On a
+  desktop the same camera is on the right mouse button with WASD and the wheel.
+* **Launcher and editor in one process.** The launcher screen opens first; picking a project
+  hands it straight to the editor. There is no second executable to start. If the editor cannot
+  open a project, the app returns to the launcher with the reason instead of closing.
+* **Leaving the app writes your preferences out.** Android can end a backgrounded app at any
+  time, so switching away flushes the editor preferences and the panel layout to disk right then.
+  Level content still follows the usual rule — you save it yourself.
+* **No Updater.** Android apps update through the store or through the `.apk` you install, so
+  the Launcher hides its Updater button.
+* **No Remote Preview**, for the reason in the table above.
+* **No Python.** The Python Console and the Python API are absent; Lua and Visual Scripting are
+  the full scripting surface, exactly as they are in a shipped game.
+* **Build Game targets Android only** — see
+  [Profiling & Building, 8.8](Profiling-And-Building-EN-DOC.md#88-building-on-android-itself).
+* **Projects travel as a .zip.** **Build Game… → Project Export → Export Project (.zip)** packs
+  the open project into `IceBoxExports/` and into the phone's Downloads folder; the launcher's
+  **Import Project (.zip)…** unpacks one back into `IceBoxProjects/`. That is the round trip
+  between a phone and a PC — see
+  [Profiling & Building, 8.8](Profiling-And-Building-EN-DOC.md#88-building-on-android-itself).
+
+Projects, builds, keystores and exports live in `/storage/emulated/0/IceBoxEngine/` — an
+ordinary folder that a file manager on the phone and a PC over USB both open, so a project can
+also move by copying its folder. The app asks for **All Files Access** on first start to put
+them there; while that permission is missing the launcher keeps an **Allow All Files Access…**
+button on its *My Projects* tab and everything falls back into
+`Android/data/com.iceboxengine.editor/files/`, where earlier versions kept it — the launcher
+still lists projects left there, so nothing is lost either way.
+
+Every field that takes a folder has a browse button that opens the system folder picker: the
+launcher's **Location**, **Move…** and **Duplicate…**, and the editor's **Output Path** and
+**Export Folder** under Build Game. Android itself refuses to hand out `Download` and the top
+level of storage through that picker — pick a subfolder there, or type the path into the field,
+which works for any folder the app can write.
 
 > Besides Tools items and panels, a plugin can also add **toolbar buttons**,
 > **viewport overlays**, **right-click context items**, **Preferences pages** and
@@ -1049,7 +1129,8 @@ Look-and-feel of the editor itself:
 * **Language** — the editor UI language, from the 14 supported languages.
 * **Font** — file (scanned from `Config/Fonts`), size (8–72 px) and colour, with a
   **Refresh** button that rescans the folder.
-* **UI Scale** (1×–4×).
+* **UI Scale** (1×–4×; on Android `0.60×`–`2.00×`, applied on top of the scale the
+  engine picks for the screen — see [The editor on Android](#the-editor-on-android)).
 * **Grid** — size (1–1000), line thickness (0.01–1), colour, **Snap to Grid**,
   **Show Grid**.
 * **Camera** — editor camera speed, min zoom, max zoom (the two clamp each other)

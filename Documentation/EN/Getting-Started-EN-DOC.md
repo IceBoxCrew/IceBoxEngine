@@ -147,6 +147,44 @@ desktop and MIME databases.
 script places an **IceBoxEngineLauncher** alias on the desktop of the logged-in user and
 re-registers the bundles with LaunchServices.
 
+**Android.** The engine also ships as an `.apk` that carries the launcher, the editor and the
+game runtime in one app. There are four of them, one per CPU architecture, and you download the
+one that matches your device:
+
+| File | For |
+| ---- | --- |
+| `IceBoxEngine-1.0.0-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
+| `IceBoxEngine-1.0.0-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
+| `IceBoxEngine-1.0.0-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
+| `IceBoxEngine-1.0.0-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
+
+Each file holds one architecture only, which is what keeps it small; the wrong one simply
+refuses to install with `INSTALL_FAILED_NO_MATCHING_ABIS`, so nothing breaks if you guess wrong
+— download another one. Install it the way you install any sideloaded APK: copy it to the
+device, tap it, and allow your file manager or browser to install apps once when Android asks.
+There is no separate updater on Android; a new version is a new `.apk`, installed over the old
+one (the same signing key keeps your data in place).
+
+On first run the app unpacks its engine data into
+`Android/data/com.iceboxengine.editor/files/Engine/`, asks for **All Files Access** and creates
+`IceBoxProjects/`, `IceBoxBuilds/`, `IceBoxKeystores/` and `IceBoxExports/` in
+`/storage/emulated/0/IceBoxEngine/`, where a file manager and a PC over USB reach them (without
+that permission they are created beside `Engine/` instead). That takes a few seconds
+and happens again after every engine update; your projects, builds and keystores are outside
+`Engine/` and are never touched. Your editor preferences - language, font, theme and the
+renderer that was picked - live in `UserData/` beside the launcher's project list, so they are
+carried across updates too.
+
+The Android app needs **Android 8.0 (API 26) or newer** on an **arm64-v8a** device, or
+**x86_64** for an emulator or a Chromebook.
+
+A project started on the phone does not have to stay there. **Build Game… → Project Export →
+Export Project (.zip)** writes the whole project to `IceBoxExports/` and to the phone's
+**Downloads** folder; unpack that `.zip` on a PC and add the folder from the desktop launcher.
+The other way round, zip the project folder on the PC, copy it to the phone and press **Import
+Project (.zip)…** on the launcher's *My Projects* tab. Details in
+[Profiling & Building, 8.8](Profiling-And-Building-EN-DOC.md#88-building-on-android-itself).
+
 ### 2.2 What gets installed, and where
 
 | Platform | Install root |
@@ -154,6 +192,7 @@ re-registers the bundles with LaunchServices.
 | **Windows** | `C:\Program Files\IceBoxEngine` (x86 build: `C:\Program Files (x86)\IceBoxEngine`) |
 | **Linux** | `/opt/iceboxengine` |
 | **macOS** | `/Applications/IceBoxEngine` |
+| **Android** | `Android/data/com.iceboxengine.editor/files/Engine` (unpacked from the APK on first run) |
 
 Whatever the platform, the layout inside that folder is the same:
 
@@ -186,13 +225,21 @@ Nothing you create ever lands here: projects live wherever you put them, and you
 personal settings live in the user-data folder
 ([6. Files & locations](#6-files--locations)).
 
+On **Android** the same layout is unpacked from the APK, minus the pieces a phone has no use
+for: there is no `IceBoxEngineUpdater`, no `Tools/IceBoxPreview` and no `Tools/PythonScripts`,
+and `Tools/BuildSystem` carries only the Android runtime template the editor repacks into your
+games. The editor and the launcher are the one installed app rather than separate
+executables.
+
 ### 2.3 Starting the Launcher and Updater
 
 There is no wrong way to start them:
 
 * **Launcher** — the desktop shortcut/alias, the Start-Menu or application-menu
   entry, or `IceBoxEngineLauncher` in the install folder. The finish page of the Windows
-  installer can also launch it for you.
+  installer can also launch it for you. On **Android** the launcher is simply the app's first
+  screen: tap the IceBoxEngine icon and it opens, and picking a project hands it straight to
+  the editor in the same app.
 * **Updater** — the *IceBoxEngineUpdater* Start-Menu entry, `IceBoxEngineUpdater` in the
   install folder, or the **Updater** button in the launcher's sidebar
   ([3.1](#31-the-window-at-a-glance)).
