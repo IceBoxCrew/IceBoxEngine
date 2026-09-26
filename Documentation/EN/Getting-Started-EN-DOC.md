@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > This is the **first stop** for anyone who has just installed **IceBoxEngine**.
 > Before you ever open the editor you meet two small companion applications, and
@@ -90,14 +90,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-1.0.0-Release-Windows-x64-Setup.exe
-IceBoxEngine-1.0.0-Release-Windows-x86-Setup.exe
-IceBoxEngine-1.0.0-Release-Windows-arm64-Setup.exe
-IceBoxEngine-1.0.0-Release-Linux-x64-Setup.deb
-IceBoxEngine-1.0.0-Release-Linux-x86-Setup.deb
-IceBoxEngine-1.0.0-Release-Linux-arm64-Setup.deb
-IceBoxEngine-1.0.0-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-1.0.0-Release-macOS-x64-Setup.pkg
+IceBoxEngine-1.0.1-Release-Windows-x64-Setup.exe
+IceBoxEngine-1.0.1-Release-Windows-x86-Setup.exe
+IceBoxEngine-1.0.1-Release-Windows-arm64-Setup.exe
+IceBoxEngine-1.0.1-Release-Linux-x64-Setup.deb
+IceBoxEngine-1.0.1-Release-Linux-x86-Setup.deb
+IceBoxEngine-1.0.1-Release-Linux-arm64-Setup.deb
+IceBoxEngine-1.0.1-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-1.0.1-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -153,10 +153,10 @@ one that matches your device:
 
 | File | For |
 | ---- | --- |
-| `IceBoxEngine-1.0.0-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
-| `IceBoxEngine-1.0.0-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
-| `IceBoxEngine-1.0.0-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
-| `IceBoxEngine-1.0.0-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
+| `IceBoxEngine-1.0.1-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
+| `IceBoxEngine-1.0.1-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
+| `IceBoxEngine-1.0.1-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
+| `IceBoxEngine-1.0.1-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
 
 Each file holds one architecture only, which is what keeps it small; the wrong one simply
 refuses to install with `INSTALL_FAILED_NO_MATCHING_ABIS`, so nothing breaks if you guess wrong
@@ -166,14 +166,18 @@ There is no separate updater on Android; a new version is a new `.apk`, installe
 one (the same signing key keeps your data in place).
 
 On first run the app unpacks its engine data into
-`Android/data/com.iceboxengine.editor/files/Engine/`, asks for **All Files Access** and creates
-`IceBoxProjects/`, `IceBoxBuilds/`, `IceBoxKeystores/` and `IceBoxExports/` in
-`/storage/emulated/0/IceBoxEngine/`, where a file manager and a PC over USB reach them (without
-that permission they are created beside `Engine/` instead). That takes a few seconds
-and happens again after every engine update; your projects, builds and keystores are outside
-`Engine/` and are never touched. Your editor preferences - language, font, theme and the
-renderer that was picked - live in `UserData/` beside the launcher's project list, so they are
-carried across updates too.
+`Android/data/com.iceboxengine.editor/files/Engine/` and asks for **All Files Access**; the
+launcher opens as soon as you have answered. With that permission it creates `IceBoxProjects/`,
+`IceBoxBuilds/`, `IceBoxKeystores/`, `IceBoxExports/` and `UserData/` in
+`/storage/emulated/0/IceBoxEngine/` — right next to `Download/`, `DCIM/` and the rest, where a
+file manager and a PC over USB reach them. Without it they are created beside `Engine/` instead;
+granting the permission later from the launcher switches over on the spot — the launcher reloads
+itself and brings your project list and preferences along. Unpacking takes a few seconds and
+happens again after every engine update; your projects, builds and keystores are outside
+`Engine/` and are never touched. `UserData/` holds the launcher's project list and your editor
+preferences - language, font, theme and the renderer that was picked - so they survive every
+update, and because the folder sits in shared storage they also survive uninstalling and
+reinstalling the app.
 
 The Android app needs **Android 8.0 (API 26) or newer** on an **arm64-v8a** device, or
 **x86_64** for an emulator or a Chromebook.
@@ -388,11 +392,18 @@ them does not cost you the activation:
 | Windows | `%ProgramData%\IceBoxCrew\IceBoxEngine\`, `%LOCALAPPDATA%\IceBoxCrew\IceBoxEngine\`, `%APPDATA%\IceBoxEngine\`, `%USERPROFILE%\.iceboxengine\`, and the registry under `HKCU\Software\IceBoxCrew\IceBoxEngine` (plus `HKLM` when the launcher runs elevated) |
 | Linux | `/var/lib/IceBoxCrew/IceBoxEngine/` (when writable), `~/.config/IceBoxEngine/`, `~/.local/share/IceBoxCrew/IceBoxEngine/`, `~/.iceboxengine/` |
 | macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.iceboxengine/` |
+| Android | `/storage/emulated/0/IceBoxEngine/UserData/` and `/storage/emulated/0/.iceboxengine/` (both need All Files Access), plus the app's own `Android/data/com.iceboxengine.editor/files/UserData/`, `.iceboxengine/` and `.local/share/IceBoxCrew/IceBoxEngine/` |
 
 None of these live inside the install folder, so **uninstalling and reinstalling
 the engine — or updating it — keeps the activation**. Wiping the machine (a fresh
-OS install or a reformat) removes them all; ask support for a replacement key in
-that case.
+OS install, a reformat or a phone's factory reset) removes them all; ask support for
+a replacement key in that case.
+
+On Android the copies inside `Android/data/` go away together with the app, so it is
+the two in shared storage that carry the activation across a reinstall: answer the
+**All Files Access** request after installing again and the launcher finds the
+activation by itself — no key to enter. A copy that goes missing from one of the
+locations is written back the next time the engine starts.
 
 The record is bound to the hardware it was created on, so copying it to another
 computer does not carry the activation with it. Ordinary upgrades are fine: the
@@ -487,6 +498,14 @@ the list always stays usable.
 You can also **drag-and-drop** a project folder onto the window to add it. And on a
 completely fresh install — when there is no saved list yet — the launcher seeds
 itself from the default projects folder (`~/IceBoxProjects`).
+
+On **Android** the two buttons are **Import Project (.zip)…**, which unpacks a project
+archive picked in the system file picker into `IceBoxProjects/`, and **Scan Device
+Storage…**, which searches the phone's shared storage and any memory card (both need
+All Files Access) plus the app's own folder for `.iceproject` files. The scan skips
+`Android/data`, `Android/obb` and hidden folders and does not look inside a project it
+has already found, so it also brings back projects you removed from the list. The
+default projects folder there is `/storage/emulated/0/IceBoxEngine/IceBoxProjects`.
 
 Every startup the list is **validated**: entries whose folder or `.iceproject` file
 has disappeared are dropped, the *Modified* timestamp of the survivors is refreshed,
@@ -861,8 +880,11 @@ Three buttons drive it:
 skips build leftovers — the `CMakeFiles`, `build`, `out`, `.vs` and `.git` folders,
 `CMakeLists.txt`, and `.obj` / `.o` / `.ilk` / `.exp` / `.lib` / `.a` / `.pdb`
 files — and, for plugins, the `Source` folder, since a project only needs the
-compiled binary. If the manifest cannot be parsed even after repair, nothing is
-touched and you are told the apply failed.
+compiled binary. A plugin's `Binaries/` folder is copied whole, `.a` and `.pdb` files
+included: it holds the libraries the Plugin Builder made for the game platforms
+(Android, iOS, Web, Xbox), and a project that ships the plugin there needs them. If the
+manifest cannot be parsed even after repair, nothing is touched and you are told the
+apply failed.
 
 When a project's manifest has no `Plugins` / `Mods` key at all (an older project),
 the ticks are seeded from whatever folders already exist inside the project, so
@@ -897,7 +919,8 @@ Launcher **Settings** carry three preferences and one read-only readout:
   with, and the **GPU** behind it. On its very first run the launcher probes the
   platform chain from the top — Windows: Direct3D 12 → Vulkan → OpenGL 4.6 →
   OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 → OpenGL 3.3; macOS: Metal →
-  Metal (MoltenVK) → Metal (ANGLE) — and records the first one that answers in
+  Metal (MoltenVK) → Metal (ANGLE); Android: Vulkan → OpenGL ES 3.2 — and records the
+  first one that answers in
   `Config/Engine.json` (the per-user copy when the install folder is read-only), so
   every later start goes straight to it. The Updater shows
   the same two lines in its own **Settings** panel and shares the same recorded

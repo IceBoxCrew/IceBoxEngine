@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > This document covers the parts of **IceBoxEngine** that live *below* the editor and
 > *beside* the scripting API: how the runtime is put together, how **multiplayer** works
@@ -703,6 +703,12 @@ paths identically, which is why its per-message-type breakdown works on Web too.
 `Initialize()` sets up libsodium and ENet, and is called **lazily** — starting a server or
 connecting initializes the subsystem if you did not do it yourself.
 
+**Ways to join.** A client joins a host by **address** (IP and port — on the internet the
+host must be reachable, which usually means a forwarded port), finds hosts on the same
+network through **server discovery**, or joins an **online room** by its short **room code**:
+the engine then finds the host and opens a direct path through both routers on its own, so
+nobody forwards ports ([5.10](#510-server-discovery--nat-traversal)).
+
 ### 5.2 Session lifecycle
 
 **Hosting.** Starting a server clamps **Max Players** into 2…256, creates the ENet host on
@@ -712,7 +718,8 @@ a local player, generates a **server secret** used for reconnect tokens, and —
 
 **Joining.** Connecting creates a client host and initiates the ENet connection. The
 connect attempt is polled with a **timeout** taken from the config; failure raises a
-connection-failed event rather than blocking.
+connection-failed event rather than blocking. A join by room code first finds a path to the
+host ([5.10](#510-server-discovery--nat-traversal)) and then connects over it the same way.
 
 **The join handshake** is challenge–response, so a password never travels in a replayable
 form:
@@ -733,14 +740,24 @@ server. Until a peer is authenticated, the server ignores every message from it 
 
 **Reconnect.** With reconnection enabled, losing the connection puts the client into a
 *Reconnecting* state and it retries up to **Max Attempts** with an interval that grows by a
-back-off multiplier up to a ceiling. The server hands out a **reconnect token** derived from
+back-off multiplier up to a ceiling. Only a session that existed is restored this way: a first
+connection attempt that fails is reported once and is not retried. The server hands out a **reconnect token** derived from
 its secret so a returning player can be recognized as the same player rather than a new
-one.
+one. A session joined by room code is re-joined **by the code**, so the host is found again
+even if its address changed. A player who comes back before the server noticed the drop takes
+over its old slot: the stale connection is closed and the player keeps its id. Kicking or banning
+a player revokes its token, so it can only come back through a normal join, password included.
 
 **Shutdown.** Stopping a server sends an explicit **shutdown notice** to every peer,
 flushes, disconnects them, and clears all session state — so clients report *"server is
-shutting down"* instead of timing out. A client disconnect is marked intentional so the
+shutting down"* at once instead of timing out. A client disconnect is marked intentional so the
 reconnect logic does not fight it.
+
+**Nothing sent before a disconnect is lost.** Stopping a server, kicking or banning a player
+and a client's own `Disconnect` all let the messages already sent to the other side arrive
+first and only then close the connection, so a last word — the final score, the reason for a
+kick, a goodbye — always gets through. Messages a kicked player sends after the kick are
+ignored.
 
 | State | Meaning |
 | ----- | ------- |
@@ -772,7 +789,10 @@ your event callback untouched.
 
 Each message can be sent **reliably** or **unreliably**. The engine picks sensibly on your
 behalf: full keyframe snapshots and control messages are reliable; delta snapshots and
-voice are not, because a lost one is superseded by the next.
+voice are not, because a lost one is superseded by the next. An unreliable message larger than
+one packet travels as unreliable fragments: if any fragment is lost the whole message is
+dropped, and it never holds up reliable traffic behind it — so a big state update sent many
+times a second stays cheap on a lossy link.
 
 ### 5.4 Entity state & world snapshots
 
@@ -906,10 +926,17 @@ world state and **re-simulates forward** to the present — all within one frame
 
 The session requires four callbacks from the game: **save state** (produce a byte buffer
 plus a checksum), **load state**, **advance frame** (simulate exactly one fixed step from
-the given inputs) and **event**. It maintains a ring of saved frames and a ring of inputs,
-computes a **Fletcher-32** checksum of each saved state, and reports lifecycle events —
-synchronizing, synchronized, running, disconnected, connection interrupted/resumed, time
-sync, and **desync detected** when two peers' checksums disagree for the same frame.
+the given inputs) and **event**. It maintains a ring of saved frames and a ring of inputs
+and computes a **Fletcher-32** checksum of each saved state.
+
+Every input packet repeats all inputs the other peers have not **acknowledged** yet and
+carries this peer's own acknowledgements, so lost or late packets only cost a short stall —
+the session always catches up once packets flow again. Peers also exchange the checksum of
+their latest **confirmed** frame (all inputs known, state final) and report **desync
+detected** when they disagree. The other events are synchronizing, synchronized, time sync
+(this peer runs ahead and briefly stalls), **connection interrupted** (a player dropped out
+of the network session), **resumed** (it came back; the inputs it missed are resent) and
+**disconnected** (it stayed away for 10 seconds, or the initial handshake timed out).
 
 Two session types exist: **P2P** for real play, and **SyncTest**, which runs locally and
 deliberately rolls back every frame by a chosen distance and compares checksums — the
@@ -974,11 +1001,47 @@ Three controls shape the relay:
 * The engine can also **be** the master server: it binds a UDP port, keeps a bounded
   registry of registered servers and answers queries from it.
 
-**NAT traversal** is a **STUN** client: it sends a binding request to a configurable STUN
-server (Google's public one by default), parses the XOR-mapped address out of the response
-and reports your **external IP and port**. It can run **asynchronously** so a menu does not
-block, with a pending flag and a poll for the result. This tells a host what address to
-share; it does not perform hole punching or relaying on your behalf.
+**STUN.** A STUN client sends a binding request to a configurable STUN server (Google's
+public one by default), parses the XOR-mapped address out of the response and reports your
+**external IP and port**. It can run **asynchronously** so a menu does not block, with a
+pending flag and a poll for the result. On its own it only tells a host which address to
+share; hole punching and relaying are the job of online rooms.
+
+**Online rooms (NAT traversal by room code).** The host opens a *room* on top of a normal
+server session and receives a short **room code**; a player joins with that code from
+anywhere and nobody forwards a port. Finding the host, opening the path and — with a server
+— relaying happen inside the engine on the session's own UDP socket (signaling packets are
+told apart from ENet traffic on it), so the path that gets opened is exactly the one the
+session then uses, and everything in this chapter works over it unchanged.
+
+Two interchangeable **backends** find the host:
+
+| Backend | How the host is found | Adds |
+| ------- | --------------------- | ---- |
+| **P2P (serverless)** | The room code is hashed into keys of the public BitTorrent **Mainline DHT** — the code itself is never published. The host announces its public address under one key, the joiner under another, and each side looks the other up. The lookup only follows nodes whose id matches their address (BEP 42), so forged nodes cannot steer it, and the engine joins the DHT read-only (BEP 43) | Discovery on the local network with a broadcast on **UDP 7794**; a room list for the local network |
+| **Rendezvous server** | A server you run — the same engine binary started with `--rendezvous-server` — registers rooms and introduces every joiner to the host | A **relay** when no direct path exists; **browser players** through its WebSocket gateway ([5.12](#512-dedicated-servers--web-clients)); a public room list over the internet |
+
+The **Auto** setting (the default) uses the rendezvous server when one is configured and
+serverless P2P otherwise.
+
+**Opening the path.** Both sides send small *punch* packets to each other's candidate
+addresses at the same time, which opens a mapping in both routers. A candidate becomes the
+session path only after a full **round trip** — a punch answered by an acknowledgement from
+exactly that address — so a path that works in one direction only is never used. For
+routers that give every destination a new port, the engine predicts the next ports when they
+are allocated sequentially, and hosts also ask the router to open the session port through
+**UPnP IGD** or **NAT-PMP** (a double NAT, where a mapping cannot help, is detected and
+reported; UPnP only ever talks to the device that answered the discovery, by its IP address). With a rendezvous server, a joiner whose punching fails falls back to the
+server's **relay**. The **route** of every connection is reported to script: *local* (same
+machine), *lan*, *direct* (peer-to-peer over the internet), *relay* or *web*.
+
+**Limits of serverless P2P.** Without a server there is no relay: when both players are
+behind symmetric NATs with random ports, or behind the same carrier-grade NAT that cannot
+send traffic back to its own address, the join ends with `direct_connection_failed`; a
+rendezvous server removes that limit. The scripting contract with every state and error
+code is in [Lua API → Online rooms](LuaAPI-EN-DOC.md#online-rooms-by-room-code-no-port-forwarding);
+running a rendezvous server is covered in
+[Profiling & Building → Rendezvous server](Profiling-And-Building-EN-DOC.md#rendezvous-server).
 
 > **Matchmaking is a separate, script-side layer.** Discovery answers *"which servers
 > exist"*; deciding *"which players belong in the same match"* is done by the engine's
@@ -1026,6 +1089,11 @@ in-process **bridge** that accepts WebSocket connections and relays each one to 
 ENet peer connected to the server's own port. To the game logic, a web player is just
 another peer.
 
+Browser players can also join **online rooms** of the rendezvous backend: the Web build
+connects to the rendezvous server's WebSocket gateway, which bridges it to the host, so the
+host needs no open port either. Serverless P2P rooms are not available in the browser,
+because they need UDP.
+
 ### 5.13 Network quick reference
 
 | Setting | Default | Range / notes |
@@ -1051,6 +1119,12 @@ another peer.
 | Voice | off | Opus 48 kHz mono when compiled in; proximity range 500; max 8 relayed speakers |
 | Rate limit violations | 5 | Then disconnect |
 | Channels | 4 | Control, State, Input, Voice |
+| Online backend | Auto | Serverless P2P unless a rendezvous server is set |
+| Room code | 8 characters (P2P), 6 (rendezvous) | 4–16 letters/digits when you choose it |
+| Online join timeout | 30 s | 5–120 s (P2P); rendezvous: 4 s of punching, then the relay |
+| LAN room discovery | on | Broadcast on UDP 7794 (P2P) |
+| Router port mapping | on for online rooms, off for `StartServer` | UPnP IGD / NAT-PMP |
+| Rendezvous server ports | UDP 7790–7792, TCP 7793 | Relays on UDP 7800–7899 |
 
 Defaults live in `Config/Engine.json` and are edited in
 [Preferences → Network](Editor-EN-DOC.md#109-network); the live test harness is
@@ -1207,7 +1281,7 @@ underneath.
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
 | **Command system & CVars** | Named commands and console variables registered from C++ or Lua, executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
 | **Crash reporter** | Installed by every IceBoxEngine application; it records the active renderer, GPU and driver at startup so a crash report always names them. Reporting options are set per build in [Profiling & Building → Crash Reporter](Profiling-And-Building-EN-DOC.md#73-crash-reporter). |
-| **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web) that decodes video into a texture the game can draw and streams the audio track alongside it, with play/pause/resume/stop, a **skippable** flag, volume, looping, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
+| **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web, Media Foundation on the Xbox consoles) that decodes video into a texture the game can draw and streams the audio track alongside it, with play/pause/resume/stop, a **skippable** flag, volume, looping of the whole video or of a chosen part, frame-accurate seeking, playback speed from 0.25× to 4× with or without pitch correction, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
 | **Localization** | The editor UI and game text are separate: the editor reads `Config/Languages/*.json` ([Editor → 2.5](Editor-EN-DOC.md#25-language-fonts--rtl-layout)), while your game reads a `.ice_localization` asset ([Assets → 4.18](Assets-EN-DOC.md#418-localization-ice_localization)), which hot-reloads when it changes on disk. |
 | **Platform services** | Ads, in-app purchases, Play Games, saved games, analytics, notifications, consent, reviews, deep links, permissions, Bluetooth and Web3 are bridged per platform and exposed to script; see the [Lua API](LuaAPI-EN-DOC.md). |
 

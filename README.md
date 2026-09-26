@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-1.0-brightgreen?style=for-the-badge" alt="Release 1.0">
+  <img src="https://img.shields.io/badge/Release-1.0.1-brightgreen?style=for-the-badge" alt="Release 1.0">
   <img src="https://img.shields.io/badge/C%2B%2B-26-blue?style=for-the-badge&logo=cplusplus" alt="C++26">
   <img src="https://img.shields.io/badge/CMake-4.3%2B-064F8C?style=for-the-badge&logo=cmake" alt="CMake 4.3+">
   <img src="https://img.shields.io/badge/vcpkg-Managed-purple?style=for-the-badge" alt="vcpkg">
@@ -52,18 +52,18 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 - **Accessibility** — Colourblind modes, a dyslexia-friendly font, **text-to-speech** for hovered and focused UI, a field-of-view lens, game speed and forced mono audio — all readable by the game, so a shipped build honours the player's choices.
 - **Audio** — Spatial mixing and playback (miniaudio) with per-sound filters, EQ, delay and reverb, six mixer groups, multiple listeners, streamed music, and Opus / Vorbis codec support.
 - **Voice** — Microphone capture, Opus encode/decode, real-time volume analysis and WAV recording — available to single-player games as well as networked ones.
-- **Video** — Video playback into a texture and a cinematic / cutscene editor (FFmpeg).
+- **Video** — Video playback into a texture with frame-accurate seeking, 0.25×–4× speed with pitch correction and looping of any part of a clip, plus a cinematic / cutscene editor (FFmpeg; AVFoundation on iOS, the browser on Web, Media Foundation on the Xbox consoles).
 - **Input** — Keyboard, mouse, four gamepads with rumble and motion sensors, eight raw joysticks, ten-finger touch with pinch and swipe, pen/stylus, force-feedback **haptics** and device sensors, all through SDL3.
 - **Scripting** — Lua gameplay scripting with an integrated debugger, a **visual node-graph** editor, and Python for editor tooling.
 - **Gameplay systems** — Object pools, wave spawners, cooldowns, achievements, tweens, finite state machines, timers, coroutines, an event bus, typed collections (enums, arrays, maps, sets, structs, data tables), auto-persisting tables, and seeded random plus Perlin, simplex, fBm, ridged, Voronoi and curl **noise** with domain warping, so a procedural world regenerates identically every run.
-- **Saves & replays** — Game state that survives level changes, binary **scene snapshots** (physics bodies, animators, skeletons and ragdoll bones) for checkpoints and save-states, save slots on disk, and a **replay** recorder with a rolling buffer for killcams.
+- **Saves & replays** — Game state that survives level changes, binary **scene snapshots** (physics bodies, animators, skeletons and ragdoll bones) for checkpoints and save-states, save slots on disk, a **replay** recorder with a rolling buffer for killcams, and the platform's own **file dialogs** (Windows, macOS, Linux, Android and iOS) for importing and exporting the files the player chooses — maps from an in-game editor, saves, replays.
 - **AI** — Behaviour trees with blackboards, services and **EQS**, sight perception, A\* **navigation grids** with line-of-sight and flow fields, and a **fog of war** system.
 - **Networking** — Reliable UDP (ENet) plus WebSocket transport (IXWebSocket) for browser/server play, with automatic replication, delta compression, area of interest, prediction, lag compensation, **rollback netcode**, voice chat, server discovery, matchmaking, headless dedicated servers, and cryptography via libsodium.
 - **Local multiplayer** — Split-screen for up to four players, each with its own camera, UI, audio listener and input device.
 - **Platform services** — Ads, in-app purchases, Play Games / Game Center, cloud saves, analytics, notifications, GDPR consent, in-app review, deep links, runtime permissions, Bluetooth and Web3, bridged per platform and exposed to Lua.
 - **Assets** — 25 asset types, each with its own editor, hidden sidecars for import settings, redirectors, a reference viewer, bulk editing, Aseprite and GIF importers, and **asset cooking** (WebP / KTX2 / Opus / Vorbis / VP9 / font subsetting) with a lossless guard that leaves hard-edged pixel art untouched.
 - **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
-- **Extensibility** — Drop-in **plugin** system and **mod** support, with a **Plugin Builder** that compiles native plugins on their own, without an engine build.
+- **Extensibility** — Drop-in **plugin** system and **mod** support (players can install mods from inside the game, on desktop and mobile alike), with a **Plugin Builder** that compiles native plugins on their own, without an engine build — for the editor and desktop games, and for Android, iOS, Web and Xbox games.
 - **Building** — One-click **Build Game** for all seven platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, Xbox `MicrosoftGame.config` layouts and `.msixvc` / `.xvc` packages via the Microsoft GDK, DLC paks that mount over the base game, and headless dedicated servers. The **Android editor** builds signed `.apk` files on the phone itself, with no PC in the loop.
 - **Tooling** — Built-in Tracy profiler, a frame profiler with recorded traces, per-pass GPU timings, memory and VRAM tracking and hitch detection, **23 debug overlays** (colliders, nav grids, light heatmaps, shadow edges, Z-depth, frozen culling and more), stats overlays, a developer console with commands and CVars, a crash reporter that reports only to an endpoint you configure, **Remote Preview** to an Android device over USB, and a hot-key reference.
 
@@ -104,7 +104,8 @@ deliberate differences:
   Python is an editor tool, never a runtime one.
 
 An on-device build packages the engine, your content, your Lua scripts and your plugins' and
-mods' assets. The Play/AdMob/Firebase service integrations and the `.aab` bundle format are
+mods' assets, plus the Android libraries of plugins built beforehand with the desktop Plugin
+Builder. The Play/AdMob/Firebase service integrations and the `.aab` bundle format are
 produced by the Gradle build and still need a desktop install; the Android editor says so in
 the Build Game window instead of offering options it cannot honour.
 
@@ -135,7 +136,7 @@ second executable. The Updater is not built for Android at all.
 
 ## ✅ Project Status
 
-**IceBoxEngine has reached Release.** The current stage is **Release 1.0** — the launcher, the editor, the updater and the runtime are stable, and the engine is ready to build and ship finished, commercial games on every platform it supports.
+**IceBoxEngine has reached Release.** The current stage is **Release 1.0.1** — the launcher, the editor, the updater and the runtime are stable, and the engine is ready to build and ship finished, commercial games on every platform it supports.
 
 Released does not mean finished. An engine never really is: new features, new tooling and continuous improvements keep arriving, and every one of them reaches you as a free update. What changed at 1.0 is how they arrive — as additions on top of a stable base, rather than as ground shifting under a project you are already building on.
 
@@ -607,7 +608,7 @@ What is transmitted, why, how long it is kept and what your rights are: **[PRIVA
 
 ## 📚 Third-Party Libraries
 
-IceBoxEngine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg, which is dynamically linked so it can be replaced freely and is not part of iOS or Web builds). Games you ship for iOS and Web contain no copyleft component at all.
+IceBoxEngine uses a number of open-source third-party libraries, each distributed under its own license (MIT, zlib, BSD-3-Clause, Apache-2.0, ISC, FreeType/FTL, SIL OFL for the bundled fonts, and LGPL-2.1 for FFmpeg, which is dynamically linked so it can be replaced freely and is not part of iOS, Web or Xbox console builds). Games you ship for iOS, Web and the Xbox consoles contain no copyleft component at all.
 
 Full list of libraries and their licenses: **[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)**
 

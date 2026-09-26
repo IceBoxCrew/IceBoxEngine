@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -71,6 +71,7 @@
    - 7.3 [Multi-selection editing](#73-multi-selection-editing)
    - 7.4 [World-asset properties (Views & Cinemas)](#74-world-asset-properties-views--cinemas)
    - 7.5 [Per-instance script overrides](#75-per-instance-script-overrides)
+   - 7.6 [Instance variables](#76-instance-variables)
 8. [World Settings](#8-world-settings)
 9. [The Console](#9-the-console)
    - 9.1 [Menu bar](#91-menu-bar)
@@ -181,13 +182,20 @@ Every asset editor (Sprite Editor, Class Editor, Material Editor, …) opens as 
 free-floating window that you can dock anywhere. Opening the same asset twice does
 not create a second window — the existing one is focused instead.
 
+Inside a panel, the regions of an editor — for example the folder tree, filters and
+thumbnails of the Content Browser, the settings, graph and inspector of the Material
+Editor, or the rows and columns of the Lua Script Debugger — are separated by dividers of
+their own. Drag one to resize the regions on either side of it and double-click it to
+reset it; the positions are remembered per editor type and stored in `imgui.ini` (see
+[Assets → Common editor behavior](Assets-EN-DOC.md#common-editor-behavior)).
+
 ### 2.3 Panel persistence
 
 Several files remember your workspace and your settings between sessions:
 
 | File | Remembers |
 | ---- | --------- |
-| `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float. Delete it to reset to the default layout. |
+| `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float — plus the positions of the dividers inside the editors. Delete it to reset to the default layout. |
 | `Config/Editor.json` | Which panels are open, the last opened level, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
 | `Config/Engine.json` | Everything on the [Preferences](#10-preferences) tabs except collision groups — window, rendering, optimization, audio, accessibility and network defaults. Shipped games read the same file. |
 | `Config/CollisionGroups.json` | The collision group names and the collision matrix ([Preferences → Collision](#103-collision)). |
@@ -220,6 +228,9 @@ When something changes on disk:
 * A changed `.ice_localization` reloads the project's game localization.
 * All assets are refreshed and every class instance in the open level is reloaded,
   so external edits show up in the viewport without a restart.
+* The **Content Browser** — both the folder tree and the item grid — shows files and
+  folders created, renamed or deleted outside the editor within about a second and a
+  half. Changes you make from the Content Browser itself appear at once.
 
 Saving from inside the editor suppresses the watcher for a few seconds so your own
 writes don't trigger a redundant reload.
@@ -293,6 +304,10 @@ A separator sits between **Save Level** and **Level Script Editor**.
 > dragging a gizmo across the viewport is one undo. Scene and file undo are
 > disabled while Play mode is running, and both stacks are cleared when you create
 > or open a level.
+>
+> On Android the editor toolbar carries **Undo** and **Redo** buttons that do exactly
+> what the two shortcuts do, on whichever panel you were last working in — see
+> [The editor on Android](#the-editor-on-android).
 
 ### 3.3 Window
 
@@ -341,10 +356,12 @@ adjusted for a touch screen and for what a phone can actually do:
   only its empty part — with a flick coasting on after you lift the finger. Tapping a text field
   opens the system keyboard automatically; a Bluetooth or USB keyboard and mouse work as ordinary
   input. The divider between two docked panels is thick enough to catch with a finger, so the
-  panels can be resized by dragging it. **Settings → Editor → UI Scale** rides on top of the
-  size the engine picks for the screen: `1.00x` keeps that size, lower values fit more on screen,
-  higher values make everything bigger, and the change applies as you drag. The range on Android
-  is `0.60x`–`2.00x`; on a desktop the same setting is the plain `1.0x`–`4.0x` HiDPI multiplier.
+  panels can be resized by dragging it, and so are the dividers between the regions inside an
+  editor: their grab area spans the whole gap between two regions.
+  **Settings → Editor → UI Scale** rides on top of the size the engine picks for the screen:
+  `1.00x` keeps that size, lower values fit more on screen, higher values make everything
+  bigger, and the change applies as you drag. The range on Android is `0.60x`–`2.00x`; on a
+  desktop the same setting is the plain `1.0x`–`4.0x` HiDPI multiplier.
 * **Right click without a mouse.** Hold one finger where you want the menu and tap with a second
   finger — the tap has to land and lift within half a second, and neither finger may slide. That
   is a right click at the first finger's position, which puts every context menu within reach:
@@ -376,6 +393,61 @@ adjusted for a touch screen and for what a phone can actually do:
   gesture that turned into a pan no longer changes the selection when you lift the finger. A
   short press keeps its usual meaning: select, drag a gizmo, rubber-band a selection. On a
   desktop the same camera is on the right mouse button with WASD and the wheel.
+* **Graphs and canvases navigate like the viewport.** The Material, Material Function, Behavior
+  Tree, Animation State Machine and Visual Scripting graphs, the Class Editor viewport, the
+  Widget canvas, the Tilemap grid, the sprite, flipbook, texture, font atlas, spritesheet,
+  decal, FX and skeleton previews, the Cinema timeline and the Profiler flame graph all take the
+  same gestures: drag with two fingers to pan, pinch to zoom around the point between them, and
+  hold one finger still on empty background for about a third of a second and then drag to pan
+  with it. A short press keeps its usual meaning — select a node, drag it, pull a wire out of a
+  pin, rubber-band a selection, paint a tile, move a widget element — and a two-finger tap is
+  still the right click that opens the node palette and the context menus. While a two-finger
+  gesture is running the surface only navigates, so whatever was under your first finger is
+  never dragged along with it, and a one-finger drag on such a surface no longer scrolls the
+  panel behind it.
+* **What a mouse draws with the right button held takes two taps.** An Animation State Machine
+  transition and a manual slice box in the Spritesheet Slicer are both dragged out with the right
+  mouse button on a desktop. On a phone the two-finger tap that stands in for a right click sets
+  the first end — the source state, or the first corner of the box — and the next tap sets the
+  other end and commits it. A second tap on the same spot, or on empty background, cancels
+  instead.
+* **Shift, Ctrl and Alt live on the toolbar.** A phone has no keyboard, so the editor toolbar
+  starts with three sticky modifier keys. Tap one to hold it down for your next touch, tap it
+  again to lock it on (a dot appears under it), and a third time to release it; a one-shot key
+  lets go by itself as soon as the touch that used it ends. They drive everything a mouse does
+  with a modifier held: Ctrl adds one item to a selection or takes it out in the viewport, the
+  Level Outliner, the Content Browser, the node graphs and the Cinema timeline; Shift picks a
+  range in lists, keeps an existing selection while you box-select, snaps a widget element to
+  its anchor, and in the Tilemap Editor selects a region, stamps it back down and resizes the
+  brush with a pinch; Alt picks the tile under your finger. Lock a key when you are about to do
+  several of these in a row.
+* **Undo and Redo sit next to them.** The same toolbar strip ends with an **Undo** and a **Redo**
+  button, because Ctrl+Z and Ctrl+Y are the one pair of shortcuts you cannot reach by holding a
+  sticky key — the finger that presses the button is the finger that would have to press the key.
+  They act on whatever you were last working in, not on the toolbar: the level, the Content
+  Browser, a node graph, a Visual Scripting graph, a script's code or any asset editor, exactly
+  as the keyboard shortcut does on a desktop. Tap somewhere else and the buttons follow you
+  there. A Shift, Ctrl or Alt you have latched does not change what they do — Undo stays Undo
+  with Shift locked — and pressing them does not use up a one-shot key.
+* **A Tilemap region is selected with two taps.** With Shift held, a two-finger tap sets one
+  corner of the region and the next tap sets the other and copies it into the stamp, because a
+  right-button drag has no touch equivalent.
+* **The Tilemap eraser is a toggle.** On a desktop you rub tiles out by dragging with the right
+  mouse button held. On a phone the tile palette has an **Eraser** checkbox next to **Tiles** and
+  **Animated**: turn it on and a one-finger drag across the grid erases instead of painting, and
+  the brush ghost goes away so you can see what you are removing. Everything a modifier does —
+  Shift to select a region or stamp, Alt to pick a tile, Ctrl+Q/E to rotate — still works while
+  the eraser is on; turn it off to paint again.
+* **Copy and paste in the Visual Scripting graph.** The node and comment menus gain a **Copy**
+  item, and the node palette opens with a **Paste** item above the search box whenever something
+  is on the clipboard, so a selection can be carried across the graph without Ctrl+C and Ctrl+V.
+  The Material, Material Function and Behavior Tree graphs already carry **Copy**, **Paste** and
+  **Duplicate** in their own menus on every platform.
+* **Small drag surfaces keep the finger.** The FX curve and gradient editors, the tile collider
+  and animated-tile collider editors, the Widget animation timeline and the Visual Scripting
+  timeline plot hand a one-finger drag to the points they edit instead of scrolling the panel
+  underneath, and dragging a panel splitter resizes it rather than scrolling. Everywhere else a
+  one-finger drag still scrolls the panel exactly as before.
 * **Launcher and editor in one process.** The launcher screen opens first; picking a project
   hands it straight to the editor. There is no second executable to start. If the editor cannot
   open a project, the app returns to the launcher with the reason instead of closing.
@@ -394,14 +466,23 @@ adjusted for a touch screen and for what a phone can actually do:
   **Import Project (.zip)…** unpacks one back into `IceBoxProjects/`. That is the round trip
   between a phone and a PC — see
   [Profiling & Building, 8.8](Profiling-And-Building-EN-DOC.md#88-building-on-android-itself).
+* **Assets come in through + Import.** Files cannot be dropped into the editor from other apps
+  on Android, so the Content Browser's **+ Import** is the way in: it opens the system file
+  picker, takes several files at once and brings them into the current folder under their own
+  names, with the same prefixes, sidecars, name-conflict dialog and Undo as on a desktop — one
+  Undo takes back the whole batch. See
+  [Assets, 3.9](Assets-EN-DOC.md#39-importing-external-files).
 
-Projects, builds, keystores and exports live in `/storage/emulated/0/IceBoxEngine/` — an
-ordinary folder that a file manager on the phone and a PC over USB both open, so a project can
-also move by copying its folder. The app asks for **All Files Access** on first start to put
-them there; while that permission is missing the launcher keeps an **Allow All Files Access…**
-button on its *My Projects* tab and everything falls back into
-`Android/data/com.iceboxengine.editor/files/`, where earlier versions kept it — the launcher
-still lists projects left there, so nothing is lost either way.
+Projects, builds, keystores, exports and your preferences live in
+`/storage/emulated/0/IceBoxEngine/` — an ordinary folder that a file manager on the phone and a
+PC over USB both open, so a project can also move by copying its folder, and nothing in it goes
+away when the app is uninstalled. The app asks for **All Files Access** on first start to put
+them there and opens the launcher once you have answered; while that permission is missing the
+launcher keeps an **Allow All Files Access…** button on its *My Projects* tab and everything
+falls back into `Android/data/com.iceboxengine.editor/files/`, where earlier versions kept it —
+the launcher still lists projects left there, so nothing is lost either way. Granting the
+permission from that button switches over as soon as you come back: the launcher reloads itself
+on the shared folder.
 
 Every field that takes a folder has a browse button that opens the system folder picker: the
 launcher's **Location**, **Move…** and **Duplicate…**, and the editor's **Output Path** and
@@ -501,7 +582,8 @@ captured.
    Preferences values) and the rendering override.
 5. Pushes the level script into the script engine and hands the placed **cinema**
    volumes (auto-play / play-once / trigger flags) to the cutscene player.
-6. Applies the **custom cursor** from Preferences, or restores the default one.
+6. Hands the pointer to the game and applies the **custom cursor** from
+   Preferences, or restores the default one.
 7. Hides the OS cursor, switches to relative-mouse mode, and starts the runtime.
 8. Notifies the Lua and Visual Script debuggers that Play has begun.
 
@@ -509,9 +591,35 @@ captured.
 emitters, wipes the registry and **restores the pre-play snapshot** — any change
 made during Play is discarded — then restores the cursor.
 
-> **Cursor in Play mode.** Entering Play hides the OS cursor and switches to
-> relative-mouse mode (for FPS-style look). Press `Shift+F1` to toggle the cursor
-> back on without leaving Play.
+> **Cursor in Play mode.** The editor keeps two separate pointers and only one of
+> them owns the mouse at a time.
+>
+> * **Game cursor** (the default the moment Play starts). The pointer belongs to
+>   the running game: it is **confined to the game viewport** — including after you
+>   drag the viewport panel to another size or position — and the editor UI ignores
+>   the mouse completely, so a click can no longer land on a panel behind the game.
+>   Its look and visibility come **only from the game**: the custom cursor from
+>   Preferences and the Lua calls `ShowCursor()`, `HideCursor()`, `SetCursor*()` and
+>   `SetRelativeMouseMode()`. Entering Play hides the OS cursor and switches to
+>   relative-mouse mode (for FPS-style look), exactly like a shipped build.
+> * **Editor cursor.** Press `Shift+F1` to take the pointer back: the barrier around
+>   the viewport is removed, the normal editor cursor returns and every panel, menu
+>   and toolbar button answers the mouse again. The game keeps running but receives
+>   no mouse position, buttons, wheel or delta while you browse, so clicking a panel
+>   never leaks into the game. The game's own cursor state is remembered and restored
+>   the moment you press `Shift+F1` again. Ejecting the camera (`F2`) switches to the
+>   editor cursor too, because the free camera and the gizmos need the mouse.
+>
+> The keyboard is never captured, so `Shift+F1`, `F2`, `F3` and `F5` work in both
+> modes. The switch is also available to Python as
+> `editor.set_editor_cursor()` / `editor.toggle_editor_cursor()` /
+> `editor.is_editor_cursor()` / `editor.get_cursor_owner()`; nothing in the editor
+> touches the game cursor, and nothing in the game touches the editor cursor.
+>
+> **Touch input is unaffected.** On Android (and on any touch screen) taps keep
+> reaching the editor while the game owns the mouse, because a finger is not a
+> pointer. Plug a mouse into an Android device and the split above applies to that
+> mouse as well; unplug it and the editor takes the pointer back automatically.
 
 > **Editing while playing.** With the camera **ejected**, you can select and move
 > entities during Play mode; the gizmo writes straight into the live simulation
@@ -742,7 +850,7 @@ hovering a row for a moment shows its type in a tooltip.
 | **Double-click** | On a class entity: opens its Class asset. On a world asset: opens the `.ice_view` / `.ice_cinema` asset. |
 | **F2** | Rename the selected entity, or the selected folder. |
 | **Delete** | Delete the selected entity, folder or world asset. |
-| **Ctrl + C / X / V** | Copy / cut / paste entities (pasted copies are offset slightly and renamed). Also works while the viewport is focused. |
+| **Ctrl + C / X / V** | Copy / cut / paste entities (pasted copies are offset slightly and renamed). Also works while the viewport is focused. [Instance variables](#76-instance-variables) that point at entities copied together are redirected to the new copies; after a cut and paste, other entities keep pointing at the moved ones. |
 | **Ctrl + A** | Select all entities. |
 | **Drag** | Re-file an entity (or the whole multi-selection) into a folder, or drag a folder into another folder. Dropping onto empty space in the panel moves items out of all folders. |
 | **Right-click an entity** | Copy / Cut / Paste, and **Move to Folder ▸** with `(None)` plus every folder. |
@@ -779,6 +887,8 @@ For a single entity, the top of the panel shows:
     collapsible **"Modified from class (N)"** listing exactly which components
     differ. A component the class defines but the entity no longer has is listed as
     `… (removed)`.
+  * The [instance variables](#76-instance-variables) section, when the class has
+    variables marked *Instance Editable*.
   * The [per-instance script override](#75-per-instance-script-overrides) section.
 
 The diff deliberately **ignores the Transform's Position**, so simply placing an
@@ -856,7 +966,9 @@ and an editable **Position**. Everything else lives elsewhere:
 Under the class-sync header, an entity created from a class gets a **Lua Script
 (Class Override)** section. It exists so one instance can behave differently from
 its class without cloning the class — for example wiring one specific button to one
-specific door.
+specific door. When only *values* differ between instances (which door, how fast,
+what color), [instance variables](#76-instance-variables) do the job without copying
+the script.
 
 **Lua projects**
 
@@ -877,6 +989,35 @@ specific door.
   and a status line; the node count is shown next to it. Edits recompile to Lua on
   the fly and are stored with the entity.
 * **Reset to Class Script** re-copies the class graph.
+
+### 7.6 Instance variables
+
+When an entity's class is a Visual Script class with variables marked **Instance
+Editable** (see [Visual Scripting reference](LuaAPI-EN-DOC.md#visual-scripting-reference)),
+an **Instance Variables** section appears under the class-sync header. It lets one placed
+instance differ from its class — the key a door needs, an enemy's patrol speed, the lamp a
+switch controls — without touching the script.
+
+* Variables are grouped by their **Category**. Each row shows the variable name (hover it
+  for the type and tooltip) and an editor for its type: number fields respect the
+  variable's **Value Range**, enums get a drop-down, and arrays, sets and maps get an item
+  list with **+ Add**, **Clear** and a remove button per item.
+* **Entity** variables point at another entity of the level. Pick it from the searchable
+  list, or drag an entity from the Level Outliner onto the field. A reference to an entity
+  that has been deleted shows **Missing entity** and is `nil` in the game.
+* A value that differs from the class default is highlighted and gets a **reset arrow**
+  that returns it to the class default. Setting a value equal to the class default removes
+  the override, so the instance keeps following the class.
+* Variables inherited from parent classes are listed too. If the entity uses a per-instance
+  Visual Script override ([7.5](#75-per-instance-script-overrides)), the variables of that
+  graph are shown.
+* Values saved for variables that no longer exist, or whose type has changed, are listed as
+  **Unused overrides** with a **Remove** button.
+* After an edit the class's **On Construct** runs again in the editor, so construction logic
+  that depends on the value updates the viewport.
+* The values are stored with the entity in the `.icemap`, survive a class hot-reload whatever
+  *Override Class Defaults* is set to, and travel with the entity when it is copied or cloned
+  at runtime with `CloneEntity`.
 
 ---
 
@@ -1128,7 +1269,10 @@ Look-and-feel of the editor itself:
   **Tabs** and **Title** (title bar, active, collapsed).
 * **Language** — the editor UI language, from the 14 supported languages.
 * **Font** — file (scanned from `Config/Fonts`), size (8–72 px) and colour, with a
-  **Refresh** button that rescans the folder.
+  **Refresh** button that rescans the folder. In Play mode it is also the fallback for
+  widget text and `Draw.Text` that have no font of their own, until the game assigns a
+  font asset with `SystemFont.Set` (see
+  [Lua API → SystemFont](LuaAPI-EN-DOC.md#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)).
 * **UI Scale** (1×–4×; on Android `0.60×`–`2.00×`, applied on top of the scale the
   engine picks for the screen — see [The editor on Android](#the-editor-on-android)).
 * **Grid** — size (1–1000), line thickness (0.01–1), colour, **Snap to Grid**,
@@ -1144,16 +1288,24 @@ Global rendering defaults (a level can override these in
 * **Lighting Mode** (Unlit / Lit).
 * **Render Backend** — the list depends on the platform and the build: OpenGL 4.6 /
   OpenGL 3.3 (/ Vulkan when compiled in, / Direct3D 12 on Windows when compiled in) on
-  Windows and Linux, and Metal (native, the default) / Metal (ANGLE) / Metal (MoltenVK)
-  on macOS. The choice is written to
+  Windows and Linux, Metal (native, the default) / Metal (ANGLE) / Metal (MoltenVK)
+  on macOS, and Vulkan / OpenGL ES 3.2 on Android. The choice is written to
   `Config/Engine.json` and applied on the next editor start, with an automatic fallback
-  chain when the selected backend is not available on the machine.
+  chain when the selected backend is not available on the machine. On Android a project
+  that does not record Vulkan — every project brought over from a desktop, for example —
+  opens on OpenGL ES 3.2, and saving the preferences on the phone keeps that desktop
+  renderer in `Config/Engine.json` unless you switch the phone to Vulkan, so the project
+  still opens on its own renderer when it goes back to the PC. Switching the phone from
+  Vulkan back to OpenGL ES 3.2 clears the recorded renderer, so the next desktop start
+  picks the best one again by itself. If Vulkan cannot start on the device, the editor
+  falls back to OpenGL ES 3.2 on its own.
 * **Active renderer** — read-only: the backend the editor is rendering with *right now*,
   and the **GPU** behind it. A project that has never recorded a renderer gets one the
-  first time it is opened, by probing the platform chain from the top
+  first time it is opened on a desktop, by probing the platform chain from the top
   (Windows: Direct3D 12 → Vulkan → OpenGL 4.6 → OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 →
   OpenGL 3.3; macOS: Metal → Metal (MoltenVK) → Metal (ANGLE)) — new projects already
-  carry the probe result from the moment the Launcher creates them. When the combo above
+  carry the probe result from the moment the Launcher creates them, on Android too, where
+  the Launcher probes Vulkan → OpenGL ES 3.2. When the combo above
   names something other than the active renderer, a reminder to restart the editor
   appears under this line. The details are in
   [Graphics → Backends & platforms](Graphics-EN-DOC.md#22-backends--platforms).
@@ -1276,11 +1428,35 @@ tabs.
 
 * A coloured **Status** line: *Offline*, *Connecting…*, *Reconnecting…*,
   *Connection Failed*, *Connected* or *Server Running*.
-* **Mode** radio buttons — **Offline / Host / Client**. Hosting exposes **Max
-  Players**; joining exposes **Server IP**. Both expose **Port** (1024–65535) and a
-  masked **Password**. All of these lock while a session is up.
-* **Start Server** / **Connect**, and **Stop Server** / **Disconnect** (red) once
-  connected. Connect/host events are echoed into the chat log as system messages.
+* **Mode** radio buttons — **Offline / Host / Client / Host Online / Join by Code**.
+  * **Host** and **Client** are the classic direct session: hosting exposes **Max
+    Players**, joining exposes **Server IP**; both expose **Port** (1024–65535) and a
+    masked **Password**.
+  * **Host Online** and **Join by Code** test
+    [online rooms](Engine-EN-DOC.md#510-server-discovery--nat-traversal) — there is no
+    port or IP to enter. Both show **Connection Method** (**Auto / Serverless P2P /
+    Rendezvous Server**), the **Rendezvous Server** address (host or host:port; hidden
+    for serverless P2P), **Local Network Discovery** (hidden for the rendezvous server)
+    and **Password**. **Host Online** adds **Max Players**, an optional fixed **Room
+    Code** (empty = a random code) and **Public Room**; the session port is picked
+    automatically. **Join by Code** takes the friend's **Room Code**.
+
+  All of these lock while a session is up.
+* **Start Server** / **Connect** / **Host Online** / **Join Room**, and **Stop Server** /
+  **Disconnect** (red) once connected; while a join is still in progress the button
+  reads **Cancel**. Connect/host events and online errors are echoed into the chat log
+  as system messages, including the room code as soon as the room is ready.
+* An **online status** block while a room session runs: the **Online** state
+  (registering, hosting, searching, punching, connecting, connected, …), the
+  **Connection Method**, the **Public Address** the internet sees for this machine,
+  **DHT Nodes** with *reachable* / *not reached yet* (serverless P2P), the **Room Code**
+  with a **Copy** button, the **Route** to the host (client), the **NAT Type** and, on
+  the host, **Router Port Mapping** (the UPnP / NAT-PMP result with the mapped address).
+* **Local Rendezvous Server** — a collapsible section that starts a rendezvous server
+  inside the editor (UDP 7790–7791, relays 7800–7899, web gateway 7792/7793) to test the
+  rendezvous backend on one machine or in the local network; while it runs it shows
+  *Rooms / Relays / Web players* and a stop button. Enter `127.0.0.1` as the
+  **Rendezvous Server** to use it.
 * Four inner tabs:
   * **Chat** — a message log with a **Mode** selector: **Public / Channel / DM**.
     Channel mode adds a channel name field with **Join** and **Leave** and lists the
@@ -1300,6 +1476,10 @@ tabs.
   netcode state when it is running: synchronizing/running, local player handle,
   player count, current and confirmed frame, predicted frames, rollbacks per second,
   average and maximum rollback depth, and frame advantage.
+
+Sessions started while the game runs in **Play** mode — by scripts or from this panel
+— are closed when you press **Stop**, and so is a local rendezvous server started during
+Play; a session or server that was already running before Play keeps running.
 
 **Network Profiler** — a second tab with live graphs sampled a few times a second
 and a **Pause** checkbox that freezes sampling:
@@ -1390,7 +1570,8 @@ same server and reflects the connection state.
 * **Editor** — file (`Ctrl+S`, `Alt+F4`), edit (`Ctrl+Z/Y/R`, `Del`), selection
   (`F`, `Ctrl+Click`, LMB-drag marquee).
 * **Play Mode** — `F5` pause/resume, `F3` toggle Play, `F2` toggle free camera
-  (Eject), `Shift+F1` toggle cursor.
+  (Eject), `Shift+F1` toggle the editor cursor (pointer to the editor or back to
+  the game).
 * **Viewport** — gizmos (`Q/E/R`), camera (`RMB+WASD`, scroll, `Shift+Scroll`),
   mouse (LMB select, RMB context menu).
 * **Tilemap Editor** — paint/erase/fill/pick, region/stamp, tile rotation
@@ -1400,8 +1581,9 @@ same server and reflects the connection state.
   `PrintScreen` / `PrintScreenEx` / `RemoveScreenMessage` / `ClearScreenMessages` /
   `DrawWorldText` overlay calls, the `GetDebug…` / `ToggleDebug…` flag helpers,
   `IsDebugBuild`, the profiler-trace calls (`StartProfilerTrace`,
-  `StopProfilerTrace`, `SaveChromeTrace`), the whole `NetworkProfiler.*` table, and
-  a list of viewers that can open an exported Chrome trace. These are reference for
+  `StopProfilerTrace`, `SaveChromeTrace`), the `SystemFont.*` table that sets the font
+  of the developer console and the debug overlays, the whole `NetworkProfiler.*` table,
+  and a list of viewers that can open an exported Chrome trace. These are reference for
   scripting — see [Lua API](LuaAPI-EN-DOC.md).
 
 The full shortcut list is reproduced in [Section 15](#15-keyboard--mouse-reference).
@@ -1541,7 +1723,7 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `F3` | Toggle Play mode |
 | `F5` | Pause / resume |
 | `F2` | Toggle free camera (Eject / Inject) |
-| `Shift+F1` | Toggle cursor |
+| `Shift+F1` | Toggle the editor cursor (pointer to the editor or back to the game) |
 
 **Console**
 
@@ -1580,8 +1762,10 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 ## 16. FAQ & troubleshooting
 
 **My panel layout is broken — how do I reset it?**
-Delete `imgui.ini` next to the editor and restart; the default layout is rebuilt.
-Individual panels can be re-opened from the [Window](#33-window) menu.
+Delete `imgui.ini` next to the editor and restart; the default layout is rebuilt, and the
+dividers inside the editors go back to their default positions too. A single divider can be
+reset without that by double-clicking it. Individual panels can be re-opened from the
+[Window](#33-window) menu.
 
 **I closed the Console / Outliner / Properties — where did it go?**
 Re-enable it from the **Window** menu (the Console is `Window → Show Console`).

@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > This document covers two production-critical workflows of **IceBoxEngine**:
 >
@@ -61,6 +61,7 @@
    - 5.4 [The network profiler](#54-the-network-profiler)
    - 5.5 [Driving the profiler from Lua](#55-driving-the-profiler-from-lua)
    - 5.6 [Profiling a shipped build](#56-profiling-a-shipped-build)
+   - 5.7 [The console & overlay font](#57-the-console--overlay-font)
 
 **Part II — Building games**
 
@@ -100,6 +101,7 @@
 **Appendix**
 
 - [Headless (dedicated server)](#headless-dedicated-server)
+- [Rendezvous server](#rendezvous-server)
 
 ---
 
@@ -135,8 +137,8 @@ Every frame the profiler can collect:
 | Category | Metrics |
 | -------- | ------- |
 | **Frame** | Frame time (ms), FPS, GPU frame time (ms). |
-| **CPU** | Process CPU usage (%, exponentially smoothed), physical core count, logical processor count, frequency (GHz). |
-| **Memory** | RAM current / peak / total (MB), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
+| **CPU** | Process CPU usage (%, exponentially smoothed, sampled four times a second), physical core count, logical processor count, frequency (GHz). |
+| **Memory** | RAM current / peak / total (MB, current and peak sampled four times a second), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
 | **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
 | **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners, mixer voices, streams, limiter reduction in dB), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
@@ -508,7 +510,11 @@ rather than the whole system's.
 * With **Show Graphs**: GPU-time, draw-call and VRAM graphs.
 
 GPU timing relies on driver timer queries; when they are unavailable the panel says so
-and the value shows as `N/A` — CPU scopes, memory and counters keep working.
+and the value shows as `N/A` — CPU scopes, memory and counters keep working. On Android,
+OpenGL ES timer queries (`GL_EXT_disjoint_timer_query`) run in the editor and in Debug game
+builds; Release game builds leave them off to spare the per-frame query cost, so there the
+GPU time on OpenGL ES stays `N/A`. Vulkan timestamps work in every build the device
+supports them in.
 
 ### 4.6 Engine tab
 
@@ -691,7 +697,8 @@ it every frame for a live readout — which is why `DrawWorldText` defaults to `
 **negative** duration makes the message persistent until you remove it by key or clear it.
 The whole system can be switched off globally with `SetScreenEnabled(false)`
 (`IsScreenEnabled()` reads it back). Text is drawn **both in the editor viewport and in
-the standalone runtime**, so what you see while testing is what players see.
+the standalone runtime**, so what you see while testing is what players see — only the
+font differs: the editor uses its own, a game build the [system font](#57-the-console--overlay-font).
 
 This is the primary way to surface live values (FPS, counters, state) inside a running
 build. (The scripting entry points are in the [Lua API](LuaAPI-EN-DOC.md).)
@@ -800,6 +807,37 @@ engine scopes. Full signatures and examples are in
   metrics are computable at runtime and can be surfaced via `DebugScreen` or custom UI.
 * **Release** builds disable Tracy and both overlays for zero overhead; use
   `DebugScreen`/console and your own in-game readouts for lightweight runtime checks.
+
+### 5.7 The console & overlay font
+
+The developer console, the `DebugScreen` text and both profiler overlays have no font
+asset of their own — they draw with the engine's **system font**, the same font that widget
+text, tooltips, dropdowns and `Draw.Text` fall back to when they have no font.
+
+* **By default** it is the operating system's UI font, found at runtime (Segoe UI on
+  Windows, San Francisco on macOS/iOS, Roboto on Android, DejaVu/Liberation/Noto on Linux),
+  so nothing has to ship for it.
+* **Web** has no OS font at all — a browser never exposes font files — and an **Xbox**
+  console gives a game none to read, so there this text stays blank on its own. The
+  start-up log says so: `No OS system font found; ...`.
+* **Assign a font asset** from the Content Browser to fix it everywhere and get the same
+  look on every platform:
+
+  ```lua
+  function OnLevelStart()
+      SystemFont.Set("Content/Fonts/F_Console.ttf")
+  end
+  ```
+
+  Leave it out and nothing changes — the OS font keeps working as before. A path that
+  cannot be loaded returns `false`, logs a warning and keeps the current font.
+* With **Cook Assets** and Font Mode **Auto-subset**, give that font Additional Ranges for
+  every script your console and logs print — strings made at runtime are invisible to the
+  cooker (see [9](#9-asset-cooking)).
+
+The full API — `Set`, `Get`, `Clear`, `IsLoaded`, `GetSource`, `GetFile`, `HasOSFont` —
+and the exact order in which the font is chosen are in
+[Lua API → SystemFont](LuaAPI-EN-DOC.md#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text).
 
 ---
 
@@ -916,11 +954,20 @@ click.
 > counts as a failure, and the report stays queued and is retried on the next launch.
 >
 > **No server at all?** Add `"CrashReportEmail": "support@yourgame.com"` to the packaged
-> `game.json`. With no URL set, the **desktop** crash dialog then offers to compose an
-> email to that address instead of only naming the file it wrote, and the **Web** overlay
-> grows a *Send via Email* button that does the same through `mailto:`. **Android and
-> iOS** have no mail path: they ask to send only when a Crash Report URL is set, and stay
-> silent otherwise.
+> `game.json`. With no URL set, the crash dialog then offers to compose an email to that
+> address instead of only naming the file it wrote: on **desktop** through MAPI /
+> `xdg-email` / `mailto:`, on the **Web** through a *Send via Email* button, and on
+> **Android** through a mail-app intent that already carries the head of the report. On
+> **iOS** the same mail offer appears on the next launch rather than at crash time.
+
+> **When the dialog appears.** Windows, Linux, macOS, Android and Web show it *at crash
+> time*, right after the report file has been written, so the player can send in one tap
+> and close the app. **iOS** is the one exception: presenting a modal from a crashed main
+> thread is not safe there, so the report and a `.pending` marker are written at crash
+> time and the "Send the crash report?" prompt appears on the next launch. On **Android**
+> the dialog is skipped in one case too — a crash on the Android UI thread itself, where
+> blocking that thread would freeze the dialog — and the same next-launch prompt takes
+> over. Either way the report file is always written first, so nothing is ever lost.
 
 ---
 
@@ -1088,6 +1135,10 @@ macOS). The engine also ships an Android APK that carries the editor itself; bui
 * The packaging step also copies the generated companion files next to the `.html`
   (`.js`, `.wasm`, `.data`) plus `favicon.png` and `apple-touch-icon.png` when the build
   produced them.
+* **Fonts.** A browser exposes no OS font, so the developer console, `DebugScreen` text,
+  the profiler overlays and widget / `Draw.Text` text without a font stay blank until the
+  game assigns a font asset with `SystemFont.Set` — see
+  [5.7](#57-the-console--overlay-font).
 
 ### 8.5 macOS
 
@@ -1239,7 +1290,11 @@ on a Windows host.
 > OpenGL backend sources are excluded, because a title may only present through Direct3D 12
 > there. Xbox Services links from the GDKX's own console libraries, and the crash reporter
 > and hardware sensors step aside for the console operating system, which captures crashes
-> itself and delivers them through Partner Center.
+> itself and delivers them through Partner Center. Video plays through the console's Media
+> Foundation Source Reader instead of FFmpeg: H.264 or HEVC in MP4 with AAC-LC or AC-3 audio,
+> from loose files and from `Content.icepak` alike, with the same Lua `Video.*` API as every
+> other platform (seeking, playback speed and loop ranges included); the build links
+> `mfplat` / `mfreadwrite` (delay-loaded) and `mfuuid` from the GDKX for it.
 >
 > What is left needs the GDKX and a devkit. **SDL3:** SDL carries the `Gaming.Xbox.*` code
 > in its public release, but it builds for the console only through its own `VisualC-GDK`
@@ -1305,6 +1360,11 @@ xbapp install "<output>\<Base>.xvc"
   `"Scarlett"`). `Settings.IsXbox()` is true for all of them, `Settings.IsConsole()` only
   for the two console families. `Settings.IsWindows()` stays true on the PC family,
   because that build really does run on Windows.
+* **Fonts.** A console title cannot read the system's font files, so the developer
+  console, `DebugScreen` text, the profiler overlays and widget / `Draw.Text` text without
+  a font stay blank until the game assigns a font asset with `SystemFont.Set` — see
+  [5.7](#57-the-console--overlay-font). The PC family runs on Windows and falls back to
+  Segoe UI like any Windows build.
 * **Microsoft ecosystem.** The `Xbox.*`, `XboxStore.*` and `XboxMultiplayer.*` tables expose
   the Microsoft GDK itself to Lua on all three device families: sign-in and the gamertag, age
   group and privileges, the system achievements panel, message dialogs and the on-screen
@@ -1328,7 +1388,10 @@ xbapp install "<output>\<Base>.xvc"
   run without it. On PC it is only logged, so a loose build you launched directly (without
   registering it first) still starts, with Xbox services unavailable for that session.
 * **Plugins and mods** are packaged exactly like the desktop targets, and asset cooking
-  offers the same formats as Windows x64, KTX2 included.
+  offers the same formats as Windows x64, KTX2 included. A plugin that ships without
+  sources needs its GDK build for the device family — `Tools\PluginBuilder\build_plugins_xbox.bat`
+  files it under the plugin's `Binaries/Xbox/<family>/`, and the build packages it in place
+  of the plugin's Windows DLL.
 
 **Toolchain and triplets.** The Xbox targets are wired the same way as every other
 platform in the engine. `Gaming.Desktop.x64` is a normal Windows x64 build with the GDK
@@ -1448,11 +1511,18 @@ the phone, and use **Import Project (.zip)…** on the launcher's *My Projects* 
 into `IceBoxProjects/`, refuses an archive that holds no `.iceproject`, never writes outside the
 destination folder, and adds the result to the project list ready to open. If a folder of that
 name already exists the import lands beside it as `<Name>-2`, so nothing is ever overwritten.
+The archive is read straight from wherever you picked it — nothing is copied first — and the
+launcher stays responsive while it unpacks. Archives made by the macOS Finder are fine too: its
+`__MACOSX` folder and `.DS_Store` files are left out.
 
 **Plugins with native code.** An on-device build packages every enabled plugin's assets,
 scripts and descriptors, but it cannot compile a plugin's native library — there is no
-compiler on the device. When such a plugin is enabled the build log says so by name and
-carries on; build that game from a desktop install if it needs the plugin's native part.
+compiler on the device. What it can do is ship a library that was built beforehand: the
+`.so` files under a plugin's `Binaries/Android/<ABI>/`, which the desktop Plugin Builder
+(`Tools/PluginBuilder/build_plugins_android`) produces, go into the APK for every ABI the
+runtime template carries. When an enabled plugin has native sources but no such library, the
+build log says so by name and carries on; build the plugin's Android library on a desktop, or
+build that game from a desktop install.
 
 **Where your files live.** Everything you work with sits in ordinary shared storage, so a file
 manager on the phone and a PC over USB both reach it without special tools:
@@ -1462,23 +1532,33 @@ manager on the phone and a PC over USB both reach it without special tools:
 ├── IceBoxProjects/      # your projects — the launcher's default location
 ├── IceBoxBuilds/        # built APKs
 ├── IceBoxKeystores/     # signing keystores generated on the device
-└── IceBoxExports/       # screenshots, console logs and exported project archives
+├── IceBoxExports/       # screenshots, console logs and exported project archives
+├── UserData/            # launcher project list, editor preferences and a copy of the activation
+└── Saved/CrashReports/  # crash reports of the editor itself, newest 15 kept
 
 Android/data/com.iceboxengine.editor/files/
-├── Engine/              # engine data unpacked from the APK on first run (Config, Content, Documentation, Plugins, Mods, the runtime template)
-└── UserData/            # launcher project list and editor preferences
+└── Engine/              # engine data unpacked from the APK on first run (Config, Content, Documentation, Plugins, Mods, the runtime template)
 ```
 
-The shared folder needs **All Files Access**, which the app asks for on first start; the
-launcher keeps an **Allow All Files Access…** button on its *My Projects* tab while the
-permission is missing. Without it everything falls back into
-`Android/data/com.iceboxengine.editor/files/`, exactly where earlier versions kept it, and the
-launcher still lists projects left there, so nothing is lost either way.
+**If the editor itself crashes.** The report is written to
+`IceBoxEngine/Saved/CrashReports/` first, then a dialog names that exact file and offers to
+send it to the engine developers in one tap. Decline and nothing leaves the device — the
+`.txt` stays there for you to read or forward yourself. It is a plain folder in shared
+storage, so any file manager opens it.
+
+The shared folder needs **All Files Access**, which the app asks for on first start — the
+launcher opens once you have answered — and the launcher keeps an **Allow All Files Access…**
+button on its *My Projects* tab while the permission is missing. Without it everything falls
+back into `Android/data/com.iceboxengine.editor/files/` (`UserData/` included), exactly where
+earlier versions kept it, and the launcher still lists projects left there, so nothing is lost
+either way. Granting the permission later switches over as soon as you come back: the launcher
+reloads itself on the shared folder and moves the project list and preferences over from
+`Android/data/…/UserData/`.
 
 `Engine/` is re-unpacked whenever the app is updated, so nothing inside it is yours to keep:
 your editor preferences - language, font, theme and the renderer that was picked - live in
-`UserData/Config/Engine.json` beside the launcher's project list, and survive every update.
-Everything outside `Engine/` is yours and is never touched.
+`UserData/Config/Engine.json` beside the launcher's project list, and survive every update and
+an uninstall as well. Everything outside `Engine/` is yours and is never touched.
 
 ---
 
@@ -1516,8 +1596,12 @@ into memory when they load and long ones are streamed ([Engine → 6](Engine-EN-
 Audio cooked by an earlier engine version is re-encoded once, on the next cook.
 
 **Platform restrictions:** WebP textures are not available on the **iOS** and **Web**
-runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only);
-those are forced to PassThrough. **KTX2** requires a desktop x86/x64 runtime
+runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only)
+or on the **Xbox consoles** — the **Xbox One** and **Xbox Series X|S** device families, whose
+runtime plays video through Media Foundation (H.264/HEVC in MP4 with AAC-LC or AC-3 audio);
+those are forced to PassThrough, so ship MP4 videos for those targets. The **PC** device
+family of an Xbox build (`Gaming.Desktop.x64`) decodes through FFmpeg like Windows and keeps
+VP9. **KTX2** requires a desktop x86/x64 runtime
 (Windows/Linux, or macOS Intel) because it needs the Basis Universal transcoder, which has
 no arm64 vcpkg port, so arm64 desktop targets are excluded too — on other
 targets it falls back to WebP, or to PassThrough where WebP is unavailable too. The dialog
@@ -1683,7 +1767,7 @@ the script as `--format deb|appimage|both`.
   the `.deb` launcher does, next to a `.desktop` entry and a 256×256 icon so desktop
   integrators (AppImageLauncher, `appimaged`) can add a menu entry. An AppImage is mounted
   **read-only**, so the runtime falls back to `~/.local/share/IceBoxEngine/game/` for saves,
-  config and user `Mods/`/`Plugins/` — the same place a `.deb` installed under `/opt` uses.
+  config and the player's `Mods/` folder — the same place a `.deb` installed under `/opt` uses.
   An icon is mandatory for an AppImage, so a build without one gets the engine's default
   logo instead of failing.
 
@@ -1794,7 +1878,11 @@ re-signed:
 12. **Stage plugins & mods** — only the entries marked enabled in `Plugins.json` /
     `Mods.json` are copied, build junk (`Source/`, `build/`, `out/`, `.git/`, `*.obj`,
     `*.pdb`, `CMakeLists.txt`, …) is filtered out, and the freshly built plugin binaries
-    (`.dll`/`.so`/`.dylib` + `plugin.json`) are overlaid on top. Skipped entirely when
+    (`.dll`/`.so`/`.dylib` + `plugin.json`) are overlaid on top. A plugin's `Binaries/`
+    folder of game-platform libraries is not copied; on **Xbox**, the DLLs under
+    `Binaries/Xbox/<family>/` of the device family being built replace the Windows DLLs of
+    every plugin the build did not compile itself, and an Xbox One / Xbox Series build
+    leaves out Windows DLLs it has no console build for. Skipped entirely when
     **Include Plugins** / **Include Mods** is off, and for any plugin whose `plugin.json`
     declares `"EditorOnly": true`. Also skipped where plugins are linked in statically
     (Web, iOS) or bundled by Gradle (Android); mods are not supported on Web.
@@ -2053,7 +2141,7 @@ an incompatible build. The Lua side of this is
 | ----- | ------- | ---------------- |
 | Texture | PassThrough · WebP · WebP Lossless · KTX2 UASTC · KTX2 ETC1S | WebP: iOS, Web · KTX2: everything except desktop x86/x64 (not arm64) |
 | Audio | PassThrough · Ogg Vorbis · Opus | — |
-| Video | PassThrough · VP9 (WebM) | VP9: iOS |
+| Video | PassThrough · VP9 (WebM) | VP9: iOS, Xbox consoles (Xbox One and Xbox Series X\|S device families) |
 | Font | PassThrough · Subset · Auto-subset | — |
 | JSON | PassThrough · Minify | — |
 
@@ -2119,7 +2207,7 @@ Windows host install it **inside the WSL distribution**, not on Windows.
 
 **WebP/KTX2/VP9 options are greyed out or forced to PassThrough.**
 Those formats aren't supported by every runtime: WebP is unavailable on iOS/Web, VP9 on
-iOS, and KTX2 needs a desktop x86/x64 runtime - not arm64 (it uses the Basis Universal
+iOS and the Xbox consoles, and KTX2 needs a desktop x86/x64 runtime - not arm64 (it uses the Basis Universal
 transcoder, which has no arm64 port). The
 dialog enforces valid combinations per platform but keeps your preference for targets that
 do support it.
@@ -2146,6 +2234,11 @@ and remember that **Delete Trace** deletes the file too.
 **There is no Chrome-trace export button in the Profiler panel.**
 Correct — it is a scripting call. Use `SaveChromeTrace()` from Lua; see
 [4.9](#49-where-traces-live--chrome-trace-export).
+
+**The developer console, `PrintScreen` text or the profiler overlay is blank on Web or Xbox.**
+They draw with the system font, which by default comes from the operating system — and
+there is none there. Assign a font asset once at start-up with
+`SystemFont.Set("Content/Fonts/...")`; see [5.7](#57-the-console--overlay-font).
 
 **How do I profile the actual shipped game?**
 Build **Debug**. On desktop attach the external **Tracy** app. On any platform you can
@@ -2178,13 +2271,129 @@ What this means in practice:
 
 - The process never suspends on focus loss, so a server can run unattended indefinitely.
 - Particle systems still advance, so FX lifetimes expire instead of accumulating.
-- The frame limiter still applies, so the server paces itself instead of burning a core.
+- The frame limiter still applies: with no target FPS configured a headless process runs at
+  60 frames per second and sleeps between frames instead of spinning, so the server paces
+  itself instead of burning a core.
+- Scripts can tell they run headless and read their own command-line options —
+  `Settings.IsHeadless()`, `Settings.HasLaunchOption("server")`,
+  `Settings.GetLaunchOption("port", "7777")`; see
+  [Lua API → Launch options and headless mode](LuaAPI-EN-DOC.md#launch-options-and-headless-mode).
 - Deterministic UUIDs and the shared RNG make rollback sessions reproducible on the server.
 - CPU scopes, RAM and the scene counters keep being collected, so traces and the
   `NetworkProfiler` still work; only GPU timing has nothing to measure.
 
 Requirements: none beyond the normal build — no GPU, no display server, no X11/Wayland
 session on Linux. It runs in a container.
+
+## Rendezvous server
+
+The rendezvous server is the optional backend of **online rooms**
+([Lua API → Online rooms by room code](LuaAPI-EN-DOC.md#online-rooms-by-room-code-no-port-forwarding)).
+Games that use the serverless `"p2p"` backend do not need one. Run a rendezvous server when you
+want what only a server can give:
+
+- a **relay** for players whose networks cannot open a direct path (both behind symmetric or
+  carrier-grade NAT);
+- **browser players** (Web builds) joining native hosts through the WebSocket gateway;
+- a **public room list** across the internet.
+
+The server never runs game logic: it registers rooms, introduces players to hosts, measures NAT
+types, relays traffic when a direct path is impossible and bridges browsers to hosts. It is the
+same binary as the game — the standalone runtime (or the editor executable) started with
+`--rendezvous-server` loads no game, runs only the server and stops on Ctrl+C / SIGTERM.
+
+```bash
+IceBoxEngineRuntime --rendezvous-server
+IceBoxEngineRuntime --rendezvous-server --rv-public-ip 203.0.113.10 --rv-app-id MyGame-1
+IceBoxEngineRuntime --rendezvous-server --rv-help        # prints every option
+```
+
+On Linux the Build Game output also contains `launch_<GameName>.sh`, which forwards its
+arguments, so `./launch_MyGame.sh --rendezvous-server` works too.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--rv-bind <ip>` | `0.0.0.0` | Local address to bind |
+| `--rv-public-ip <ip>` | the address clients used | Public address announced for relays and the web gateway; set it when the server sits behind NAT or has several addresses |
+| `--rv-port <port>` | `7790` | UDP: rooms, joins and hole-punch introductions |
+| `--rv-alt-port <port\|0>` | `7791` | UDP: second port for NAT type detection (`0` disables it) |
+| `--rv-gateway-port <port\|0>` | `7792` | UDP: hosts connect here to reach browser players (`0` disables the web gateway) |
+| `--rv-ws-port <port\|0>` | `7793` | TCP: WebSocket port for browser players (`0` disables the web gateway) |
+| `--rv-relay-ports <a-b\|0>` | `7800-7899` | UDP range, one port per relayed connection (`0` disables relaying) |
+| `--rv-max-rooms <n>` | `10000` | Rooms registered at once |
+| `--rv-max-rooms-per-ip <n>` | `16` | Rooms one public IP may register; raise it when many players share one mobile-carrier address |
+| `--rv-max-relays <n>` | `100` | Relayed connections at once |
+| `--rv-max-relays-per-ip <n>` | `8` | Relayed connections one public IP may open |
+| `--rv-relay-kbps <n>` | `512` | Relay bandwidth cap per direction per connection, KB/s |
+| `--rv-max-web <n>` | `256` | Browser players at once |
+| `--rv-app-id <id>` | any game | Accept only this game id; repeat the option for several games |
+| `--rv-stats <seconds>` | `300` | Print statistics every N seconds (`0` = never) |
+
+Options accept both `--rv-port 7790` and `--rv-port=7790`. An unknown option or an invalid value
+prints the help and exits with code 2; a port that cannot be opened exits with code 1. The relay
+range must not contain the other UDP ports — the server refuses such a configuration.
+
+**Firewall.** Allow inbound UDP 7790, 7791, 7792 and 7800-7899 and TCP 7793, or whatever you
+configured. Nothing else is needed: players never open ports, only the server does.
+
+**What it costs.** Registrations and introductions are a handful of small packets per join; only
+relayed sessions carry real traffic, and each is capped by `--rv-relay-kbps`. A small VPS or a
+free-tier cloud instance (for example Oracle Cloud Always Free) handles thousands of rooms. The
+server keeps nothing on disk: after a restart the live hosts re-register on their own within
+seconds.
+
+**Security.** Registrations use address-bound cookies that rotate every minute, so spoofed source
+addresses are rejected. Every room has a secret host token, so nobody else can update or close it.
+Each public IP is rate-limited and capped (rooms, relays), a relay forwards only between the two
+endpoints that bound it, and `--rv-app-id` makes the server refuse every other game.
+
+### Running it permanently (Linux, systemd)
+
+Copy the game's Linux build (or its runtime folder) to the server, then create a service:
+
+```ini
+# /etc/systemd/system/mygame-rendezvous.service
+[Unit]
+Description=MyGame rendezvous server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/mygame
+ExecStart=/opt/mygame/IceBoxEngineRuntime --rendezvous-server --rv-app-id MyGame-1
+Restart=always
+RestartSec=3
+User=mygame
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now mygame-rendezvous
+journalctl -u mygame-rendezvous -f      # room log and periodic statistics
+```
+
+On Windows run the same command from a console, or register it as a service with any service
+wrapper; there is nothing Windows-specific in the server.
+
+### Pointing the game at it
+
+```lua
+Network.SetAppId("MyGame-1")                 -- must match --rv-app-id when you use it
+Network.SetRendezvousServer("rv.mygame.com") -- host[:port], the port defaults to 7790
+-- The "auto" backend (default) now uses the server; set "rendezvous" to require it.
+```
+
+Web builds connect to `ws://<server>:7793`. A page served over HTTPS must use a secure socket:
+put a TLS reverse proxy (nginx, Caddy, …) in front of port 7793 and pass its address as the third
+argument, for example `Network.SetRendezvousServer("rv.mygame.com", 7790, "wss://rv.mygame.com/rooms")`.
+The gateway reads the room code from the last path segment, so any path prefix works behind a
+proxy.
+
+For tests on one machine or a LAN you do not need a deployment: start the **Local Rendezvous
+Server** in the editor's [Network Manager](Editor-EN-DOC.md#11-network-manager-enet), or call
+`Network.StartRendezvousServer()` from Lua, and point the game at `127.0.0.1`.
 
 ---
 

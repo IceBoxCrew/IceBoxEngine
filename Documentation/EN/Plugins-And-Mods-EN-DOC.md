@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** is extensible in two complementary ways:
 >
@@ -188,12 +188,18 @@ Plugins/MyPlugin/
     README.md             # optional; indexed by the AI Helper plugin
     VisualScriptAPI.json  # optional; extra Visual Script nodes
     Content/  Assets/  Scripts/  Lua/    # optional data folders
+    Binaries/             # optional; libraries the Plugin Builder built for game platforms
 ```
 
 When built, the compiled library and a copy of `plugin.json` end up in the engine's
 plugin output directory (`bin/<platform>/Plugins/MyPlugin/`), which is where the engine
 loads it from. On Android the library instead goes to `lib/Android/<ABI>/`; for static
 builds (Web, iOS) it is linked directly into the runtime executable.
+
+`Binaries/` holds ready-made libraries for the game platforms — `Android/<ABI>/`,
+`iOS/<slice>/`, `Web/<variant>/` and `Xbox/<family>/` — which a game build uses for a
+plugin it does not compile from source ([3.13](#313-building-a-plugin--the-plugin-builder)).
+The editor never loads anything from it.
 
 ### 3.3 The `plugin.json` manifest
 
@@ -422,12 +428,17 @@ ICE_PLUGIN_ENTRY(MyPlugin)   // at file scope, after the class definition
 * **Static** — on platforms without dynamic loading (**Web**, **iOS**), or when you opt
   in, the engine builds plugins with `ICE_PLUGIN_STATIC_BUILD`. The same macro then
   **registers the plugin in a static registry** at startup, and the engine links it
-  directly into the runtime with whole-archive linkage. (You can also register
-  explicitly with `ICE_PLUGIN_REGISTER_STATIC(Name, Class)`.)
+  directly into the runtime with whole-archive linkage. The registration carries the
+  plugin's manifest `Name` — the game build and the Plugin Builder pass it in as
+  `ICE_PLUGIN_STATIC_NAME` — so the Plugin Manager finds the plugin whatever its C++ class
+  is called; compiled without that definition, the registration falls back to the class
+  name. (You can also register explicitly with `ICE_PLUGIN_REGISTER_STATIC(Name, Class)`.)
 * **Android** is a hybrid: Gradle packs plugin `.so` files into the APK's
   `nativeLibraryDir`, so when no library is found next to `plugin.json` the loader
   retries `dlopen("lib<Name>.so")` using the sanitized plugin name, then falls back to
-  the static registry.
+  the static registry. The Android library therefore has to be called `lib<Name>.so`:
+  the Android build adds a missing `lib` prefix, the Plugin Builder names its libraries
+  that way, and desktop libraries are kept out of the APK so they never shadow it.
 
 Statically registered plugins that have no folder on disk are still discovered — the
 manager synthesizes an entry named after the registration so you can enable it in
@@ -518,7 +529,10 @@ in. Discovery rules:
 * A folder is only added if it contains a **`CMakeLists.txt`**.
 * Folders are searched in the **project root** first (the parent of `ICE_CONTENT_DIR`,
   when building a game project) and then in the **engine root**; the first folder with a
-  given name wins, so a project can shadow an engine plugin.
+  given name wins, so a project can shadow an engine plugin. An **Android** game build
+  compiles plugin sources from the engine root only; a project plugin reaches an Android
+  game through the library the Plugin Builder files under its
+  `Binaries/Android/<ABI>/` ([3.13](#313-building-a-plugin--the-plugin-builder)).
 * If `Config/Plugins.json` exists and has an `Enabled` object, only plugins listed there
   with `true` are configured — everything else is skipped with
   `Skipping disabled plugin '<name>' (not enabled in Plugins.json)`. **Tick a new plugin
@@ -577,7 +591,14 @@ Notes:
   builds. Respect it if you customize output paths (`Plugins/AIHelper/CMakeLists.txt.example`
   shows the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for
   multi-config generators). That is also the directory a game build packages from, so
-  a plugin that ignores it will not ship.
+  a plugin that ignores it will not ship. A static build produces an archive, so there
+  `ARCHIVE_OUTPUT_DIRECTORY` is the property that counts; the Plugin Builder additionally
+  points CMake's default output directories at `ICE_PLUGIN_OUTPUT_DIR`, so a plugin that
+  sets no output directory at all still builds with it.
+* On the static platforms (Web, iOS) the build defines `ICE_PLUGIN_STATIC_NAME` as the
+  plugin's manifest `Name` for every source of the plugin — that is the name
+  `ICE_PLUGIN_ENTRY` registers under ([3.8](#38-entry-points-dynamic-vs-static)). Do not
+  define it yourself.
 * Add `add_dependencies(IceBoxEngineRuntime <plugin>)` — guarded by
   `if(TARGET IceBoxEngineRuntime)` — so your plugin is rebuilt as part of every game build
   that includes it. `Plugins/AIHelper/CMakeLists.txt.example` also guards an
@@ -662,7 +683,7 @@ same shape as the engine catalog:
 
 ```json
 {
-    "version": 1,
+    "version": 2,
     "functions": [
         {
             "name": "MyPluginPing",
@@ -671,9 +692,23 @@ same shape as the engine catalog:
             "category": "MyPlugin",
             "pure": false,
             "args": [
-                { "name": "message", "type": "String", "opt": false }
+                { "name": "message", "type": "String", "opt": false },
+                { "name": "targets", "type": "Array<Entity>", "opt": true }
             ],
             "ret": "Bool"
+        },
+        {
+            "name": "MyPluginGetBounds",
+            "call": "MyPluginGetBounds",
+            "surface": "any",
+            "category": "MyPlugin",
+            "pure": true,
+            "args": [],
+            "ret": "(Vec2, Vec2)",
+            "rets": [
+                { "name": "Min", "type": "Vec2" },
+                { "name": "Max", "type": "Vec2" }
+            ]
         }
     ]
 }
@@ -686,10 +721,20 @@ same shape as the engine catalog:
 | `title` | Explicit node title (defaults to `call` when it contains a dot, else `name`). |
 | `surface` | Where the node is offered: `class`, `level`, `widget`, `any`. |
 | `category` | Palette category. |
-| `pure` | `true` for a value node with no execution pins. |
-| `ret` / `rets` | Single return type, or a list of named outputs. |
-| `args` | Input pins: `name`, `type`, optional `picker`, `values` (enum), `default`, `opt`. |
+| `pure` | `true` for a value node with no execution pins (use it for functions that only read something). |
+| `ret` / `rets` | Single return type, or — for functions that return several values — a list of named outputs; the node gets one output pin per value. |
+| `args` | Input pins: `name`, `type`, optional `picker`, `values` (enum), `default`, `opt`. An `opt` argument that is left unconnected and unset is not passed, so your function's own default applies. |
+| `variadic` | `true` when the function takes extra arguments (`...`); the node gets **Add Pin** / **Remove Pin** for `Any` pins after the regular ones. |
 | `method`, `object`, `colon` | Emit `object.name(...)` / `object:name(...)` instead of a free function. |
+| `legacyPure` | Engine catalog only: the value `pure` had before format version 2, so graphs saved by older editors keep their pin layout. Plugins normally leave it out. |
+
+**Types.** `type` (and `ret`) use the same type names as the graph editor: `Bool`, `Int`,
+`Float`, `String`, `Vec2`, `Vec3`, `Color`, `Entity`, `Table`, `Function` and `Any`, plus
+containers and named types — `Array<Float>`, `Set<String>`, `Map<String,Int>`, `Table<Name>`
+for a table of a known shape, `Enum<Name>`. Prefer the most precise type: typed pins get
+literal editors and type-checked wires, while `Any` accepts anything and its unconnected
+value is written as a raw Lua expression. Use `Function` for callback parameters — the node
+then takes a **Function Reference** to a custom event.
 
 Duplicate names are ignored, and entries that collide with a curated engine node are
 skipped, so you cannot accidentally overwrite the built-in palette.
@@ -707,10 +752,16 @@ engine build involved. That is how you build every plugin you write.
 | Windows | `Tools\PluginBuilder\build_plugins_windows.bat` |
 | Linux | `Tools/PluginBuilder/build_plugins_linux.sh` |
 | macOS | `Tools/PluginBuilder/build_plugins_macos.sh` |
+| Android | `Tools\PluginBuilder\build_plugins_android.bat` (Windows) · `Tools/PluginBuilder/build_plugins_android.sh` (Linux, macOS) |
+| iOS | `Tools/PluginBuilder/build_plugins_ios.sh` (macOS with Xcode) |
+| Web | `Tools\PluginBuilder\build_plugins_web.bat` (Windows) · `Tools/PluginBuilder/build_plugins_web.sh` (Linux, macOS) |
+| Xbox | `Tools\PluginBuilder\build_plugins_xbox.bat` (Windows, Microsoft GDK) |
 
 Run one and it scans `Plugins/`, lists every plugin with its state — `NOT BUILT`,
 `OUTDATED`, `BUILT` or `NO BUILD` (no `CMakeLists.txt`, nothing to compile) — and lets
-you pick what to build. Pressing Enter builds everything that needs it.
+you pick what to build. Pressing Enter builds everything that needs it. The Android,
+iOS, Web and Xbox scripts also show `EDITOR ONLY` for plugins that never ship with a
+game.
 
 For each selected plugin it configures the small CMake project in
 `Tools/PluginBuilder/Harness/`, which recreates the `IceBoxPluginSDK` interface target
@@ -739,6 +790,39 @@ Three things must match the engine you load the plugin into: the **configuration
 (`Release` ↔ `Release`), the **architecture**, and the **ABI version**
 ([3.9](#39-api--abi-versioning)). Full option list, examples and troubleshooting are in
 `Tools/PluginBuilder/README.md` (Russian: `README.ru.md`).
+
+#### Game platforms — Android, iOS, Web and Xbox
+
+The desktop scripts build the library the editor loads, which desktop games ship too. A
+game on another platform needs the plugin built with that platform's toolchain, and the
+other four scripts do exactly that, filing each result under the plugin's `Binaries/`
+folder so one plugin folder can carry every platform:
+
+| Script | Builds | Into |
+| ------ | ------ | ---- |
+| Android | one `.so` per ABI (`--abi arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` or `all`) | `Binaries/Android/<ABI>/lib<Name>.so` |
+| iOS | a static library for devices or the Simulator (`--sdk device`, `simulator` or `all`) | `Binaries/iOS/arm64/` · `Binaries/iOS/arm64-simulator/` |
+| Web | a static library per variant (`--variant wasm32`, `wasm32-pthreads`, `wasm64`, `wasm64-pthreads` or `all`) | `Binaries/Web/<variant>/` |
+| Xbox | a DLL per device family (`--device-family desktop`, `xboxone`, `scarlett` or `all`) | `Binaries/Xbox/<family>/` |
+
+A game build uses them for every plugin it does not compile from source — a plugin that
+ships without sources, or a project plugin on Android:
+
+* **Build Game → Android** packs `Binaries/Android/<ABI>/*.so` into the APK, and so does
+  an on-device build in the Android editor, for the ABIs its runtime template carries.
+* **Build Game → iOS** and **Build Game → Web** link the libraries of the slice or
+  variant they build into the runtime.
+* **Build Game → Xbox** packages the DLLs of the device family it builds in place of the
+  plugin's Windows DLLs; an Xbox One or Xbox Series build without them leaves the Windows
+  DLLs out, because they cannot load on a console.
+
+Sources always win: a plugin the game compiles itself ignores its `Binaries/`. When a
+plugin has neither, the build log names the Plugin Builder command that fills the gap,
+and the game still ships the plugin's data. Pick the target that matches the game — the
+Android ABI, the iOS destination, the Web memory model and pthreads switch, the Xbox
+device family — and keep `--min-sdk` / `--deployment-target` at or below the game's.
+`Tools/PluginBuilder/README.md` covers each platform in detail, including what a
+`CMakeLists.txt` needs to build everywhere.
 
 ---
 
@@ -1031,8 +1115,8 @@ Mods can also be inspected and managed at runtime from script through the engine
 
 | Function | Returns |
 | -------- | ------- |
-| `Mods.GetAll()` | Array of tables: `name`, `description`, `author`, `version`, `enabled`, `loaded`, `loadOrder`. |
-| `Mods.GetInfo(name)` | The same table plus `entryScript` and `folderPath`, or `nil`. |
+| `Mods.GetAll()` | Array of tables: `name`, `description`, `author`, `version`, `enabled`, `loaded`, `loadOrder`, `folderPath`, `canUninstall`. |
+| `Mods.GetInfo(name)` | The same table plus `entryScript`, or `nil`. |
 | `Mods.GetCount()` / `Mods.GetEnabledCount()` | Totals. |
 | `Mods.IsEnabled(name)` / `Mods.IsLoaded(name)` | Booleans. |
 | `Mods.SetEnabled(name, enabled)` | Enables/disables and **saves** `Config/Mods.json`. |
@@ -1040,6 +1124,11 @@ Mods can also be inspected and managed at runtime from script through the engine
 | `Mods.AddSearchPath(path)` | Registers an extra directory to scan for mods alongside `Mods/`. Session-only; returns `false` for a path that is not an existing directory. |
 | `Mods.GetSearchPaths()` | Array of the extra search paths currently registered. |
 | `Mods.ClearSearchPaths()` | Drops every extra search path. |
+| `Mods.Import(options?, callback?)` | Shows the system file dialog, then installs the `.zip` or folder the player picks into the player's mods folder and loads it. Options: `source` (`"archive"` / `"folder"`), `title`, `enable`, `replace`. |
+| `Mods.Install(path, options?, callback?)` | The same for a path the player already picked or dropped on the window. |
+| `Mods.Uninstall(name)` / `Mods.CanUninstall(name)` | Removes a mod the player installed / tells whether that is allowed. |
+| `Mods.GetUserFolder()` / `Mods.OpenUserFolder()` | The player's mods folder / opens it in the file manager (desktop). |
+| `Mods.GetLastError()` | Why the last install or uninstall call failed. |
 
 ```lua
 Mods.SetEnabled("PlatformerCrates", false)
@@ -1090,15 +1179,29 @@ Two consequences matter here:
 
 ### 5.5 Player-installed plugins & mods
 
-Shipped games on **macOS and iOS** additionally look for user-installed packages outside
-the app bundle. On first run the runtime creates a user content root — the app's
-writable data directory, or `~/Documents` on iOS — containing `Saves/`, `Config/`,
-`Mods/`, `Plugins/` and a short `README.txt` explaining the layout.
+A shipped game also loads mods the player installs, on **every platform**:
 
-Any folder dropped into that `Mods/` or `Plugins/` with a valid `mod.json` / `plugin.json`
-is discovered after the game's own packages, is **enabled automatically**, and is skipped
-with a log line if a package of the same name already ships with the game. This is what
-lets players install mods into a signed, read-only build.
+* **From inside the game.** `Mods.Import` shows the system file dialog; the player picks a
+  downloaded `.zip` or folder, and the engine checks it, copies it into the player's mods
+  folder and loads it at once. `Mods.Uninstall` removes it again. On Android this is the only
+  way to add mods and on iOS the easiest one — see
+  [LuaAPI → Installing mods from inside the game](LuaAPI-EN-DOC.md#4111-installing-and-removing-mods-from-inside-the-game).
+* **By hand.** A folder with a valid `mod.json` put into the player's mods folder is found at
+  the next launch.
+
+The player's mods folder is `Mods/` in the game's writable data location, and
+`Mods.GetUserFolder()` returns it. On Windows and Linux that is the game's own `Mods/` when the
+game folder is writable, otherwise `Mods/` in the per-user data folder; on macOS it lies
+outside the signed `.app`, and on iOS it is `Documents/Mods`, which players can also reach in
+the Files app. It is scanned after the game's own packages. A mod with the same name as a
+package that ships with the game is skipped with a log line, so a player's mod never replaces
+the game's content. Mods put by hand into a separate player folder start **enabled**.
+
+On **macOS and iOS** the first run also creates a user content root — the app's writable
+data directory, or `Documents` on iOS — with `Saves/`, `Config/`, `Mods/`, `Plugins/` and a
+short `README.txt` explaining the layout. A folder with a valid `plugin.json` dropped into that
+`Plugins/` is loaded as well: player-installed **plugins** exist on those two platforms only.
+This is what lets players extend a signed, read-only build.
 
 ## 6. How plugins & mods are loaded
 
@@ -1169,7 +1272,9 @@ When you build a game (see
 * Filters out build noise while copying — the `Source/`, `src/`, `build/`, `out/`,
   `CMakeFiles/`, `.cache/`, `.vs/`, `.vscode/`, `.idea/`, `.git/`, `node_modules/` and
   `__pycache__/` folders, the `.obj/.o/.lib/.a/.exp/.ilk/.pdb/.pyc/.pyo/.cmake` files and
-  `CMakeLists.txt` / `CMakeCache.txt` / `.gitignore` / `.gitattributes`.
+  `CMakeLists.txt` / `CMakeCache.txt` / `.gitignore` / `.gitattributes`. A plugin's
+  top-level `Binaries/` folder is left out too: the build takes the one library the
+  target platform needs from it itself (see the table below).
 * Then **overlays the built plugin artifacts** on top: only the compiled library
   (`.dll`/`.so`/`.dylib`), its `.pdb` if present, and `plugin.json`.
 * For **mods**, ships the whole enabled mod folder (its `Content/`, `main.lua`,
@@ -1181,10 +1286,11 @@ Per-platform placement:
 | -------- | ------- | ---- |
 | Windows / Linux | `<Output>/Plugins/<Name>/` | `<Output>/Mods/<Name>/` |
 | macOS | `<Game>.app/Contents/Resources/Plugins/` | `<Game>.app/Contents/Resources/Mods/` |
-| Android | `.so` → the APK's `jniLibs/<ABI>/`, the rest of the folder → `assets/Plugins/<Name>/` | staged into the APK's `assets/Mods` |
-| Android *(built on the device)* | assets, scripts and `plugin.json` → `assets/Plugins/<Name>/`; a native `.so` cannot be produced — there is no compiler on a phone, and the build log names every enabled plugin that has native sources | staged into the APK's `assets/Mods` |
-| iOS | statically linked; `plugin.json` + data folders staged into the signed `.app` | staged into the `.app` bundle |
-| Web | statically linked into the runtime | embedded into the Emscripten `.data` via `--preload-file` |
+| Android | `.so` → the APK's `jniLibs/<ABI>/` — compiled from the engine's plugin sources, or taken from the plugin's `Binaries/Android/<ABI>/`, with a missing `lib` prefix added; the rest of the folder, minus `Binaries/` and desktop libraries → `assets/Plugins/<Name>/` | staged into the APK's `assets/Mods` |
+| Android *(built on the device)* | assets, scripts and `plugin.json` → `assets/Plugins/<Name>/`; the plugin's `Binaries/Android/<ABI>/*.so` → the APK's `lib/<ABI>/` for the ABIs of the runtime template. A native `.so` cannot be compiled — there is no compiler on a phone — so the build log names every enabled plugin that has native sources but no prebuilt library | staged into the APK's `assets/Mods` |
+| iOS | statically linked — compiled from source, or taken from the plugin's `Binaries/iOS/<slice>/`; `plugin.json` + data folders staged into the signed `.app` | staged into the `.app` bundle |
+| Web | statically linked into the runtime — compiled from source, or taken from the plugin's `Binaries/Web/<variant>/` | embedded into the Emscripten `.data` via `--preload-file` |
+| Xbox | `<Output>/Plugins/<Name>/`; the DLL comes from the GDK build of the plugin's sources or from its `Binaries/Xbox/<family>/`, and an Xbox One / Xbox Series build drops Windows DLLs it has no console build for | `<Output>/Mods/<Name>/` |
 
 Cooked builds additionally stage `Config/`, `Plugins/` and `Mods/` next to the cooked
 content so the packaged game sees the same layout — and skip the `Plugins/` or `Mods/`
@@ -1227,7 +1333,8 @@ Hooks: `OnModLoad` · `OnLevelStart` · `OnLevelUpdate` · `OnLevelFixedUpdate` 
 `OnLevelLateUpdate` · `OnLevelEnd` · `OnModUnload`
 Globals: `MOD_NAME` · `MOD_VERSION` · `MOD_DIR` · `ModRequire`
 Lua module: `Mods.GetAll` · `GetInfo` · `GetCount` · `GetEnabledCount` · `IsEnabled` ·
-`IsLoaded` · `SetEnabled` · `Refresh`
+`IsLoaded` · `SetEnabled` · `Refresh` · `AddSearchPath` · `GetSearchPaths` · `ClearSearchPaths` ·
+`Import` · `Install` · `Uninstall` · `CanUninstall` · `GetUserFolder` · `OpenUserFolder` · `GetLastError`
 
 ### 8.4 Files & folders
 
@@ -1235,13 +1342,16 @@ Lua module: `Mods.GetAll` · `GetInfo` · `GetCount` · `GetEnabledCount` · `Is
 | ---- | ---------- |
 | `Plugins/<Name>/plugin.json` | Plugin manifest (source folder); `"EditorOnly": true` keeps it out of every game build. |
 | `Plugins/<Name>/VisualScriptAPI.json` | Optional extra Visual Script nodes. |
+| `Plugins/<Name>/Binaries/<Platform>/…` | Game-platform libraries from the Plugin Builder: `Android/<ABI>/*.so`, `iOS/<slice>/*.a`, `Web/<variant>/*.a`, `Xbox/<family>/*.dll`. |
 | `Mods/<Name>/mod.json` | Mod manifest. |
 | `Config/Plugins.json` · `Config/Mods.json` | Which packages are enabled. |
 | `Config/Editor.json` → `PanelVisibility.PluginsPanel` | Whether the panel is open. |
 | `Config/Editor.json` → `BuildSettings.IncludePlugins` / `.IncludeMods` | The Build Game **Packages** switches. |
 | `bin/<platform>/Plugins/<Name>/` | Built plugin library + `plugin.json`. |
 | `<Project>.iceproject` → `"Plugins"`, `"Mods"` | Per-project package selection (launcher). |
-| `<user data>/Mods/`, `<user data>/Plugins/` | Player drop-in packages (macOS/iOS builds). |
+| `<user data>/Mods/` | Player-installed mods, on every platform; `Mods.GetUserFolder()` returns it. |
+| `<user data>/Plugins/` | Player drop-in plugins (macOS/iOS builds). |
+| `Mods/<Name>/.icebox-installed` | Marks a mod installed from inside the game, so it can be uninstalled. |
 
 ---
 
@@ -1270,8 +1380,8 @@ For per-frame editor work use `OnEditorUI`.
 `Plugins/` and `Mods/` relative to the working directory (configurable via
 `SearchDirectory` in the config files). Compiled plugins are loaded from the runtime's
 `Plugins/<Name>/` output directory. At build-configure time CMake also searches the
-project root, and shipped macOS/iOS games additionally scan the player's writable
-`Mods/`/`Plugins/` folders.
+project root, and shipped games additionally scan the player's mods folder (every platform)
+and, on macOS/iOS, the player's `Plugins/` folder.
 
 **Can mods run native code?**
 No — mods are Lua + content, sandboxed. For native code, write a plugin.
@@ -1284,6 +1394,12 @@ also relative to `MOD_DIR`.
 **My mod's assets don't appear in the Content Browser.**
 They aren't supposed to — the browser indexes the project's `Content/` tree only. Mods
 resolve their own files at runtime through `MOD_DIR`.
+
+**How do players install mods on a phone?**
+From inside the game: call `Mods.Import()` from a menu button. The player picks a downloaded
+`.zip` (or a folder) in the system picker, and the engine installs and loads it — no folders to
+find and no permissions to ask for. See
+[LuaAPI → Installing mods from inside the game](LuaAPI-EN-DOC.md#4111-installing-and-removing-mods-from-inside-the-game).
 
 **A mod isn't loading.**
 Check the log for: a missing/broken/not-enabled **dependency**, a dependency **cycle**, an
@@ -1299,7 +1415,7 @@ artifacts (source is excluded); mods ship their whole folder. See
 **How do I keep an editor tool out of my game?**
 Add `"EditorOnly": true` to its `plugin.json`. It then shows an `[Editor Only]` badge in
 the Plugins panel, is skipped by CMake in every runtime configuration, is never copied or
-embedded by any of the six platform builds, and is refused by the Plugin Manager outside
+embedded by any of the seven platform builds, and is refused by the Plugin Manager outside
 the editor. It keeps working normally in the editor.
 
 **I turned Include Plugins off but the game still finds a plugin.**
@@ -1313,7 +1429,18 @@ Build it with the Plugin Builder
 plugin **folder** — after a build it holds `plugin.json` next to the compiled library,
 which is everything the engine needs. Keep `CMakeLists.txt` and `Source/` in it if you
 also want the recipient to be able to rebuild it for their platform, configuration or
-engine ABI version.
+engine ABI version. Build it for the game platforms as well (Android, iOS, Web, Xbox) and
+the folder carries a `Binaries/` library for each, so games on those platforms can ship
+it without its sources. Keep console builds (`Binaries/Xbox/XboxOne`, `Scarlett`) out of
+anything public — the GDKX they are built with is under NDA.
+
+**My plugin works in the editor but not in my Android / iOS / Web / Xbox game.**
+The game needs the plugin built for its platform. A game build compiles a plugin from
+source when it can; otherwise it uses the library under `Binaries/`, and the build log
+warns when there is none, naming the Plugin Builder command to run
+([3.13](#313-building-a-plugin--the-plugin-builder)). Build the target the game uses —
+Android ABI, iOS device or Simulator, Web variant, Xbox device family — and build the
+game again.
 
 **How do I attach a plugin or mod to a specific project?**
 Use the launcher's **Plugins & Mods** tab — it copies the package into the project and

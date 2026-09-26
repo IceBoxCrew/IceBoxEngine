@@ -3,8 +3,8 @@
                  (CRASH REPORTS AND LICENSE ACTIVATION)
 ================================================================================
 
-Version:        1.0.0
-Effective date: 2026-08-16
+Version:        1.0.1
+Effective date: 2026-09-20
 Applies to:     IceBoxEngineEditor, IceBoxEngineLauncher, IceBoxEngineUpdater
 Does NOT apply: to games built with IceBoxEngine (see sections 8 and 9)
 
@@ -53,6 +53,10 @@ on your own machine, and a dialog appears asking whether you want to send it.
   * If sending fails (no network, endpoint down), the report is queued and one
     retry is attempted on the next launch. Declining is not retried - a declined
     report is never queued.
+  * On iOS - and on Android when the crash happened on the platform's own UI
+    thread - the dialog cannot be shown safely while the process is dying, so
+    the same question is asked once on the next launch instead. The report file
+    is written either way, and it is still never sent without your answer.
 
 There is no telemetry, analytics, usage tracking, advertising identifier, or
 background reporting in the editor, launcher or updater. Besides crash reports

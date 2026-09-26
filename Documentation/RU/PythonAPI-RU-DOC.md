@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии R-1.0.0
+### Актуальная для версии R-1.0.1
 
 > **IceBoxEngine** интегрирует **Python** через библиотеку **pybind11** для скриптинга редактора.
 > Python API позволяет автоматизировать работу в редакторе, управлять сценами, сущностями,
@@ -1894,11 +1894,34 @@ sc = editor.get_component(uuid, 'Script')
 #     'override_class_defaults': False,
 #     'override_lua_script': False,
 #     'lua_script_override': '',
-#     'visual_graph_override': ''
+#     'visual_graph_override': '',
+#     'instance_variables': ''
 # }
 ```
 
-> Все шесть полей доступны для записи.
+> Все семь полей доступны для записи.
+
+`instance_variables` хранит значения [переменных экземпляра](Editor-RU-DOC.md#76-переменные-экземпляра)
+сущности в виде строки с JSON-объектом — пустая строка означает «переопределений нет».
+Ключ — имя переменной, значение — тип и значение переменной:
+
+```python
+import json
+values = {
+    "Speed":  {"type": "Float", "value": 250.0},
+    "Mode":   {"type": "Enum<EMode>", "value": "Patrol"},
+    "Door":   {"type": "Entity", "value": door_uuid},          # UUID другой сущности уровня
+    "Points": {"type": "Array<Vec2>", "value": [[0, 0], [64, 32]]},
+    "Loot":   {"type": "Map<String,Int>", "value": [["gold", 5], ["gem", 1]]}
+}
+editor.set_component(uuid, 'Script', {'instance_variables': json.dumps(values)})
+```
+
+`type` должен совпадать с типом переменной в графе класса (так, как он записан в редакторе
+графа: `Float`, `Array<Vec2>`, `Map<String,Int>`, `Enum<Name>`, …), иначе значение при запуске
+игры игнорируется. Векторы — `[x, y]` / `[x, y, z]`, цвета — `[r, g, b, a]`, множества —
+списки, словари — списки пар `[ключ, значение]`. Строка, которая не является JSON-объектом,
+отклоняется (`set_component` возвращает `False`).
 
 **Пример для AI:**
 ```python
@@ -2872,6 +2895,36 @@ if not editor.is_play_mode():
 editor.play()
 editor.set_timer(5.0, lambda: editor.stop())  # Остановить через 5 секунд
 ```
+
+#### `editor.is_editor_cursor()` → `bool`
+
+`True`, пока указателем владеет редактор. Вне режима игры это всегда `True`; во
+время игры значение повторяет переключатель `Shift+F1` (и принудительно становится
+`True`, пока камера извлечена, — свободной камере нужна мышь).
+
+#### `editor.set_editor_cursor(enabled)`
+
+Отдаёт указатель редактору (`True`) или обратно запущенной игре (`False`) — тот же
+переключатель, что и `Shift+F1`. При активном игровом курсоре указатель ограничен
+вьюпортом игры, а интерфейс редактора игнорирует мышь; при активном редакторском
+курсоре игра вообще не получает ввод мыши.
+
+**Игровой** курсор при этом не трогается: его видимость, относительный режим мыши и
+его спрайт или флипбук остаются ровно такими, какими их оставил Lua игры, и
+восстанавливаются, когда указатель вернётся игре.
+
+```python
+editor.play()
+editor.set_timer(1.0, lambda: editor.set_editor_cursor(True))   # полазить по панелям
+```
+
+#### `editor.toggle_editor_cursor()` → `bool`
+
+Переключает и возвращает новое состояние (`True` — указателем владеет редактор).
+
+#### `editor.get_cursor_owner()` → `str`
+
+`'editor'` или `'game'`. То же значение лежит в `editor.get_stats()['cursor_owner']`.
 
 ---
 
@@ -4296,7 +4349,7 @@ print(stats['entity_count'], stats['level_dirty'], stats['fps'])
 ```
 
 `editor.get_stats()` возвращает `entity_count`, `selected_count`, `folder_count`, `world_asset_count`,
-`level_path`, `level_dirty`, `play_mode`, `paused`, `undo_count`, `redo_count`, `fps`.
+`level_path`, `level_dirty`, `play_mode`, `paused`, `cursor_owner`, `undo_count`, `redo_count`, `fps`.
 
 #### Счётчики undo / redo
 
@@ -4774,6 +4827,75 @@ sys = engine.system_info()
 # }
 ```
 
+#### `engine.cpu_scopes()` → `list[dict]`
+
+CPU-скоупы профилировщика за последний отрисованный кадр — те же строки, что показывает таблица
+**CPU Scope Breakdown** в панели Profiler, — от самого медленного. Каждая строка: `{'name', 'time_ms',
+'self_ms', 'calls', 'thread'}`: `time_ms` включает вложенные скоупы, `self_ms` — время самого скоупа,
+`thread` — индекс потока профилировщика (`0` — главный поток).
+
+```python
+for scope in engine.cpu_scopes()[:5]:
+    print(f"{scope['name']:32s} {scope['time_ms']:7.3f} мс  self {scope['self_ms']:7.3f}  x{scope['calls']}")
+```
+
+#### `engine.render_passes()` → `list[dict]`
+
+Проходы рендера последнего кадра в порядке отправки — `{'name', 'cpu_ms', 'gpu_ms', 'depth'}`. На бэкендах
+без GPU-таймеров `gpu_ms` равен `0`. Сбросы батчей (`Batch.FlushInstanced`, `Batch.Flush`) попадают в список по
+одному на сброс, так что их количество — это число батчей, которые породил кадр.
+
+```python
+passes = engine.render_passes()
+flushes = [p for p in passes if p['name'].startswith('Batch.')]
+print(len(flushes), 'сбросов батчей,', sum(p['cpu_ms'] for p in flushes), 'мс CPU')
+```
+
+#### `engine.lua_stats()` → `dict`
+
+Профилировщик Lua-скриптов: `total_ms` и `calls` за последний кадр, `memory_kb`, `peak_memory_kb` и
+`alloc_rate_kbps` виртуальной машины, число ошибок `errors` и `rows` — по словарю на каждый колбэк скрипта
+с полями `script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`,
+`last_frame_calls`, `instances` и `errors`.
+
+```python
+lua_ms = engine.lua_stats()['total_ms']
+if lua_ms > 4.0:
+    editor.log_warn(f'скрипты заняли {lua_ms:.2f} мс в этом кадре')
+```
+
+#### `engine.profiler_counters()` → `list[dict]`
+
+Все именованные счётчики профилировщика (секция **Counters** панели Profiler): `{'group', 'name', 'value',
+'budget', 'unit', 'higher_is_worse', 'stale'}`. `unit`: `0` — количество, `1` — миллисекунды, `2` — байты,
+`3` — КБ, `4` — МБ, `5` — проценты, `6` — в секунду; `stale` равен `True`, если счётчик не обновлялся
+несколько кадров.
+
+#### `engine.hitches()` → `list[dict]`, `engine.clear_hitches()` → `bool`
+
+Хитчи (микрофризы), которые записал профилировщик, — кадры, сильно превысившие скользящее среднее (см.
+*Hitch detection* в панели Profiler), от самого старого: `{'timestamp', 'frame_ms', 'average_ms',
+'budget_ms', 'gpu_ms', 'top_scope', 'top_scope_ms'}`. `clear_hitches()` забывает их все — вызовите его перед
+замером, чтобы остались только хитчи интересующего прогона.
+
+```python
+# Автономный замер производительности: 600 кадров игры, затем отчёт.
+engine.clear_hitches()
+samples = []
+
+def tick():
+    samples.append(engine.cpu_scopes())
+    if len(samples) < 600:
+        editor.defer(tick)
+    else:
+        render = [s for frame in samples for s in frame if s['name'] == 'Render']
+        print('Render в среднем', sum(s['time_ms'] for s in render) / len(render), 'мс')
+        print('хитчи', [h['frame_ms'] for h in engine.hitches()])
+
+editor.play()
+editor.defer(tick)
+```
+
 ---
 
 ### 7.3 Ресурсы (Resources)
@@ -4946,6 +5068,11 @@ info = engine.audio_info()
 | `engine.log_path()` | `str` | Папка, куда движок пишет файлы логов |
 | `engine.frame_count()` | `int` | Кадров отрисовано с момента запуска |
 | `engine.profiler_stats()` | `dict` | Счётчики CPU/GPU/рендера одним словарём |
+| `engine.cpu_scopes()` | `list[dict]` | CPU-скоупы последнего кадра, от самого медленного (см. 7.2) |
+| `engine.render_passes()` | `list[dict]` | Проходы рендера последнего кадра с временем CPU/GPU (см. 7.2) |
+| `engine.lua_stats()` | `dict` | Профилировщик Lua: время кадра, память VM, строки по колбэкам (см. 7.2) |
+| `engine.profiler_counters()` | `list[dict]` | Все именованные счётчики профилировщика (см. 7.2) |
+| `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Записанные хитчи кадров (см. 7.2) |
 
 ```python
 print(engine.build_info())

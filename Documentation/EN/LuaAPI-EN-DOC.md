@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -16,6 +16,7 @@
 
 1. [Architecture and Basics](#1-architecture-and-basics)
    - [Scripting modes: Code and Visual](#scripting-modes-code-and-visual)
+   - [Visual Scripting reference](#visual-scripting-reference)
    - [Class editor: `.ice_class` components](#class-editor-ice_class-components)
    - [Lua script editor](#lua-script-editor)
 2. [Lua Language Basics — Full Course for Beginners](#2-lua-language-basics--full-course-for-beginners)
@@ -89,6 +90,7 @@
 40. [Practical examples](#40-practical-examples)
 41. [Mods — Mod System](#41-mods--mod-system)
    - [Mods Lua API (`Mods.*`)](#4110-mods--lua-api-for-mod-management)
+   - [Installing mods from inside the game](#4111-installing-and-removing-mods-from-inside-the-game)
 42. [DLC — Downloadable Content](#42-dlc--downloadable-content)
 43. [Ads — Advertising (Google AdMob)](#43-ads--advertising-google-admob)
 44. [IAP — In-App Purchases (Google Play Billing)](#44-iap--in-app-purchases-google-play-billing)
@@ -113,6 +115,8 @@
 63. [Xbox — Microsoft Ecosystem (Xbox network and Microsoft Store)](#63-xbox--microsoft-ecosystem-xbox-network-and-microsoft-store)
 64. [Screenshot — Capturing the Screen from a Game](#64-screenshot--capturing-the-screen-from-a-game)
 65. [Screen — Window Size and Device Orientation](#65-screen--window-size-and-device-orientation)
+66. [SystemFont — Font for the Console, Debug Overlays and Font-less Text](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)
+67. [FileDialog — Open, Save, Import and Export Player Files](#67-filedialog--open-save-import-and-export-player-files)
 
 ---
 
@@ -137,7 +141,7 @@ IceBoxEngine offers two ways to author gameplay logic. The mode is chosen **once
 
 - **Event nodes** are entry points (`On Create`, `On Update`, `On Collision Enter`, …) — the same lifecycle callbacks listed in [Script lifecycle](#3-script-lifecycle).
 - **Action / value nodes** wrap the engine's Lua functions (`Set Position`, `Is Key Pressed`, `Add Force`, `Play Sound`, …). Every global function in this document is available as a node, with typed nodes for the most common categories (Transform, Physics, Input, Entity, Audio, Camera, and more).
-- **Flow control nodes** add the structure a visual graph needs: `Branch` (if), `Sequence`, `For Loop`, `While`, `For Each`, `Do Once`, `Flip Flop`, `Do N`, `Delay`.
+- **Flow control nodes** add the structure a visual graph needs: `Branch` (if), `Sequence`, `For Loop` (+ with Break), `While`, `For Each` (+ with Break), `Do Once`, `Flip Flop`, `Do N`, `Gate`, `MultiGate`, `Switch` on Int / String / Enum, `Delay`, `Retriggerable Delay` and `Timeline`.
 - **Variable nodes** (`Get` / `Set`) plus **math and logic nodes** (`+`, `-`, `>`, `AND`, `Make Vec2`, …) let you compute and store values.
 
 Under the hood the graph is **compiled to the exact same Lua** and runs through the same engine. This means:
@@ -154,6 +158,211 @@ The chosen mode is stored as `"ScriptingMode": "Code"` or `"Visual"` in the proj
 - Add variables in the **Variables** panel; select a node to edit its details on the right.
 
 > Node titles and categories are in English by design.
+
+### Visual Scripting reference
+
+This reference covers the data model of the node graph — pin types, wildcards, variables,
+spawning — and the exact runtime behaviour of the flow-control nodes. Everything here
+compiles to plain Lua, so the rest of this document still describes what each node does.
+
+#### Pin types
+
+| Pin | Look | Carries |
+|-----|------|---------|
+| **Exec** | white triangle | Execution order, not a value. |
+| **Bool** | red | `true` / `false`. |
+| **Int** | teal | A whole number (a Lua integer). |
+| **Float** | green | A number. |
+| **String** | magenta | Text. |
+| **Vec2** / **Vec3** | yellow / orange | `{x=, y=}` / `{x=, y=, z=}` tables. |
+| **Color** | blue | `{r=, g=, b=, a=}` table, components 0..1. |
+| **Entity** | light blue | An entity id (a number); `nil` means *none*. |
+| **Table** | violet | Any Lua table. With a name it is a **struct** declared in the graph (`Table<Name>`). |
+| **Enum** | sea green | One value of an enum declared in the graph, stored as its name (a string). |
+| **Function** | coral square | A function value — wire a **Function Reference** (or any function-typed output) into it. |
+| **Any** | gray | Any Lua value — see [What `Any` means](#what-any-means). |
+
+Containers change the pin shape: **Array** (a 3×3 grid of squares), **Set** (three dots) and
+**Map** (two squares). Tooltips and the Problems panel write container types as
+`Array<Float>`, `Set<String>`, `Map<String,Int>`, `Table<Stats>`, `Enum<State>`.
+
+#### Connection rules
+
+A wire is accepted when the types match, plus these conversions:
+
+* `Int` ↔ `Float`, and a number into a `String` pin (Lua turns it into text).
+* `Enum` ↔ `String` — an enum value *is* its name.
+* `Vec2`, `Vec3` and `Color` into a plain `Table` pin. Structs and containers also connect to
+  and from a plain `Table` pin.
+* A struct connects only to the same struct (or to a plain `Table`).
+* Containers connect only to the same container kind with compatible elements
+  (`Array<Int>` → `Array<Float>` is fine, `Array` → `Set` is not); map keys must match too.
+* `Function` pins take only function values.
+* `Any` takes everything.
+
+A wire that no longer type-checks (for example after you changed a variable's type) stays
+in the graph and is listed in the **Problems** panel as `Type mismatch: A -> B`.
+
+#### What `Any` means
+
+An `Any` pin is a raw Lua value with no type check. It exists for engine functions that
+genuinely take anything — `SetEntityData(id, key, value)`, the extra arguments of
+`Str.Format`, table fields, `Print` — and for values the catalog cannot describe more
+precisely.
+
+* Any output can be wired into an `Any` input, and an `Any` output into any input: the graph
+  trusts you, exactly like Lua does.
+* An **unconnected** `Any` input has no literal editor. Its field is a **Lua expression**
+  (`nil` when empty): `{x = 1, y = 2}`, `"text"`, `GetDeltaTime() * 2`.
+* Nodes whose inputs must *agree* on a type do not use `Any` — they use wildcard pins.
+
+#### Wildcard pins
+
+A wildcard pin looks like `Any` until something is connected, then the whole node adopts the
+connected type:
+
+* **Equal**, **Not Equal**, **Select**, **Is Valid**, **To String**, **Reroute** — every
+  wildcard pin takes the first connected type. *Select*'s **Result** becomes the type of *A*/*B*.
+* **Array / Set / Map nodes** (`Array Get`, `Array Add`, `Map Set`, `Map Get`, `Make Array`, …) —
+  connecting an `Array<Float>` makes the element pins `Float`; connecting a `Map<String,Int>`
+  makes the key pin `String` and the value pin `Int`.
+* **For Each** retypes its outputs from the connected collection: `Index` + `Element` for an
+  array, `Element` + `Present` for a set, `Key` + `Value` for a map.
+* A resolved wildcard accepts only compatible wires. Disconnect everything to make the node
+  generic again.
+
+#### Literal values and the **fx** button
+
+Unconnected typed inputs show an inline value editor. In the **Details** panel every
+unconnected input also has an **fx** button: it switches the pin to a **Lua expression**
+typed as text (the button turns orange). Use it for values a literal cannot express —
+`math.pi / 4`, `{x = GetMouseX(), y = 0}`, a global defined in Lua. Press **fx** again to go
+back to the literal.
+
+#### Variables
+
+Add variables in the **Variables** panel — member variables of the graph, or local
+variables while a function is open. A variable has a **Type** (including the graph's enums
+and structs), a **Container** (`Single`, `Array`, `Set`, `Map` + key type) and a **Default**.
+Arrays, sets and maps of simple types (Bool, Int, Float, String, Vec2, Vec3, Color, Enum)
+have an item editor for their default contents. Member variables can carry a **Tooltip**,
+shown when you hover the variable.
+
+In **class** graphs a member variable also has these options:
+
+| Option | Effect |
+|--------|--------|
+| **Instance Editable** (the eye icon in the list) | Every placed instance of the class shows the variable in the **Properties** panel and can set its own value. Supported types: Bool, Int, Float, String, Vec2, Vec3, Color, Entity, Enum, and arrays, sets and maps of them. An `Entity` value points at another entity of the level. |
+| **Expose on Spawn** | The variable becomes an input pin on the **Spawn Class** node, and `SpawnEntity(classPath, x, y, z, vars)` accepts it by name. Any type can be exposed. |
+| **Category** | Groups instance-editable variables in the Properties panel. |
+| **Value Range** | Int / Float only: clamps the default and the per-instance values while you edit them. |
+
+When an entity's script starts, each variable is initialised in this order:
+**class default → per-instance value** (saved in the level) **→ spawn value** (from
+`SpawnEntity` or *Spawn Class*). A per-instance value is skipped if the variable's type has
+changed since it was saved; the Properties panel lists such values as unused overrides you
+can remove. Per-instance values also reach **On Construct**, both in the editor — where it
+re-runs after you edit a value — and in the game.
+
+#### Spawn Class node
+
+**Spawn Class** (category *Entity*) spawns a class at *X*, *Y*, *Z* and outputs the new
+**Entity**. Choose the class with the picker in the Details panel (or type its path into
+the *Class* pin). The node then grows one input pin for each **Expose on Spawn** variable of
+that class and of its parent classes:
+
+* A pin you leave alone keeps the class default — the Details panel marks it
+  *(class default)*. A pin you set or connect overrides it; the reset arrow next to it
+  returns to the class default.
+* The pins follow the class: when its exposed variables change, the node updates by itself,
+  keeps the wires of variables that still exist and drops the rest.
+* If the class comes from a connected pin or an **fx** expression, no pins can be shown —
+  pass the values in the `vars` table of `SpawnEntity` instead.
+
+#### Execution model
+
+* Nodes without Exec pins (**pure** nodes — math, getters, `Get Variable`, …) have no place
+  in the flow: they are evaluated **for every executing node that uses them**, right before
+  it runs. A getter read after a `Set` therefore always sees the new value.
+* An Exec output continues into one node. Use **Sequence** to run several chains in order.
+* A chain may come back into a node through a *different* Exec input — for example an
+  update chain that calls a Gate's **Close**. Wiring a chain back into the *same* input it
+  came from is not followed (the chain ends there). For repeating logic use **For Loop**,
+  **While Loop**, a **Timeline**, or a timer: `SetInterval` with a **Function Reference** to a
+  custom event.
+
+#### Flow-control nodes
+
+| Node | Behaviour |
+|------|-----------|
+| **Branch** | Runs *True* or *False* by the condition. |
+| **Sequence** | Runs *Then 0 … Then N* in order (add pins in Details). |
+| **For Loop** / **For Loop with Break** | *First*..*Last* inclusive, then *Completed*. *Break* stops once the current iteration finishes. |
+| **For Each** / **For Each with Break** | Arrays in order with a 1-based *Index*; sets and maps in no particular order. |
+| **While Loop** | Checks the condition before every iteration. |
+| **Do Once** | Passes the first time only; *Reset* re-arms it. |
+| **Do N** | Passes *N* times (*Counter* = 1..N); *Reset* restarts the count. |
+| **Flip Flop** | Alternates *A* and *B*; *Is A* tells which one ran. |
+| **Gate** | *Enter* passes only while open. *Open*, *Close* and *Toggle* change it; *Start Closed* sets the initial state. |
+| **MultiGate** | Each *Enter* fires the next output (or a random unused one with *Is Random*). *Loop* starts over after the last output, *Start Index* picks the first one, *Reset* clears it. |
+| **Switch on Int / String / Enum** | Fires the matching case, otherwise *Default*. Cases are edited in Details; *Switch on Enum* gets one output per enum value. |
+| **Delay** | Waits *Duration* seconds, then continues. While it is waiting, further triggers are **ignored**. |
+| **Retriggerable Delay** | Every trigger restarts the countdown; continues once, *Duration* seconds after the last trigger. |
+| **Is Valid** | Branches on whether the value is not `nil`. |
+
+State such as a Gate being open or a pending Delay belongs to each entity separately.
+
+#### Timeline node
+
+Select a **Timeline** node to set its *Length*, *Loop* and *Rate* and to add tracks — Float,
+Vec2, Vec3 or Color, each with an easing. **Edit Curves** opens the keyframe editor. Every
+track becomes an output pin that holds its current value.
+
+| Input | Effect |
+|-------|--------|
+| **Play** | Plays forward from the current time. |
+| **Play from Start** | Rewinds to 0 and plays forward. |
+| **Stop** | Pauses at the current time. |
+| **Reverse** | Plays backward from the current time. |
+| **Reverse from End** | Jumps to the end and plays backward. |
+| **Set New Time** | Jumps to *New Time* without starting or stopping playback. |
+
+**Update** fires every frame while the timeline plays, including the frame in which it
+reaches the end. **Finished** fires in that same frame, when playback reaches the end (or
+the start, when reversed). A looping timeline never finishes. Playback starts advancing on
+the frame after *Play*, using that frame's delta time.
+
+The same control is available to Lua through `tl.SetReversed(bool)` / `tl.IsReversed()` on a
+[Timeline](#timeline--multi-track-timeline-with-keyframes) object.
+
+#### Engine function nodes
+
+Every function of this document is a node. Functions that only *read* something (`Get…`,
+`Is…`, `Has…`, math) are **pure** value nodes; the rest are actions with Exec pins.
+
+* Functions that return several values get one output pin per value.
+* Optional arguments you leave unconnected and untouched are not passed at all, so the
+  engine's own default applies. A value you set on such a pin is always passed.
+* Functions with a variable number of arguments (`Str.Format`, …) get extra *Arg* pins with
+  **Add Pin** / **Remove Pin** in Details.
+
+#### Problems panel
+
+Below the canvas, the **Problems** panel lists what the compiler found: nodes that never run
+because nothing executes them, `Type mismatch` wires, unconnected `Function` pins, duplicate
+switch cases, custom events or functions whose names clash with an engine event or function,
+a *Spawn Class* without a class (or with a class that no longer exists), and variables marked
+*Instance Editable* whose type cannot be edited per instance. Click an entry to select its
+node.
+
+#### Graph format and upgrades
+
+Graphs are saved with `"version": 2`. A graph saved by an older editor is upgraded when it
+loads: nodes whose engine function turned into a value node (or back) keep their old pin
+layout so existing wires stay valid, Lua-expression values of former `Any` pins stay
+expressions (**fx** on), and the old *Get Entities In Radius* node — it had only a *Radius*
+pin and could not work — becomes **GetEntitiesInMyRadius** (entities around this entity).
+Save the asset once to store the upgraded graph.
 
 ### File types
 
@@ -3536,6 +3745,24 @@ local cursorType = GetCursorType()  -- "None" | "Sprite" | "Flipbook"
 SetCursorPosition(400, 300)
 ```
 
+> **Game cursor vs editor cursor.** Everything above drives the **game** cursor and
+> nothing else: the editor never changes it, and in a shipped build there is nothing
+> else to share the pointer with. Inside the editor the same calls behave exactly the
+> same, with two extras that only exist there:
+>
+> * While Play mode owns the pointer it is **confined to the game viewport**, so a
+>   cursor you draw yourself from `GetMousePosition()` can never wander into the
+>   editor panels — the reported position stops at the viewport edge.
+> * `Shift+F1` hands the pointer to the editor. The game keeps running but stops
+>   receiving mouse position, buttons, wheel and delta, and the editor cursor takes
+>   over the screen. Your cursor state — visible or hidden, relative mode, the sprite
+>   or flipbook you set — is remembered and restored the moment the pointer comes
+>   back. `IsCursorVisible()` and `GetRelativeMouseMode()` keep reporting what *the
+>   game* asked for, not what the editor is showing.
+>
+> Note that `HideCursor()` also turns relative-mouse mode on and `ShowCursor()` turns
+> it off; use `SetRelativeMouseMode()` when you want to change only that half.
+
 ### Gamepad
 
 ```lua
@@ -4095,6 +4322,11 @@ end
 | `DragDrop.GetTexts()` | Array of text strings dropped from another app |
 | `DragDrop.GetPosition()` | `{x, y}` window-relative drop position |
 | `DragDrop.Clear()` | Manually empty the buffers |
+
+Dropped files and folders can be opened right away: a drop gives the game read access to exactly
+those items, so `FileDialog.Read`, `FileDialog.List` (for a dropped folder), `FileDialog.Import` and
+`Mods.Install` accept the paths from `DragDrop.GetFiles()` — see
+[FileDialog](#67-filedialog--open-save-import-and-export-player-files).
 
 ### Clipboard
 
@@ -4730,10 +4962,16 @@ end)
 
 ```lua
 -- Spawn entity from class
+-- SpawnEntity(classPath, x, y [, z] [, vars]) → new entity id, or nil
 local id = SpawnEntity("Content/Classes/Bullet.ice_class", x, y)
 local id = SpawnEntity("Content/Classes/Bullet.ice_class", x, y, z)  -- with Z
 
+-- Spawn with values for the class's "Expose on Spawn" variables
+local id = SpawnEntity("Content/Classes/Enemy.ice_class", x, y, 0, { Speed = 250, Team = "Red" })
+local id = SpawnEntity("Content/Classes/Enemy.ice_class", x, y, { Speed = 250 })  -- Z may be skipped
+
 -- Spawn with initial velocity
+-- SpawnEntityWithVelocity(classPath, x, y, vx, vy [, vars])
 local id = SpawnEntityWithVelocity("Content/Classes/Bullet.ice_class", x, y, vx, vy)
 
 -- Create an empty entity
@@ -4743,7 +4981,24 @@ local id = CreateEmptyEntity("Player", 100, 200, 0)
 -- Clone existing entity (with components and script)
 local cloneId = CloneEntity(entityId, x, y)  -- New position
 local cloneId = CloneEntity(entityId)         -- Original position
+```
 
+> **Spawn variables (`vars`).** The optional `vars` table is handed to the spawned class's
+> script before its `OnConstruct` / `OnCreate` run:
+>
+> * **Visual Script classes** apply it to the variables marked **Expose on Spawn**
+>   (see [Visual Scripting reference](#visual-scripting-reference)). A value is used only
+>   when its Lua type matches the variable (a number for `Int`/`Float`/`Entity`, a string
+>   for `String`/enums, a table for vectors, colors and containers, …); `Int` values are
+>   rounded down. Keys that are not exposed are ignored.
+> * **Lua classes** receive it as the first value of the chunk varargs:
+>   `local spawnVars = ...` at the top of the script.
+>
+> The engine keeps a copy of `vars` for the entity, so a hot-reloaded script and a
+> `CloneEntity` copy are constructed with the same values. `vars` stays on the machine that
+> spawned the entity — it is not sent to network peers.
+
+```lua
 -- Destroy entity
 DestroyEntity(entityId)
 
@@ -4862,8 +5117,9 @@ AttachChildEntity(childId)                -- attach a child to the current (self
 DetachEntityFromParent(childId)           -- detach an arbitrary entity from its parent
 
 -- Spawn a class instance already attached to a parent, positioned at a parent-local offset.
--- SpawnEntityAsChild(classPath, parentId [, localX, localY, z]) → new entity id, or nil
+-- SpawnEntityAsChild(classPath, parentId [, localX, localY, z] [, vars]) → new entity id, or nil
 local turretId = SpawnEntityAsChild("Content/Classes/Turret.ice_class", GetEntityId(), 0, 24)
+local gunId = SpawnEntityAsChild("Content/Classes/Turret.ice_class", GetEntityId(), 0, 24, 0, { FireRate = 3 })
 
 -- Get parent
 local parentId = GetParentEntity()  -- nil if none
@@ -8742,6 +8998,8 @@ tl.Play()
 tl.Pause()
 tl.Stop()
 tl.Reverse()               -- Reverse direction
+tl.SetReversed(true)       -- Play backward (false = forward), regardless of the current direction
+local back = tl.IsReversed()  -- true while playing backward
 tl.SetPlayRate(2.0)        -- 2x speed
 local rate = tl.GetPlayRate()  -- current play rate
 tl.SetTime(1.5)            -- Seek to 1.5s
@@ -9015,8 +9273,8 @@ to the native snapshot and handed straight back to `OnLoadState`; physics, anima
 the engine's job either way.
 
 ```lua
-Rollback.OnSaveState(function(frame) return SaveTableToString(myCombatState) end)
-Rollback.OnLoadState(function(extra, frame) myCombatState = LoadTableFromString(extra) end)
+Rollback.OnSaveState(function(frame) return Network.JsonEncode(myCombatState) end)
+Rollback.OnLoadState(function(extra, frame) myCombatState = Network.JsonDecode(extra) end)
 ```
 
 ### Tables (complex data)
@@ -9085,6 +9343,12 @@ for _, e in ipairs(infos) do
     Print(e.name .. "  " .. e.size .. " bytes  ts=" .. e.mtime)
 end
 ```
+
+> These functions only reach the save folder. Paths that contain `..` or a drive letter (`C:`) and
+> paths that start with `/` are refused, so a script — or a mod — cannot write anywhere else on the
+> player's disk. To read or write files the player chooses — a map to import, a level to export —
+> use [FileDialog](#67-filedialog--open-save-import-and-export-player-files); it can also copy them
+> into this folder and out of it.
 
 ### World and FX
 
@@ -9668,7 +9932,7 @@ local ha = GetWidgetElementTextAlign("Title")
 SetWidgetElementTextVAlign("Title", "Middle")    -- "Top" | "Middle" | "Bottom"
 local va = GetWidgetElementTextVAlign("Title")
 
--- Font face (path to .ice_font / font asset; "" = default font)
+-- Font face (the font's .ttf/.otf path or its .ice_font sidecar; "" = the system font, see SystemFont)
 SetWidgetElementFont("Title", "Content/Fonts/Title.ice_font")
 local font = GetWidgetElementFont("Title")
 
@@ -11860,6 +12124,40 @@ else
 end
 ```
 
+### Launch options and headless mode
+
+Command-line arguments are available to scripts, so one build can run as a normal client, a
+dedicated server or a test bot depending on how it was started. The standalone runtime passes
+everything after the executable name; in the editor these functions see the editor's own command
+line, and on Android, iOS and Web the list is empty.
+
+```lua
+local headless = Settings.IsHeadless()             -- started with --headless: no window, Null renderer, no audio device
+local args = Settings.GetLaunchArguments()         -- array of every argument after the executable name
+local has = Settings.HasLaunchOption("dedicated")  -- true for --dedicated, -dedicated or --dedicated=...
+local port = Settings.GetLaunchOption("port", "7777")
+-- "--port 7000" or "--port=7000" → "7000"; a flag without a value → "";
+-- a missing option → the fallback, or nil when no fallback is given
+```
+
+Option names match with or without the leading `-` / `--`. The value is the text after `=`,
+otherwise the next argument when it does not start with `-`. Values are strings — convert them
+with `tonumber`.
+
+```lua
+-- One build, several roles:  MyGame.exe --headless --server --port 7777
+function OnLevelStart()
+    if Settings.HasLaunchOption("server") then
+        Network.SetDedicatedServer(true)
+        Network.StartServer(tonumber(Settings.GetLaunchOption("port", "7777")), 32)
+    end
+end
+```
+
+> Started with `--rendezvous-server`, the runtime (and the editor binary) does not load the game
+> at all: it runs only the rendezvous server for online rooms — see
+> [Profiling & Building → Rendezvous server](Profiling-And-Building-EN-DOC.md#rendezvous-server).
+
 ### Accessibility
 
 ```lua
@@ -11903,10 +12201,14 @@ local fp = Settings.GetDyslexiaFontPath()
 
 `DyslexiaFontPath` accepts a path relative to the project `Content/` folder
 (e.g. `"Fonts/OpenDyslexic-Regular.ttf"` or `"Content/Fonts/OpenDyslexic-Regular.ttf"`)
-as well as an absolute path; packaged VFS builds are supported. While the override
+as well as an absolute path — the font file itself or its `.ice_font` sidecar; packaged
+VFS builds are supported. While the override
 is active (`AccessibilityEnabled` + `DyslexiaFriendlyFont` + non-empty path), it
 replaces **every** font in game text rendering — widget elements with their own
-fonts, elements without a font, tooltips and dropdowns — and the editor rebuilds
+fonts, elements without a font, tooltips and dropdowns, `Draw.Text`, and the
+[system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)
+of the developer console and the debug overlays, a font assigned with `SystemFont.Set`
+included — and the editor rebuilds
 its UI font with the dyslexia font as primary and the regular editor font merged
 in as a glyph fallback. If the file cannot be found, a single warning is logged
 and the regular fonts keep working.
@@ -13438,7 +13740,7 @@ ClearWorldText()
 
 `duration` and `key` behave exactly as for `PrintScreen`: `key >= 0` overwrites the entry with the same key instead of stacking a new one, which is what you want when drawing a label every tick. Off-screen world text is culled and costs nothing to draw.
 
-**Fonts & platforms:** The overlay and world text use the operating-system UI font resolved at runtime (Segoe UI on Windows, San Francisco on macOS/iOS, DejaVu/Noto/Liberation on Linux, Roboto on Android) — no font asset is shipped with the game for this. On Web the browser does not expose OS font files, so overlay text is not drawn there. The overlay is drawn on top of the scene and game UI with depth testing off, honoring the window pixel size; world text follows the engine's Y-up / X-right coordinate system.
+**Fonts & platforms:** In a game build the overlay and world text are drawn with the [system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text). By default that is the operating-system UI font resolved at runtime (Segoe UI on Windows, San Francisco on macOS/iOS, DejaVu/Noto/Liberation on Linux, Roboto on Android), so no font asset has to ship for it. A browser does not expose OS font files and an Xbox console gives a game none to read, so on Web and Xbox the text stays blank until you assign a font asset with `SystemFont.Set("Content/Fonts/...")` — which also makes the text look the same on every platform. In the editor viewport the messages are drawn by the editor UI with the editor font. The overlay is drawn on top of the scene and game UI with depth testing off, honoring the window pixel size; world text follows the engine's Y-up / X-right coordinate system.
 
 **Parameters:**
 
@@ -15133,14 +15435,16 @@ Network.StartServer(7777, 16)              -- port, max players
 Network.StartServer(7777, 16, "password")  -- with password
 Network.StartServer(7777, 16, "password", 8080) -- 4th arg: WebSocket port so browser (web) clients can join; 0/omitted = native (ENet) only
 
--- Stop server
+-- Stop server (every player is told at once; what was already sent to them arrives first)
 Network.StopServer()
 
 -- Connect to server
 Network.Connect("127.0.0.1", 7777)
-Network.Connect("127.0.0.1", 7777, "password")
+Network.Connect("127.0.0.1", 7777, "password")  -- the password is used for this connection only; it never changes a server password
+Network.Connect("play.mygame.com", 7777)        -- a host name is resolved in the background, the game keeps running;
+                                                 -- if it cannot be resolved, OnConnectionFailed fires with "resolve_failed"
 
--- Disconnect
+-- Disconnect (messages already sent to the server are delivered first)
 Network.Disconnect()
 
 -- State checks
@@ -15148,6 +15452,292 @@ local connected = Network.IsConnected()
 local server = Network.IsServer()
 local connecting = Network.IsConnecting()
 local host = Network.IsHost()
+```
+
+### Online rooms by room code (no port forwarding)
+
+`StartServer` + `Connect` need the host's IP address and an open port. **Online rooms** remove
+both: the host opens a room and gets a short **room code**, friends join with that code from
+anywhere — no port forwarding, no VPN, no third-party apps and no paid services. The engine finds
+the host, opens a direct UDP path through both routers (NAT hole punching) and then runs the
+normal session: RPC, variables, replication, voice and rollback work exactly as with
+`StartServer` / `Connect`.
+
+Two interchangeable **backends** find the host by its code:
+
+| Backend | What it needs | What you get |
+|---|---|---|
+| `"p2p"` — serverless | Nothing. The room is published in the public BitTorrent **Mainline DHT** (millions of nodes, free, no account) | Room codes over the internet, NAT hole punching with port prediction, automatic UPnP / NAT-PMP, discovery on the same Wi-Fi/LAN, a room list for the local network |
+| `"rendezvous"` | Your own **rendezvous server** — the same engine binary started with `--rendezvous-server` (see [Profiling & Building → Rendezvous server](Profiling-And-Building-EN-DOC.md#rendezvous-server)) | Everything above **plus** a relay when no direct path is possible, browser (Web build) players through its WebSocket gateway and a public room list over the internet |
+
+`"auto"` (the default) picks the rendezvous server when one is configured with
+`Network.SetRendezvousServer`, and serverless P2P otherwise — a game can start serverless and
+add a server later without changing its code.
+
+```lua
+Network.SetOnlineBackend("auto")            -- "auto" (default) | "p2p" | "rendezvous"; → true, or false for an unknown name
+local backend = Network.GetOnlineBackend()  -- the configured value ("auto" | "p2p" | "rendezvous")
+Network.SetAppId("MyGame-1.0")              -- rooms are separated per game id (1-64 printable characters)
+local appId = Network.GetAppId()            -- "IceBoxGame" until you set one
+```
+
+> Use your own `SetAppId` in every shipped game (the name, optionally with a protocol version):
+> players of different games — or of incompatible versions of one game — then never see each
+> other's rooms, even when they happen to use the same code.
+
+#### Hosting a room
+
+```lua
+Network.OnRoomReady(function(code)
+    Print("Tell your friend this code: " .. code)   -- e.g. "K7F3Q9MX"
+end)
+
+local ok = Network.HostOnline({
+    maxPlayers = 6,              -- default: the current Network max players (16)
+    password   = "",             -- optional; checked with the usual challenge-response
+    code       = "",             -- optional fixed code (4-16 letters/digits); empty = random
+    name       = "Bill's table", -- shown in room lists (default: the local player name)
+    public     = false,          -- list the room in Network.ListRooms
+    lan        = true,           -- p2p: also announce the room on the local network (UDP 7794)
+    upnp       = true,           -- ask the router to open the port for this room (UPnP / NAT-PMP)
+    web        = true,           -- rendezvous: allow browser players through the gateway
+    port       = 0,              -- UDP port of the session; 0 = any free port
+    backend    = "auto",         -- overrides Network.SetOnlineBackend for this call
+})
+-- ok == false → nothing was started; the reason is the second value of Network.GetOnlineState()
+```
+
+`HostOnline` starts a server exactly like `StartServer` (the host is player 1, `OnPlayerJoined`
+fires for everybody who joins) and opens the room on top of it. The P2P backend creates a random
+**8-character** code (letters and digits without the look-alikes `I`, `O`, `0`, `1`) and fires
+`OnRoomReady` at once — the room is joinable on the local network immediately and from the
+internet a few seconds later, when the state turns `hosting`. The rendezvous backend fires
+`OnRoomReady` after the server registered the room (its codes are 6 characters). `Network.StopServer()`
+closes the room.
+
+#### Joining a room
+
+```lua
+Network.OnConnected(function() Print("In the room!") end)
+Network.OnConnectionFailed(function(reason) Print("Could not join: " .. reason) end)
+
+Network.JoinOnline("K7F3-Q9MX")              -- case, spaces and dashes are ignored
+Network.JoinOnline("K7F3Q9MX", "password")   -- the password of a protected room
+Network.JoinOnline("K7F3Q9MX", nil, {
+    backend      = "auto",  -- per-call backend override
+    lan          = true,    -- also look for the room on the local network
+    timeout      = 30,      -- p2p: seconds to find the host and open the path (5..120)
+    relay        = true,    -- rendezvous: use the relay when the direct path fails
+    relayOnly    = false,   -- rendezvous: skip hole punching and go through the relay
+    punchTimeout = 4,       -- rendezvous: seconds of hole punching before the relay fallback
+})
+```
+
+`JoinOnline` returns `false` only when the join cannot start at all (invalid code, missing
+rendezvous server, already connected); everything else is reported asynchronously through
+`OnConnected` / `OnConnectionFailed` and `OnOnlineStatus`. With `Network.EnableReconnect(...)` a
+lost online session is re-joined **by code**, and a player who comes back before the host noticed
+the drop gets the same player id back.
+
+#### Status, diagnostics and room settings
+
+```lua
+Network.OnOnlineStatus(function(state, detail)
+    -- state: see the table below; detail = route or error code, may be ""
+end)
+
+local code = Network.GetRoomCode()                 -- current room code, "" when none
+local state, err = Network.GetOnlineState()        -- e.g. "hosting", ""  /  "failed", "room_not_found"
+local ready = Network.IsSessionReady()             -- host: true; client: the handshake finished (Welcome received)
+local route = Network.GetConnectionRoute()         -- client: the path to the host
+local route = Network.GetConnectionRoute(playerId) -- host: the path to that player
+-- "local" (same machine) | "lan" | "direct" (peer-to-peer over the internet) | "relay" | "web" | "" (none)
+local nat = Network.GetNatType()                   -- "open" | "cone" | "symmetric" | "blocked" | "unknown"
+
+local info = Network.GetOnlineInfo()
+-- info.backend       "p2p" | "rendezvous": the backend of the session (when idle: the one "auto" would pick)
+-- info.active        an online room session is running
+-- info.hosting       this machine hosts the room
+-- info.state, info.error, info.code, info.route, info.nat
+-- info.publicAddress "ip:port" of this machine as the internet sees it ("" while unknown)
+-- info.registered    rendezvous: the room is registered; p2p: the room is published in the DHT
+-- info.lan           p2p: local-network discovery is active
+-- info.dhtNodes      p2p: DHT nodes known to this session
+-- info.dhtReachable  p2p: the public DHT has answered
+
+Network.UpdateRoom({ name = "Final table", public = false, locked = true })  -- host only
+-- locked = true refuses new players with "room_locked"; players already in stay.
+-- Pass every field you care about: omitted fields fall back to their defaults.
+```
+
+`OnOnlineStatus` states:
+
+| State | Side | Meaning |
+|---|---|---|
+| `registering` | host | Registering the room on the server (rendezvous) / publishing it (p2p) |
+| `hosting` | host | The room is open and joinable |
+| `offline` | host | The room cannot be reached from the internet right now (`detail`: `dht_unreachable`, `rendezvous_unreachable`, `rendezvous_lost`, `rendezvous_timeout`, `server_full`, `rate_limited`). Players already in the session are not affected and the engine keeps retrying; a P2P room stays joinable on the local network |
+| `joining` | client | The join started |
+| `resolving` | client | rendezvous: resolving the server name |
+| `searching` | client | p2p: looking the room up in the DHT and on the local network |
+| `punching` | client | The host was found; opening a direct path |
+| `relaying` | client | rendezvous: switching to the relay |
+| `connecting` | client | A path was found (`detail` = route); the session handshake runs |
+| `connected` | client | In the room (`detail` = route) |
+| `reconnecting` | client | The connection was lost; retrying (needs `Network.EnableReconnect`) |
+| `failed` | both | Gave up (`detail` = error code) |
+
+Error codes (`OnConnectionFailed(reason)`, the second value of `GetOnlineState()`, the `detail` of
+`failed` / `offline`):
+
+| Code | Meaning |
+|---|---|
+| `invalid_room_code` | The code is not 4-16 letters/digits |
+| `room_not_found` | No room with this code (p2p: nobody announced it before the timeout) |
+| `room_full` / `room_locked` | The host refuses new players |
+| `wrong_password` | Wrong room password |
+| `direct_connection_failed` | The host was found, but no direct path could be opened — see *When a direct path is impossible* |
+| `dht_unreachable` | p2p: the public DHT could not be reached (no internet, or UDP is blocked) |
+| `rendezvous_not_configured` | The `"rendezvous"` backend without `Network.SetRendezvousServer` |
+| `rendezvous_unreachable` / `rendezvous_timeout` / `rendezvous_dns_failed` | The rendezvous server does not answer or its name cannot be resolved |
+| `relay_unavailable` / `relay_timeout` | rendezvous: no free relay, or the relay did not connect (`relayOnly` on the p2p backend is refused with `relay_unavailable`) |
+| `code_taken` | host: the fixed `code` belongs to another live room |
+| `port_unavailable` | host: the UDP port could not be opened |
+| `invalid_app_id` | The `SetAppId` value is empty, longer than 64 or contains control characters |
+| `unsupported_platform` | Hosting from a Web build, or the p2p backend in a Web build |
+| `timeout`, `connection_refused`, `connection_lost`, `server_shutdown`, `kicked`, `banned`, `server_full`, `reconnect_failed` | The regular session errors, the same as with `Network.Connect` |
+
+#### Room list
+
+```lua
+Network.ListRooms(function(rooms, err)
+    if err ~= "" then Print("List failed: " .. err) return end
+    for _, r in ipairs(rooms) do
+        -- r.code, r.name, r.players, r.maxPlayers, r.hasPassword, r.locked,
+        -- r.web (browser players allowed), r.lan (found on the local network)
+    end
+end)                                   -- → true when the request started
+Network.ListRooms(callback, "p2p")        -- public rooms on the local network (a 1.6 s scan)
+Network.ListRooms(callback, "rendezvous") -- public rooms of this game id on the rendezvous server
+```
+
+Only rooms hosted with `public = true` are listed. The serverless backend has no global
+directory, so its list covers the local network; a room on the internet is joined by its code.
+
+#### How serverless P2P works
+
+The room code is turned into hashed keys; the code itself is never published. The host
+announces its public address under one key in the DHT through the game's own UDP socket, and
+the joiner announces itself under another. Each side looks the other up and both send "punch"
+packets at the same time, which opens the path through both routers. When the router supports
+UPnP or NAT-PMP the port is also opened and announced. NATs that give every destination a new
+port are handled with port prediction when their ports are allocated sequentially. On the same
+Wi-Fi the room is also found through a local broadcast on **UDP 7794**, because many routers cannot
+send traffic back to their own public address. A join usually takes 3–15 seconds.
+
+#### When a direct path is impossible
+
+Without a server there is no relay. When **both** players are behind symmetric NATs with random
+ports, or both are behind the same carrier-grade NAT that cannot loop traffic back, the join ends
+with `direct_connection_failed`. This is rare on home Wi-Fi and happens on some mobile networks.
+Remedies: one of the players switches the network (for example Wi-Fi instead of mobile data), the
+host enables UPnP on the router, or the game uses the `"rendezvous"` backend, whose relay always
+connects.
+
+#### Security
+
+The room code is the key to the room: whoever knows it can find the host, so share it like an
+invite link and add a `password` for private games. The code travels only as hashes, but players
+of one room see each other's public IP addresses, as in any peer-to-peer game. Authorization,
+bans, rate limits and validation work exactly as with `StartServer`.
+
+#### Platforms
+
+Serverless P2P works on Windows, Linux, macOS, Android, iOS and in headless builds. A **Web** build
+cannot use UDP: browser players join rooms of the `"rendezvous"` backend through its WebSocket
+gateway (`JoinOnline` connects over WebSocket automatically), and a browser cannot host. **Android**:
+the local-network part needs `ACCESS_LOCAL_NETWORK` on Android 17+ (see *Server discovery* below);
+the Wi-Fi multicast lock needed to receive LAN broadcasts is taken automatically. **iOS**: internet
+P2P needs nothing extra; the local-network broadcast needs the Multicast Networking entitlement
+(`--enable-multicast` in the iOS build), otherwise friends on the same Wi-Fi are reached through the
+internet path, which works when the router supports hairpinning. **Xbox**: use `XboxMultiplayer`
+sessions for console play.
+
+#### Router port mapping
+
+`HostOnline` asks the router to open the session port (`upnp = true`); `StartServer` does the same
+when port mapping is enabled.
+
+```lua
+Network.SetPortMappingEnabled(true)     -- StartServer also opens its port on the router
+local on = Network.IsPortMappingEnabled()
+local s = Network.GetPortMappingStatus()
+-- s.state            "idle" | "working" | "mapped" | "failed" | "unsupported"
+-- s.method           "upnp" | "natpmp" | ""
+-- s.externalAddress  public IP reported by the router ("" if unknown)
+-- s.externalPort, s.internalPort
+-- s.doubleNat        the router is itself behind another NAT, so the mapping cannot help
+-- s.error            the reason when the state is "failed"
+```
+
+#### Rendezvous server
+
+```lua
+Network.SetRendezvousServer("rv.mygame.com")                   -- host[:port]; the port defaults to 7790
+Network.SetRendezvousServer("203.0.113.10", 7790)
+Network.SetRendezvousServer("rv.mygame.com", 7790, "wss://rv.mygame.com/rooms") -- WebSocket URL for Web builds (default ws://host:7793)
+local host, port, wsUrl = Network.GetRendezvousServer()
+Network.SetRendezvousServer("")                                 -- forget the server ("auto" becomes p2p again)
+
+-- Run a rendezvous server inside the running game: LAN parties, tests, or a listen server that
+-- also matchmakes. A public server normally runs the same binary headless with
+-- --rendezvous-server instead (see Profiling & Building).
+local ok = Network.StartRendezvousServer({
+    port = 7790, altPort = 7791, gatewayPort = 7792, wsPort = 7793,
+    relayPorts = { 7800, 7899 },  -- or relay = false to disable relaying
+    bind = "0.0.0.0", publicIp = "",
+    maxRooms = 10000, maxRelays = 100, relayKBps = 512, maxWeb = 256,
+    appIds = { "MyGame-1.0" },    -- accept only these game ids (default: any)
+})
+local running = Network.IsRendezvousServerRunning()
+local st = Network.GetRendezvousServerStats()
+-- st.running, st.rooms, st.publicRooms, st.pendingJoins, st.relays, st.webPlayers,
+-- st.joinRequests, st.relayRequests, st.relayedBytes, st.uptime,
+-- st.relayEnabled, st.webEnabled, st.natProbeEnabled
+Network.StopRendezvousServer()
+```
+
+#### Complete example: "Create room" and "Join by code"
+
+```lua
+function CreateRoom(playerName)
+    Network.SetAppId("MyGame-1")
+    Network.SetPlayerName(playerName)
+    Network.OnRoomReady(function(code) ShowCode(code) end)
+    Network.OnOnlineStatus(function(state, detail)
+        if state == "offline" then ShowHint("No internet right now - friends on this Wi-Fi can still join") end
+        if state == "hosting" then ShowHint("") end
+    end)
+    Network.OnPlayerJoined(function(id, name) AddToLobby(id, name) end)
+    Network.OnPlayerLeft(function(id) RemoveFromLobby(id) end)
+    if not Network.HostOnline({ maxPlayers = 4 }) then
+        local _, err = Network.GetOnlineState()
+        ShowError(err)
+    end
+end
+
+function JoinByCode(playerName, code)
+    Network.SetAppId("MyGame-1")
+    Network.SetPlayerName(playerName)
+    Network.EnableReconnect(true, 4, 2.0)
+    Network.OnOnlineStatus(function(state) ShowStatus(state) end)  -- searching → punching → connecting → connected
+    Network.OnConnected(function() OpenLobby() end)
+    Network.OnConnectionFailed(function(reason) ShowError(reason) end)
+    if not Network.JoinOnline(code) then
+        local _, err = Network.GetOnlineState()
+        ShowError(err)
+    end
+end
 ```
 
 ### Player information
@@ -15253,6 +15843,15 @@ Client-side `BroadcastData`/`BroadcastTable`/`BroadcastDataExcept`/`BroadcastTab
 as well as targeted `SendData`/`SendTable`, are automatically relayed through the host:
 receivers get the real sender `playerId` in `OnDataReceived`/`OnTableReceived`.
 
+An unreliable message may be larger than one UDP packet (a whole world state, for example): it
+is split into unreliable fragments and arrives whole or not at all, and a lost one never delays
+the reliable messages sent after it.
+
+Tables travel as JSON. Integers stay 64-bit integers and other numbers keep full precision;
+`nan` and `inf` become `nil`. A table is sent as an array only when its keys are exactly `1..n`;
+otherwise it becomes an object and numeric keys arrive as strings (`{[5] = "a"}` arrives as
+`{["5"] = "a"}`). Nesting deeper than 64 levels is not transmitted.
+
 ### Callbacks (events)
 
 ```lua
@@ -15271,7 +15870,7 @@ Network.OnPlayerVarChanged(function(playerId, key, value)
     Print("Player " .. playerId .. ": " .. key .. " = " .. value)
 end)
 
--- Clear all callbacks
+-- Clear all callbacks (including OnOnlineStatus, OnRoomReady and a pending ListRooms)
 Network.ClearCallbacks()
 ```
 
@@ -15874,7 +16473,7 @@ local maxRelay = Network.GetMaxVoiceRelayPlayers() -- current limit
 ### Administration
 
 ```lua
-Network.KickPlayer(playerId)
+Network.KickPlayer(playerId)   -- a message sent to the player just before still arrives (e.g. the reason)
 Network.BanPlayer(playerId)
 Network.UnbanPlayer(playerId)
 local banned = Network.IsPlayerBanned(playerId)
@@ -15974,6 +16573,10 @@ Network.SetPlayerInterestPosition(playerId, x, y)  -- server: set a player's foc
 
 -- Reconnect
 Network.EnableReconnect(true, 5, 2.0)  -- enable, maxAttempts, interval
+-- Only a session that was established and then lost is re-established. A first connection
+-- attempt that fails is reported once through OnConnectionFailed and is not retried.
+-- A player who comes back before the host noticed the drop keeps the same player id;
+-- online rooms (Network.JoinOnline) are re-joined by their code.
 local reconnecting = Network.IsReconnecting()
 local attempt = Network.GetReconnectAttempt()
 local connState = Network.GetConnectionState()
@@ -16015,7 +16618,8 @@ local cliTime = Network.GetClientTime()
 Network.EnableEncryption("my_secret_key")
 local encEnabled = Network.IsEncryptionEnabled()
 
--- NAT traversal (peer-to-peer connectivity)
+-- STUN: learn this machine's public address. Joining without port forwarding is done by
+-- the online rooms (Network.HostOnline / Network.JoinOnline), not by these calls.
 Network.EnableNATTraversal(true)                                    -- defaults: stun.l.google.com:19302
 Network.EnableNATTraversal(true, "stun.l.google.com", 19302)       -- custom STUN server
 local natEnabled = Network.IsNATEnabled()
@@ -16026,7 +16630,8 @@ local discovered = Network.DiscoverExternalAddress()
 -- Async NAT discovery
 Network.DiscoverExternalAddressAsync()
 local pending = Network.IsDiscoveryPending()
-local result = Network.PollDiscoveryResult()  -- returns discovery result or nil if still pending
+local done = Network.PollDiscoveryResult()    -- true once, when the answer arrived (GetExternalIP/GetExternalPort are set);
+                                              -- false while pending or after a failure (then IsDiscoveryPending() is false)
 ```
 
 > **The two compressions are different layers and stack.** Delta compression decides *what* goes
@@ -16161,12 +16766,13 @@ Use the `NetworkProfiler.MSG_*` constants, which mirror the engine `NetMessageTy
 
 ```
 MSG_PlayerJoin       MSG_PlayerLeave       MSG_Ping              MSG_Pong
-MSG_TextChat         MSG_VoiceData         MSG_PrivateChat       MSG_ChannelChat
-MSG_ChannelJoin      MSG_ChannelLeave      MSG_EntitySync        MSG_EntitySpawn
-MSG_EntityDestroy    MSG_TransformUpdate   MSG_Snapshot          MSG_EntityOwnership
-MSG_InputState       MSG_InputAck          MSG_RemoteCall        MSG_Reconnect
-MSG_RateExceeded     MSG_DeltaSnapshot     MSG_AuthChallenge     MSG_ShutdownNotice
-MSG_Custom
+MSG_Welcome          MSG_TextChat          MSG_VoiceData         MSG_PrivateChat
+MSG_ChannelChat      MSG_ChannelJoin       MSG_ChannelLeave      MSG_EntitySync
+MSG_EntitySpawn      MSG_EntityDestroy     MSG_TransformUpdate   MSG_Snapshot
+MSG_EntityOwnership  MSG_InputState        MSG_InputAck          MSG_RemoteCall
+MSG_Reconnect        MSG_RateExceeded      MSG_DeltaSnapshot     MSG_ReplicationControl
+MSG_AuthChallenge    MSG_ShutdownNotice    MSG_RollbackInput     MSG_RollbackSync
+MSG_Custom           MSG_UserData
 ```
 
 ```lua
@@ -16243,7 +16849,7 @@ Rollback only works if your gameplay is **deterministic**: the same starting sta
 
 **Determinism rules** (follow all of them):
 - Inside `OnAdvanceFrame`, drive the simulation **only** from `inputs` — never read live input (`IsKeyPressed`, `GetMousePosition`, …) or per-frame globals.
-- For randomness use `RNG.*` or the global `Random*()` helpers — both draw from the engine `RandomService`. Its state is saved and restored **automatically** every frame (toggle with the session config), so dice rolls replay identically through a rollback. Plain `math.random` is **not** covered.
+- For randomness use `RNG.*` or the global `Random*()` helpers — both draw from the engine `RandomService`. Its state is saved and restored **automatically** every frame (toggle with the session config), so dice rolls replay identically through a rollback. When a P2P session synchronizes, the engine seeds it with a seed chosen by player 0, so every peer starts from the same random state; to use a seed of your own, set it in the `"synchronized"` event (the same value on every peer). `math.random` and `math.randomseed` are routed to the same service, so they are covered too.
 - Do **not** use wall-clock time (`GetTime()`, `GetDeltaTime()`, `os.time()`), un-ordered iteration (`pairs` over a hash whose order you depend on), or any value that differs run-to-run.
 - Box2D physics is deterministic for the **same binary on the same platform** — both peers must run the same build. Cross-platform float determinism is not guaranteed; ship identical executables for ranked play.
 
@@ -16253,6 +16859,10 @@ Every fixed tick (typically 60 Hz), sample the local input and call `Rollback.Ti
 1. stores your local input (with optional input delay) and sends it to the other peers,
 2. predicts any remote inputs that have not arrived yet and advances the present frame via `OnAdvanceFrame`,
 3. when a real remote input arrives that differs from the prediction, calls `OnLoadState` at the mispredicted frame and re-runs `OnAdvanceFrame` forward to the present.
+
+Each frame's local input is taken from the **first** `Tick` call of that frame. While `Tick` keeps returning `"stall"`, the input you pass is ignored, because the input of that frame has already been sent to the peers — keep passing your current input every tick; it is used as soon as the simulation moves on.
+
+Inputs are resent until every peer acknowledges them, so lost or late packets never desynchronize the match: after a network hiccup the session stalls for a moment and then catches up on its own.
 
 `Rollback.Tick(input)` returns a status string:
 
@@ -16276,7 +16886,7 @@ Every fixed tick (typically 60 Hz), sample the local input and call `Rollback.Ti
 | `Rollback.GetLocalHandle()` | `int` — this peer's player index (`0..numPlayers-1`). |
 | `Rollback.GetPlayerCount()` | `int`. |
 | `Rollback.GetCurrentFrame()` | `int` — the next frame to simulate. |
-| `Rollback.GetConfirmedFrame()` | `int` — the last frame for which all inputs are confirmed (no prediction). |
+| `Rollback.GetConfirmedFrame()` | `int` — the last **simulated** frame for which all inputs are confirmed (no prediction); its state is final. |
 | `Rollback.RecommendStallFrames()` | `int` — time-sync hint; how many frames you are ahead of the remote peer. |
 | `Rollback.SetPlayerHandle(handle, netPlayerId, local)` | Manually map a player index to a network player id (auto-assigned by sorted id otherwise). |
 | `Rollback.GetInputs()` | Table of the inputs used for the current frame (`{ bits, predicted }`). |
@@ -16284,7 +16894,17 @@ Every fixed tick (typically 60 Hz), sample the local input and call `Rollback.Ti
 | `Rollback.OnSaveState(fn)` / `OnLoadState(fn)` / `OnAdvanceFrame(fn)` / `OnEvent(fn)` | Register the simulation and event callbacks. |
 | `Rollback.ClearCallbacks()` | Remove all registered callbacks. |
 
-`OnEvent(fn)` receives a table with `type` (`"synchronizing"`, `"synchronized"`, `"disconnected"`, `"timesync"`, `"desync"`, …), plus `player`, `frame`, `count`, `total`, `frames_ahead`, `local_checksum`, `remote_checksum`.
+`OnEvent(fn)` receives a table with `type`, plus `player`, `frame`, `count`, `total`, `frames_ahead`, `local_checksum`, `remote_checksum`:
+
+| `type` | When |
+|---|---|
+| `"synchronizing"` | The handshake with the peers is in progress (`count` of `total` answered). |
+| `"synchronized"` | Every peer is ready; frame 0 starts. |
+| `"timesync"` | This peer runs ahead of the others by `frames_ahead` frames; `Tick` returns `"stall"` for a frame or two so they catch up. |
+| `"interrupted"` | Player `player` dropped out of the network session. The simulation keeps predicting its input and then waits for it (`Tick` returns `"stall"`) for up to 10 seconds. |
+| `"resumed"` | Player `player` is back in the network session (for example after an automatic reconnect); the inputs it missed are resent automatically. |
+| `"disconnected"` | Player `player` stayed away for 10 seconds, or the initial handshake timed out (`player` = `-1`, the session stops). After a player disconnects the session no longer waits for it and repeats its last input. With more than two players, end or restart the match on this event — the remaining peers may have received different amounts of that player's input. |
+| `"desync"` | The peers disagree on the state of confirmed frame `frame` (`local_checksum` ≠ `remote_checksum`; `player` is the peer that reported it): the simulation is not deterministic. Peers compare the checksums of confirmed frames automatically. |
 
 ### Complete example (1-byte input bitmask)
 
@@ -18698,7 +19318,7 @@ return M
 
 ### 41.6 Mod lifecycle
 
-1. **Discover** — the engine scans `Mods/` and reads `mod.json` at startup.
+1. **Discover** — the engine scans `Mods/` and reads `mod.json` at startup. A shipped game also scans the player's mods folder ([41.11](#4111-installing-and-removing-mods-from-inside-the-game)).
 2. **Enable** — `Config/Mods.json` marks which mods are enabled.
 3. **Load** — when the game starts (OnRuntimeStart), enabled mods are topologically sorted by their `Dependencies` (falling back to `LoadOrder`) and loaded. Each mod's `APIVersion` must be ≤ the engine API version.
 4. **Execute** — `main.lua` runs in its sandboxed environment. The mod may declare any of the lifecycle callbacks below.
@@ -18837,6 +19457,7 @@ Each element is a table with the following fields:
 | `loaded` | bool | Whether the mod is currently loaded and running |
 | `loadOrder` | int | Load priority (lower = earlier) |
 | `folderPath` | string | Absolute path to the mod folder |
+| `canUninstall` | bool | The player installed this mod, so `Mods.Uninstall` may remove it ([41.11](#4111-installing-and-removing-mods-from-inside-the-game)) |
 
 #### `Mods.GetCount()` → int
 
@@ -18904,6 +19525,7 @@ if info then
     print("Load Order: " .. info.loadOrder)
     print("Entry Script: " .. info.entryScript)
     print("Folder: " .. info.folderPath)
+    print("Can uninstall: " .. tostring(info.canUninstall))
 end
 ```
 
@@ -18918,6 +19540,7 @@ end
 | `loadOrder` | int | Load priority |
 | `entryScript` | string | Entry script filename (e.g. `"main.lua"`) |
 | `folderPath` | string | Absolute path to the mod folder |
+| `canUninstall` | bool | Whether `Mods.Uninstall` may remove it |
 
 #### `Mods.Refresh()`
 
@@ -18983,6 +19606,81 @@ for _, path in ipairs(Mods.GetSearchPaths()) do print(path) end
 Removes every extra search path. The next `Mods.Refresh()` then sees only `Mods/`. Call this before re-registering
 Workshop folders so unsubscribed items do not linger.
 
+#### `Mods.Import(options?, callback?)` → bool
+
+Shows the system file dialog so the player can pick a mod they downloaded — a `.zip` archive
+or a folder — then checks it, copies it into the player's mods folder and loads it. Returns
+`true` when the dialog was shown; the callback receives the result described in
+[41.11](#4111-installing-and-removing-mods-from-inside-the-game).
+
+| Option | Default | Meaning |
+|---|---|---|
+| `source` | `"archive"` | `"archive"` (or `"zip"`) to pick a `.zip` file, `"folder"` to pick a folder. |
+| `title` | — | Title of the dialog (desktop only). |
+| `enable` | `true` | Enable the installed mods right away. With `false`, new mods are installed switched off and updated mods keep their current state. |
+| `replace` | `true` | Replace a mod the player installed earlier under the same `Name`. With `false`, such a mod is reported as already installed. |
+
+```lua
+Mods.Import({ source = "archive" }, function(result)
+    if result.ok then ShowToast("Installed " .. result.name) end
+end)
+```
+
+#### `Mods.Install(path, options?, callback?)` → bool
+
+Installs from a path you already have — one the player picked with
+[FileDialog](#67-filedialog--open-save-import-and-export-player-files) or dropped on the
+window. Takes the same `enable` / `replace` options and reports the same result as
+`Mods.Import`.
+
+```lua
+if DragDrop.HasItems() then
+    for _, path in ipairs(DragDrop.GetFiles()) do
+        if path:lower():sub(-4) == ".zip" then
+            Mods.Install(path, nil, OnModInstalled)
+        end
+    end
+end
+```
+
+#### `Mods.Uninstall(name)` → bool
+
+Removes a mod the player installed: all mods are unloaded, that mod's folder is deleted and
+the others are loaded again. Returns `false` (with the reason in `Mods.GetLastError()`) for a
+mod that ships with the game or when its files are in use.
+
+```lua
+if Mods.CanUninstall("SuperWeapons") then
+    Mods.Uninstall("SuperWeapons")
+end
+```
+
+#### `Mods.CanUninstall(name)` → bool
+
+Whether `Mods.Uninstall(name)` is allowed for this mod — the same value as the `canUninstall`
+field of `Mods.GetAll()` and `Mods.GetInfo()`.
+
+#### `Mods.GetUserFolder()` → string
+
+Absolute path of the player's mods folder, where `Mods.Import` and `Mods.Install` put mods and
+where players on desktop can also drop mod folders by hand.
+
+#### `Mods.OpenUserFolder()` → bool
+
+Opens the player's mods folder in the system file manager (Explorer, Finder, the Linux file
+manager), creating it if needed. Desktop only; returns `false` elsewhere.
+
+```lua
+if not Mods.OpenUserFolder() then
+    ShowToast("Mods folder: " .. Mods.GetUserFolder())
+end
+```
+
+#### `Mods.GetLastError()` → string
+
+Why the last `Mods.Import`, `Mods.Install` or `Mods.Uninstall` call returned `false`; `""`
+after a call that succeeded. (It is shared with `FileDialog.GetLastError()`.)
+
 #### Complete example: in-game mod menu
 
 ```lua
@@ -19005,6 +19703,135 @@ function OnLevelStart()
     end
 end
 ```
+
+### 41.11 Installing and removing mods from inside the game
+
+Players can install a mod they downloaded without touching the game's files. That matters
+most on phones, where there is no folder a player could drop a mod into — but it is just as
+convenient on desktop. The game shows the system file dialog, the player picks a `.zip` or a
+folder, and the engine checks it, copies it into place and loads it.
+
+```lua
+function OnInstallModClicked()
+    local started = Mods.Import({ source = "archive" }, function(result)
+        if result.cancelled then return end
+        if result.ok then
+            ShowToast("Installed " .. result.name)
+        else
+            ShowToast("Could not install: " .. result.error)
+        end
+        RebuildModMenu()
+    end)
+    if not started then
+        ShowToast(Mods.GetLastError())
+    end
+end
+```
+
+It works wherever [FileDialog](#67-filedialog--open-save-import-and-export-player-files) does:
+Windows, macOS, Linux, Android and iOS. On Web and Xbox `Mods.Import` returns `false`.
+
+#### The result
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ok` | bool | Every mod that was found got installed. |
+| `cancelled` | bool | The player closed the dialog without picking anything. |
+| `error` | string | The first problem, starting with the mod's name. |
+| `name` | string | `Name` of the first mod that was installed. |
+| `folderPath` | string | Its folder. |
+| `mods` | table | One entry per mod found: `{ name, version, folderPath, installed, replaced, error }`. |
+
+An archive or a folder may hold several mods; the ones that pass the checks are installed even
+when another one fails, so walk `mods` to report each of them.
+
+#### What the player can pick
+
+* **An archive** (`source = "archive"`, the default) — a `.zip` file.
+* **A folder** (`source = "folder"`) — a mod folder, or a folder that holds mod folders one or
+  two levels down.
+
+Every folder with a `mod.json` becomes a mod. A `mod.json` nested inside a mod is just one of
+that mod's files. The `__MACOSX` folders and `.DS_Store` files macOS adds to archives are
+ignored.
+
+#### What is checked
+
+Nothing is copied into the mods folder until these pass:
+
+* `mod.json` is valid JSON. `Name` is a non-empty string (when it is missing, the folder or
+  archive name is used); `Version` and `EntryScript` are strings.
+* `EntryScript` (`main.lua` by default) exists inside the mod and does not point outside it.
+* For archives: Store and Deflate compression (what every zip tool writes) and ZIP64 are
+  supported; encrypted and multi-part archives are refused; at most 100,000 entries and 4 GB
+  unpacked; a compressed file may unpack to at most 128 MB (store bigger files uncompressed);
+  every file's checksum is verified; a path that tries to leave the mod (`..`, an absolute
+  path) refuses the whole archive; symbolic links are skipped.
+
+#### Where mods go
+
+Mods are copied into the player's mods folder — `Mods.GetUserFolder()` returns it:
+
+| Where the game runs | Player's mods folder |
+|---|---|
+| Windows, Linux | `Mods/` next to the game when the game can write there; otherwise `Mods/` in the game's per-user data folder |
+| macOS | `Mods/` in the game's data folder, outside the `.app` |
+| iOS | `Documents/Mods` — players can see it in the Files app under the game's name |
+| Android | `Mods/` in the game's private storage — installing from inside the game is how players add mods |
+| Editor, in Play | The project's `Mods/` folder |
+
+A shipped game scans that folder on every platform, after the mods that come with the game.
+The mod gets a folder named after its `Name` (letters, digits, spaces and `- _ . ( )` are kept,
+anything else becomes `_`, and ` (2)`, ` (3)`, … is added when the name is taken), plus a small
+`.icebox-installed` marker file.
+
+After copying, **all mods are unloaded and loaded again** — the same as `Mods.Refresh()` — so
+the new mod runs at once: its `OnModLoad` fires, and during a level its `OnLevelStart` too. The
+enabled state is saved to `Config/Mods.json` as usual.
+
+#### Updating and conflicts
+
+* A mod whose `Name` matches one the player installed earlier **replaces** it (unless
+  `replace = false`). The old version is moved aside, the new one is moved in, and only then
+  is the old one deleted — if anything fails, the old version is put back.
+* A mod whose `Name` matches a mod that **comes with the game** (or from an extra search path)
+  is never replaced: that mod is not installed and its `error` says why. A download cannot
+  overwrite the game's own content.
+* The same `Name` twice in one archive installs the first and reports the second.
+
+#### Removing mods
+
+`Mods.Uninstall(name)` deletes only mods the player installed — `Mods.CanUninstall(name)` and
+the `canUninstall` field tell you which. When the player's mods folder is a separate folder,
+every mod in it counts. When it is the game's own `Mods/` folder (a writable game folder on
+Windows or Linux, and the editor), only mods installed from inside the game count — they are
+the ones with the `.icebox-installed` marker.
+
+The folder is first moved out of `Mods/`, so the mod is gone at once even if some of its files
+are still being deleted.
+
+```lua
+function BuildModMenu()
+    for _, mod in ipairs(Mods.GetAll()) do
+        AddModRow(mod.name, mod.version, mod.enabled)
+        if mod.canUninstall then
+            AddRemoveButton(mod.name, function()
+                if not Mods.Uninstall(mod.name) then
+                    ShowToast(Mods.GetLastError())
+                end
+                BuildModMenu()
+            end)
+        end
+    end
+end
+```
+
+#### In the editor
+
+`Mods.Import` works in Play mode and installs into the **project's** `Mods/` folder, marked with
+`.icebox-installed`. Those mods stay after you stop Play, and with **Include Mods** on they would
+ship with the game like any other enabled mod — remove them with `Mods.Uninstall` (or delete the
+folder) when you are done testing.
 
 ---
 
@@ -21766,6 +22593,10 @@ Permissions.GetPublicStoragePath(type) -> string
 Returns the absolute path of a **public** shared-storage directory (`Environment.getExternalStoragePublicDirectory(type)`). With no argument (or `""`) returns the root of the user-visible external storage (`Environment.getExternalStorageDirectory()`).
 Writing here requires `WRITE_EXTERNAL_STORAGE` (≤ Android 9) or `MANAGE_EXTERNAL_STORAGE` / Storage Access Framework on newer versions — reading via `MediaStore` typically only needs the granular `READ_MEDIA_*` permission.
 
+> To let the player pick a file or a folder anywhere — shared storage, an SD card, Google Drive — without
+> asking for any permission, use [FileDialog](#67-filedialog--open-save-import-and-export-player-files).
+> It goes through the Storage Access Framework, where the player's choice is the permission.
+
 Use the `Permissions.Dirs` subtable for the `type` argument:
 
 | Constant | Value | Maps to |
@@ -22984,16 +23815,22 @@ end
 > `Material.SetTexture`, `PP.SetCustomMaterialTexture` and the texture variants of a `.ice_decal`. So a video can be
 > placed in world space at any position, size, rotation and depth.
 >
-> Supports skip input (ESC / Space / Enter / Gamepad A / Start), audio, volume control, looping,
-> and the `VideoFinished` Lua event for scene transitions.
+> Supports skip input (ESC / Space / Enter / Gamepad A / Start), audio, volume control, looping of the whole video or of
+> a part of it, frame-accurate seeking, playback speed from 0.25× to 4× (with or without pitch correction), and the
+> `VideoFinished` Lua event for scene transitions.
 >
-> Video files are played directly (`.mp4`, `.webm`, `.avi`, `.mkv` — any format supported by FFmpeg).
+> Video files are played directly (`.mp4`, `.webm`, `.avi`, `.mkv` — any format supported by FFmpeg; on the Xbox
+> consoles MP4 with H.264 or HEVC, see the note below).
 > Works with both loose files on disk and files packed in `.ICEPAK` archives via VFS.
 >
-> **Note:** Available on all seven platforms. **Windows**, **Linux**, **macOS**, **Android** and **Xbox** decode through
-> FFmpeg; **iOS** plays through AVFoundation (H.264/HEVC only — WebM/VP9 is not decodable there, so video
-> cooking falls back to PassThrough for iOS builds); **Web** plays through the browser's `<video>` element.
-> Channels, textures and the presentation settings below behave the same on every platform.
+> **Note:** Available on all seven platforms. **Windows**, **Linux**, **macOS**, **Android** and **Xbox on PC**
+> (`Gaming.Desktop.x64`) decode through FFmpeg. The **Xbox consoles** (Xbox One, Xbox Series X|S) play through Media
+> Foundation: H.264 or HEVC video in an MP4 file with AAC-LC or AC-3 audio (HEVC in the `hvc1` form). WebM/VP9 is not
+> decodable there, so video cooking falls back to PassThrough for console builds. Keep console videos at 1080p / 30 fps
+> or below: Xbox Series X|S also plays H.264 above 1080p, HEVC stays within 1080p on every console. **iOS** plays through AVFoundation
+> (H.264/HEVC only — WebM/VP9 is not decodable there, so video cooking falls back to PassThrough for iOS builds);
+> **Web** plays through the browser's `<video>` element. Channels, textures, seeking, playback speed, looping and the
+> presentation settings below behave the same on every platform.
 
 ### Playback
 
@@ -23025,8 +23862,17 @@ Video.Play("Videos/news.mp4", {
     volume        = 0.5,     -- same as Video.SetVolume (0.0–1.0)
     postProcessed = nil,     -- override the asset's IsPostProcessed for this playback (true/false)
     lit           = nil,     -- override the asset's IsLit for this playback (true/false)
+    startTime     = 12.5,    -- start at this moment (seconds) instead of the beginning
+    playbackRate  = 1.0,     -- same as Video.SetPlaybackRate (0.25–4.0)
+    preservePitch = true,    -- same as Video.SetPreservePitch
+    loopStart     = 3.0,     -- same as Video.SetLoopRange: the part of the video that `loop` repeats
+    loopEnd       = 10.0,    -- omitted or 0 = up to the end of the video
 })
 ```
+
+`startTime` begins playback at that moment instead of at 0 (clamped to the video's duration). On the FFmpeg and Xbox
+console platforms the first frame shown is already the frame at `startTime`; on Web and iOS the file is opened first and
+then positioned, and `Video.IsSeeking` is `true` until the frame is there.
 
 Every other function takes the **channel name as its last, optional argument**. Without it the call works on the main
 channel exactly as before, so existing scripts keep working unchanged:
@@ -23044,9 +23890,9 @@ local channels = Video.GetChannels()   -- { "main", "tv", ... } — channels tha
 ```
 
 Calling `Video.Play` on a channel that is already playing replaces its video. Playback settings (`loop`, `skippable`,
-`volume`, `fullscreen`, `postProcessed`, `lit`) are reset on every `Play`, so set them in the options table or after
-the call. `Video.Stop(channel)` releases the channel completely; a finished video keeps its last frame on the texture
-until you stop it or play something else.
+`volume`, `fullscreen`, `postProcessed`, `lit`, the playback rate, pitch preservation and the loop range) are reset on
+every `Play`, so set them in the options table or after the call. `Video.Stop(channel)` releases the channel completely;
+a finished video keeps its last frame on the texture until you stop it or play something else.
 
 ### State checks
 
@@ -23061,8 +23907,8 @@ local w, h     = Video.GetWidth(), Video.GetHeight()   -- frame size in pixels (
 ```
 
 `IsReady` matters on **Web** and **iOS**, where the browser / AVFoundation open the file asynchronously: `Play` returns
-`true` immediately, and the first frame arrives a moment later. On the FFmpeg platforms it is already `true` when
-`Play` returns.
+`true` immediately, and the first frame arrives a moment later. On the FFmpeg platforms and on the Xbox consoles it is
+already `true` when `Play` returns.
 
 ### Reading a video's info without playing it
 
@@ -23083,6 +23929,69 @@ local t   = Video.GetTime()       -- current playback time (seconds)
 local dur = Video.GetDuration()   -- total duration (seconds)
 local pct = Video.GetProgress()   -- progress 0.0–1.0
 ```
+
+### Seeking — rewind and fast-forward to any moment
+
+```lua
+Video.Seek(42.0)                                   -- jump to 0:42 on the main channel
+Video.Seek(Video.GetTime() + 10)                   -- 10 seconds forward
+Video.Seek(math.max(0, Video.GetTime() - 10))      -- 10 seconds back
+Video.Seek(0.5 * Video.GetDuration("tv"), "tv")    -- the middle of the "tv" channel's video
+local busy = Video.IsSeeking()                     -- true until the frame at the new position is shown
+```
+
+`Video.Seek(seconds, [channel])` moves playback to `seconds` (clamped to 0 … duration) and returns `true`. It returns
+`false` when the channel holds no video, or — rarely, for a damaged file — when the file cannot be positioned; the video
+then stays as it was. It works in every state:
+
+- **playing** — playback continues from the new position;
+- **paused** — the texture shows the frame at the new position and the video stays paused, so a paused video can be
+  scrubbed frame by frame;
+- **finished** (it reached the end or was skipped) — the video comes back **paused** at the new position: `Resume`
+  plays on from there, and `VideoFinished` is emitted again when it reaches the end.
+
+Seeking is frame-accurate and never freezes the game:
+
+- `GetTime` and `GetProgress` report the new position immediately. `IsSeeking` stays `true` until the frame at that
+  position is on the texture; until then the texture keeps the previous frame.
+- On the FFmpeg platforms and on the Xbox consoles the decoder jumps to the keyframe before the target and decodes
+  forward to the exact frame within a small time budget per frame, so a long jump is spread over a few frames instead of
+  stalling one. The sound resumes exactly at the new position, in sync with the picture.
+- Calling `Seek` again before the previous seek finished — for example while the player drags a scrub bar — simply
+  retargets it; on the FFmpeg platforms and the Xbox consoles the nearest keyframe is shown while dragging, and the
+  exact frame as soon as the target stops moving.
+- On Web and iOS the browser / AVFoundation perform the seek; the same `GetTime` / `IsSeeking` rules apply.
+
+`Seek` only moves the playback position: looping, speed, volume and the other settings stay as they are.
+
+### Playback speed — slow motion and fast forward
+
+```lua
+Video.SetPlaybackRate(0.5)             -- half speed (slow motion)
+Video.SetPlaybackRate(2.0, "tv")       -- double speed on the "tv" channel
+local rate = Video.GetPlaybackRate()   -- 1.0 = normal speed
+
+Video.SetPreservePitch(false)          -- let the pitch follow the speed, like a tape
+local keeps = Video.GetPreservePitch() -- true by default
+```
+
+`Video.SetPlaybackRate(rate, [channel])` sets how fast the video plays: `rate` is clamped to **0.25 – 4.0**, `1.0` is
+normal speed. Picture and sound change speed together and stay in sync, and the change applies immediately, so the rate
+can be changed every frame — for example to ease into slow motion. It works while the video plays, while it is paused
+(it applies when playback resumes) and together with seeking and looping. Playing backwards is not supported: use
+`Seek` to go back.
+
+By default the sound keeps its **pitch** at any speed, the way video players do: voices sound natural at 1.5× or 0.75×.
+`Video.SetPreservePitch(false)` switches to tape-style speed instead — the pitch rises with the speed and drops in slow
+motion, which suits bullet-time and "time slows down" effects.
+
+Good to know:
+
+- Videos run on real time scaled only by their own rate: the game's time scale (`SetTimeScale`) does not slow a video
+  down. Call `Video.SetPlaybackRate` with the same value if a video should follow it.
+- A higher rate means more frames to decode per second — 4× on a 60 fps video is 240 frames per second. A device that
+  cannot decode that fast plays the picture slower than requested, so keep high rates for short fast-forwards or use
+  lighter videos (lower resolution or frame rate) on weak devices.
 
 ### Volume
 
@@ -23105,6 +24014,40 @@ local loops = Video.IsLooping()
 
 Skip input is checked per channel, and it is off by default for every channel — a looping TV in the background never
 reacts to Escape unless you make it skippable.
+
+### Looping a part of the video
+
+```lua
+Video.Play("Videos/menu_background.mp4", { loop = true })
+Video.SetLoopRange(3.0, 10.0)       -- play 0–3 s once, then repeat 3–10 s
+Video.SetLoopRange(3.0, 0)          -- from 3 s up to the end of the video (0 = the end)
+
+local from = Video.GetLoopStart()   -- 3.0
+local to   = Video.GetLoopEnd()     -- 10.0 (the video's duration while no range is set)
+local set  = Video.HasLoopRange()
+
+Video.ClearLoopRange()              -- loop the whole video again
+```
+
+`Video.SetLoopRange(start, end, [channel])` chooses the part of the video that looping repeats; looping itself is still
+switched on with `Video.SetLooping(true)` (or `loop = true`). While looping is on, playback that reaches `end` jumps back
+to `start`, and so does playback that reaches the end of the video. With looping off the range is ignored and the video
+plays to its end as usual. The range can be set before or during playback and works at any speed:
+
+- Playback that starts before `start` plays into the range normally — an intro shown once, then a loop.
+- The jump happens when playback **crosses** `end`. After a `Seek` past `end` the video plays on to its end and then
+  returns to `start`.
+- An `end` of `0` means the end of the video. A range that ends less than 0.05 s after its start, or that starts past the
+  end of the video, is rejected: `SetLoopRange` returns `false`, logs a warning and keeps the previous range.
+- `GetLoopStart` / `GetLoopEnd` return the range in effect: `0` and the duration while no range is set.
+
+A loop back to the start of the file is seamless. A loop back to the middle of a video makes the decoder start again
+from the keyframe before `start`, which can hold the picture and the sound for a moment at the jump on the FFmpeg
+platforms and the Xbox consoles (on Web and iOS it depends on the browser / AVFoundation). For a perfectly seamless
+background loop, cut the looping part into its own file and play it with `loop = true`.
+
+To leave a loop and let the video play on — for example to show the ending of a menu video once the player presses
+Start — turn looping off with `Video.SetLooping(false)`: playback continues past `end` and finishes normally.
 
 ### Full-screen presentation: post-processing and lighting
 
@@ -23293,14 +24236,68 @@ function OnTriggerEnter(other)
 end
 ```
 
+### Practical example — player controls: rewind, speed and an A-B loop
+
+```lua
+local SPEEDS = { 0.5, 1.0, 1.5, 2.0 }
+local speedIndex = 2
+local loopFrom = nil
+
+function OnStart()
+    Video.Play("Videos/tutorial.mp4", { name = "tutorial", fullscreen = true })
+end
+
+function OnUpdate(dt)
+    if not Video.HasActiveVideo("tutorial") then return end
+
+    if IsKeyJustPressed("space") then
+        if Video.IsPaused("tutorial") then Video.Resume("tutorial") else Video.Pause("tutorial") end
+    end
+
+    if IsKeyJustPressed("right") then
+        Video.Seek(Video.GetTime("tutorial") + 10, "tutorial")
+    elseif IsKeyJustPressed("left") then
+        Video.Seek(math.max(0, Video.GetTime("tutorial") - 10), "tutorial")
+    end
+
+    if IsKeyJustPressed("up") and speedIndex < #SPEEDS then
+        speedIndex = speedIndex + 1
+        Video.SetPlaybackRate(SPEEDS[speedIndex], "tutorial")
+    elseif IsKeyJustPressed("down") and speedIndex > 1 then
+        speedIndex = speedIndex - 1
+        Video.SetPlaybackRate(SPEEDS[speedIndex], "tutorial")
+    end
+
+    if IsKeyJustPressed("l") then
+        if not loopFrom then
+            loopFrom = Video.GetTime("tutorial")
+        elseif Video.SetLoopRange(loopFrom, Video.GetTime("tutorial"), "tutorial") then
+            Video.SetLooping(true, "tutorial")
+            Video.Seek(loopFrom, "tutorial")
+            loopFrom = nil
+        end
+    end
+
+    if IsKeyJustPressed("c") then
+        Video.ClearLoopRange("tutorial")
+        Video.SetLooping(false, "tutorial")
+        loopFrom = nil
+    end
+end
+```
+
+The first `L` marks point A, the second marks point B and starts repeating A–B; `C` clears the loop. A progress bar can
+be drawn from `Video.GetProgress("tutorial")`, and a click on it becomes `Video.Seek(fraction * Video.GetDuration("tutorial"), "tutorial")`.
+
 ### API reference
 
 `channel` is optional everywhere: omitted or `""` means the main channel. A named channel that holds no video is
-ignored: setters do nothing and getters return `false`, `0` or `""` (`GetVolume` returns `1.0`).
+ignored: setters do nothing and getters return `false`, `0` or `""` (`GetVolume` and `GetPlaybackRate` return `1.0`,
+`GetPreservePitch` returns `true`).
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `Video.Play(path, [options])` | `bool` | Start video playback. Path is relative to `Content/`. `options`: `name`, `fullscreen`, `loop`, `skippable`, `volume`, `postProcessed`, `lit`. Returns `true` on success |
+| `Video.Play(path, [options])` | `bool` | Start video playback. Path is relative to `Content/`. `options`: `name`, `fullscreen`, `loop`, `skippable`, `volume`, `postProcessed`, `lit`, `startTime`, `playbackRate`, `preservePitch`, `loopStart`, `loopEnd`. Returns `true` on success |
 | `Video.Stop([channel])` | — | Stop the video and release the channel: decoder, audio and texture |
 | `Video.Pause([channel])` | — | Pause playback |
 | `Video.Resume([channel])` | — | Resume playback |
@@ -23312,15 +24309,26 @@ ignored: setters do nothing and getters return `false`, `0` or `""` (`GetVolume`
 | `Video.IsPaused([channel])` | `bool` | `true` if video is paused |
 | `Video.IsFinished([channel])` | `bool` | `true` after the video ends or is skipped |
 | `Video.IsReady([channel])` | `bool` | `true` once the first frame is on the channel's texture |
-| `Video.GetTime([channel])` | `float` | Current playback time in seconds |
+| `Video.GetTime([channel])` | `float` | Current playback time in seconds (the target position while a seek is in progress) |
 | `Video.GetDuration([channel])` | `float` | Total video duration in seconds |
 | `Video.GetProgress([channel])` | `float` | Playback progress (0.0–1.0) |
+| `Video.Seek(seconds, [channel])` | `bool` | Jump to `seconds` (clamped to 0 … duration). Works while playing, paused or finished (a finished video comes back paused). `false` if the channel holds no video or the file cannot be positioned |
+| `Video.IsSeeking([channel])` | `bool` | `true` until the frame at the position of the last `Seek` (or loop jump) is on the texture |
+| `Video.SetPlaybackRate(rate, [channel])` | — | Playback speed, clamped to 0.25–4.0 (1.0 = normal). Picture and sound stay in sync |
+| `Video.GetPlaybackRate([channel])` | `float` | Current playback speed |
+| `Video.SetPreservePitch(bool, [channel])` | — | `true` (default): the sound keeps its pitch at any speed; `false`: the pitch follows the speed like a tape |
+| `Video.GetPreservePitch([channel])` | `bool` | Whether pitch correction is on |
 | `Video.SetVolume(volume, [channel])` | — | Set audio volume (0.0–1.0) |
 | `Video.GetVolume([channel])` | `float` | Get current audio volume |
 | `Video.SetSkippable(bool, [channel])` | — | Allow/disallow skip via input (ESC, Space, Enter, Gamepad A/Start) |
 | `Video.IsSkippable([channel])` | `bool` | Check if the video can be skipped |
 | `Video.SetLooping(bool, [channel])` | — | Enable/disable video looping |
 | `Video.IsLooping([channel])` | `bool` | Check if looping is enabled |
+| `Video.SetLoopRange(start, end, [channel])` | `bool` | Part of the video that looping repeats (`end` of `0` = the end of the video). `false` and a warning for an invalid range |
+| `Video.ClearLoopRange([channel])` | — | Loop the whole video again |
+| `Video.HasLoopRange([channel])` | `bool` | Whether a loop range is set |
+| `Video.GetLoopStart([channel])` | `float` | Start of the loop in effect (`0` without a range) |
+| `Video.GetLoopEnd([channel])` | `float` | End of the loop in effect (the duration without a range) |
 | `Video.SetFullscreen(bool, [channel])` | — | Show the channel full screen over the game, or only through its texture |
 | `Video.IsFullscreen([channel])` | `bool` | Check if the channel is shown full screen |
 | `Video.SetPostProcessed(bool, [channel])` | — | Override the asset's *Is Post Processed* setting for this playback |
@@ -24038,6 +25046,11 @@ Console.SetStyle({
 })
 ```
 
+> **Font:** the console draws with the [system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text) —
+> the operating-system UI font unless you assign a font asset with `SystemFont.Set`, which is
+> the only way to get console text on Web and Xbox. `fontScale` scales that font from its
+> 24 px base size; `lineHeight` is the row spacing in pixels.
+
 ### 60.2 Console — Command Registration
 
 | Function | Returns | Description |
@@ -24503,6 +25516,11 @@ state is left cleared, so a typo degrades to the default shader instead of drawi
 > thing to group by is the blend mode. Drawing a hundred actors as halo/body/glow, halo/body/glow, ... costs three
 > hundred draw calls; drawing all hundred halos, then all hundred bodies, then all hundred glows costs three.
 >
+> Consecutive `additive` / `translucent` runs whose `z` never goes back down are uploaded together: the renderer keeps
+> them in one batch (one vertex upload, one sort) and only switches the blend state between them, so a panel drawn as a
+> translucent body at `z = 0` and an additive rim at `z = 1` costs two draw calls but a single batch. The order you see
+> on screen is exactly the order you submitted — the merge only happens when it cannot change the result.
+>
 > A `Draw.Mesh` under a material is one draw call per mesh — that is already the natural granularity, but it means a
 > thousand small meshes cost a thousand calls where a thousand quads would cost one. Prefer quads, or merge the geometry
 > into fewer, larger meshes.
@@ -24526,7 +25544,7 @@ Draw.Text("Score: 1200", x, y, 24)              -- text, position, pixel size
 Draw.Text("HP", x, y, 18, {
     r = 1, g = 0.3, b = 0.3, a = 1,             -- colour (defaults to the draw-state colour)
     align = "center",                            -- "left" (default) | "center" | "right"
-    font = "Content/Fonts/Pixel.ttf",            -- default engine font when omitted
+    font = "Content/Fonts/Pixel.ttf",            -- the system font (SystemFont) when omitted
     z = 10,
     rtl = false,                                 -- force right-to-left layout
     lit = false,                                 -- take scene lighting
@@ -24543,6 +25561,10 @@ Draw.SetMaxTexts(20000)      -- per-frame budget (default 20000)
 Draw.GetMaxTexts()
 ```
 
+- `font` is the font asset's full content path — the `.ttf` / `.otf` itself or its `.ice_font`
+  sidecar. Without `font`, or when that font cannot be loaded, the text uses the
+  [system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text) — the
+  operating-system UI font, or the font asset assigned with `SystemFont.Set` (the only option on Web).
 - `x, y` is the **baseline** of the first line, in the current space (`Draw.SetSpace`).
 - In `world` space the text rolls and scales with the camera; in `screen` space it is fixed to the viewport.
 - Text is drawn in submission order and is **not** depth-tested, so it always lands on top of the geometry submitted
@@ -24550,6 +25572,10 @@ Draw.GetMaxTexts()
 - `\n` starts a new line one `lineHeight` below the previous one, and `align` is applied to each line separately, so a
   whole paragraph is one call. `MeasureText` reports the widest line as `width` and the block as `lines` / `totalHeight`.
 - Text honours the clip and moves with the transform (see *Clipping* and *Transform stack*).
+- The first time a font appears at a given pixel size the engine opens the face and starts an empty glyph atlas for
+  it (about a millisecond); glyphs are rasterized the first time a string uses them, so new sizes and new characters
+  mid-game do not stall the frame. Every distinct size is its own atlas, so snap animated sizes to a few steps rather
+  than a new integer every frame.
 
 ```lua
 -- A text-grid renderer: one call per row, whole screen in 50 calls.
@@ -25069,6 +26095,10 @@ Draw.SetTarget(nil)
 Render-target geometry is rendered **before** the main scene each frame, so a target you fill this frame can already be
 sampled by sprites and materials in the same frame. In screen space the target's own pixel rectangle is used
 (origin bottom-left); in world space the current camera projection is stretched over the target.
+
+> `RenderTarget.ReadPixels` reads back through the graphics API synchronously. Every backend supports it except
+> **WebGPU**, where the browser only exposes asynchronous buffer mapping and the call returns an empty table — a web
+> build that needs pixel readback should be built with `--renderer webgl2`.
 
 The depth buffer of a render target is **not** cleared automatically — call `RenderTarget.Clear` each frame if you draw
 depth-tested world-space geometry into it.
@@ -26402,5 +27432,563 @@ end
 
 > **See also:** `Settings.IsMobile()` and `Settings.GetPlatform()` for deciding
 > whether an orientation control belongs in the menu at all.
+
+---
+
+## 66. SystemFont — Font for the Console, Debug Overlays and Font-less Text
+
+> **Type:** Global functions. `SystemFont` table.
+>
+> A handful of engine systems draw text without a font asset of their own: the
+> **developer console**, the **on-screen debug text** (`PrintScreen`, `DrawWorldText`),
+> the **runtime profiler** and **network profiler overlays**, and every **widget text,
+> tooltip and dropdown** and every **`Draw.Text`** call that has no font set. They all
+> share one font — the *system font*.
+>
+> Out of the box that font is taken from the operating system, so a game ships nothing
+> for it. That fallback is proven and stays in place, but it cannot be relied on
+> everywhere: a browser never exposes font files, so on **Web** there is no OS font at
+> all; an **Xbox** console gives a game no system font files to read; and a stripped-down
+> Linux or a custom Android image may simply not have the expected files. Wherever that
+> happens, all of that text stays blank.
+>
+> `SystemFont.Set` removes the dependency: point it at a font asset from the Content
+> Browser and every one of those systems draws with it, on every platform, identically.
+> The asset ships with the game like any other content. Leave it unset and nothing
+> changes — the engine keeps using the OS font exactly as before.
+
+### Assigning a font
+
+```lua
+function OnLevelStart()
+    SystemFont.Set("Content/Fonts/F_Console.ttf")
+end
+```
+
+That is all. From then on the developer console, the debug overlays and every font-less
+text draw with `F_Console.ttf` — with the settings of its `.ice_font` sidecar
+(**Antialiased**, **Nearest Filter** for pixel fonts, atlas size), exactly as the Font
+Editor shows it.
+
+The path is the one the Content Browser shows. These forms all work:
+
+| Form | Example |
+| --- | --- |
+| Full content path (recommended) | `"Content/Fonts/F_Console.ttf"` |
+| Relative to `Content/` | `"Fonts/F_Console.ttf"` |
+| The sidecar — the `.ttf` / `.otf` / `.ttc` next to it is used | `"Content/Fonts/F_Console.ice_font"` |
+| Bare file name — found by searching `Content/` | `"F_Console.ttf"` |
+
+It resolves the same way everywhere a game runs: loose files, packed `Content.icepak`
+archives, Android APK assets and the Web data package. Backslashes are accepted and
+stored as forward slashes. Moving or renaming the font through the Content Browser
+rewrites the full path in your scripts like any other asset reference, and an old path
+that still reaches the engine is followed through its redirector.
+
+### It either works or changes nothing
+
+`Set` loads the font right away (at the 24 px base size the console uses), so its return
+value is a real answer:
+
+```lua
+if not SystemFont.Set("Content/Fonts/F_Console.ttf") then
+    PrintWarning("console font missing, still using: " .. SystemFont.GetSource())
+end
+```
+
+When the file cannot be found or is not a font, `Set` returns `false`, writes a warning
+to the log and **keeps the current system font** — the asset assigned before, or the OS
+font. A typo never takes away a font that was working. Repeating a call that failed tries
+again without repeating the warning, and calling `Set` with the path that is already active
+is free, so it is safe from code that runs often.
+
+`SystemFont.Set("")` is the same as `SystemFont.Clear()`.
+
+### Where the font comes from
+
+Every time one of those systems needs the font, the engine takes the first source that
+works:
+
+1. The **dyslexia-friendly font**, while the player has it switched on
+   (`Settings.SetAccessibilityEnabled(true)` + `Settings.SetDyslexiaFriendlyFont(true)` +
+   a font path). It replaces every font in the game, this one included — it is the
+   player's choice.
+2. The **font asset** assigned with `SystemFont.Set`.
+3. In the editor: the **editor font** ([Preferences → Editor](Editor-EN-DOC.md#104-editor)
+   → *Font*).
+4. The **operating-system UI font** — Segoe UI (then Arial, Tahoma, Verdana, Calibri) on
+   Windows; the system UI font (San Francisco, then Helvetica, Geneva, Arial) on macOS and
+   iOS; Roboto (then Noto Sans, Droid Sans) on Android; DejaVu Sans (then Liberation Sans,
+   Noto Sans, FreeSans) on Linux; nothing on Web.
+5. None — the text of those systems is not drawn.
+
+`SystemFont.GetSource()` tells you which one is in use right now, and
+`SystemFont.GetFile()` which file:
+
+```lua
+Print("system font: " .. SystemFont.GetSource() .. " -> " .. SystemFont.GetFile())
+-- system font: asset -> Content/Fonts/F_Console.ttf
+-- system font: os -> C:/Windows/Fonts/segoeui.ttf
+```
+
+| `GetSource()` | Meaning |
+| --- | --- |
+| `"asset"` | The font asset from `SystemFont.Set`. |
+| `"dyslexia"` | The player's dyslexia-friendly font overrides it. |
+| `"editor"` | Play mode in the editor with no asset assigned — the editor font. |
+| `"os"` | No asset assigned — the operating-system font. |
+| `"none"` | Nothing is available; that text is not drawn. |
+
+If an assigned asset later stops loading — deleted, or broken by a bad edit — the systems
+fall back down the list on their own (with a warning in the log), `IsLoaded()` turns
+`false` and `GetSource()` reports the fallback.
+
+### Only where the platform has no font
+
+`HasOSFont()` tells you whether this device has an OS font to fall back on. Keep the
+native look on desktop and phones, and switch to your own font only where there is none:
+
+```lua
+function OnLevelStart()
+    if not SystemFont.HasOSFont() then
+        SystemFont.Set("Content/Fonts/F_Console.ttf")
+    end
+end
+```
+
+It is always `false` on Web. The first call looks the OS font up and loads it, so on a
+platform that has one it costs one font load.
+
+### Lifetime
+
+* The assignment lives until you change it — it survives level changes, like
+  `Console.SetStyle`. Set it once at startup: in the first level's `OnLevelStart`, in the
+  `OnCreate` of a persistent game-manager entity, or in a mod's start-up code.
+* It is not written to disk. It belongs to the game, not to the player's settings, so it is
+  set again on every launch by the same script.
+* In the editor, Play mode never leaks into the editor: when you stop playing, the system
+  font goes back to what it was before you pressed Play.
+
+### What it covers
+
+| Text | Uses the system font |
+| --- | --- |
+| Developer console (game builds) | Always. |
+| `PrintScreen` / `DrawWorldText` (game builds) | Always. |
+| Runtime profiler and network profiler overlays (Debug game builds) | Always. |
+| Widget elements that show text, their tooltips and dropdown lists | When the element has no font, or its font cannot be loaded. |
+| `Draw.Text` / `Draw.MeasureText` | When `font` is omitted, or it cannot be loaded. |
+| Widget Editor preview (editor) | For elements with no font. |
+| Text with a font of its own | Never — that font is used. |
+
+In the editor, Play mode applies the system font to widget text, tooltips, dropdowns and
+`Draw.Text` without a font. The viewport's `PrintScreen` / `DrawWorldText` messages are
+drawn by the editor UI in the editor font, and the developer console and the profiler
+overlays exist only in game builds — check those in a build.
+
+### Size and pixel fonts
+
+Widgets and `Draw.Text` ask for the exact pixel size they draw at, so they stay sharp with
+any font. The console and the debug overlays use the font at a **24 px base size** and scale
+it: the console by its `fontScale` (`0.45` by default, set with `Console.SetStyle`), the
+on-screen debug text by `0.5` times the message `scale`, and the profiler overlays by `0.5`.
+
+For a pixel font, pick a `fontScale` that lands on the font's native size — for a font drawn
+on an 8 px grid that is `24 × 1/3 = 8` — and in its `.ice_font` turn **Nearest Filter** on
+and **Antialiased** off:
+
+```lua
+SystemFont.Set("Content/Fonts/F_Pixel8.ttf")
+Console.SetStyle({ fontScale = 1 / 3, lineHeight = 10 })
+```
+
+### Cooking: keep the glyphs the console prints
+
+Characters the font does not contain are drawn as `?` (when the font has one), so pick a
+system font that covers every script your console and debug text print — a pixel font
+often has Latin only.
+
+The console and the debug text print strings made at runtime, which the cooker cannot see.
+With **Font Mode = Subset** the font keeps the ranges declared in its `.ice_font` (Latin and
+Cyrillic by default); with **Auto-subset** it keeps printable ASCII, the characters found in
+your widgets, localization, views and cinemas, and its **Additional Ranges**. If your logs or
+commands use other scripts, add their blocks to the font's Additional Ranges in the Font
+Editor (for example `0x0400`–`0x04FF` for Cyrillic), or cook fonts with PassThrough.
+
+### Reference
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `SystemFont.Set(path)` | `bool` | Uses the font asset at `path` as the system font. `true` once it is found and loaded; `false` keeps the current font. `""` clears. |
+| `SystemFont.Get()` | `string` | The assigned path as given (forward slashes), `""` when none is assigned. |
+| `SystemFont.Clear()` | — | Removes the asset; the platform font is used again. |
+| `SystemFont.IsLoaded()` | `bool` | An asset is assigned and it loads. Independent of the dyslexia override. |
+| `SystemFont.GetSource()` | `string` | `"asset"`, `"dyslexia"`, `"editor"`, `"os"` or `"none"`. |
+| `SystemFont.GetFile()` | `string` | The font file in use right now, `""` when there is none. |
+| `SystemFont.HasOSFont()` | `bool` | This device has an OS font to fall back on. Always `false` on Web. |
+
+> **See also:** [Console](#60-console--developer-console--command-system) for the console
+> style, [Debug](#29-debug--debugging) for `PrintScreen` / `DrawWorldText`,
+> [Draw](#61-draw--immediate-mode-rendering-draw--texture--rendertarget) for `Draw.Text`,
+> and [Assets → Fonts](Assets-EN-DOC.md#413-fonts-and-the-ice_font-sidecar) for a font's
+> settings and glyph ranges.
+
+---
+
+## 67. FileDialog — Open, Save, Import and Export Player Files
+
+> **Type:** Global functions. `FileDialog` table.
+>
+> Shows the platform's own file dialog so the player can choose a file or a folder, and then
+> lets your script work with exactly what they chose. Use it to import a map, a skin or a
+> replay the player downloaded, to export a level from an in-game map editor, or to let the
+> player back up a save and carry it to another device. Installing mods this way has its own
+> helpers in [Mods](#4111-installing-and-removing-mods-from-inside-the-game).
+>
+> The game never gets free run of the player's disk. Every path these functions accept must
+> come from a dialog the player answered, or from a file they dropped on the game window
+> ([Drag & Drop](#6-input--input-keyboard-mouse-gamepad-touch)). The save folder
+> (`WriteFile`, `ReadFile`, [Section 20](#20-scene--scenes-saves-files)) stays the place for
+> the game's own data; `FileDialog` is the door between it and the player's files.
+
+### Platforms
+
+| Platform | What the player sees | Notes |
+| --- | --- | --- |
+| Windows | The standard Explorer Open / Save / Select Folder dialogs | The Save dialog adds the extension of the selected filter when the player types a name without one. |
+| macOS | The standard open and save panels | Also works with the App Sandbox on: the engine's default entitlements already include `com.apple.security.files.user-selected.read-write`, and the player's choice is the permission. |
+| Linux | The desktop's file chooser through the XDG portal (GNOME, KDE, Flatpak, Snap), or `zenity` | With neither available the call still starts, and the callback reports `ok = false` with the reason. |
+| Android | The system document picker (Files, Downloads, Google Drive and any other installed storage provider) | Needs no storage permission. Paths are `content://` addresses, not file paths. |
+| iOS / iPadOS | The document picker of the Files app | Chosen files are copied into the game first; chosen folders are used in place. `SaveFile` becomes "export a copy". |
+| Web, Xbox | — | `FileDialog.IsSupported()` is `false`; every call fails and `GetLastError()` says why. |
+
+```lua
+if not FileDialog.IsSupported() then
+    HideButton("ImportMap")   -- nothing to show on this platform
+end
+```
+
+### Opening a file
+
+```lua
+FileDialog.OpenFile({
+    title   = "Open map",
+    filters = { { name = "Maps", extensions = { "map", "json" } } },
+}, function(result)
+    if result.cancelled then return end
+    if not result.ok then
+        Print("Could not open the map: " .. result.error)
+        return
+    end
+    local text = FileDialog.Read(result.path)
+    if text then LoadMapFromText(text) end
+end)
+```
+
+Every dialog is **asynchronous**. The call returns `true` when the dialog is on its way (or
+`false` and a reason in `FileDialog.GetLastError()`), and the callback runs later, on the
+game thread, with a result table. Only one dialog can be open at a time.
+
+Do not rely on the game being paused or running while a dialog is open. On desktop and on
+iOS the game keeps running under the dialog. On Android the picker is a separate screen, so
+the game is suspended exactly as when the player switches to another app.
+
+### The result table
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ok` | bool | The player chose something and every step you asked for (import, write) succeeded. |
+| `cancelled` | bool | The player closed the dialog without choosing. `ok` is `false`, `error` is `""`. |
+| `error` | string | What went wrong when `ok` is `false` and `cancelled` is `false`. |
+| `path` | string | The first chosen item. Pass it to `Read`, `List`, `Import`, … |
+| `name` | string | Its name, as the player sees it. |
+| `isFolder` | bool | Whether it is a folder. |
+| `savePath` | string | With `importTo`: where the copy landed, relative to the save folder. |
+| `files` | table | Every chosen item as `{ path, name, isFolder, size, modified, savePath }` — several with `multiple = true`. |
+
+`size` is in bytes and `modified` is a Unix time in seconds; both are `0` when the platform
+does not report them.
+
+### Options
+
+| Option | For | Meaning |
+| --- | --- | --- |
+| `title` | all | Title of the dialog. Android and iOS pickers have none and ignore it. |
+| `filters` | `OpenFile`, `SaveFile` | Which files to offer: `{ { name = "Maps", extensions = { "map", "json" } } }`, a plain list `{ "png", "jpg" }`, or one string `"png;jpg"`. Extensions are written without the dot; `"*"` means any file. |
+| `location` | all | Folder to start in: `"home"`, `"desktop"`, `"documents"`, `"downloads"`, `"music"`, `"pictures"`, `"videos"`, or an absolute folder path. Desktop only; a folder that does not exist is ignored. |
+| `multiple` | `OpenFile` | Let the player choose several files. |
+| `importTo` | `OpenFile`, `OpenFolder` | Copy what was chosen into the save folder right away: a subfolder such as `"maps"`, or `true` for the save folder itself. |
+| `overwrite` | `OpenFile`, `OpenFolder` | With `importTo`: replace an item that has the same name instead of adding ` (1)`, ` (2)`, … |
+| `name` | `SaveFile` | The file name the dialog suggests. |
+| `data` | `SaveFile` | The text or binary string to write. |
+| `source` | `SaveFile` | Instead of `data`: a file in the save folder to copy out, for example `"replays/best.replay"`. |
+
+**Filters are a hint, not a guarantee.** Windows, macOS and Linux filter by extension. Android
+can only filter by file type, so it narrows the list for images, audio, video and `.zip`, and
+shows every file for anything else. iOS filters by the type an extension stands for and shows
+every file for extensions it does not know. Always check what you actually got:
+
+```lua
+local function hasExtension(name, ext)
+    return name:lower():sub(-#ext - 1) == "." .. ext
+end
+
+FileDialog.OpenFile({ filters = { "map" } }, function(result)
+    if result.ok and not hasExtension(result.name, "map") then
+        ShowMessage("That is not a map file.")
+    end
+end)
+```
+
+### Choosing a folder
+
+```lua
+FileDialog.OpenFolder({ title = "Choose a maps folder" }, function(result)
+    if not result.ok then return end
+    for _, entry in ipairs(FileDialog.List(result.path)) do
+        if not entry.isFolder then
+            Print(entry.name .. "  " .. entry.size .. " bytes")
+        end
+    end
+end)
+```
+
+A chosen folder is the most useful grant: everything inside it can be listed and read, new
+files and folders can be written into it, and items inside it can be deleted.
+
+### Saving a file
+
+```lua
+FileDialog.SaveFile({
+    title   = "Export map",
+    name    = "MyMap.map",
+    filters = { { name = "Maps", extensions = { "map" } } },
+    data    = Network.JsonEncode(currentMap),
+}, function(result)
+    if result.ok then
+        ShowMessage("Saved to " .. result.name)
+    elseif not result.cancelled then
+        ShowMessage("Could not save: " .. result.error)
+    end
+end)
+```
+
+`data` must be a string — turn a table into text first (for example with
+`Network.JsonEncode`). Binary strings are written byte for byte. To offer a file that already
+exists in the save folder, pass `source` instead of `data`:
+
+```lua
+FileDialog.SaveFile({ name = "best.replay", source = "Replays/best.replay" })
+```
+
+What happens after the player confirms depends on the platform:
+
+* **Windows, macOS, Linux** — the file is written where the player chose; the system asks
+  before replacing an existing file. The chosen file stays writable: `FileDialog.Write(result.path, newText)`
+  updates it again later in the session.
+* **Android** — the picker creates the document; if the name is taken, Android usually adds a
+  number to it. Like on desktop, the document stays writable.
+* **iOS** — the file is prepared first and the player picks where a **copy** goes ("Save to
+  Files", iCloud Drive, another app). `result.path` tells where it went, but the game cannot
+  write there again — call `SaveFile` once more to export a newer version.
+
+If writing fails, the callback gets `ok = false`; on Android the half-written document is
+removed.
+
+### Reading and writing what the player chose
+
+```lua
+local text = FileDialog.Read(path)            -- whole file as a string, or nil
+local ok   = FileDialog.Write(path, text)     -- replace the whole file
+local list = FileDialog.List(folderPath)      -- children of a folder
+local info = FileDialog.GetInfo(path)         -- { path, name, isFolder, size, modified } or nil
+local here = FileDialog.Exists(path)
+FileDialog.CreateFolder(folderPath .. "/Backups")
+FileDialog.Delete(folderPath .. "/old.map")
+```
+
+These run **immediately** on the calling thread, which is fine for the small files a game
+usually handles (configs, maps, save files). `Read` loads the whole file into memory — for big
+files, `Import` them in the background instead and work from the save folder. The same goes
+for Android documents that live on a cloud drive: the provider may download them on first
+access, and `Import` does that off the game thread.
+
+`List` returns folders first, then files, sorted by name. Each entry has `path`, `name`,
+`isFolder`, `size` and `modified`.
+
+**What you may do with what.** Access follows what the player did, lasts until the game is
+closed, and is never written to disk — after a restart, ask again:
+
+| The player… | Read / GetInfo | List | Write | CreateFolder | Delete | Import | Export into |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| chose a file (`OpenFile`) | ✅ | — | — | — | — | ✅ | — |
+| chose a folder (`OpenFolder`) | ✅ everything inside | ✅ | ✅ inside | ✅ | ✅ inside (not the folder itself) | ✅ | ✅ |
+| chose where to save (`SaveFile`, not on iOS) | ✅ | — | ✅ that file | — | — | ✅ | — |
+| dropped a file on the window | ✅ | — | — | — | — | ✅ | — |
+| dropped a folder on the window | ✅ everything inside | ✅ | — | — | — | ✅ | — |
+
+`FileDialog.CanRead(path)` and `FileDialog.CanWrite(path)` answer from this table without
+touching the disk. A path outside every grant fails with an error that says so.
+
+**Paths.** Always use the `path` you were given, or build a child path from it with
+`folder .. "/" .. name`. That works on every platform: desktop paths use forward slashes
+(`C:/Users/Ann/Maps/level.map`), and on Android the same rule holds for `content://`
+addresses, which are not real file paths — never take them apart yourself.
+
+`Write` replaces the whole file. On desktop and iOS it writes a temporary file next to it first
+and swaps it in, so a full disk leaves the old file intact; where the system forbids creating
+that temporary file (a single file chosen in a sandboxed macOS app) it writes in place, and on
+Android documents are always written in place.
+
+### Importing into the save folder
+
+Copy what the player chose into the save folder, then use the normal save functions on it.
+Either ask for it in the dialog with `importTo`:
+
+```lua
+FileDialog.OpenFile({ filters = { "png" }, multiple = true, importTo = "skins" }, function(result)
+    if not result.ok then return end
+    for _, f in ipairs(result.files) do
+        Print(f.name .. " -> " .. f.savePath)     -- "hero.png -> skins/hero.png"
+    end
+end)
+```
+
+or import later from a path you already have:
+
+```lua
+FileDialog.Import(path, "maps", function(result)
+    if result.ok then
+        local text = ReadFile(result.savePath)    -- a regular save-folder path now
+    end
+end)
+```
+
+* The copy runs in the background; the callback gets the same result table, with `savePath`
+  set to where the item landed. Pass `savePath` to `ReadFile`, `GetSaveFiles`,
+  `GetSaveFileInfo`, `FileDialog.Export` and the other save functions.
+* Folders are copied with everything inside (up to 200,000 items and 64 levels deep).
+  Symbolic links are skipped.
+* Names are made safe for every platform: characters that file systems do not allow become
+  `_`, and a run of dots becomes one dot, because save paths cannot contain `..`.
+* When an item with the same name is already there, ` (1)`, ` (2)`, … is added — unless you
+  pass `overwrite = true` (`FileDialog.Import(path, folder, callback, true)`). Overwriting
+  copies first and swaps the new item in only when the copy is complete, so a failed import
+  never destroys the save that was there.
+* A folder cannot be imported into itself (for example, picking the game's own data folder).
+
+### Exporting from the save folder
+
+`FileDialog.Export(savePath, folder, callback?, overwrite?)` copies a file or a whole folder
+from the save folder into a folder the player chose:
+
+```lua
+FileDialog.OpenFolder({ title = "Where should the level go?" }, function(pick)
+    if not pick.ok then return end
+    FileDialog.Export("levels/Castle", pick.path, function(result)
+        if result.ok then
+            ShowMessage("Exported to " .. result.path)
+        else
+            ShowMessage("Export failed: " .. result.error)
+        end
+    end)
+end)
+```
+
+The result's `path` and `name` describe the exported copy. Name clashes get ` (1)`, … unless
+`overwrite` is `true`; replacing works like importing — the old item is only swapped out once
+the new one is complete. The item being exported is never changed or removed, even when the
+player picks a destination inside the save folder itself.
+
+To let the player pick the file name for a single file, use
+`FileDialog.SaveFile({ source = savePath })` instead.
+
+### A map editor: export and import
+
+```lua
+local MAPS = "maps"
+
+function ExportMap(map)
+    FileDialog.SaveFile({
+        title   = "Export map",
+        name    = map.name .. ".map",
+        filters = { { name = "Maps", extensions = { "map" } } },
+        data    = Network.JsonEncode(map),
+    }, function(result)
+        if result.ok then ShowToast("Map exported") end
+    end)
+end
+
+function ImportMap()
+    FileDialog.OpenFile({
+        title    = "Import map",
+        filters  = { { name = "Maps", extensions = { "map" } } },
+        importTo = MAPS,
+    }, function(result)
+        if result.cancelled then return end
+        if not result.ok then
+            ShowToast("Import failed: " .. result.error)
+            return
+        end
+        local map = Network.JsonDecode(ReadFile(result.savePath) or "")
+        if map and map.tiles then
+            AddToMapList(result.savePath, map)
+        else
+            DeleteSaveFile(result.savePath)
+            ShowToast(result.name .. " is not a valid map")
+        end
+    end)
+end
+```
+
+### Errors
+
+Functions that return `false` or `nil` when they fail record why — read it with
+`FileDialog.GetLastError()` right after such a call. It is `""` after a call that succeeded.
+`Exists`, `CanRead` and `CanWrite` only answer a question and leave it untouched.
+Asynchronous work reports through `result.error` instead.
+
+```lua
+if not FileDialog.Write(path, text) then
+    Print("Write failed: " .. FileDialog.GetLastError())
+end
+```
+
+### Lifetime
+
+* Callbacks belong to the level that asked. When the level changes, callbacks that have not
+  run yet are dropped — the work itself still finishes (the file is still imported, the save
+  still written, a mod still installed).
+* Access to chosen files and folders lasts until the game closes.
+* In the editor, stopping Play ends all access, drops the callbacks and cancels a mod
+  installation that has not finished, so every Play session starts clean.
+
+### Reference
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `FileDialog.IsSupported()` | `bool` | System file dialogs are available on this platform. `false` on Web and Xbox, and on Android when the Java bridge is missing from the APK. |
+| `FileDialog.CanPickFolders()` | `bool` | `OpenFolder` is available. |
+| `FileDialog.IsOpen()` | `bool` | A dialog is open, or the work it started (`importTo`, writing a `SaveFile`, unpacking a mod) is still running. |
+| `FileDialog.IsBusy()` | `bool` | `IsOpen()`, or an `Import`, `Export` or mod installation is running. |
+| `FileDialog.OpenFile(options?, callback?)` | `bool` | Choose one file, or several with `multiple = true`. |
+| `FileDialog.OpenFolder(options?, callback?)` | `bool` | Choose a folder. `filters` and `multiple` are ignored. |
+| `FileDialog.SaveFile(options, callback?)` | `bool` | Choose where to save; needs `data` or `source`. |
+| `FileDialog.Read(path)` | `string` or `nil` | The whole file. |
+| `FileDialog.Write(path, data)` | `bool` | Replaces the whole file; creates missing folders inside a chosen folder. |
+| `FileDialog.List(folder)` | `table` | Entries of a folder; an empty table on failure. |
+| `FileDialog.GetInfo(path)` | `table` or `nil` | `{ path, name, isFolder, size, modified }`. |
+| `FileDialog.Exists(path)` | `bool` | The item exists and may be read. |
+| `FileDialog.CanRead(path)` / `CanWrite(path)` | `bool` | Access check only. |
+| `FileDialog.CreateFolder(path)` | `bool` | Creates the folder and any missing parents inside a chosen folder. |
+| `FileDialog.Delete(path)` | `bool` | Deletes a file or a whole folder inside a chosen folder. |
+| `FileDialog.Import(path, saveFolder?, callback?, overwrite?)` | `bool` | Copies into the save folder in the background. |
+| `FileDialog.Export(savePath, folder, callback?, overwrite?)` | `bool` | Copies out of the save folder in the background. |
+| `FileDialog.GetLastError()` | `string` | Why the last call failed, `""` after a success. |
+
+> **See also:** [Scene → Working with files](#20-scene--scenes-saves-files) for the save
+> folder, [Mods](#4111-installing-and-removing-mods-from-inside-the-game) for installing mods
+> the player downloaded, and [Input → Drag & Drop](#6-input--input-keyboard-mouse-gamepad-touch)
+> for files dropped on the window.
 
 ---

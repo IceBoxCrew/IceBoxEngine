@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
@@ -284,23 +284,27 @@ operates inside it.
 
 ### 3.1 Layout
 
-The panel is split into a **top bar** and two resizable columns:
+The panel is split into a **top bar** and three regions separated by draggable dividers:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ [Back]  Current: Content/Sprites     [Search…] [X]  [+ Import]  │   ← Top bar
-├──────────────┬──────────────────────────────────────┬───────────┤
-│ Folder tree  │            Content area              │  Filters  │
-│ ▸ Content    │   ▢ T_Hero   ▢ Hero.ice_sprite  …    │  ☐ Levels │
-│   ▸ Sprites  │   ▢ …        ▢ …                     │  ☐ Sprites│
-│   ▸ Audio    │                                      │  ☐ Audio  │
-│   …          │                                      │  …        │
-└──────────────┴──────────────────────────────────────┴───────────┘
+├──────────────┬───────────┬──────────────────────────────────────┤
+│ Folder tree  │  Filters  │            Content area              │
+│ ▸ Content    │  ☐ Levels │   ▢ T_Hero   ▢ Hero.ice_sprite  …    │
+│   ▸ Sprites  │  ☐ Sprites│   ▢ …        ▢ …                     │
+│   ▸ Audio    │  ☐ Audio  │                                      │
+│   …          │  …        │                                      │
+└──────────────┴───────────┴──────────────────────────────────────┘
 ```
 
-* **Left column** — the recursive **folder tree** rooted at `Content`.
-* **Right column** — the **content area** (a grid of thumbnails for the current
-  folder) plus a thin **filter panel** along its right edge.
+* **Folder tree** — the recursive **folder tree** rooted at `Content`.
+* **Filters** — a narrow column of asset-type **filters** ([3.4](#34-type-filters)).
+* **Content area** — a grid of thumbnails for the current folder; it takes whatever width
+  the other two regions leave.
+
+Drag a divider to widen or narrow the region next to it, and **double-click** it to put it
+back to its default width (see [Common editor behavior](#common-editor-behavior)).
 
 ### 3.2 Navigation & the folder tree
 
@@ -348,7 +352,7 @@ one-folder listing.
 
 ### 3.4 Type filters
 
-The narrow **filter panel** on the right of the content area lets you show only
+The narrow **filter panel** between the folder tree and the content area lets you show only
 certain asset categories. Each filter is a color-coded toggle; enabling one or more
 filters restricts the view to those types (combined with the search box). Available
 filters:
@@ -811,6 +815,18 @@ Every asset editor is a normal dockable panel, and they all follow the same rule
 * **Live feedback.** Editors that can preview do (flipbook playback, FX simulation, widget
   animation, material compilation, skeleton posing), and renaming or moving an asset while
   its editor is open re-targets the panel instead of breaking it.
+* **Resizable regions.** Wherever an editor splits its window into regions — lists,
+  previews, graphs, timelines and inspectors side by side or stacked — a thin divider sits
+  between them. Hover it (the cursor turns into a resize arrow) and drag to hand space from
+  one region to its neighbour; **double-click** it to put it back to its default size. The
+  region that fills the rest of the window follows the window when you resize it, and
+  previews and palettes use whatever space they get (the Material Editor preview grows with
+  its column, the Tilemap Editor palette wraps its tiles to the sidebar width). Divider
+  positions are remembered per editor type — the next editor of that type you open starts
+  with the layout you left — and are saved in `imgui.ini` together with the dock layout, so
+  deleting that file resets them as well. On Android the grab area covers the whole gap
+  between two regions, wide enough for a finger, and dragging it resizes instead of
+  scrolling the panel.
 
 ### 4.1 Source files & their sidecars
 
@@ -915,16 +931,26 @@ The font sidecar (`FontSettings`) controls glyph atlas generation:
 
 | Setting | Notes |
 | ------- | ----- |
-| **Default Size** | Pixel size the atlas is baked at (default 24). |
+| **Default Size** | Pixel size the Font Editor preview is baked at (default 24); at runtime every pixel size a script or widget asks for is its own font instance. |
 | **Antialiased** | Smooth glyph edges. |
 | **Nearest Filter** | Crisp/pixel font rendering. |
 | **Bold / Italic** | Synthetic style flags. |
-| **Char Range Start / End** | Codepoint range to bake (default `32`–`1103`, covering Latin + Cyrillic). |
+| **Char Range Start / End** | Codepoint range the font is declared to cover (default `32`–`1103`, covering Latin + Cyrillic). |
 | **Additional Ranges** | Extra codepoint ranges (e.g. CJK blocks, symbols). |
-| **Atlas Width / Height** | Glyph atlas texture size (default 1024×1024). |
+| **Atlas Width / Height** | Size of one glyph atlas page (default 1024×1024). |
 
 The renderer supports **right-to-left** scripts (Arabic, Hebrew) and bidirectional
 text. The declared glyph ranges also drive font **subsetting** when cooking.
+
+At runtime glyphs are rasterized **on demand**. Loading a font — or a new pixel size of
+it — only opens the face and allocates one empty atlas page of **Atlas Width × Height**;
+each glyph is rendered into that page the first time a string uses it, so a new size
+costs about a millisecond instead of a full bake, and a text-heavy scene never stalls on
+a font. When a page fills up the engine adds another page (twice the size, up to the
+GPU's texture limit) rather than dropping glyphs, and a string whose glyphs live on
+several pages is simply drawn in several batches. Characters outside the declared
+ranges still render as long as the face has them; the ranges are what the cooker
+subsets to and what the Font Editor preview bakes eagerly, so keep them honest.
 
 **The Font Editor** shows a live preview of the baked font next to the settings:
 
@@ -940,8 +966,22 @@ text. The declared glyph ranges also drive font **subsetting** when cooking.
 * **Save Settings** writes the sidecar; **Apply & Reload** re-bakes the atlas so every
   widget and text draw in the editor picks up the change immediately.
 
-> Adding large ranges (CJK in particular) can exceed a 1024×1024 atlas — raise
-> **Atlas Width/Height** if glyphs start going missing.
+> Adding large ranges (CJK in particular) can exceed a 1024×1024 atlas in the Font Editor
+> preview. At runtime extra pages are added automatically, but a larger
+> **Atlas Width/Height** still saves page switches for glyph-heavy scripts.
+
+**Referencing a font.** Wherever a font is given by path — a widget element's font,
+`Draw.Text`, `SystemFont.Set`, the dyslexia-friendly font, `Prewarm.Font` — the `.ttf` /
+`.otf` itself and its `.ice_font` sidecar both work: for a sidecar the engine loads the
+font file next to it, with the sidecar's settings either way.
+
+**As the system font.** Any font asset can become the engine's *system font* — the one the
+developer console, the on-screen debug text, the profiler overlays and every widget or
+`Draw.Text` text without a font draw with — by passing its Content Browser path to
+`SystemFont.Set` from Lua. Its sidecar settings apply there too (**Nearest Filter** for a
+pixel-font console, for example). Without it those systems use the operating-system font,
+which does not exist on Web and Xbox. See
+[Lua API → SystemFont](LuaAPI-EN-DOC.md#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text).
 
 #### 4.1.4 Video and the `.ice_video` sidecar
 
@@ -982,7 +1022,9 @@ Re-importing the video or replacing the file refreshes the probed metadata and k
 **first frame** for the tile thumbnail.
 
 > Video cooking (re-encode to VP9) is build-time and platform-restricted — see
-> [Section 6](#6-asset-cooking--overview).
+> [Section 6](#6-asset-cooking--overview). iOS and the Xbox consoles cannot decode VP9 at run
+> time and play the source file as it is, so videos meant for those targets should be MP4 with
+> H.264 or HEVC video (and AAC-LC or AC-3 audio on the Xbox consoles).
 
 ### 4.2 Sprite (`.ice_sprite`)
 
@@ -1043,7 +1085,10 @@ frame. From Lua the same thing is `AttachSpriteToSocket` /
 
 **Slice Spritesheet…** on a texture (item context menu) opens the **Spritesheet Slicer** — a
 dedicated panel that cuts a sheet into many `.ice_sprite` assets in one pass. Each sheet you
-open gets its own slicer panel.
+open gets its own slicer panel. The sheet preview sits on the left with the slice list on its
+right, and the slicing settings with the **Generate Sprites** button run along the bottom; dividers
+between them resize all three, and **Fit to Window** fits the sheet into the preview region
+at its current size.
 
 **Slice modes**
 
@@ -1219,7 +1264,8 @@ painting tilemaps.
   * An optional **data name/tag** you can read from script to identify the tile type.
 
 **The Tileset Editor** shows the texture sliced into its grid on the left and the selected
-tile's properties on the right:
+tile's properties on the right, under a block of tileset settings; dividers resize all three
+(the settings block starts exactly as tall as its content):
 
 * Set the **Tile Size**; the grid overlay updates live. Drag a texture in from the Content
   Browser to (re)assign it. **Zoom** the sheet and the collider preview independently.
@@ -1272,6 +1318,11 @@ several projections.
   The cell under the cursor is outlined and shows a translucent **ghost of the tile about
   to be placed**, already rotated, so you can dial in the orientation before you click.
   There is a separate editor zoom for the palette.
+
+  On Android the same tools are on the touch screen: the modifiers come from the toolbar,
+  erasing is an **Eraser** checkbox in the palette instead of a right-drag, a region is
+  selected with two taps, and the canvas pans with two fingers and zooms with a pinch — see
+  [The editor on Android](Editor-EN-DOC.md#the-editor-on-android).
 * **Tile Rotation** — the sidebar shows the current brush rotation in degrees plus the step
   index, with **CCW / CW / Reset** buttons next to the `Q` / `E` shortcuts. Rotation is a
   property of the *placed cell*, not of the tileset, so the same tile can sit at several
@@ -1315,6 +1366,14 @@ several projections.
   **per frame** (**+ Add Collider For Frame** / remove, or **Copy To All Frames** to reuse one
   shape for the whole animation). The same collider presets, physics, event, shadow and
   fragment settings as a static tile are available.
+* **Sidebar layout** — the sidebar is stacked into four sections: **Map settings** (with
+  Optimization and Layers), **Tile Rotation**, **Tile Span** and **Tileset** (the palette,
+  or the animated tiles list). Each of the first three starts exactly as tall as its content
+  and the Tileset section takes the rest; drag the divider under a section to shrink or
+  grow it — dragging the one under *Map settings* up is the quickest way to give the
+  palette more room. The divider between the sidebar and the canvas sets the sidebar width,
+  and the palette wraps its tiles to that width, so a wider sidebar shows more tiles per
+  row.
 
 ### 4.8 Material (`.ice_material`)
 

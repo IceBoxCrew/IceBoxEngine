@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
@@ -1897,11 +1897,34 @@ sc = editor.get_component(uuid, 'Script')
 #     'override_class_defaults': False,
 #     'override_lua_script': False,
 #     'lua_script_override': '',
-#     'visual_graph_override': ''
+#     'visual_graph_override': '',
+#     'instance_variables': ''
 # }
 ```
 
-> All six fields are writable.
+> All seven fields are writable.
+
+`instance_variables` holds the entity's [instance variable](Editor-EN-DOC.md#76-instance-variables)
+values as a JSON object string — an empty string means "no overrides". Each key is a
+variable name; each value records the variable's type and value:
+
+```python
+import json
+values = {
+    "Speed":  {"type": "Float", "value": 250.0},
+    "Mode":   {"type": "Enum<EMode>", "value": "Patrol"},
+    "Door":   {"type": "Entity", "value": door_uuid},          # UUID of another entity in the level
+    "Points": {"type": "Array<Vec2>", "value": [[0, 0], [64, 32]]},
+    "Loot":   {"type": "Map<String,Int>", "value": [["gold", 5], ["gem", 1]]}
+}
+editor.set_component(uuid, 'Script', {'instance_variables': json.dumps(values)})
+```
+
+The `type` must match the variable's type in the class graph (as written in the graph
+editor: `Float`, `Array<Vec2>`, `Map<String,Int>`, `Enum<Name>`, …), otherwise the value is
+ignored when the game starts. Vectors are `[x, y]` / `[x, y, z]`, colors `[r, g, b, a]`, sets
+are lists and maps are lists of `[key, value]` pairs. A string that is not a JSON object is
+rejected (`set_component` returns `False`).
 
 **Example for AI:**
 ```python
@@ -2875,6 +2898,36 @@ Resumes the game.
 editor.play()
 editor.set_timer(5.0, lambda: editor.stop())  # Stop after 5 seconds
 ```
+
+#### `editor.is_editor_cursor()` → `bool`
+
+`True` while the pointer belongs to the editor. Outside Play mode this is always
+`True`; during Play it mirrors the `Shift+F1` toggle (and it is forced `True` while
+the camera is ejected, because the free camera needs the mouse).
+
+#### `editor.set_editor_cursor(enabled)`
+
+Gives the pointer to the editor (`True`) or back to the running game (`False`) —
+the same switch as `Shift+F1`. With the game cursor active the pointer is confined
+to the game viewport and the editor UI ignores the mouse; with the editor cursor
+active the game receives no mouse input at all.
+
+This never touches the **game** cursor: its visibility, its relative-mouse mode and
+its sprite or flipbook stay exactly as the game's Lua left them, and are restored
+when the pointer goes back to the game.
+
+```python
+editor.play()
+editor.set_timer(1.0, lambda: editor.set_editor_cursor(True))   # inspect panels
+```
+
+#### `editor.toggle_editor_cursor()` → `bool`
+
+Flips the switch and returns the new state (`True` = the editor owns the pointer).
+
+#### `editor.get_cursor_owner()` → `str`
+
+`'editor'` or `'game'`. The same value is in `editor.get_stats()['cursor_owner']`.
 
 ---
 
@@ -4299,7 +4352,7 @@ print(stats['entity_count'], stats['level_dirty'], stats['fps'])
 ```
 
 `editor.get_stats()` returns `entity_count`, `selected_count`, `folder_count`, `world_asset_count`,
-`level_path`, `level_dirty`, `play_mode`, `paused`, `undo_count`, `redo_count`, `fps`.
+`level_path`, `level_dirty`, `play_mode`, `paused`, `cursor_owner`, `undo_count`, `redo_count`, `fps`.
 
 #### Undo / redo counters
 
@@ -4777,6 +4830,74 @@ sys = engine.system_info()
 # }
 ```
 
+#### `engine.cpu_scopes()` → `list[dict]`
+
+The CPU profiler scopes of the last rendered frame — the same rows the **CPU Scope Breakdown** table in the
+Profiler panel shows — slowest first. Each row is `{'name', 'time_ms', 'self_ms', 'calls', 'thread'}`:
+`time_ms` includes child scopes, `self_ms` is the time spent in the scope itself, `thread` is the profiler
+thread index (`0` is the main thread).
+
+```python
+for scope in engine.cpu_scopes()[:5]:
+    print(f"{scope['name']:32s} {scope['time_ms']:7.3f} ms  self {scope['self_ms']:7.3f}  x{scope['calls']}")
+```
+
+#### `engine.render_passes()` → `list[dict]`
+
+The render passes of the last frame in submission order — `{'name', 'cpu_ms', 'gpu_ms', 'depth'}`. `gpu_ms` is
+`0` on backends without GPU timers. Batch flushes (`Batch.FlushInstanced`, `Batch.Flush`) appear once per flush,
+so counting them tells you how many draw batches a frame produced.
+
+```python
+passes = engine.render_passes()
+flushes = [p for p in passes if p['name'].startswith('Batch.')]
+print(len(flushes), 'batch flushes,', sum(p['cpu_ms'] for p in flushes), 'ms CPU')
+```
+
+#### `engine.lua_stats()` → `dict`
+
+The Lua script profiler: `total_ms` and `calls` of the last frame, `memory_kb`, `peak_memory_kb` and
+`alloc_rate_kbps` of the VM, the number of script `errors`, and `rows` — one dict per script callback with
+`script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`, `last_frame_calls`,
+`instances` and `errors`.
+
+```python
+lua_ms = engine.lua_stats()['total_ms']
+if lua_ms > 4.0:
+    editor.log_warn(f'scripts took {lua_ms:.2f} ms this frame')
+```
+
+#### `engine.profiler_counters()` → `list[dict]`
+
+Every named profiler counter (the **Counters** section of the Profiler panel): `{'group', 'name', 'value',
+'budget', 'unit', 'higher_is_worse', 'stale'}`. `unit` is `0` count, `1` milliseconds, `2` bytes, `3` KB,
+`4` MB, `5` percent, `6` per second; `stale` is `True` for a counter that has not been updated for a few frames.
+
+#### `engine.hitches()` → `list[dict]`, `engine.clear_hitches()` → `bool`
+
+The frame hitches the profiler recorded (a hitch is a frame far above the running average — see
+*Hitch detection* in the Profiler panel), oldest first: `{'timestamp', 'frame_ms', 'average_ms', 'budget_ms',
+'gpu_ms', 'top_scope', 'top_scope_ms'}`. `clear_hitches()` forgets them all — call it before a measurement so
+only the hitches of the run you are looking at remain.
+
+```python
+# An unattended performance probe: play for 600 frames, then report.
+engine.clear_hitches()
+samples = []
+
+def tick():
+    samples.append(engine.cpu_scopes())
+    if len(samples) < 600:
+        editor.defer(tick)
+    else:
+        render = [s for frame in samples for s in frame if s['name'] == 'Render']
+        print('Render avg', sum(s['time_ms'] for s in render) / len(render), 'ms')
+        print('hitches', [h['frame_ms'] for h in engine.hitches()])
+
+editor.play()
+editor.defer(tick)
+```
+
 ---
 
 ### 7.3 Resources
@@ -4949,6 +5070,11 @@ info = engine.audio_info()
 | `engine.log_path()` | `str` | Folder the engine writes log files into |
 | `engine.frame_count()` | `int` | Frames rendered since startup |
 | `engine.profiler_stats()` | `dict` | CPU/GPU/render counters in one dict |
+| `engine.cpu_scopes()` | `list[dict]` | CPU profiler scopes of the last frame, slowest first (see 7.2) |
+| `engine.render_passes()` | `list[dict]` | Render passes of the last frame with CPU/GPU times (see 7.2) |
+| `engine.lua_stats()` | `dict` | Lua script profiler: frame time, VM memory, per-callback rows (see 7.2) |
+| `engine.profiler_counters()` | `list[dict]` | Every named profiler counter (see 7.2) |
+| `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Recorded frame hitches (see 7.2) |
 
 ```python
 print(engine.build_info())

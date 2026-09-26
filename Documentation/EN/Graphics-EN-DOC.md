@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.0 Version
+### Actual for R-1.0.1 Version
 
 > **IceBoxEngine** renders 2D worlds through a modern, backend-agnostic graphics
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
@@ -180,11 +180,15 @@ The **seven** target platforms and the renderers each one offers:
 | **iOS** | Metal (native) or Metal (MoltenVK over Vulkan) | Metal (native) → Metal (MoltenVK) |
 | **Xbox** | Direct3D 12 | Direct3D 12 (no fallback — it is the only API an Xbox title may present with) |
 
-The **Android editor** runs on that same Android chain: the launcher, the editor and Play mode
-all render through Vulkan 1.1-1.4 when the device exposes it, and fall back to OpenGL ES 3.2,
-then OpenGL ES 3.0, exactly as a shipped Android game does. The renderer a *built game* uses is
-still chosen in Build Game → **Render backend**, independently of what the editor itself runs
-on.
+The **Android editor** runs on that same Android chain. The launcher probes it on its first run,
+and every project it creates records the result, so a project made on the phone opens in the
+editor and Play mode on Vulkan 1.1-1.4 when the device exposes it. A project that records
+anything other than Vulkan — one brought over from a desktop, for example — opens on
+OpenGL ES 3.2; **Preferences → Rendering → Render Backend** offers exactly Vulkan and
+OpenGL ES 3.2 there, and the choice takes effect on the next start. When Vulkan cannot start the
+editor falls back to OpenGL ES 3.2, then OpenGL ES 3.0, exactly as a shipped Android game does.
+The renderer a *built game* uses is still chosen in Build Game → **Render backend**,
+independently of what the editor itself runs on.
 
 Every chain runs top-down: the entry that is asked for is tried first, and each failure
 steps exactly one rung down, never sideways and never back up.
@@ -383,8 +387,10 @@ startup:
   [2.2](#22-backends--platforms)); GLES/WebGL dialects get explicit `highp` precision
   qualifiers for every sampler type.
 * **Generated defines** inject the live configuration into the source —
-  `MAX_TEXTURES` (the backend's texture-slot count), `MAX_LIGHTS_CAP` (the hard cap of
-  128 lights in the UBO), `MAX_LIGHTS_ACTIVE` (the configured **Max Point Lights**) and
+  `MAX_TEXTURES` (the backend's texture-slot count, clamped at startup to the device's
+  texture units minus the three reserved for the shadow-summary, shadow-map and
+  light-cookie arrays), `MAX_LIGHTS_CAP` (the hard cap of 128 lights in the UBO),
+  `MAX_LIGHTS_ACTIVE` (the configured **Max Point Lights**) and
   `MAX_PCF_HALF_SAMPLES` (4).
 * **Swappable function bodies** — texture sampling has four variants (GL 4.6 array
   indexing, bindless handles, SPIR-V backends (Vulkan / MoltenVK / Direct3D 12 / Metal),
@@ -698,8 +704,11 @@ To avoid GPU stalls when uploading per-frame geometry, the renderer uses one of
 several streaming strategies depending on backend support:
 
 * **Persistent-mapped, triple-buffered** vertex/instance buffers — the CPU writes
-  directly into mapped, coherent GPU memory, rotating through three buffers each
-  guarded by its own fence sync.
+  directly into mapped, coherent GPU memory. Every flush of a frame is appended to
+  the same buffer at its own offset, the ring rotates once per frame (or earlier
+  only when a frame fills the buffer), and the fence guarding a buffer is waited on
+  only when the ring comes back to it two frames later — so a frame with many
+  flushes never stalls the CPU on the GPU mid-frame.
 * **Stream double-buffering with orphaning** — alternates two buffers and orphans
   the previous contents to avoid read-after-write hazards.
 * A plain dynamic-buffer path as the universal fallback.
@@ -707,6 +716,41 @@ several streaming strategies depending on backend support:
 The vertex and instance buffers each pick their strategy independently, so a device
 that supports persistent mapping for one and not the other still gets the best
 available path for both.
+
+On the explicit backends — **Direct3D 12, Vulkan and Metal** — the plain path is
+backed by **frame-sliced ring buffers** inside the RHI itself. The first update of a
+buffer inside a frame turns it into a ring with one region per frame in flight; every
+later update of that frame is appended to the current region at a fresh offset (the
+draw is bound at that offset), a new frame moves to the next region, and a region is
+reused only once the frame that filled it has been fenced. An update that does not
+fit the region spills into a pooled buffer of the same size. Nothing is allocated per
+update, so hundreds of batch flushes, text strings or particle emitters per frame cost
+a memcpy each, not a GPU allocation — the same property the persistent-mapped path
+gives OpenGL.
+
+Texture updates follow the same rule: a region uploaded while a frame is being recorded
+is staged and copied inside that frame's own command stream, in submission order, even
+when a render pass is open (the pass is suspended around the copy where the API demands
+it). There is no blocking submit, so glyph atlases, procedural textures and video frames
+updated mid-frame cost a copy, not a GPU round-trip.
+
+**WebGPU** gets the same treatment shaped to the browser's queue model. Every queue
+operation of a frame is applied before that frame's commands run, so a buffer written
+twice in one frame needs two distinct regions rather than two buffers: the RHI appends
+each update to a fresh offset inside the same allocation and resets the cursor once per
+frame, because the next frame's writes are ordered behind the current frame's commands.
+The region that still holds the previous frame's data stays reserved for the whole
+frame, so draws recorded before a buffer's first update keep reading exactly what they
+were recorded with.
+Uniform blocks go into a per-frame uniform ring and bind groups are cached by content
+for the frame, so a draw that changes nothing rebinds without creating a single object.
+A texture region written after something already sampled, rendered to or blitted that
+texture in the frame is staged into an upload ring and copied with `copyBufferToTexture`
+inside the command stream — the render pass is suspended and resumed around it — which
+is the only way to order a texture write against draws that came before it. Buffers,
+textures, views and samplers destroyed mid-frame are released only after the frame has
+been submitted, so freeing or recreating a resource mid-frame — a resized render target,
+for example — never invalidates a draw that is already recorded.
 
 ### 4.5 Meshes, blur & special draws
 
@@ -946,6 +990,22 @@ the occluder's shadow Z is left lit — that is what makes a tall wall shadow th
 but not the roof, and lets sprites at different heights shadow each other correctly.
 All lights' shadow maps are packed into a single **texture array**.
 
+The fourth channel (**A**) of each layer is a *next-layer* flag — `1` when a deeper layer
+exists on that ray, `0` otherwise — so shading stops at the last occupied layer instead
+of always reading all four.
+
+Next to the shadow maps the system keeps a small **per-ray summary**: a second, 32-bit
+texture array with two rows per light. For every ray it stores the nearest start and the
+farthest end of any occluded interval within a window of neighbouring rays — a wide
+window that covers every soft-shadow tap and a narrow one that covers a single tap. A
+lit pixel reads the summary first: when its distance falls before the nearest start or
+past the farthest end, no layer of any tap can darken it and the shadow map is not read
+at all. Inside a penumbra each tap checks its own narrow window before touching the
+shadow map. The bounds are rounded conservatively and account for linear filtering
+between neighbouring rays, so the image is exactly the same as reading every layer —
+only the cost changes: most lit pixels pay one 32-bit read instead of up to 28
+full-precision shadow-map reads, which is what keeps shadows cheap on mobile GPUs.
+
 This is a true 2D visibility technique: shadows are cast by the actual silhouettes
 of scene geometry, support any number of occluders, and update every frame.
 
@@ -1025,9 +1085,15 @@ The shadow system has two execution paths and two big optimizations:
 
 * **GPU compute path** — when compute shaders are available, occluder edges and
   lights are uploaded to SSBOs and all shadow maps are generated on the GPU in one
-  dispatch.
+  dispatch. Each light walks only the edges that reach inside its radius (they are
+  pre-selected on the CPU in their original order, so the result is unchanged), which
+  makes a light's cost follow the geometry around it rather than the whole collected
+  region. When many large lights overlap, the lights past a fixed upload budget share
+  one full edge list instead, so the per-frame upload stays bounded. A second, small
+  dispatch builds the per-ray summary described in
+  [7.1](#71-how-ray-cast-shadows-work).
 * **CPU fallback** — otherwise, a brute-force ray caster runs on the CPU using the
-  edge grid for acceleration.
+  edge grid for acceleration, and builds the per-ray summary on the CPU as well.
 * **Edge-grid acceleration** — ray casts query a uniform grid of edges instead of
   testing every edge, keeping cost roughly proportional to local complexity. The grid
   is rebuilt only when the edge set changes.
@@ -1044,6 +1110,12 @@ The shadow system has two execution paths and two big optimizations:
 > rays** option on, the lit shaders read this same occluder set through the hardware
 > acceleration structure instead of the shadow maps below; everything described here
 > still defines *which* geometry occludes and in what Z order.
+
+> Custom lit [materials](#5-materials--shaders) use the per-ray summary only on GPUs with
+> more than 16 texture units. On 16-unit devices every unit is already taken by the
+> entity texture, twelve texture parameters, scene colour, the shadow map and the light
+> cookies, so those materials read the shadow map directly — the result is identical,
+> they simply skip the early-out.
 
 Shadow counters — casters, edges, shadow-casting lights, directional state, map
 resolution and a per-light **shadow-map preview** strip — are in the
