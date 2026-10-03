@@ -196,7 +196,7 @@ Several files remember your workspace and your settings between sessions:
 | File | Remembers |
 | ---- | --------- |
 | `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float — plus the positions of the dividers inside the editors. Delete it to reset to the default layout. |
-| `Config/Editor.json` | Which panels are open, the last opened level, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
+| `Config/Editor.json` | Which panels are open, the last opened level, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute and the editor's audio output device, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
 | `Config/Engine.json` | Everything on the [Preferences](#10-preferences) tabs except collision groups — window, rendering, optimization, audio, accessibility and network defaults. Shipped games read the same file. |
 | `Config/CollisionGroups.json` | The collision group names and the collision matrix ([Preferences → Collision](#103-collision)). |
 | `<Project>.iceproject` | The project manifest. The editor keeps `StartScene` pointing at the level you have open, and refreshes `EngineVersion` when you open the project. |
@@ -274,7 +274,7 @@ The menu bar runs across the very top of the window.
 | **Open Level** | — | Opens the **Open Level** dialog with an `.icemap` asset picker. **Open** loads the chosen level. If Play mode is running it is stopped first. |
 | **Save Level** | `Ctrl+S` | Saves the current level (entities, Outliner folders, placed view/cinema volumes, World Settings, and the level script) to its `.icemap`. |
 | **Level Script Editor** | — | Toggles the **Level Script** window — a Lua (or Visual Script) editor for the level's own `OnLevelStart` / `OnLevelUpdate(dt)` / `OnLevelEnd` callbacks. See [Section 14](#14-levels-dialogs--scripts). |
-| **Update All Assets** | — | Saves the level and every dirty asset editor, refreshes all assets, **compiles all class scripts**, rebuilds the post-process volumes and reloads every class instance in the level. This is the manual "make everything current" button. |
+| **Update All Assets** | — | Saves the level and every dirty asset editor (including pending **Property Matrix** edits), refreshes all assets, **compiles all class scripts**, rebuilds the post-process volumes and reloads every class instance in the level. This is the manual "make everything current" button. |
 | **Update All Assets on Play** | (toggle) | When **on** (default), pressing **PLAY** runs the same save-and-refresh pass first, so Play mode always reflects your latest edits. Turn it off for faster Play starts when you know nothing changed. |
 | **Exit** | `Alt+F4` | Quits the editor. If the level has unsaved changes, the **Unsaved Changes** dialog appears first (Save / Don't Save / Cancel). |
 
@@ -333,6 +333,7 @@ Separators group the list as: the four main panels, then **World Settings**, the
 | ---- | ------------- | ----- |
 | **Run Python Script** | [Python API](PythonAPI-EN-DOC.md) | Opens the **Python Console** panel — a script editor plus a command line for editor automation. **Not shown on Android** — that build carries no CPython. |
 | **Network Manager (ENet)** | *This document, [Section 11](#11-network-manager-enet)* | Live multiplayer test client/host, chat, voice, rollback diagnostics and the network profiler. |
+| **Audio Mixer** | *This document, [4.2](#the-audio-mixer-panel)* | Live group faders and level meters, editor mute/solo, snapshots, the editor's output device and the list of playing sounds. |
 | **Build Game…** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The packaging/cooking/installer pipeline for all seven platforms. |
 | **DLC Packager** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | Builds add-on content packages. |
 | **Remote Preview** | *This document, [Section 12](#12-remote-preview)* | Streams the running game to an Android device over ADB. **Not shown on macOS or on the Android editor** — on the device itself, Play mode already is the preview. |
@@ -341,7 +342,7 @@ Separators group the list as: the four main panels, then **World Settings**, the
 | **Plugins & Mods** | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) | Manage installed plugins and mods. |
 | *(Plugin tools)* | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) | Plugins can add their own items (optionally grouped into sub-menus) below the built-ins. |
 
-Only **Network Manager** and **Remote Preview** are explained in this document;
+Only **Network Manager**, **Audio Mixer** and **Remote Preview** are explained in this document;
 the rest link to their dedicated references.
 
 ### The editor on Android
@@ -539,6 +540,36 @@ settings and has no effect on game builds.
 
 Both settings persist in `Config/Editor.json`.
 
+#### The Audio Mixer panel
+
+**Tools → Audio Mixer** opens a live view of the game's mixer. Nothing in it is saved into the
+project — it is a monitoring and testing tool:
+
+* **Output Device** — the speakers or headphones the *editor* plays through (**System Default**
+  follows the operating system). The choice is saved in `Config/Editor.json` and never affects
+  game builds; players pick their device in the game's own options
+  (`Settings.SetAudioOutputDevice`). Play mode keeps this device unless a script changes the
+  game's output device (`Settings.SetAudioOutputDevice`, `Settings.ResetDefaults`); stopping
+  Play switches back. Below it: the active device, sample rate and channel count.
+* **Mute Editor** / **Editor Volume** — the same monitor controls as the toolbar.
+* **Voice statistics** — how many sounds play, how many wait for their delay, the voice limit,
+  streams, listeners, and how many voices were stolen or rejected by the limits. **Limiter**
+  shows how hard the master limiter works (0 dB = idle; large values mean the mix is too loud).
+* **Groups** — one strip per group with a vertical **fader** (the live group volume), a stereo
+  **peak meter** (green, yellow above −12 dB, red above −3 dB, a white line for RMS and a tick
+  at 0 dB), **M** (mute the group in the editor only) and **S** (solo: while any group is
+  soloed, only soloed groups are heard). **M** on the Master strip mutes the whole editor
+  output. A strip also shows *Muted* when the game muted that group and the current
+  **ducking** amount. Fader moves are temporary — they return to the Preferences values when
+  Play stops; **Reset Mix** returns them at once and clears the editor mute and solo.
+* **Snapshots** — the active snapshot (applied by a script or an audio zone), and **Apply** /
+  **Clear** for any snapshot from Preferences → Audio or defined by a script.
+* **Playing Sounds** — every playing voice with its group, state, time, volume, pitch and flags
+  (music, loop, stream, 3D, detached, preview, occlusion). Hover the name for the file, priority
+  and voice id, hover the flags of a 3D sound for its position, and **Stop** stops just that
+  voice. The filter searches names and files; **Show Editor Previews** also lists the editor's
+  own preview sounds.
+
 ### 4.3 Grid toggle
 
 A **grid icon** that shows or hides the viewport's editor grid. This is
@@ -572,7 +603,9 @@ captured.
 
 **Entering Play** performs, in order:
 
-1. If **Update All Assets on Play** is on — saves and refreshes all assets.
+1. Leaves **Cinema Mode** in every open Cinema Editor, so previewed actors are back in
+   their original state. Then, if **Update All Assets on Play** is on — saves and
+   refreshes all assets.
 2. Records an undo step and takes a **full text snapshot of the scene** plus the
    current selection.
 3. If **Auto-Compile on Play** is on and step 1 was skipped — compiles all class
@@ -581,7 +614,8 @@ captured.
    [World Settings](#8-world-settings) override if enabled, otherwise the global
    Preferences values) and the rendering override.
 5. Pushes the level script into the script engine and hands the placed **cinema**
-   volumes (auto-play / play-once / trigger flags) to the cutscene player.
+   volumes (auto-play / play-once / trigger flags, trigger tag and trigger size) to the
+   cutscene player.
 6. Hands the pointer to the game and applies the **custom cursor** from
    Preferences, or restores the default one.
 7. Hides the OS cursor, switches to relative-mouse mode, and starts the runtime.
@@ -589,7 +623,9 @@ captured.
 
 **Leaving Play** stops the runtime, clears pause and eject, destroys live FX
 emitters, wipes the registry and **restores the pre-play snapshot** — any change
-made during Play is discarded — then restores the cursor.
+made during Play is discarded — then restores the cursor. A script that calls
+`QuitGame()` leaves Play mode the same way and the editor stays open; in a built game
+the same call closes the application.
 
 > **Cursor in Play mode.** The editor keeps two separate pointers and only one of
 > them owns the mouse at a time.
@@ -776,7 +812,8 @@ viewport are skipped. The functions are part of the runtime debug API listed in 
 ### 5.8 Debug overlays in the viewport
 
 The **Statistics** panel's *Debug* section holds ~23 overlay toggles that draw into
-the viewport — colliders, nav grid, entity markers, light radii, audio ranges,
+the viewport — colliders, nav grid, entity markers, light radii, audio ranges (the min/max
+distance circles of 3D sound sources and their cone edges),
 camera frustum, joints, physics contacts, sleeping bodies, velocity vectors,
 tilemap grid, FX/widget bounds, Z-depth colouring, wireframe, freeze culling, plus
 an advanced group (shadow maps, shadow edges, light heatmap, nav-grid heatmap, AI
@@ -838,7 +875,7 @@ hovering a row for a moment shows its type in a tooltip.
 * **World Assets** — placed **view** and **cinema** volumes appear in their own section
   at the bottom, under a *World Assets* heading, tinted per type. Hovering one shows
   its type, asset path and position (and scale, for a bounded view volume, or
-  *Infinite* for an unbounded one).
+  *Infinite* for an unbounded one); a view with an audio volume also shows its snapshot.
 
 **Operations**
 
@@ -907,13 +944,13 @@ own fields, open by default. The available component types are:
 | **Sprite Renderer** | Draws one or more sprites, with material/shading/blend/tint and per-instance transforms. |
 | **Flipbook** | Plays frame-by-frame sprite animations. |
 | **Animator** | Drives flipbooks from an Animation state machine (`.ice_animation`). |
-| **Skeleton** | 2D skeletal animation (bones, slots, skins, IK, physics bones). |
+| **Skeleton** | 2D skeletal animation (bones, slots, skins, IK, physics bones, hair, cloth). |
 | **Tilemap Renderer** | Renders a tilemap (`.ice_tm`), optionally generating collision. |
 | **Camera** | A game camera (primary flag, zoom, viewport rect, player index for split-screen). |
 | **Rigidbody** | Box2D body (Static / Kinematic / Dynamic) with mass, damping, gravity scale, bullet (CCD), sleep. |
 | **Collider** | Box / Circle (sphere) / Capsule shapes with physics material, sensors, one-way, and collision groups. |
-| **Destructible** | Breakable geometry that fractures on impact. |
-| **Audio** | An attached sound source (2D or spatial 3D). |
+| **Destructible** | Breakable geometry that fractures on impact, on damage or from script — into rectangles, triangles, shards or splinters, with debris that can keep breaking into smaller pieces. |
+| **Audio** | One or more sound sources (2D or spatial 3D). Each instance can be previewed, takes its group, volume, pitch, loop and 3D settings from the sound asset unless overridden, and chooses whether its sound stops when the entity is destroyed. |
 | **FX** | A particle system instance (`.ice_fx`). |
 | **Widget** | An attached UI widget (`.ice_widget`). |
 | **Light** | Point and spot lights (color, intensity, radius, shadows, light cookie). |
@@ -953,11 +990,11 @@ When a placed **view** or **cinema** volume is selected (instead of an entity), 
 Properties panel shows that volume's placement: its **name**, its **asset path**,
 and an editable **Position**. Everything else lives elsewhere:
 
-* The post-process stack and nav-grid parameters belong to the `.ice_view` asset —
+* The post-process stack, the nav-grid parameters and the audio volume belong to the `.ice_view` asset —
   double-click the volume (or use **Open in Editor**) to edit them in the View
   Editor. The stack itself is described in
   [Graphics → Post-processing](Graphics-EN-DOC.md#9-post-processing).
-* A cinema's **Auto Play / Play Once / Trigger On Overlap / Trigger Tag** flags are
+* A cinema's **Auto Play / Play Once / Trigger On Overlap / Trigger Tag / Trigger Size** settings are
   per-placement and live in [World Settings → Cutscene](#8-world-settings); the
   cutscene timeline itself is in the Cinema Editor.
 
@@ -1060,7 +1097,9 @@ own look. This mirrors [Preferences → Rendering](#105-rendering):
 **Cutscene section** — if the level contains placed **cinema** volumes, a
 *Cutscene* header lists each of them with its path and position and lets you set
 **Auto Play**, **Play Once**, **Trigger On Overlap** and, when overlap is on, the
-**Trigger Tag**.
+**Trigger Tag** and the **Trigger Size** — the width and height of the trigger box in
+pixels, centered on the placement (drawn in the viewport). An empty tag lets any entity
+trigger the cinema.
 
 All World Settings are saved inside the `.icemap`. They are applied automatically
 when the level loads and when you press PLAY — and while Play is running, editing
@@ -1342,14 +1381,45 @@ baked into the shaders at startup.
 
 ### 10.7 Audio
 
-The global mixer:
+The project's mixer. The shipped game starts from these values:
 
 * **Master Controls** — Mute All, Master Volume, Global Gain (0–2).
-* **Group Volumes** — Music, SFX, Voice, Ambient, UI.
-* **3D Audio** — Spatial Audio toggle and, when on, Doppler Factor, Speed of Sound
-  and the default attenuation min/max distance and rolloff.
+* **Group Volumes** — Music, SFX, Voice, Ambient, UI. The game's own options menu can change
+  them per player (`Settings.SetMusicVolume` …).
+* **Voices** — **Max Voices**: how many sounds may play at once (0 = unlimited). At the limit
+  the least important sound (lowest Priority, then the oldest) makes room for a new one; music
+  and editor previews do not count.
+* **Game Pause & Time Scale** — two switches per group: **Pauses With Game** (sounds playing
+  when the game pauses freeze and continue afterwards) and **Follows Time Scale** (the pitch
+  follows the game time scale, so slow motion lowers it). Both are off by default; a sound asset
+  can override them for one sound.
+* **3D Audio** — Spatial Audio toggle and, when on, Doppler Factor, Speed of Sound (m/s,
+  converted with the physics pixels-per-meter), **Automatic Doppler Velocity** (velocities are
+  calculated from movement every frame) and the default attenuation min/max distance and
+  rolloff that new sound assets start with.
+* **Occlusion** — how walls muffle 3D sounds that have *Occlusion* enabled: on/off, which
+  collision groups block sound (All Groups or a selection), Static Colliders Only, the volume
+  and low-pass of a fully occluded sound, how much each obstacle adds, the smoothing time and
+  how often the raycasts run.
+* **Group Bus Effects** — a full effect chain (the same fourteen stages as a sound asset) for
+  each group bus; Master processes the whole mix.
+* **Ducking** — rules that lower one group while another is audible: the group to lower, the
+  group that triggers it, amount, attack, release and threshold. A rule that uses the same
+  group twice is ignored and marked.
+* **Mixer Snapshots** — named mixes with a fade time and, for each group, a volume and optional
+  replacement bus effects. Scripts apply them by name (`Audio.ApplySnapshot`) and View assets
+  apply them as audio zones. Names must be unique.
+* **External Audio Routing** — which group's volume and mute also apply to **video** sound and to
+  incoming network **voice chat** (Master by default).
+* **Platform** — the **iOS Audio Session**: Playback (always audible, stops other apps' audio),
+  Ambient (mixes with other apps and follows the silent switch) or Solo Ambient (follows the
+  silent switch and stops other apps' audio).
 * An **Audio Info** read-out of the active device name, sample rate and channel
   count (shown once the audio system is initialized).
+
+When Play stops, every change a script made to the mixer — group volumes, bus effects, ducking,
+snapshots, voice limit — returns to these values. The live mix can be watched and tested in the
+[Audio Mixer](#the-audio-mixer-panel).
 
 ### 10.8 Accessibility
 
@@ -1481,26 +1551,49 @@ Sessions started while the game runs in **Play** mode — by scripts or from thi
 — are closed when you press **Stop**, and so is a local rendezvous server started during
 Play; a session or server that was already running before Play keeps running.
 
-**Network Profiler** — a second tab with live graphs sampled a few times a second
-and a **Pause** checkbox that freezes sampling:
+**Network Profiler** — a second tab that shows the engine's network profiler, the same
+one behind the Debug-runtime overlay, Lua's `NetworkProfiler.*` and Python's
+`engine.network_*()`. It is always active in the editor and counts every session,
+whoever started it. Its graphs are sampled a few times a second:
 
-* **Latency** — ping (green/amber/red by threshold), interpolation delay and
-  time-sync offset for clients, plus a ping graph.
-* **Bandwidth** — total bytes sent/received, current send/receive rates, and two
-  rate graphs.
-* **Packets** — packet sequence, packet rate, tick rate, snapshot rate and a packet
-  rate graph.
+* **Toolbar** — **Pause** freezes the graphs; **Reset** zeroes the profiler totals,
+  per-type statistics and history together with the graphs (a running trace keeps
+  recording); **Save Report** writes a JSON snapshot; **Open Folder** opens
+  `Tools/Helpers/NetworkProfiler/`. Below it are the **trace controls**: a *[REC]* /
+  *Idle* indicator with the running trace's name and length, an optional **trace name**
+  and **Start Trace** / **Stop Trace**. A stopped trace is saved as JSON to the same
+  folder, and the last written file is shown under the toolbar.
+* **Latency** — ping (green/amber/red by threshold): the round-trip time to the host
+  on a client, the average round-trip time to the connected clients on a server;
+  interpolation delay and time-sync offset for clients, plus a ping graph.
+* **Bandwidth** — payload bytes sent/received and current send/receive rates with two
+  rate graphs, then the **wire** counters: what ENet actually sent and received on the
+  UDP socket (after packet compression, with protocol headers, acknowledgements and
+  pings), their rates and the **Wire / Payload** ratio — below 1 packet compression
+  pays off, above 1 many small messages drown in protocol overhead.
+* **Packets & Tick** — packets sent/received, the packet rate (with a graph), tick
+  rate and snapshot rate.
+* **Message Types** — a sortable table of every message type with traffic: channel,
+  packets and bytes in each direction, average and **maximum** message size, and its
+  share of the traffic. A maximum above the ENet MTU (about 1400 bytes) turns amber —
+  such messages are split into fragments.
+* **Channels** — the same traffic per ENet channel (control, state, input, voice).
 * **Entity Sync** — replicated entity count (with a graph) and, as a server,
   connected peers against capacity.
-* **Features** — lag compensation, delta compression, prediction, entity validation
-  and encryption, plus a dedicated-server badge.
-* **Per-Peer Stats** — as a server, an expandable node per peer with uptime, RTT,
-  packets lost and bytes sent/received.
+* **Features** — lag compensation, delta compression, packet compression, prediction,
+  entity validation and encryption, plus a dedicated-server badge.
+* **Peer Statistics** — an expandable node per connection (every client on a server,
+  the host link on a client) with uptime, RTT, packet loss, packets lost and bytes
+  sent/received.
+* **Traces** — the network traces recorded in this session, newest first, with
+  duration, average and peak TX/RX and the number of spike seconds; hover a name for
+  its file.
 
 > The network configuration defaults live in
 > [Preferences → Network](#109-network); the gameplay-facing networking API is in
 > the [Lua API](LuaAPI-EN-DOC.md). The scriptable `NetworkProfiler.*` surface that
-> mirrors this panel is listed in the [Hot-Keys](#131-hot-keys) panel.
+> mirrors this panel is listed in the [Hot-Keys](#131-hot-keys) panel, and the
+> Python functions are in [Python API → Network profiler](PythonAPI-EN-DOC.md#78-network-profiler).
 
 ---
 

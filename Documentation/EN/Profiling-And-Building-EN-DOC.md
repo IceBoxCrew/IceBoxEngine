@@ -224,10 +224,25 @@ showing an old value.
 | Counter | Meaning |
 | ------- | ------- |
 | **Playing Voices** | Audio component instances that are currently playing. |
-| **Listeners** | Listener slots the audio engine provides. |
+| **Listeners** | Active listeners out of the listener slots the audio engine provides (split-screen uses one per player). |
 | **Mixer Voices** | Every voice the mixer is rendering right now — component sounds, sounds played from script, music, and sounds still fading out. |
-| **Streams** | Loaded sounds that are streamed on the background thread instead of being held in memory ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)). |
+| **Delayed Voices** | Plays that wait for their `delay` before they start. |
+| **Streams** | Voices that stream on the background thread instead of being held in memory ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)). |
+| **Stolen Voices** | How many voices were stopped since start to make room for more important ones (the Max Instances steal mode or the project voice limit); in the editor the count restarts with every Play session. A fast-growing value means too many sounds compete — raise the limit or lower Priority on unimportant sounds. |
+| **Rejected Voices** | How many plays did not start since start because of a limit (steal mode *Ignore New Play*, or a new sound less important than everything playing); counted per Play session in the editor, like Stolen Voices. |
 | **Limiter Reduction (dB)** | How hard the output limiter pulled the mix down in the last audio block. Values that regularly exceed the 6 dB budget mean the mix itself is too loud — lower group or sound volumes rather than leaning on the limiter. |
+
+**Network counters.** The `Network` group mirrors the [network profiler](#54-the-network-profiler) in the
+editor and in Debug builds:
+
+| Counter | Meaning |
+| ------- | ------- |
+| **Ping** | Round-trip time to the host on a client, the average round-trip time to the connected clients on a server (120 ms budget). |
+| **Players** | Players in the session, the host included. |
+| **Out Rate** / **In Rate** | Smoothed payload bandwidth in KB/s — what your messages weigh before packet compression. |
+| **Packets Out** / **Packets In** | Smoothed messages per second. |
+| **Total Sent** / **Total Received** | Payload bytes since start or the last profiler reset. |
+| **Wire Out Rate** / **Wire In Rate** | Smoothed KB/s that ENet actually put on / took off the UDP socket — after packet compression, with protocol headers, acknowledgements and pings. Native builds only. |
 
 ### 2.4 Script (Lua) profiling
 
@@ -238,7 +253,7 @@ profiler**, keyed by *script* × *callback*:
 | -------------- | -------------------- |
 | `OnUpdate` / `OnLateUpdate` / `OnFixedUpdate` | Per entity, every frame / fixed step. |
 | `Collision` / `Sensor` | `OnCollisionEnter` / `Exit` / `Stay`, `OnSensorEnter` / `Exit` / `Stay`. |
-| `OnHit`, `OnJointBreak` | Physics impact and joint-break callbacks. |
+| `OnHit`, `OnJointBreak`, `OnFracture` | Physics impact, joint-break and fracture callbacks. |
 | `Lifecycle` | `CallEntityLifecycle` and broadcast lifecycle events. |
 | `OnDestroy` | Entity teardown. |
 | `BehaviorTree` | Lua nodes evaluated by AI behavior trees. |
@@ -748,18 +763,48 @@ Web) and aggregates per message type. The overlay shows:
 
 * **State** (Offline / Server / Client-Connected / Connecting / Reconnecting) and the
   player count.
-* **Ping** (color-coded: green < 80 ms, yellow < 200 ms, red above).
-* **Bandwidth per second** — TX/RX in KB/s and packets/s.
-* **Totals** — bytes and packets sent/received, human-readable.
+* **Ping** (color-coded: green < 80 ms, yellow < 200 ms, red above) — the round-trip time to
+  the host on a client, the average round-trip time to the connected clients on a server.
+* **Bandwidth per second** — TX/RX in KB/s and packets/s, plus a **Wire** line on native
+  builds.
+* **Totals** — bytes and packets sent/received, human-readable, and the wire totals.
 * A per-**message-type** breakdown sorted by total traffic, so an unexpectedly chatty
   message type is immediately visible.
+* A `[TRACING: name, n s]` line while a network trace is recording.
+
+**Payload and wire.** The message counters measure your *payload* — the one-byte message type
+plus its data, before ENet's packet compression; that is what your code controls. The
+**wire** counters measure what ENet actually put on and took off the UDP socket — after
+compression, including its protocol headers, acknowledgements and pings; that is what the
+network pays, and the only place where the effect of packet compression shows up. Their ratio
+tells you whether compression pays off (below 1) or whether many small messages drown in
+protocol overhead (above 1). Web builds have no wire counters. Each message type also records
+its **largest message**: anything above the ENet MTU (about 1400 bytes) is split into
+fragments, and losing one fragment loses the whole message.
+
+**Network traces.** Like the frame profiler, the network profiler records **traces**: from
+start to stop it keeps one sample per second, the per-type and per-channel traffic and the
+wire counters, independently of a counter reset. When it stops it computes the average, peak
+and P95 bandwidth, packet rates, the ping and player ranges and the **spike** seconds (traffic
+above twice the trace average, seconds under 1 KB excluded), stores the network settings and
+the peer list of that moment, and writes everything as JSON to
+**`Tools/Helpers/NetworkProfiler/<name>.json`** in the engine's writable folder (the project
+folder in the editor, the per-user data folder in a game build). `SaveReport` writes its
+snapshot reports (`network_profile_<date>_<time>.json`) into the same folder. Traces are
+started and stopped from the editor's Network Profiler tab, from Lua
+(`NetworkProfiler.StartTrace` / `StopTrace`, which is how you profile on a phone or a
+dedicated server) and from Python.
 
 Like the profiler overlay it is Debug-runtime only and has no default key — toggle it with
 `NetworkProfiler.Toggle()`. The same counters are readable from Lua at any time (with a
-120-second rolling history and a `SaveReport` call), and the editor exposes them as live
-graphs in the **Network Manager** panel — see
-[Editor → Network Manager](Editor-EN-DOC.md#11-network-manager-enet) and
-[Lua API → Network](LuaAPI-EN-DOC.md#32-network--multiplayer-network).
+120-second rolling history and a `SaveReport` call). In the editor the profiler is always on:
+the **Network Manager** panel's **Network Profiler** tab shows it as live graphs, a sortable
+message-type table, channels, per-peer quality and trace controls, and the Python `engine`
+module drives it from scripts (`engine.network_stats()`, `engine.network_message_types()`,
+`engine.network_start_trace()`, `engine.network_load_trace()` for before/after comparisons,
+…) — see [Editor → Network Manager](Editor-EN-DOC.md#11-network-manager-enet),
+[Lua API → Network](LuaAPI-EN-DOC.md#32-network--multiplayer-network) and
+[Python API → Network profiler](PythonAPI-EN-DOC.md#78-network-profiler).
 
 ### 5.5 Driving the profiler from Lua
 
@@ -787,6 +832,7 @@ profile on a phone or in a shipped build:
 | `GetScriptProfilerRows()` → `table` | Array of per-script rows: `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
 | `ToggleDebugProfiler()` / `GetDebugProfilerVisible()` | Flip / read the [runtime profiler overlay](#53-the-runtime-profiler-overlay). |
 | `NetworkProfiler.Toggle()` / `NetworkProfiler.IsVisible()` | Flip / read the [network overlay](#54-the-network-profiler). |
+| `NetworkProfiler.StartTrace([name])` → `bool` / `NetworkProfiler.StopTrace()` → `string` / `NetworkProfiler.IsTracing()` → `bool` | Record a [network trace](#54-the-network-profiler); `StopTrace` returns the path of the written JSON file. |
 | `GetDebugFlag(name)` / `SetDebugFlag(name, v)` / `ToggleDebugFlag(name)` | Read/write any viewport debug flag by name (`"ShowColliders"`, `"WireframeMode"`, …). |
 | `GetDebugFlagNames()` / `ClearDebugFlags()` | List every valid flag name / reset them all. |
 | `IsDebugBuild()` → `bool` | Whether this binary was compiled as Debug. |
@@ -1571,7 +1617,7 @@ cook settings appear in the dialog when enabled.
 | Media | Options |
 | ----- | ------- |
 | **Texture Format** | **PassThrough** (copy raw PNG/JPG), **WebP** (lossy, ~80% smaller), **KTX2 UASTC** (GPU-compressed, high quality), **KTX2 ETC1S** (GPU-compressed, small), **WebP Lossless**. The lossy formats share a **Quality** 1–100 (default 80). |
-| **Audio Format** | **PassThrough**, **Ogg Vorbis**, or **Opus**, with a **Bitrate** 32–320 kbps for the lossy options (96 good for SFX, 128–192 for music). |
+| **Audio Format** | **PassThrough**, **Ogg Vorbis**, or **Opus**, with a **Bitrate** 32–320 kbps for the lossy options (96 good for SFX, 128–192 for music). A sound asset can override both for its own file. |
 | **Video Format** | **PassThrough** or **VP9 (WebM)** at a chosen **CRF** (18 = high quality … 32 = smaller), with optional **max resolution** (Source/1080p/720p/480p), **max FPS** (Source/30/60), **strip audio**, and audio bitrate 64–320 kbps. |
 | **Font Mode** | **PassThrough**, **Subset** (only glyphs declared in font sidecars), or **Auto-subset** (only glyphs actually used in the project). |
 | **JSON Mode** | **PassThrough** or **Minify** (strip whitespace from `.json` and `.ice_*` sidecars). |
@@ -1592,8 +1638,15 @@ other rates are resampled with a high-quality filter at cook time, and a 48 kHz 
 device (the default **Sound Quality**) plays it with no resampling at all. Opus is encoded
 with unconstrained VBR at the highest encoder complexity, so the selected bitrate is an
 average and transients get the bits they need. Whatever the format, short sounds are decoded
-into memory when they load and long ones are streamed ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)).
+into memory when they load and long ones are streamed, unless the sound asset's **Load Mode**
+says otherwise ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)).
 Audio cooked by an earlier engine version is re-encoded once, on the next cook.
+
+**Per-sound overrides.** **Cook Format** and **Cook Bitrate** in a sound asset's
+*Loading & Cooking* section (Sound Settings or the Property Matrix) replace the build's audio
+format and bitrate for that one file — keep a short UI click as a lossless original, or give the
+music a higher bitrate. The files listed as **Variations** of a sound are cooked with that
+sound's override, and changing an override re-cooks the file on the next build.
 
 **Platform restrictions:** WebP textures are not available on the **iOS** and **Web**
 runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only)
@@ -2163,7 +2216,7 @@ an incompatible build. The Lua side of this is
 | **Statistics** | Editor — `Window → Stats` | Live scene/renderer counts, atlas, physics, shadows, debug-draw toggles. |
 | **Profiler** (Advanced) | Editor — `Tools → Profiler (Tracy)` | Traces, CPU scopes & flame timeline, frame diff, trace compare, memory/GPU graphs, render passes & render-graph metrics. |
 | **Profiler overlay** | Debug runtime | On-screen FPS/CPU/RAM/VRAM/GPU, engine stats, hot scopes, render passes. |
-| **Network profiler** | Debug runtime + editor Network Manager | Ping, bandwidth, packet counts, per-message-type breakdown. |
+| **Network profiler** | Debug runtime + editor Network Manager + Python `engine.network_*()` | Ping, payload and wire bandwidth, packet counts, per-message-type and per-channel breakdown, per-peer quality, network traces. |
 | **DebugScreen** | Editor + runtime | On-screen & world-space debug text in the running game. |
 | **Developer Console** | Editor + runtime | Live command/CVar console with completion & history. |
 | **Tracy** | Desktop Editor + Debug runtime | External nanosecond-level, multi-thread frame profiler. |

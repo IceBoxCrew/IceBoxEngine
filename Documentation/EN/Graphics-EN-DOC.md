@@ -535,10 +535,11 @@ A single rendered frame proceeds roughly as:
    ([3.3](#33-the-scene-drawing-chain)).
 8. **Execute the post-process graph** → PostProcess (or Composite) → `FinalColor`.
 9. **Composite the video and widget overlays.** When post-processing is on, full-screen
-   videos whose asset is not **Is Post Processed** are rendered (with the `Cinema` fade on
-   top of them) into their own full-resolution video-overlay framebuffer and composited
-   over the post-processed image first. Then UI drawn after the scene, rendered into its
-   own full-resolution framebuffer, is composited over that, so the UI stays crisp at
+   videos whose asset is not **Is Post Processed** are rendered into their own
+   full-resolution video-overlay framebuffer and composited over the post-processed image
+   first. Then UI drawn after the scene — with the **cinema overlay** (fades, letterbox,
+   flash, dialogue box, skip prompt) drawn right above the widgets — is rendered into its
+   own full-resolution framebuffer and composited over that, so the UI stays crisp at
    reduced **Render Scale** and is not distorted by scene effects. Both composites are
    HDR10-aware.
 10. **Finalize split-screen** — each player's image is blitted into its window rectangle.
@@ -559,14 +560,15 @@ post-process graph takes over:
 | 2 | *(editor only)* Grid | Geometry pass | The editor world grid, drawn through a dedicated grid shader. |
 | 3 | `Render.Tilemaps` | Geometry pass | Tilemap layers, merged and cached per tilemap; animated tiles are resolved once per frame. |
 | 4 | `Render.Flipbooks` | Geometry pass | Flipbook (frame-animation) instances. |
-| 5 | `Render.Skeletons` | Geometry pass | Skeletal meshes and their attachments, drawn as meshes rather than quads. |
+| 5 | `Render.Skeletons` | Geometry pass | Skeletal meshes and their attachments, drawn as meshes rather than quads — including hair strands and simulated cloth. Skeletons entirely outside the view are skipped. |
 | 6 | `Render.Sprites` | Geometry pass | Sprite instances — the bulk of a typical scene. |
 | 7 | Ray-traced GI | after the graph | `Raytracer2D` traces and composites [global illumination](#8-ray-traced-global-illumination) over the scene colour. |
 | 8 | `FX.Update` / `FX.Render` | after the graph | Particle simulation and drawing (see below). |
 | 9 | `FogOfWar` | after the graph | The fog-of-war overlay, in Play mode only. |
-| 10 | `Widgets` | after the graph | Foreground UI widgets, plus the overlay capture described in [3.2](#32-the-frame-step-by-step). |
-| 11 | `Video` / `Video.Overlay` | after the graph | Full-screen video channels in Play mode, letterboxed over a black background, then the `Cinema` fade. Videos marked **Is Post Processed** (and every video while post-processing is off) are drawn here into the scene; the rest go to the video overlay from [3.2](#32-the-frame-step-by-step). **Is Lit** videos use the same screen-space lit path as UI. |
-| 12 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
+| 10 | `Widgets` | after the graph | Foreground UI widgets, plus the overlay capture described in [3.2](#32-the-frame-step-by-step). With post-processing on, the cinema overlay (`Render.CinemaOverlay`) is drawn into that overlay right above the widgets. |
+| 11 | `Video` / `Video.Overlay` | after the graph | Full-screen video channels in Play mode, letterboxed over a black background. Videos marked **Is Post Processed** (and every video while post-processing is off) are drawn here into the scene; the rest go to the video overlay from [3.2](#32-the-frame-step-by-step). **Is Lit** videos use the same screen-space lit path as UI. |
+| 12 | `CinemaOverlay` | after the graph | With post-processing off: the cinema overlay, above the widgets and videos. It holds, bottom to top, the cinema's fade, letterbox bars, flash, the script fade (`Cinema.FadeOut`), the dialogue box and the skip prompt — so dialogue stays readable over a fade to black. In the editor it previews the open Cinema Editor in **Cinema Mode**. |
+| 13 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
 
 Particles are simulated and drawn once per frame even in split-screen (the first view
 owns the update), while every view redraws the geometry it can see.
@@ -1480,7 +1482,7 @@ panel and are readable/writable from script by name:
 | **Nav grid** / **Nav-grid heatmap** | The AI nav-grid built from view volumes, and its cost heatmap. |
 | **Entity markers** | Origins/markers for entities. |
 | **Light radius** | Each light's reach circle (and spot cone). |
-| **Audio range** | Audio-source attenuation distances. |
+| **Audio range** | Attenuation distances of 3D audio sources (the effective min/max circles) and the edges of their cones. |
 | **Camera frustum** | The active camera's visible rectangle. |
 | **Joints** | Physics joints, their anchors and limits. |
 | **Physics contacts** | Live contact points. |
@@ -1653,13 +1655,21 @@ at a screen point or cursor) and screen-rectangle entity selection. All of them 
 collision groups and accept a layer-mask override.
 
 **Destruction.** The **Destructible** component fractures geometry into physical debris
-on impact. Sprites, flipbooks and tilemap tiles can all be
-fractured, with a **Grid**, **Radial** or **Random** fragment pattern and a configurable
-fragment count. Every fragment is a real physics body and inherits a full set of
-overridable properties: lifetime and fade time, gravity scale, density, friction,
-restitution, sensor flag, which contact/sensor/hit/pre-solve events it raises, its
-collision group, and its own shadow settings (cast, origin, edge fade, Z order, blocking).
-Tiles can carry per-tile overrides for any of these.
+on impact, on damage or from script. Sprites, flipbooks, skeletons (including mesh
+attachments) and tilemap tiles can all be fractured, with a **Grid**, **Radial** or
+**Random** pattern, a configurable fragment count and a piece **shape**: **Rectangles**
+(classic boxes), **Triangles**, **Shards** (irregular polygons for glass, stone or ice) or
+**Splinters** (long slanted strips for wood and beams). Polygon pieces are drawn as textured
+meshes and get matching polygon colliders and polygon shadows; fully transparent parts of the
+texture never become pieces. A **seed** makes the cut repeatable. Every fragment is a real
+physics body that can keep the motion of the object it came from and inherits a full set of
+overridable properties: lifetime (or permanent debris) and fade time, gravity scale,
+density, friction, restitution, linear and angular damping, sensor flag, which
+contact/sensor/hit/pre-solve events it raises, its collision group, and its own shadow
+settings (cast, origin, edge fade, Z order, blocking). Debris can itself break into smaller
+debris for up to 8 **generations** — by impact speed, by script or by an explosion — down to
+a minimum size. Instead of being deleted, the original can be hidden and restored later, and
+damage can be driven by impact speed. Tiles can carry per-tile overrides for any of these.
 
 These are configured via components ([Editor → Properties](Editor-EN-DOC.md#72-components))
 and driven from script ([Lua API](LuaAPI-EN-DOC.md)).
@@ -1693,9 +1703,10 @@ The values in Preferences are stored in `Config/Engine.json` → `Physics` and a
 the shipped runtime reads them at startup on every platform, and they are re-seeded every
 time a level starts. A level that enables **Override Enabled** replaces them for itself
 only — leaving that level no longer leaks its physics into the next one, in the editor or
-in the build. `Config/Engine.json` → `Audio` works the same way for the audio globals
-(gain, Doppler, speed of sound, spatial audio, default attenuation distances) and for the
-starting volumes, which the player's `GameSettings.json` then overrides.
+in the build. `Config/Engine.json` → `Audio` is read the same way at startup for the audio
+globals (gain, Doppler, speed of sound, spatial audio, default attenuation distances, voice
+limit, game-pause behavior, occlusion, bus effects, ducking and snapshots) and for the starting
+volumes, which the player's `GameSettings.json` then overrides.
 
 ---
 

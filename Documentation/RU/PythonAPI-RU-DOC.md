@@ -82,6 +82,7 @@
    - 7.5 [Платформа, сборка и бэкенд рендеринга](#75-платформа-сборка-и-бэкенд-рендеринга)
    - 7.6 [Окно редактора и приложение](#76-окно-редактора-и-приложение)
    - 7.7 [Инвентарь ресурсов](#77-инвентарь-ресурсов)
+   - 7.8 [Сетевой профайлер](#78-сетевой-профайлер)
 8. [Модуль `browser` — Браузер контента](#8-модуль-browser--браузер-контента)
    - 8.1 [Навигация](#81-навигация)
    - 8.2 [Файлы и папки](#82-файлы-и-папки)
@@ -153,7 +154,7 @@
 - **Массовых операций** над сущностями (пакетное переименование, перемещение, удаление)
 - **Управления сценами** (создание, сохранение, загрузка)
 - **Работы с файлами проекта** (браузер контента)
-- **Получения диагностической информации** (FPS, память, ресурсы)
+- **Получения диагностической информации** (FPS, память, ресурсы, профилирование CPU и сети)
 - **Расширения функциональности** редактора без перекомпиляции движка
 
 ### Как это устроено?
@@ -271,7 +272,7 @@
 | **Сбросить окружение** | Стереть всё, что вы определили в интерактивной консоли (переменные, функции, импорты), и создать чистое пространство имён с `help()`. |
 | **Очистить историю** | Очистить историю быстрых команд. |
 
-**`Сниппеты`** — готовые шаблоны кода в один клик, сгруппированные по темам: сущности, браузер контента, диагностика (FPS / память / рендер), компоненты, пакетные операции, камера и сцена, события и таймеры. Выбранный сниппет загружается либо в поле быстрой команды, либо в редактор скриптов — готовый к запуску или правке.
+**`Сниппеты`** — готовые шаблоны кода в один клик, сгруппированные по темам: сущности, браузер контента, диагностика (FPS / память / рендер / сетевая статистика / 30-секундная сетевая трасса), компоненты, пакетные операции, камера и сцена, события и таймеры. Выбранный сниппет загружается либо в поле быстрой команды, либо в редактор скриптов — готовый к запуску или правке.
 
 **`Справка`** — вывод справочников API прямо в лог:
 
@@ -282,6 +283,11 @@
 | **Показать API браузера** | Список всех функций `browser`. |
 | **Показать API сцены** | Список всех функций `scene`. |
 | **Двигатель API** | Список всех функций `engine`. |
+| **Показать API консоли** | Список всех функций `console`. |
+| **Показать API Lua** | Список всех функций `lua`. |
+| **Показать API проекта** | Список всех функций `project`. |
+| **Показать API ассетов** | Список всех функций `assets`. |
+| **Показать API пакетов** | Список всех функций `packages`. |
 
 #### Редактор скриптов
 
@@ -1230,7 +1236,7 @@ f-строки:   f'текст {переменная} текст {выражен
 |--------|----------|--------|
 | `editor` | Сущности, компоненты, трансформации, панели, камера, уровни, события, рантайм Python | `editor.create_entity('Box')` |
 | `scene` | Сохранение/загрузка сцен, статистика, проверка, экспорт/импорт сущностей | `scene.save('Content/level.icemap')` |
-| `engine` | Версия движка, FPS, память, ресурсы, аудио, окно, платформа | `engine.fps()` |
+| `engine` | Версия движка, FPS, память, профайлеры CPU/GPU/Lua и сети, ресурсы, аудио, окно, платформа | `engine.fps()` |
 | `browser` | Браузер контента, файлы, папки, JSON, контрольные суммы | `browser.list_files()` |
 | `console` | Лог консоли редактора — чтение, поиск, фильтры, сохранение, запись | `console.get_errors()` |
 | `lua` | Мост в игровую ВМ Lua — выполнение, вычисление, проверка компиляции | `lua.compile_all()` |
@@ -1777,17 +1783,22 @@ sr = editor.get_component(uuid, 'SpriteRenderer')
 audio = editor.get_component(uuid, 'Audio')
 # {
 #     'instance_count': 1,
-#     'sound_path': 'Content/Sounds/jump.ice_sound',
-#     'group': 0,
-#     'volume': 1.0,
-#     'pitch': 1.0,
+#     'sound_path': 'Content/Sounds/jump.wav',
+#     'group': -1,
+#     'volume': -1.0,
+#     'pitch': -1.0,
 #     'loop': False,
 #     'play_on_wake': False,
 #     'spatial': False,
-#     'min_distance': 100.0,
-#     'max_distance': 1000.0
+#     'min_distance': 1.0,
+#     'max_distance': 100.0,
+#     'stop_on_destroy': True
 # }
 ```
+
+`sound_path` — это аудиофайл (`.wav`, `.mp3`, `.ogg`, `.flac`); настройки звукового ассета берутся
+из файла `.ice_sound` рядом с ним. `group` `-1`, `volume` `-1` и `pitch` `-1` означают «взять
+значение из звукового ассета».
 
 **Пример для Flipbook:**
 ```python
@@ -1848,11 +1859,16 @@ sk = editor.get_component(uuid, 'Skeleton')
 #     'ragdoll_auto_on_start': False,
 #     'ragdoll_angular_damping': 0.5,
 #     'ragdoll_gravity_scale': 1.0,
-#     'bone_colliders_enabled': True
+#     'bone_colliders_enabled': True,
+#     'dynamics_enabled': True,       # симулировать динамические кости, волосы и ткань
+#     'dynamics_offscreen': False,    # продолжать симуляцию вне всех камер
+#     'dynamics_wind': (0.0, 0.0),    # локальный ветер, px/с² (X вправо, Y вверх)
+#     'dynamics_wind_scale': 1.0,     # доля глобального ветра
+#     'dynamics_gravity_scale': 1.0
 # }
 ```
 
-> Все перечисленные поля Skeleton доступны для записи через `set_component`. Значения `cast_shadow_mode` и `shading_mode` ограничиваются диапазоном `0..1`, `shadow_origin` — `0..2`, `blend_mode` — `0..3`.
+> Все перечисленные поля Skeleton доступны для записи через `set_component`. Значения `cast_shadow_mode` и `shading_mode` ограничиваются диапазоном `0..1`, `shadow_origin` — `0..2`, `blend_mode` — `0..3`; `dynamics_wind` принимает кортеж из двух чисел, а `dynamics_wind_scale` не может быть меньше `0`.
 
 **Пример для PointLight:**
 ```python
@@ -2063,14 +2079,20 @@ d = editor.get_component(uuid, 'Destructible')
 #     'health': 100.0,
 #     'fragment_count': 8,
 #     'pattern': 0,
+#     'fragment_shape': 0,              # 0 Rectangles, 1 Triangles, 2 Shards, 3 Splinters
+#     'fragment_seed': 0,               # 0 = каждый раз другая нарезка
 #     'explosion_force': 200.0,
 #     'impact_threshold': 5.0,
-#     'fragment_lifetime': 5.0,
+#     'impact_damage_scale': 0.0,       # > 0: удары наносят урон (скорость × множитель) вместо мгновенного разрушения
+#     'inherit_velocity': 0.0,          # 0..1
+#     'fragment_lifetime': 5.0,         # 0 = постоянные обломки
 #     'fragment_fade_time': 1.0,
 #     'fragment_gravity_scale': 1.0,
 #     'fragment_density': 1.0,
 #     'fragment_friction': 0.3,
 #     'fragment_restitution': 0.0,
+#     'fragment_linear_damping': 0.4,
+#     'fragment_angular_damping': 0.4,
 #     'fragment_is_sensor': False,
 #     'fragment_enable_contact_events': False,
 #     'fragment_enable_sensor_events': False,
@@ -2083,6 +2105,11 @@ d = editor.get_component(uuid, 'Destructible')
 #     'fragment_shadow_origin': 0,
 #     'fragment_shadow_edge_fade': 0.0,
 #     'fragment_shadow_z_order': 0.0,
+#     'debris_generations': 0,          # 0..8, сколько ещё раз обломки могут разбиваться
+#     'debris_fragment_count': 3,       # 2..32 кусков за разлом
+#     'debris_impact_threshold': 0.0,   # скорость удара, разбивающая кусок, 0 = только скрипты/взрывы
+#     'debris_min_size': 8.0,           # куски меньше этого не разбиваются
+#     'debris_force_scale': 0.5,
 #     'destroy_original': True
 # }
 ```
@@ -2215,7 +2242,7 @@ editor.set_component(uuid, 'PointLight', {
 
 # Настроить аудио
 editor.set_component(uuid, 'Audio', {
-    'sound_path': 'Content/Sounds/bgm.ice_sound',
+    'sound_path': 'Content/Sounds/bgm.ogg',
     'volume': 0.7,
     'loop': True,
     'play_on_wake': True
@@ -2784,7 +2811,7 @@ for p in panels:
 
 **Докируемые панели** — можно свободно показывать и скрывать:
 
-`Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`, `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`, `TextNoteEditor`, `RemotePreview`
+`Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`, `AudioMixer`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`, `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`, `TextNoteEditor`, `RemotePreview`
 
 **Одноразовые триггеры диалогов** — установка в `True` открывает модальное окно, после чего флаг сразу сбрасывается в `False`, поэтому `is_panel_visible` для них почти всегда `False`:
 
@@ -2826,7 +2853,7 @@ editor.open_asset('Content/Sprites/hero.ice_sprite')
 editor.save_panel('ClassEditor')
 ```
 
-> Сохранять можно только панели редакторов ассетов. У `SpritesheetSlicer` сохранять нечего — она вернёт `False`, как и любое имя, не относящееся к панели ассета. `VideoPlayer` сохраняет настройки видео **Is Post Processed** / **Is Lit** в его сайдкар `.ice_video`.
+> Сохранять можно только панели редакторов ассетов и `PropertyMatrix`. У `SpritesheetSlicer` сохранять нечего — она вернёт `False`, как и любое имя, не относящееся к панели ассета. `VideoPlayer` сохраняет настройки видео **Is Post Processed** / **Is Lit** в его сайдкар `.ice_video`. Для `PropertyMatrix` сохранение применяет неприменённые правки ко всем выбранным ассетам — точно как **Применить ко всем**; `is_panel_dirty('PropertyMatrix')` сообщает, есть ли такие правки, `close_panel('PropertyMatrix')` применяет их перед скрытием панели, а `save_all_panels()` тоже её учитывает.
 
 #### `editor.close_panel(panel_name)` → `bool`
 
@@ -3122,18 +3149,19 @@ editor.set_instance(uuid, 'SpriteRenderer', 0, {
 audio_data = editor.get_instance(uuid, 'Audio', 0)
 # {
 #     'name': 'FootstepSound',
-#     'sound_path': 'Content/Sounds/step.ice_sound',
-#     'group': 0,
-#     'volume': 1.0,
-#     'pitch': 1.0,
+#     'sound_path': 'Content/Sounds/step.wav',
+#     'group': -1,
+#     'volume': -1.0,
+#     'pitch': -1.0,
 #     'loop': False,
 #     'play_on_wake': False,
 #     'spatial': False,
-#     'min_distance': 100.0,
-#     'max_distance': 1000.0,
+#     'min_distance': 1.0,
+#     'max_distance': 100.0,
 #     'rolloff': 1.0,
 #     'override_loop': False,
 #     'override_spatial': False,
+#     'stop_on_destroy': True,
 #     'position': (0.0, 0.0, 0.0)
 # }
 ```
@@ -3595,7 +3623,8 @@ for level in scene.list_scenes():
 | `cinema_auto_play` | `bool` | Cinema: запускать автоматически |
 | `cinema_play_once` | `bool` | Cinema: проигрывать только один раз |
 | `cinema_trigger_on_overlap` | `bool` | Cinema: запускать при перекрытии сущностью с тегом |
-| `cinema_trigger_tag` | `str` | Cinema: какой геймплейный тег запускает |
+| `cinema_trigger_tag` | `str` | Cinema: какой геймплейный тег запускает (пусто — любая сущность) |
+| `cinema_trigger_size` | `(w, h)` | Cinema: размер зоны триггера в пикселях с центром в позиции (минимум 1) |
 
 #### `editor.get_world_asset_count()` → `int`
 
@@ -3631,6 +3660,7 @@ editor.set_world_asset(1, {
     'cinema_auto_play': False,
     'cinema_trigger_on_overlap': True,
     'cinema_trigger_tag': 'Player',
+    'cinema_trigger_size': (256.0, 128.0),
     'cinema_play_once': True
 })
 ```
@@ -4498,6 +4528,7 @@ if not r['success']:
 print(editor.api())
 print(scene.api()); print(engine.api()); print(browser.api())
 print(console.api()); print(lua.api()); print(project.api()); print(assets.api())
+print(packages.api())
 ```
 
 Те же списки доступны из меню **Помощь** консоли Python, а `help()` печатает обзорный экран.
@@ -4896,6 +4927,9 @@ editor.play()
 editor.defer(tick)
 ```
 
+> У сетевого трафика свой профайлер в этом же модуле — пропускная способность, пакеты, типы сообщений, пиры
+> и записанные сетевые трассы описаны в [7.8 Сетевой профайлер](#78-сетевой-профайлер).
+
 ---
 
 ### 7.3 Ресурсы (Resources)
@@ -5073,6 +5107,7 @@ info = engine.audio_info()
 | `engine.lua_stats()` | `dict` | Профилировщик Lua: время кадра, память VM, строки по колбэкам (см. 7.2) |
 | `engine.profiler_counters()` | `list[dict]` | Все именованные счётчики профилировщика (см. 7.2) |
 | `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Записанные хитчи кадров (см. 7.2) |
+| `engine.network_stats()` и остальные функции `engine.network_…` | `dict` / `list[dict]` | Сетевой профайлер и сетевые трассы (см. 7.8) |
 
 ```python
 print(engine.build_info())
@@ -5116,6 +5151,223 @@ engine.set_target_fps(0)               # без ограничения на вр
 res = engine.list_resources()
 print(len(res['textures']), 'текстур |', len(res['shaders']), 'шейдеров')
 ```
+
+---
+
+### 7.8 Сетевой профайлер
+
+Сетевой профайлер движка — тот же, что стоит за вкладкой **Network Profiler** панели Network Manager, за
+оверлеем Debug-рантайма и за Lua-таблицей `NetworkProfiler`, — в редакторе всегда включён. Он видит каждое
+сообщение, которое игра отправляет и получает (ENet на десктопе и мобильных, WebSocket в вебе), кто бы ни
+запустил сессию: игровые скрипты в режиме Play, панель Network Manager или ваш собственный Python через
+[мост `lua`](#10-модуль-lua--мост-в-игровую-виртуальную-машину-lua). Эти функции позволяют измерять
+сетевой трафик мультиплеера из редактора так же, как `cpu_scopes()` и `hitches()` измеряют время кадра.
+Сама игра (Debug-сборки на устройстве, выделенные серверы) управляет тем же профайлером из Lua —
+`NetworkProfiler.*` в [Lua API](LuaAPI-RU-DOC.md).
+
+**Два вида байтов.**
+
+| Счётчик | Что измеряет |
+|---------|--------------|
+| **Полезная нагрузка** (`bytes_*`, `packets_*`, типы сообщений, каналы) | Сколько весят ваши сообщения: однобайтовый тип сообщения плюс его данные (зашифрованные, если включено шифрование) — *до* сжатия пакетов ENet. Это то, чем управляет ваш код. |
+| **Wire** (`wire_*`) | Что ENet на самом деле отправил в UDP-сокет и принял из него: *после* сжатия пакетов, вместе с заголовками протокола ENet, подтверждениями и пингами (и сигнализацией онлайн-комнат, приходящей на игровой сокет). Это то, за что платит сеть. В веб-сборках недоступно; в редакторе доступно всегда. |
+
+Их отношение показывает, окупается ли сжатие пакетов и сколько стоит протокол: меньше 1 — сжатие экономит
+больше, чем стоят заголовки; больше 1 — множество мелких сообщений тратит на заголовки, подтверждения и
+пинги больше, чем переносит.
+
+**Пинг** — на клиенте время отклика до хоста, на сервере *среднее* время отклика до подключённых клиентов.
+
+Счётчики идут с запуска редактора или с последнего `engine.network_reset()` и охватывают все Play-сессии между ними,
+поэтому перед замером сбросьте их — а лучше запишите [трассу](#сетевые-трассы).
+
+#### `engine.network_stats()` → `dict`
+
+Снимок всего профайлера одним вызовом:
+
+| Ключ | Значение |
+|------|----------|
+| `enabled` | `True` — профайлер вкомпилирован в каждую сборку редактора |
+| `role`, `state`, `session_ready` | `'server'` / `'client'` / `'offline'`; `'disconnected'`, `'connecting'`, `'connected'`, `'reconnecting'` или `'failed'`; завершила ли сессия рукопожатие |
+| `players`, `ping_ms` | Игроков в сессии (включая хоста) и пинг, описанный выше |
+| `elapsed_sec` | Секунд с запуска профайлера или со сброса |
+| `bytes_sent`, `bytes_received`, `packets_sent`, `packets_received` | Итоги полезной нагрузки |
+| `kbps_sent`, `kbps_received`, `pps_sent`, `pps_received` | Сглаженные скорости полезной нагрузки (КБ/с и пакетов/с, обновляются раз в секунду) |
+| `avg_packet_bytes_sent`, `avg_packet_bytes_received` | Средний размер одного сообщения |
+| `peak_kbps_sent`, `peak_kbps_received` | Самая загруженная секунда за последние 120 с |
+| `wire_available` | Есть ли wire-счётчики на этой платформе |
+| `wire_bytes_sent`, `wire_bytes_received`, `wire_packets_sent`, `wire_packets_received` | Wire-итоги (`wire_packets_*` — UDP-датаграммы) |
+| `wire_kbps_sent`, `wire_kbps_received` | Сглаженные wire-скорости |
+| `peak_wire_kbps_sent`, `peak_wire_kbps_received` | Самая загруженная wire-секунда за последние 120 с |
+| `wire_ratio_sent`, `wire_ratio_received` | Wire-байт на байт полезной нагрузки (`0`, пока ничего не отправлено) |
+| `history_seconds`, `history_capacity` | Сколько секунд истории хранится и ёмкость (120) |
+| `entities`, `replicated_entities` | Сущности в сетевом снапшоте и сущности под управлением слоя репликации |
+| `tracing`, `trace_name`, `trace_seconds`, `trace_count` | Идущая трасса и сколько завершённых трасс хранит сессия |
+
+```python
+s = engine.network_stats()
+print(f"{s['role']} | игроков: {s['players']} | пинг {s['ping_ms']} мс")
+print(f"TX {s['kbps_sent']:.1f} КБ/с полезных, {s['wire_kbps_sent']:.1f} КБ/с в сети")
+```
+
+#### `engine.network_message_types(include_idle=False)` → `list[dict]`
+
+Трафик по типам сообщений, самые тяжёлые первыми. Каждая строка: `id`, `name`, `channel`, `packets_sent`,
+`packets_received`, `bytes_sent`, `bytes_received`, `bytes_total`, `avg_bytes_sent`, `avg_bytes_received`,
+`max_bytes_sent`, `max_bytes_received` и `share` (доля от всех байтов полезной нагрузки, `0.0`–`1.0`).
+Сообщения движка идут со своими именами (`Snapshot`, `DeltaSnapshot`, `EntitySync`, `RemoteCall`,
+`UserData`, `Custom`, …); неизвестный id отображается как `Type_<id>`. `include_idle=True` дополнительно
+перечисляет все известные типы, по которым ещё не было трафика.
+
+Столбцы `max_bytes_*` ловят слишком большие сообщения: ENet разбивает пакет больше своего MTU (около
+1400 байт) на фрагменты, и потеря любого фрагмента теряет всё сообщение.
+
+```python
+for row in engine.network_message_types()[:5]:
+    flag = '  <- фрагментируется' if max(row['max_bytes_sent'], row['max_bytes_received']) > 1400 else ''
+    print(f"{row['name']:<18} {row['share']:6.1%}  в среднем {row['avg_bytes_sent']:.0f} Б{flag}")
+```
+
+#### `engine.network_channels()` → `list[dict]`
+
+Та же статистика, сгруппированная по каналам ENet — `control`, `state` (снапшоты и синхронизация
+сущностей), `input` (ввод и rollback) и `voice` — с теми же ключами строк (`id`, `name`, пакеты, байты,
+`bytes_total`, средние, максимумы, `share`).
+
+#### `engine.network_history(seconds=0)` → `list[dict]`
+
+Посекундный кольцевой буфер последних 120 секунд, от старых к новым: `t` (секунды профайлера),
+`bytes_sent`, `bytes_received`, `packets_sent`, `packets_received`, их wire-двойники `wire_bytes_sent`,
+`wire_bytes_received`, `wire_packets_sent`, `wire_packets_received`, `ping_ms` и `players`. Каждое значение
+покрывает одну секунду, так что байты — это байты в секунду. `seconds=N` оставляет только `N` новейших
+сэмплов.
+
+```python
+last = engine.network_history(10)
+print('TX за последние 10 с:', sum(s['bytes_sent'] for s in last) / 1024 / max(1, len(last)), 'КБ/с')
+```
+
+#### `engine.network_peers()` → `list[dict]`
+
+Качество соединения по пирам: на сервере — строка на каждого подключённого клиента, на клиенте — одна
+строка для связи с хостом. Ключи: `id`, `name`, `is_host`, `route` (`'local'`, `'lan'`, `'direct'`,
+`'relay'` или `'web'`, пусто, если неизвестно), `rtt_ms`, `rtt_variance_ms`, `lowest_rtt_ms`,
+`packet_loss_percent` (сглаженные ENet потери надёжных пакетов), `packets_lost` (в текущем 10-секундном
+окне потерь), `mtu`, `bytes_sent`, `bytes_received` (полезная нагрузка этого соединения) и `connected_sec`.
+В Web-сборке из транспортных полей заполняется только `rtt_ms` (собственный пинг движка); на нативном
+сервере транспортные поля `'web'`-пира описывают участок до WebSocket-моста или шлюза, а не сам браузер.
+
+```python
+for peer in engine.network_peers():
+    if peer['packet_loss_percent'] > 2.0 or peer['rtt_ms'] > 150:
+        print(f"{peer['name']}: {peer['rtt_ms']} мс, потери {peer['packet_loss_percent']:.1f}% через {peer['route']}")
+```
+
+#### `engine.network_config()` → `dict`
+
+Настройки, которые формируют трафик: `role`, `port`, `max_players`, `tick_rate`, `snapshot_rate`,
+`full_state_rate_hz`, `interpolation_delay_ms` (фактическая, возможно адаптивная, задержка),
+`delta_compression`, `packet_compression`, `encryption`, `area_of_interest`, `area_of_interest_radius`,
+`prediction`, `lag_compensation`, `validation`, `voice_chat`, `dedicated_server` и `trust_model`
+(`'competitive'` или `'coop'`). Каждая трасса хранит этот же словарь, так что видно, с какими настройками
+она записана.
+
+#### `engine.network_rollback()` → `dict`
+
+Состояние rollback-неткода: `running`, `synchronized`, `session` (`'idle'`, `'p2p'` или `'synctest'`),
+`local_handle`, `players`, `current_frame`, `confirmed_frame`, `predicted_frames`, `rollbacks_per_second`,
+`avg_rollback_frames`, `max_rollback_frames`, `frame_advantage` и `remote_ping_ms`. Поля кадров имеют смысл,
+только пока `running` равно `True`.
+
+#### `engine.network_reset()` → `bool` и `engine.network_save_report(path='')` → `str`
+
+`network_reset()` обнуляет итоги, статистику по типам и историю; идущую трассу это не затрагивает.
+`network_save_report()` записывает текущие счётчики в JSON-файл — итоги, wire-счётчики, типы сообщений,
+каналы, 120-секундную историю, пиры и сетевые настройки — и возвращает полный путь к файлу или `''` при
+ошибке. Без пути файл попадает в `Tools/Helpers/NetworkProfiler/` проекта
+(`network_profile_<дата>_<время>.json`); относительный путь берётся от папки проекта, недостающие папки
+создаются. Прочитать отчёт обратно можно через `browser.read_json(path)`.
+
+#### Сетевые трассы
+
+**Трасса** записывает трафик от старта до остановки: один сэмпл в секунду (с отсчётом от собственного
+старта трассы), трафик по типам и каналам и wire-счётчики — независимо от `network_reset()`, так что сброс
+посередине её не портит. При остановке движок считает сводку, сохраняет сетевые настройки и список пиров на
+этот момент, записывает всё в `Tools/Helpers/NetworkProfiler/<имя>.json` и хранит трассу в списке сессии
+(20 новейших). Те же трассы можно записывать из вкладки Network Profiler и из Lua
+(`NetworkProfiler.StartTrace`).
+
+| Функция | Возвращает | Описание |
+|---------|-----------|----------|
+| `engine.network_start_trace(name='')` | `bool` | Начать запись. Имя по умолчанию — `NetTrace_<дата>_<время>`; занятое имя получает `_1`, `_2`, … `False`, если трасса уже пишется |
+| `engine.network_stop_trace()` | `dict` | Остановить, сохранить и вернуть сводку; `{}`, если ничего не записывалось |
+| `engine.network_is_tracing()` | `bool` | Идёт ли запись трассы? |
+| `engine.network_traces()` | `list[dict]` | Сводки трасс этой сессии, от старых к новым |
+| `engine.network_trace(index=-1)` | `dict` | Одна трасса целиком; `-1` — новейшая, `{}`, если такой нет |
+| `engine.network_load_trace(path)` | `dict` | Сохранённый файл трассы в том же формате, что `network_trace()`, — в том числе трассы прошлых сессий редактора; `{}` (и предупреждение в логе), если файл не читается |
+
+**Сводка** содержит: `name`, `file`, `started_at`, `role` (сессия, которую видела трасса), `duration_sec`,
+`truncated`, `sample_count`, `spike_count`, итоги полезной нагрузки `bytes_sent`, `bytes_received`,
+`packets_sent`, `packets_received`, wire-итоги `wire_available`, `wire_bytes_sent`, `wire_bytes_received`,
+`wire_packets_sent`, `wire_packets_received`, скорости `avg_kbps_sent`, `avg_kbps_received`,
+`peak_kbps_sent`, `peak_kbps_received`, `p95_kbps_sent`, `p95_kbps_received`, `avg_pps_sent`,
+`avg_pps_received`, `peak_pps_sent`, `peak_pps_received`, их wire-двойники `wire_avg_kbps_*`,
+`wire_peak_kbps_*`, `wire_p95_kbps_*`, а также `ping_min_ms`, `ping_avg_ms`, `ping_max_ms`, `players_min` и
+`players_max`. `network_trace()` и `network_load_trace()` добавляют `message_types` и `channels` (строки как
+в `network_message_types()`), `config` (как в `network_config()`), `peers` (как в `network_peers()`),
+`samples` (строки как в `network_history()`, `t` отсчитывается от старта трассы) и `spikes` — индексы
+сэмплов, в которых отправленный или полученный трафик более чем вдвое превысил среднее по трассе (секунды
+меньше 1 КБ всплесками не считаются).
+
+Средние делят итоги на полную длительность; пики и P95 берутся из полных секунд (трасса короче секунды
+показывает там своё среднее). Сэмплы перестают записываться через 24 часа (`truncated` становится `True`),
+а итоги продолжают считаться. Сам файл использует ключи в camelCase (`avgKbpsSent`, …) внутри `summary`.
+
+```python
+# До/после: сравнить сегодняшний прогон с трассой, сохранённой до оптимизации
+before = engine.network_load_trace('Tools/Helpers/NetworkProfiler/lobby_8p.json')
+after = engine.network_trace()
+for key in ('avg_kbps_sent', 'p95_kbps_sent', 'wire_avg_kbps_sent', 'avg_pps_sent'):
+    print(f"{key:<20} {before[key]:9.2f} -> {after[key]:9.2f}")
+```
+
+#### Полная сессия сетевого профилирования
+
+```python
+# Поднять сессию в режиме Play, записать минуту и показать, куда уходит трафик.
+def start():
+    if not editor.is_play_mode():                 # режим Play начинается на одном из следующих кадров
+        editor.defer(start)
+        return
+    lua.exec('Network.StartServer(7777, 8)')      # пропустите, если игра поднимает сервер сама;
+                                                  # клиенты (другой редактор, сборка) подключаются к порту 7777
+    engine.network_start_trace('lobby_8p')
+    editor.set_timer(60.0, report)
+
+def report():
+    summary = engine.network_stop_trace()
+    trace = engine.network_trace()
+    print(f"{summary['name']}: {summary['duration_sec']:.0f} с, до {summary['players_max']} игроков")
+    print(f"TX в среднем {summary['avg_kbps_sent']:.1f} КБ/с, P95 {summary['p95_kbps_sent']:.1f}, "
+          f"пик {summary['peak_kbps_sent']:.1f}, всплесков {summary['spike_count']}")
+    if summary['wire_available'] and summary['bytes_sent']:
+        print(f"wire TX {summary['wire_avg_kbps_sent']:.1f} КБ/с "
+              f"({summary['wire_bytes_sent'] / summary['bytes_sent']:.2f}x от полезной нагрузки)")
+    for row in trace['message_types'][:5]:
+        print(f"  {row['name']:<18} {row['share']:6.1%}  в среднем {row['avg_bytes_sent']:.0f} Б  "
+              f"макс. {max(row['max_bytes_sent'], row['max_bytes_received'])} Б")
+    for peer in trace['peers']:
+        print(f"  {peer['name']}: {peer['rtt_ms']} мс, потери {peer['packet_loss_percent']:.1f}%")
+    print(summary['file'])
+    editor.stop()
+
+editor.play()
+editor.defer(start)
+```
+
+> Трасса записывает трафик той машины, на которой запущена: на хосте она показывает, что сервер отправляет
+> всем клиентам, на клиенте — во что обходится этот один клиент. Если нужны обе стороны, пишите трассы на
+> обеих.
 
 ---
 
@@ -6418,7 +6670,7 @@ icebox.log.trace('вход в цикл импорта')
 | `Flipbook` | ✅ | Покадровая анимация. Путь к flipbook, скорость, цвет, воспроизведение. |
 | `Audio` | ✅ | Звуковые источники. Путь к звуку, громкость, тон, зацикливание, пространственный звук. |
 | `Animator` | ❌ | State Machine анимация. Путь к анимации, текущее состояние, кадр. |
-| `Skeleton` | ❌ | Скелетная (2D-костная) анимация. Путь к скелету, текущая анимация/скин, воспроизведение, цвет, рэгдолл. |
+| `Skeleton` | ❌ | Скелетная (2D-костная) анимация. Путь к скелету, текущая анимация/скин, воспроизведение, цвет, рэгдолл, динамика (волосы, ткань, динамические кости). |
 | `Tilemap` | ✅ | Тайловые карты. Путь к тайлмапу, видимость, отражение. |
 | `FX` | ✅ | Системы частиц. Путь к FX, воспроизведение, зацикливание, скорость. |
 | `Widget` | ✅ | UI-виджеты. Путь к виджету, видимость, пространство экрана, масштаб, порядок, отражение (x/y), интерактивность, индекс игрока. |
@@ -6497,6 +6749,8 @@ icebox.log.trace('вход в цикл импорта')
 
 **Camera / Widget `player_index`** — `-1` все игроки, `0..3` конкретный слот сплит-скрина.
 
+**Audio `group`** — `-1` Из ассета (решает звуковой ассет), `0` Master, `1` Music, `2` SFX, `3` Voice, `4` Ambient, `5` UI. **Audio `volume` / `pitch`** — `-1` берёт значение звукового ассета.
+
 **Sprite / Flipbook / Skeleton `cast_shadow_mode`** — `0` Colliders, `1` Contour.
 
 **Skeleton `shadow_origin`** — `0` Bottom, `1` Center, `2` Top.
@@ -6535,6 +6789,7 @@ icebox.log.trace('вход в цикл импорта')
 | `player_index` | Widget | Игрок-владелец: `-1` = все, `0..3` = конкретный игрок (значение ограничивается) |
 | `rolloff` | Audio | Затухание пространственного звука с расстоянием |
 | `override_loop` / `override_spatial` | Audio | Использовать `loop` / `spatial` самого инстанса вместо настройки звукового ассета |
+| `stop_on_destroy` | Audio | Останавливать звук при удалении сущности; `False` позволяет играющему звуку доиграть самому |
 | `thickness` | PointMarker | Толщина линии |
 | `arrow_head_size` | PointMarker | Размер наконечника стрелки (форма Arrow) |
 | `arrow_direction` | PointMarker | Направление стрелки в градусах (форма Arrow) |

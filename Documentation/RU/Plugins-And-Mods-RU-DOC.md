@@ -278,7 +278,10 @@ Android библиотека вместо этого кладётся в `lib/An
 Lua-состояния, которое создаёт движок, и для всех уже существующих состояний в момент
 загрузки плагина: это основное состояние геймплея/скриптов и отдельное состояние
 **widget runtime**, используемое интерфейсами `.ice_widget`. Регистрируйте свои функции в
-каждом переданном `L` и отменяйте это в `OnUnregisterLua`.
+каждом переданном `L` и отменяйте это в `OnUnregisterLua`. Эти два состояния независимы:
+никогда не передавайте Lua-значение (строку, таблицу, функцию или userdata со стека или из
+сохранённой ссылки) из одного состояния в другое — храните у себя обычные данные C/C++ и
+кладите их в то состояние, которое вызываете.
 
 **Какой модуль Python вам достанется.** `OnRegisterPython` получает `pybind11::module_*`,
 указывающий на модуль `__main__` редактора — тот самый, где живут встроенные привязки
@@ -343,7 +346,7 @@ Play-режима. Учтите: `RuntimeHostAPI::FireEvent` эмитит **Lua*
 
 `Set/IsPanelVisible` принимают одно из имён панелей редактора:
 `Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`,
-`Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`,
+`AudioMixer`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`,
 `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`,
 `TextNoteEditor`, `RemotePreview`, `BuildGame`, `DLCPackager`. Панели редакторов ассетов
 (`ClassEditor`, `SpriteEditor`, `MaterialEditor`, …) так можно только **закрыть** —

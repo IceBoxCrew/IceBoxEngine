@@ -151,7 +151,7 @@ One iteration of the main loop, in order:
    and touch deltas are rolled over for the next frame.
 10. **Counters** — entity/component statistics and the profiler are updated.
 11. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
-    order, followed by the network profiler in Debug builds.
+    order, followed by the network profiler in the editor and in Debug builds.
 12. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
     planes, backend, lighting) into the engine; a level's rendering override is re-applied
     if it is enabled.
@@ -180,8 +180,11 @@ One iteration of the main loop, in order:
    ([5.7](#57-automatic-replication)).
 5. **Widgets** — the UI runtime updates and then processes pointer/text input, with
    [split-screen routing](#43-cameras-ui--audio-per-player) in standalone builds.
-6. **Camera** — a playing cinema takes the camera; otherwise a free (ejected) camera or
-   the primary Camera component drives it, with optional camera lag; then camera shake is
+6. **Camera** — the primary Camera component (with optional camera lag) or a free (ejected)
+   camera sets the gameplay view. A playing cinema that controls the camera is then blended
+   over it — by its blend-in / blend-out weight, zoom and roll included — and `Cinema.ShakeCamera`
+   is added. The resulting frame is what is rendered, what `Cinema.GetCameraPosition`, the
+   screen ↔ world conversions and the cinema audio listener use. Finally camera shake is
    decayed for the primary and every split-screen camera.
 
 The scene simulation itself runs these stages, each of which appears by name in the
@@ -195,10 +198,13 @@ The scene simulation itself runs these stages, each of which appears by name in 
 | **`Update.Scripts`** | `OnUpdate` for every scripted entity and the level script. |
 | **`Update.BehaviorTree`** | AI behavior trees tick. |
 | **`Update.Perception`** | AI perception (sight/hearing) updates — parallelized across worker threads at 8 or more perceiving agents. |
+| **`Update.Cinema`** | Cinemas advance: event keys and markers fire, actors are posed, dialogue, audio and nested shots update, and cinema hooks are delivered to scripts. It runs after scripts and physics interpolation, so an actor ends the frame exactly where its keys put it. |
 | **`Update.Hierarchy`** | Parent→child transforms are propagated. |
 | **`Update.Audio`** | Listener position(s) and every spatial audio source position — the entity transform combined with the instance's local offset — are pushed to the audio engine ([4.3](#43-cameras-ui--audio-per-player), [6](#6-the-audio-engine)). |
-| **`Update.Debris`** | Destruction fragments age, fade and expire. |
-| *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. |
+| **`Update.Video`** | Video players advance on the real (unscaled) frame delta. |
+| **`Update.CinemaTriggers`** | Placed cinemas with **Trigger On Overlap** check their trigger boxes and start when a matching entity enters. |
+| **`Update.Debris`** | Destructible entities spawned during play with **Destruct On Start** break, destruction fragments age, fade and expire (permanent debris is kept), and the live debris cap is enforced. |
+| *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. Skeletons also simulate their dynamic bones, hair and cloth here ([3.7](#37-ragdolls--bone-physics)). |
 | **`Update.SocketAttachments`** | Entities attached to bones/sockets are placed. |
 | *(late)* | `OnLateUpdate` for scripts, then socket attachments are resolved **a second time** so anything a late-update moved is still correctly attached. |
 | *(sync)* | Sprite/flipbook collision shapes bound to physics bodies are re-synchronized. |
@@ -496,6 +502,32 @@ ragdoll values, and restores them exactly when the ragdoll is switched off.
 Skeleton bone bodies are included in the body→entity map, so a bullet that hits a forearm
 reports a hit on the character.
 
+**Dynamic bones, hair and cloth** are a separate, lighter kind of simulation: they are not
+Box2D bodies. Once a skeleton's pose is resolved — animation, layers, constraints, ragdoll —
+the engine simulates them directly on that pose and adds the result to the same list of
+parts as the rest of the rig. They are therefore lit, shadowed, culled and drawn like any
+other part, and a script that draws the skeleton through `Draw.Skeleton` gets them too.
+
+* The simulation runs in the skeleton's own space and is told how the entity moved,
+  rotated, scaled or flipped since the previous frame; the **Inertia** setting decides how
+  much of that motion an element feels. A jump of roughly 300 px or more within one frame
+  counts as a **teleport** and is not felt at all, and a flip mirrors the state instead of
+  swinging it across the character.
+* A frame is split into at most four sub-steps of up to 20 ms, and frame times above 80 ms
+  are clamped — a hitch slows hair down for a moment instead of making it explode.
+* Gravity is the scene gravity. Wind is the **global wind** set from script, scaled by the
+  component's **Global Wind Scale**, plus its **Local Wind**.
+* Collisions use the skeleton's own **dynamics colliders** — a handful of circles and
+  capsules. **Collide With World** additionally gathers the physics shapes around the
+  element (colliders of other entities, tiles, bone bodies; never sensors and never the
+  skeleton's own entity) and slides it along them. Nothing in the physics world is pushed
+  back: bodies never feel hair or cloth.
+* A skeleton that no camera has drawn for a few frames **freezes** its dynamics unless
+  **Simulate Offscreen** is set. Frozen elements keep their shape and carry on when the
+  skeleton is seen again.
+* They are cosmetic: they are not replicated, so in multiplayer every machine simulates
+  its own.
+
 ### 3.8 Interpolation, teleports & threading
 
 The renderer draws bodies interpolated between the previous and current fixed steps
@@ -544,6 +576,7 @@ exactly once per flip rather than every frame.
 | Break Force / Break Torque | Per joint instance | `0` disables that test; raises a break event |
 | Bone Colliders Enabled | Skeleton component | Kinematic hit bodies driven by animation |
 | Ragdoll Enabled + blend | Skeleton component | Dynamic bodies; blend scales joint motor torque |
+| Dynamics (dynamic bones, hair, cloth) | Skeleton asset + Skeleton component | Not physics bodies; cosmetic, frozen offscreen by default |
 | Parallel transform read-back | Automatic | ≥ 64 rigidbodies |
 | Teleport snap threshold | Automatic | Velocity × step × 4 + 1 metre |
 
@@ -642,6 +675,9 @@ listener is placed at the primary camera, and one at each additional registered 
 camera, up to however many listeners the audio engine supports. Spatial sounds are then
 mixed for all of them, so a sound near player 2 is audible even when player 1 is far away.
 Outside split-screen the engine falls back to a single listener at the primary camera.
+While a cinema controls the camera, the primary listener moves with the cinema's frame
+(blended by the cinema's camera weight) unless the cinema's **Audio Listener** is set to
+**Gameplay Camera**, so 3D sounds are heard from what the shot shows.
 
 ### 4.4 What runs where
 
@@ -698,7 +734,10 @@ Both transports carry the same wire format: a **one-byte message type** followed
 payload, optionally encrypted. Native sessions also enable ENet's **range-coder
 compression** on the whole host when packet compression is on (and log a warning and carry
 on uncompressed if the range coder is unavailable). The network profiler instruments both
-paths identically, which is why its per-message-type breakdown works on Web too.
+paths identically, which is why its per-message-type breakdown works on Web too. On native
+builds it also reads ENet's own socket counters, so it can show what really went over the
+wire after compression and protocol overhead
+([Profiling → 5.4](Profiling-And-Building-EN-DOC.md#54-the-network-profiler)).
 
 `Initialize()` sets up libsodium and ENet, and is called **lazily** — starting a server or
 connecting initializes the subsystem if you did not do it yourself.
@@ -1140,12 +1179,35 @@ and the engine registers an additional **Opus** decoding backend so
 [cooked Opus audio](Profiling-And-Building-EN-DOC.md#9-asset-cooking) plays back with no
 special case. The file type is recognised from its contents, not its extension, so a cooked
 file that keeps its original name decodes correctly. Sounds are registered by **name**,
-which is the handle every later call uses.
+which is the handle every later call uses; every play also returns a **voice id** that controls
+just that play.
 
-**Groups and volume.** Every sound belongs to a group — **Master**, **Music**, **SFX**,
-**Voice**, **Ambient** or **UI**. A sound's audible level is its own volume × its group's
-volume × the master volume × the global gain, and any group (or the master) can be muted
-independently. The mixer is configured in [Preferences → Audio](Editor-EN-DOC.md#107-audio).
+**Groups, buses and the mix.** Every sound belongs to a group — **Master**, **Music**, **SFX**,
+**Voice**, **Ambient** or **UI** — and every group is a **mixing bus** with its own effect
+chain; the Master bus carries the whole mix. A sound's audible level is its own volume × its
+group's volume × the master volume × the global gain, shaped further by the active snapshot,
+ducking and occlusion, and any group (or the master) can be muted independently. **Ducking**
+lowers one group while another is audible (the music under dialogue) with attack, release and
+threshold, or once on demand. **Snapshots** are named mixes — a volume and optional bus effects
+for each group — that scripts apply by name and that **audio zones** (View assets with an Audio
+Volume) apply while the listener is inside; changes blend over the snapshot's fade time or the
+zone's blend radius. Video players and incoming voice chat follow the volume and mute of a
+chosen group. The mixer is configured in [Preferences → Audio](Editor-EN-DOC.md#107-audio) and
+can be watched live in the [Audio Mixer](Editor-EN-DOC.md#the-audio-mixer-panel).
+
+**Voices.** A sound asset can play several copies at once (**Max Instances**, with a steal mode
+for when all of them are busy), pick one of several files for every play (**Variations**:
+random, random without repeat, sequence or shuffle) and ignore plays that come too quickly
+(**Retrigger Cooldown**). A project-wide **voice limit** keeps the number of playing sounds under
+control: the least important voice by **Priority** — then the oldest — makes room for a new one.
+A single play can be delayed, faded in, started at a given time, placed in the world, looped or
+given its own volume, pitch and pan. Every copy of a streamed sound gets its own stream.
+
+**Game pause & time scale.** Each group can pause while the game is paused (`PauseGame()`, a
+time scale of 0 or the editor's Pause button) and can follow the game time scale with its pitch,
+so slow motion sounds slowed down; a sound asset can override both for one sound. Sounds started
+during a pause play normally, so pause menus keep their music and clicks. Both switches are off
+by default.
 
 **Streaming vs. resident.** Nothing is ever decoded on the audio thread, which is what keeps
 playback free of crackles on slow devices:
@@ -1155,26 +1217,43 @@ playback free of crackles on slow devices:
 | **Sound** | Decoded **once, when it is loaded**, into memory. Every sound loaded from the same file at the same settings shares that memory. | **Streamed** automatically on a background streaming thread with a ¾-second buffer. |
 | **Music** | Always **streamed** (and defaults to the Music group and to looping). | Always streamed. |
 
+A sound asset's **Load Mode** can force either way: **Decompress Into Memory** keeps even a long
+sound (or music) in memory, up to 256 MB of samples, and **Stream** always streams it.
+
 Loading a short sound therefore costs its decode time up front — load sounds with the
 level or behind a loading screen rather than in the middle of a hot loop. A file whose sample
 rate differs from the engine's is converted with a high-quality filter at that moment; a sound
 loaded with **Loop** on is converted as a continuous loop, and streamed loops wrap without
-resetting the converter, so the loop point stays seamless either way. Assets that live
-inside a packed build are read through the virtual file system and decoded from a memory
-buffer, so packing changes nothing about playback.
+resetting the converter, so the loop point stays seamless either way. A **loop region** (loop
+start and end, or the loop points an audio editor stored in a WAV file) turns everything before
+it into an intro that plays once. Assets that live inside a packed build are read through the
+virtual file system and decoded from a memory buffer, so packing changes nothing about playback.
+Editing a sound file or its `.ice_sound` while the editor runs reloads just that sound in place;
+a playing sound continues from the same position.
 
 **Spatial audio.** A sound can be 2D or **3D**, with position, velocity, direction, a
 min/max distance pair, a rolloff, a Doppler factor and an optional **cone** (inner angle,
 outer angle, outer volume). The engine supports **multiple listeners**, which is what
 [split-screen](#43-cameras-ui--audio-per-player) uses; outside split-screen exactly one
 listener is active and it follows the primary camera. Global defaults for distance, rolloff,
-speed of sound and Doppler are engine-wide settings.
+speed of sound and Doppler are engine-wide settings. Distances are in world units (pixels); the
+speed of sound is given in meters per second and converted with the physics pixels-per-meter.
+Velocities for the Doppler effect can be calculated automatically from movement (teleports are
+ignored). **Panning Strength** narrows how far a 3D sound pans without changing its
+attenuation, and **occlusion** casts rays against the physics colliders — optionally only
+static ones and only chosen collision groups — to muffle and quieten 3D sounds behind walls,
+smoothly and at a configurable rate. Entity sound sources follow their entity every frame, their
+cone turns with the entity's rotation and horizontal flip, and a source can keep playing after
+its entity is destroyed.
 
-**Per-sound effects.** Each sound can carry its own effect chain: a **low-pass** and
-**high-pass** filter, **low-shelf** and **high-shelf** EQ, a **delay** (time, decay, wet,
-dry) and a **reverb** (decay, wet, room size, damping). Changing a setting while the sound
-plays glides to the new value instead of jumping, switching an effect on or off crossfades
-over about 10 ms, and the delay and reverb **tails keep ringing** after the sound stops.
+**Per-sound effects.** Each sound — and each group bus — can carry its own effect chain of
+fourteen stages: **low-pass**, **high-pass** and **band-pass** filters (with resonance),
+**low-shelf**, **peak** and **high-shelf** EQ, **distortion** (soft, hard, fuzz), a
+**bitcrusher**, a **compressor**, **chorus / flanger**, **tremolo**, a **delay** (time, decay,
+wet, dry), a **reverb** (decay, wet, room size, damping, pre-delay, width) and **stereo width**.
+Changing a setting while the sound plays glides to the new value instead of jumping, switching
+an effect on or off crossfades over about 10 ms, and the delay, reverb and modulation **tails
+keep ringing** after the sound stops.
 Cutoff frequencies are kept safely below the Nyquist limit of the current sample rate, and
 a chain that ever produces invalid samples resets itself to silence instead of exploding.
 Fades — fade to a target volume over a duration, fade in, fade out — are handled by the
@@ -1183,7 +1262,7 @@ engine rather than by your update loop.
 **Click-free playback.** Every discontinuity is smoothed at the sample level: stopping,
 pausing, resuming and seeking apply a 5–6 ms ramp (a sound started from its beginning keeps
 its attack exactly as authored); playing a sound that is already playing restarts it with a
-short **crossfade**; trimmed **Start Time / End Time** edges are
+short **crossfade** (when its asset allows one instance); trimmed **Start Time / End Time** edges are
 faded so a cut in the middle of a waveform does not click; volume and pan changes glide; and
 3D sources that pass through the listener fade their left/right panning out inside the
 **Min Distance** instead of flipping sides. Stopping a sound applies its asset's
@@ -1196,7 +1275,8 @@ look-ahead. Many loud sounds overlapping are held just under full scale instead 
 into distortion, and invalid samples are replaced with silence.
 
 **Quality.** The **Sound Quality** preset selects the engine sample rate (from 8 kHz to
-96 kHz). Changing it re-creates the audio engine and **restores every loaded sound** —
+96 kHz). Changing it — or switching the output device — re-creates the audio engine and
+**restores every loaded sound** —
 including whether it was playing or paused, its cursor position, volume, pitch, pan, loop
 flag, effects and 3D placement — so a settings menu can change audio quality without
 interrupting the game.
@@ -1204,9 +1284,12 @@ interrupting the game.
 **Devices & platforms.** The mixer renders whatever block size the platform asks for, so
 it never has to produce oversized blocks at once. On **Android** it uses a low-latency
 AAudio stream (OpenSL ES on older systems) and grows the output buffer automatically if the
-system reports an underrun. On **iOS** the audio session uses the *Playback* category, so
-Bluetooth headphones keep their high-quality stereo profile, and playback restarts by itself
-after an interruption such as a phone call. If the output device disappears or refuses to
+system reports an underrun. On **iOS** the audio session category is chosen in
+Preferences → Audio → Platform: *Playback* (the default — always audible, and Bluetooth
+headphones keep their high-quality stereo profile), *Ambient* (mixes with other apps and follows
+the silent switch) or *Solo Ambient*; playback restarts by itself after an interruption such as
+a phone call. The editor picks its output device in the Audio Mixer and a game in its options
+(`Settings.SetAudioOutputDevice`); when the saved device is missing, the system default is used. If the output device disappears or refuses to
 start — headphones unplugged, a Bluetooth switch — the engine keeps retrying in the
 background and resumes without any action from the game. On **Web**, browsers start audio
 only after the first user interaction, and streamed music keeps being fed while the tab is in
@@ -1217,10 +1300,15 @@ the background (unless the game suspends itself when it loses focus).
 fades it back in, so neither makes a pop. In the editor, a separate **monitor volume and
 mute** scale what *you* hear while editing — game audio in Play mode and every sound preview —
 without touching project settings — the toolbar control described in
-[Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). Editor builds can also tap the
-output for [Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio streaming.
+[Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). The
+[Audio Mixer](Editor-EN-DOC.md#the-audio-mixer-panel) adds per-group mute and solo for the
+editor, live meters and the list of playing voices. Stopping Play stops every sound the game
+started, music included, and resets the mixer to the project values; editor previews keep
+playing. Editor builds can also tap the output for
+[Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio streaming.
 
-The live state of the mixer — voices, streams and limiter activity — is published as
+The live state of the mixer — voices, delayed voices, streams, listeners, stolen and rejected
+voices, and limiter activity — is published as
 **Audio** counters in the profiler
 ([Profiling & Building → 2.3](Profiling-And-Building-EN-DOC.md#23-counters)).
 
@@ -1276,7 +1364,7 @@ underneath.
 | **Async level loading** | Loads a level without stalling the frame: the level JSON is parsed on a **worker thread**, then its textures are preloaded on the main thread in phases (*Parsing → Preloading Assets → Ready → Complete*), each with a progress fraction and a status string you can drive a loading screen from. The finished level is applied either automatically or when you ask for it, so you control the exact frame the world swaps. |
 | **Scene state snapshots** | Capture and restore the whole scene as data — the mechanism behind checkpoints, save-states and rollback's save/load callbacks. |
 | **Replay system** | Samples tracked entities (transform, velocity, visibility) at a fixed rate into frames, plus arbitrary named numbers and strings you record per frame. It runs in two modes: **recording** to a growing buffer you save to disk, and a **circular buffer** of the last N seconds that can be captured on demand — which is how killcams work. Playback applies samples back onto entities with optional interpolation, looping and speed control. |
-| **Destruction** | Fractures sprites, flipbooks and tiles into real physics debris on impact; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces a per-entity debris cap. |
+| **Destruction** | Fractures sprites, flipbooks, skeletons and tiles into real physics debris — rectangles, triangles, shards or splinters — on impact, on damage or from script, and lets debris break into smaller debris for several generations; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces the debris cap. |
 | **Navigation** | Nav grids are built from **view volumes** ([Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view)): each volume owns its own grid with its own cell size, agent radius, diagonal flag and mode (top-view or side-view, the latter with jump/fall limits). Several grids can coexist; a path query picks the grid that contains the endpoints, runs A\* and can smooth the result. |
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
 | **Command system & CVars** | Named commands and console variables registered from C++ or Lua, executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |

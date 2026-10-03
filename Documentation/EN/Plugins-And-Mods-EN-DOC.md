@@ -273,7 +273,9 @@ A plugin can be **editor-only** (implement only the `OnEditor*` hooks), **runtim
 creates, and for every state that already exists when your plugin loads: the main
 gameplay/script state and the separate **widget runtime** state used by `.ice_widget`
 UIs. Register your functions into each `L` you are handed, and undo that in
-`OnUnregisterLua`.
+`OnUnregisterLua`. The two states are independent: never hand a Lua value (a string, table,
+function or userdata from the stack or a stored reference) from one of them to the other —
+keep plain C/C++ data on your side and push it into the state you are calling.
 
 **Which Python module you get.** `OnRegisterPython` receives a `pybind11::module_*`
 pointing at the editor's `__main__` module — the same module that carries the built-in
@@ -336,7 +338,7 @@ call them once with a small buffer to size the allocation.
 
 `Set/IsPanelVisible` take one of the editor's panel names:
 `Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`,
-`Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`,
+`AudioMixer`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`,
 `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`,
 `TextNoteEditor`, `RemotePreview`, `BuildGame`, `DLCPackager`. Asset editor panels
 (`ClassEditor`, `SpriteEditor`, `MaterialEditor`, …) can only be **closed** this way —

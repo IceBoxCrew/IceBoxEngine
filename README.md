@@ -50,7 +50,7 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 - **Animation** — Skeletal animation with IK, skins, deformable meshes and per-bone physics, flipbooks, animation state machines, and timeline-driven clips.
 - **Text & UI** — In-engine UI widgets (19 element types, anchors and stretch layouts, nine-slice, keyframed animation, gamepad navigation) and high-quality text via FreeType, HarfBuzz, and SheenBidi (full Unicode shaping with right-to-left support).
 - **Accessibility** — Colourblind modes, a dyslexia-friendly font, **text-to-speech** for hovered and focused UI, a field-of-view lens, game speed and forced mono audio — all readable by the game, so a shipped build honours the player's choices.
-- **Audio** — Spatial mixing and playback (miniaudio) with per-sound filters, EQ, delay and reverb, six mixer groups, multiple listeners, streamed music, and Opus / Vorbis codec support.
+- **Audio** — Spatial mixing and playback (miniaudio) with a fourteen-stage effect chain per sound and per group bus (filters, EQ, distortion, bitcrusher, compressor, chorus/flanger, tremolo, delay, reverb, stereo width), six mixer buses with ducking and snapshots, audio zones, occlusion, voice limits and priorities, sound variations and loop regions, gapless music playlists, groups that follow the game pause and time scale, multiple listeners, streamed music, a live Audio Mixer in the editor, and Opus / Vorbis codec support.
 - **Voice** — Microphone capture, Opus encode/decode, real-time volume analysis and WAV recording — available to single-player games as well as networked ones.
 - **Video** — Video playback into a texture with frame-accurate seeking, 0.25×–4× speed with pitch correction and looping of any part of a clip, plus a cinematic / cutscene editor (FFmpeg; AVFoundation on iOS, the browser on Web, Media Foundation on the Xbox consoles).
 - **Input** — Keyboard, mouse, four gamepads with rumble and motion sensors, eight raw joysticks, ten-finger touch with pinch and swipe, pen/stylus, force-feedback **haptics** and device sensors, all through SDL3.
@@ -592,7 +592,7 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all seven platforms, installers, DLC, headless servers. |
 | [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
 | [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference, opening with a full Lua course for beginners. |
-| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling: entities, levels, panels, the console log, a bridge into the game Lua VM, project config, asset validation, installing PyPI packages with pip, and running the editor unattended from the command line. |
+| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling: entities, levels, panels, the console log, a bridge into the game Lua VM, CPU and network profiling, project config, asset validation, installing PyPI packages with pip, and running the editor unattended from the command line. |
 
 Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.
 
