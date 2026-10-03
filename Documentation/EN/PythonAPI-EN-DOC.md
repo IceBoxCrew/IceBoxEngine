@@ -82,6 +82,7 @@
    - 7.5 [Platform, build and rendering backend](#75-platform-build-and-rendering-backend)
    - 7.6 [Editor window and application](#76-editor-window-and-application)
    - 7.7 [Resource inventory](#77-resource-inventory)
+   - 7.8 [Network profiler](#78-network-profiler)
 8. [`browser` module — Content browser](#8-browser-module--content-browser)
    - 8.1 [Navigation](#81-navigation)
    - 8.2 [Files and folders](#82-files-and-folders)
@@ -153,7 +154,7 @@
 - **Batch operations** on entities (bulk rename, move, delete)
 - **Scene management** (create, save, load)
 - **Working with project files** (content browser)
-- **Getting diagnostic information** (FPS, memory, resources)
+- **Getting diagnostic information** (FPS, memory, resources, CPU and network profiling)
 - **Extending editor functionality** without rebuilding the engine
 
 ### How does it work?
@@ -274,7 +275,7 @@ When a file is loaded, its name is shown in parentheses next to the **Script Edi
 | **Reset Environment** | Wipe everything you defined in the interactive console (variables, functions, imports) and recreate a clean namespace with `help()`. |
 | **Clear History** | Clear the quick-command history. |
 
-**`Snippets`** — one-click code templates grouped by topic: entities, content browser, diagnostics (FPS / memory / render), components, batch operations, camera & scene, and events & timers. Picking a snippet loads it into either the quick-command field or the script editor, ready to run or edit.
+**`Snippets`** — one-click code templates grouped by topic: entities, content browser, diagnostics (FPS / memory / render / network stats / a 30-second network trace), components, batch operations, camera & scene, and events & timers. Picking a snippet loads it into either the quick-command field or the script editor, ready to run or edit.
 
 **`Help`** — print API references straight into the log:
 
@@ -285,6 +286,11 @@ When a file is loaded, its name is shown in parentheses next to the **Script Edi
 | **Show Browser API** | List every `browser` function. |
 | **Show Scene API** | List every `scene` function. |
 | **Engine API** | List every `engine` function. |
+| **Show Console API** | List every `console` function. |
+| **Show Lua API** | List every `lua` function. |
+| **Show Project API** | List every `project` function. |
+| **Show Assets API** | List every `assets` function. |
+| **Show Packages API** | List every `packages` function. |
 
 #### The script editor
 
@@ -299,7 +305,7 @@ The editor is a real code editor, not just a text box. Its toolbar (above the ed
 | **+T** | — | Insert a code template (control flow, functions, classes, editor loops, events…). |
 | **Auto** | — | Auto-compile: while ticked, the script is syntax-checked ~0.6 s after you stop typing and the offending line is flagged. |
 
-**Autocomplete** pops up automatically once you have typed two or more characters. It draws from the built-in API, live runtime bindings, and the functions you have defined in the current script. Use `↑` / `↓` to choose, `Tab` or `Enter` to accept, `Esc` to dismiss.
+**Autocomplete** pops up under the cursor once you have typed two or more characters. It draws from the built-in API, live runtime bindings, and the functions you have defined in the current script, and shows the selected entry's signature below the list. Use `↑` / `↓` to choose, `Tab` or `Enter` to accept, `Esc` to dismiss. It stays closed inside comments and strings.
 
 Press **Run Script** to execute the whole editor, or **Clear** to reset it to an empty buffer.
 
@@ -1233,7 +1239,7 @@ Lists:       [item for item in iterable if condition]
 |--------|----------|--------|
 | `editor` | Entities, components, transforms, panels, camera, levels, events, Python runtime | `editor.create_entity('Box')` |
 | `scene` | Saving/loading scenes, statistics, validation, exporting/importing entities | `scene.save('Content/level.icemap')` |
-| `engine` | Engine version, FPS, memory, resources, audio, window, platform | `engine.fps()` |
+| `engine` | Engine version, FPS, memory, CPU/GPU/Lua and network profilers, resources, audio, window, platform | `engine.fps()` |
 | `browser` | Content browser, files, folders, JSON, checksums | `browser.list_files()` |
 | `console` | Editor console log — read, search, filter, save, write | `console.get_errors()` |
 | `lua` | Bridge into the game Lua VM — run, evaluate, compile-check | `lua.compile_all()` |
@@ -1780,17 +1786,22 @@ sr = editor.get_component(uuid, 'SpriteRenderer')
 audio = editor.get_component(uuid, 'Audio')
 # {
 #     'instance_count': 1,
-#     'sound_path': 'Content/Sounds/jump.ice_sound',
-#     'group': 0,
-#     'volume': 1.0,
-#     'pitch': 1.0,
+#     'sound_path': 'Content/Sounds/jump.wav',
+#     'group': -1,
+#     'volume': -1.0,
+#     'pitch': -1.0,
 #     'loop': False,
 #     'play_on_wake': False,
 #     'spatial': False,
-#     'min_distance': 100.0,
-#     'max_distance': 1000.0
+#     'min_distance': 1.0,
+#     'max_distance': 100.0,
+#     'stop_on_destroy': True
 # }
 ```
+
+`sound_path` is the audio file (`.wav`, `.mp3`, `.ogg`, `.flac`); its sound asset settings come
+from the `.ice_sound` file next to it. `group` `-1`, `volume` `-1` and `pitch` `-1` mean "use the
+value of the sound asset".
 
 **Example for Flipbook:**
 ```python
@@ -1851,11 +1862,16 @@ sk = editor.get_component(uuid, 'Skeleton')
 #     'ragdoll_auto_on_start': False,
 #     'ragdoll_angular_damping': 0.5,
 #     'ragdoll_gravity_scale': 1.0,
-#     'bone_colliders_enabled': True
+#     'bone_colliders_enabled': True,
+#     'dynamics_enabled': True,       # simulate dynamic bones, hair and cloth
+#     'dynamics_offscreen': False,    # keep simulating outside every camera
+#     'dynamics_wind': (0.0, 0.0),    # local wind, px/s² (X right, Y up)
+#     'dynamics_wind_scale': 1.0,     # share of the global wind
+#     'dynamics_gravity_scale': 1.0
 # }
 ```
 
-> Every Skeleton field above is writable via `set_component`. `cast_shadow_mode` and `shading_mode` are clamped to `0..1`, `shadow_origin` to `0..2`, `blend_mode` to `0..3`.
+> Every Skeleton field above is writable via `set_component`. `cast_shadow_mode` and `shading_mode` are clamped to `0..1`, `shadow_origin` to `0..2`, `blend_mode` to `0..3`; `dynamics_wind` takes a 2-tuple and `dynamics_wind_scale` cannot go below `0`.
 
 **Example for PointLight:**
 ```python
@@ -1991,8 +2007,6 @@ widget = editor.get_component(uuid, 'Widget')
 #     'screen_space': True,
 #     'scale': 1.0,
 #     'render_order': 0,
-#     'flip_x': False,
-#     'flip_y': False,
 #     'interactable': True,
 #     'player_index': -1    # -1 = all players, 0..3 = specific player
 # }
@@ -2066,14 +2080,20 @@ d = editor.get_component(uuid, 'Destructible')
 #     'health': 100.0,
 #     'fragment_count': 8,
 #     'pattern': 0,
+#     'fragment_shape': 0,              # 0 Rectangles, 1 Triangles, 2 Shards, 3 Splinters
+#     'fragment_seed': 0,               # 0 = a different cut every time
 #     'explosion_force': 200.0,
 #     'impact_threshold': 5.0,
-#     'fragment_lifetime': 5.0,
+#     'impact_damage_scale': 0.0,       # > 0: hits deal (speed × scale) damage instead of breaking at once
+#     'inherit_velocity': 0.0,          # 0..1
+#     'fragment_lifetime': 5.0,         # 0 = permanent debris
 #     'fragment_fade_time': 1.0,
 #     'fragment_gravity_scale': 1.0,
 #     'fragment_density': 1.0,
 #     'fragment_friction': 0.3,
 #     'fragment_restitution': 0.0,
+#     'fragment_linear_damping': 0.4,
+#     'fragment_angular_damping': 0.4,
 #     'fragment_is_sensor': False,
 #     'fragment_enable_contact_events': False,
 #     'fragment_enable_sensor_events': False,
@@ -2086,6 +2106,11 @@ d = editor.get_component(uuid, 'Destructible')
 #     'fragment_shadow_origin': 0,
 #     'fragment_shadow_edge_fade': 0.0,
 #     'fragment_shadow_z_order': 0.0,
+#     'debris_generations': 0,          # 0..8, how many more times debris can break
+#     'debris_fragment_count': 3,       # 2..32 pieces per break
+#     'debris_impact_threshold': 0.0,   # hit speed that breaks a piece, 0 = scripts/explosions only
+#     'debris_min_size': 8.0,           # pieces smaller than this never break
+#     'debris_force_scale': 0.5,
 #     'destroy_original': True
 # }
 ```
@@ -2218,7 +2243,7 @@ editor.set_component(uuid, 'PointLight', {
 
 # Configure audio
 editor.set_component(uuid, 'Audio', {
-    'sound_path': 'Content/Sounds/bgm.ice_sound',
+    'sound_path': 'Content/Sounds/bgm.ogg',
     'volume': 0.7,
     'loop': True,
     'play_on_wake': True
@@ -2787,7 +2812,7 @@ for p in panels:
 
 **Dockable panels** — can be shown and hidden freely:
 
-`Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`, `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`, `TextNoteEditor`, `RemotePreview`
+`Hierarchy`, `Properties`, `Stats`, `ContentBrowser`, `Settings`, `NetworkPanel`, `AudioMixer`, `Profiler`, `WorldSettings`, `HotKeys`, `Documentation`, `LuaDebugger`, `Plugins`, `Console`, `PythonConsole`, `About`, `PropertyMatrix`, `LevelScriptEditor`, `TextNoteEditor`, `RemotePreview`
 
 **One-shot dialog triggers** — setting them to `True` opens a modal; they reset themselves to `False` immediately, so `is_panel_visible` on them is almost always `False`:
 
@@ -2829,7 +2854,7 @@ Saves the currently open asset in the panel. If several instances of that panel 
 editor.save_panel('ClassEditor')
 ```
 
-> Only asset editor panels can be saved. `SpritesheetSlicer` has nothing to save, so it returns `False`, as does any name that is not an asset panel. `VideoPlayer` saves the video's **Is Post Processed** / **Is Lit** settings to its `.ice_video` sidecar.
+> Only asset editor panels and `PropertyMatrix` can be saved. `SpritesheetSlicer` has nothing to save, so it returns `False`, as does any name that is not an asset panel. `VideoPlayer` saves the video's **Is Post Processed** / **Is Lit** settings to its `.ice_video` sidecar. For `PropertyMatrix`, saving applies its pending edits to every selected asset, exactly like **Apply to All**; `is_panel_dirty('PropertyMatrix')` reports whether edits are pending, `close_panel('PropertyMatrix')` applies them before hiding the panel, and `save_all_panels()` includes it.
 
 #### `editor.close_panel(panel_name)` → `bool`
 
@@ -3125,18 +3150,19 @@ editor.set_instance(uuid, 'SpriteRenderer', 0, {
 audio_data = editor.get_instance(uuid, 'Audio', 0)
 # {
 #     'name': 'FootstepSound',
-#     'sound_path': 'Content/Sounds/step.ice_sound',
-#     'group': 0,
-#     'volume': 1.0,
-#     'pitch': 1.0,
+#     'sound_path': 'Content/Sounds/step.wav',
+#     'group': -1,
+#     'volume': -1.0,
+#     'pitch': -1.0,
 #     'loop': False,
 #     'play_on_wake': False,
 #     'spatial': False,
-#     'min_distance': 100.0,
-#     'max_distance': 1000.0,
+#     'min_distance': 1.0,
+#     'max_distance': 100.0,
 #     'rolloff': 1.0,
 #     'override_loop': False,
 #     'override_spatial': False,
+#     'stop_on_destroy': True,
 #     'position': (0.0, 0.0, 0.0)
 # }
 ```
@@ -3179,8 +3205,6 @@ widget_data = editor.get_instance(uuid, 'Widget', 0)
 #     'screen_space': True,
 #     'scale': 1.0,
 #     'render_order': 0,
-#     'flip_x': False,
-#     'flip_y': False,
 #     'interactable': True,
 #     'player_index': -1,
 #     'position': (0.0, 0.0, 0.0)
@@ -3598,7 +3622,8 @@ Each world asset is a dict:
 | `cinema_auto_play` | `bool` | Cinema: start automatically |
 | `cinema_play_once` | `bool` | Cinema: play only once |
 | `cinema_trigger_on_overlap` | `bool` | Cinema: start when a tagged entity overlaps |
-| `cinema_trigger_tag` | `str` | Cinema: which gameplay tag triggers it |
+| `cinema_trigger_tag` | `str` | Cinema: which gameplay tag triggers it (empty = any entity) |
+| `cinema_trigger_size` | `(w, h)` | Cinema: trigger box size in pixels, centered on the position (minimum 1) |
 
 #### `editor.get_world_asset_count()` → `int`
 
@@ -3634,6 +3659,7 @@ editor.set_world_asset(1, {
     'cinema_auto_play': False,
     'cinema_trigger_on_overlap': True,
     'cinema_trigger_tag': 'Player',
+    'cinema_trigger_size': (256.0, 128.0),
     'cinema_play_once': True
 })
 ```
@@ -3813,7 +3839,8 @@ lang = editor.get_locale()  # 'ru'
 
 #### `editor.set_locale(lang_code)`
 
-Sets UI language.
+Sets UI language. `lang_code` is the name of a language file in `Config/Languages`
+(`'en'`, `'ru'`, `'kr'` …); the editor font is rebuilt for the new language on the next frame.
 
 ```python
 editor.set_locale('en')
@@ -3822,10 +3849,10 @@ editor.set_locale('ru')
 
 #### `editor.get_localized_string(key)` → `str`
 
-Returns localized string by key.
+Returns the editor interface string for `key` in the current language. Keys are the ones stored in `Config/Languages/<lang>.json` (for example `btn_save`); an unknown key is returned unchanged.
 
 ```python
-text = editor.get_localized_string('menu.file.save')
+text = editor.get_localized_string('btn_save')  # 'Save'
 ```
 
 ---
@@ -4501,6 +4528,7 @@ without leaving the editor, and it is always in sync with the build you are runn
 print(editor.api())
 print(scene.api()); print(engine.api()); print(browser.api())
 print(console.api()); print(lua.api()); print(project.api()); print(assets.api())
+print(packages.api())
 ```
 
 The same listings are available from the Python console's **Help** menu, and `help()` prints the
@@ -4898,6 +4926,9 @@ editor.play()
 editor.defer(tick)
 ```
 
+> Network traffic has its own profiler in the same module — bandwidth, packets, message types, peers and
+> recorded network traces are covered in [7.8 Network profiler](#78-network-profiler).
+
 ---
 
 ### 7.3 Resources
@@ -5075,6 +5106,7 @@ info = engine.audio_info()
 | `engine.lua_stats()` | `dict` | Lua script profiler: frame time, VM memory, per-callback rows (see 7.2) |
 | `engine.profiler_counters()` | `list[dict]` | Every named profiler counter (see 7.2) |
 | `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Recorded frame hitches (see 7.2) |
+| `engine.network_stats()` and the other `engine.network_…` functions | `dict` / `list[dict]` | Network profiler and network traces (see 7.8) |
 
 ```python
 print(engine.build_info())
@@ -5118,6 +5150,221 @@ engine.set_target_fps(0)               # uncapped while profiling
 res = engine.list_resources()
 print(len(res['textures']), 'textures |', len(res['shaders']), 'shaders')
 ```
+
+---
+
+### 7.8 Network profiler
+
+The engine's network profiler — the same one behind the **Network Profiler** tab of the Network Manager
+panel, the Debug-runtime overlay and Lua's `NetworkProfiler` table — is always active in the editor. It sees
+every message the game sends and receives (ENet on desktop and mobile, WebSocket on Web), no matter who
+started the session: game scripts in Play mode, the Network Manager panel, or your own Python through the
+[`lua` bridge](#10-lua-module--bridge-into-the-game-lua-vm). These functions let you measure multiplayer
+traffic from the editor the same way `cpu_scopes()` and `hitches()` measure frame time. The game itself
+(Debug builds on a device, dedicated servers) drives the same profiler from Lua — `NetworkProfiler.*` in
+the [Lua API](LuaAPI-EN-DOC.md).
+
+**Two kinds of bytes.**
+
+| Counter | What it measures |
+|---------|------------------|
+| **Payload** (`bytes_*`, `packets_*`, message types, channels) | What your messages weigh: the one-byte message type plus its payload (encrypted when encryption is on), *before* ENet's packet compression. This is what your code controls. |
+| **Wire** (`wire_*`) | What ENet actually put on and took off the UDP socket: *after* packet compression, including ENet's protocol headers, acknowledgements and pings (and online-room signalling that arrives on the game socket). This is what the network pays. Not available in Web builds; always available in the editor. |
+
+The ratio of the two tells you whether packet compression pays off and how much the protocol costs:
+below 1 the compression saves more than the headers cost, above 1 many small messages spend more on
+headers, acknowledgements and pings than they carry.
+
+**Ping** is the round-trip time to the host on a client and the *average* round-trip time to the connected
+clients on a server.
+
+The counters run from the editor start or the last `engine.network_reset()` and span every Play session in
+between, so reset them — or, better, record a [trace](#network-traces) — before you measure.
+
+#### `engine.network_stats()` → `dict`
+
+One-call snapshot of the whole profiler:
+
+| Key | Meaning |
+|-----|---------|
+| `enabled` | `True` — the profiler is compiled into every editor build |
+| `role`, `state`, `session_ready` | `'server'` / `'client'` / `'offline'`; `'disconnected'`, `'connecting'`, `'connected'`, `'reconnecting'` or `'failed'`; whether the session finished its handshake |
+| `players`, `ping_ms` | Players in the session (the host included) and the ping described above |
+| `elapsed_sec` | Seconds since the profiler started or was reset |
+| `bytes_sent`, `bytes_received`, `packets_sent`, `packets_received` | Payload totals |
+| `kbps_sent`, `kbps_received`, `pps_sent`, `pps_received` | Smoothed payload rates (KB/s and packets/s, updated once a second) |
+| `avg_packet_bytes_sent`, `avg_packet_bytes_received` | Average payload size of one message |
+| `peak_kbps_sent`, `peak_kbps_received` | Busiest second of the last 120 s |
+| `wire_available` | Whether the wire counters exist on this platform |
+| `wire_bytes_sent`, `wire_bytes_received`, `wire_packets_sent`, `wire_packets_received` | Wire totals (`wire_packets_*` are UDP datagrams) |
+| `wire_kbps_sent`, `wire_kbps_received` | Smoothed wire rates |
+| `peak_wire_kbps_sent`, `peak_wire_kbps_received` | Busiest wire second of the last 120 s |
+| `wire_ratio_sent`, `wire_ratio_received` | Wire bytes per payload byte (`0` until something was sent) |
+| `history_seconds`, `history_capacity` | Seconds of history held and the capacity (120) |
+| `entities`, `replicated_entities` | Entities in the network snapshot and entities driven by the replication layer |
+| `tracing`, `trace_name`, `trace_seconds`, `trace_count` | The running trace and how many finished traces this session keeps |
+
+```python
+s = engine.network_stats()
+print(f"{s['role']} | {s['players']} players | ping {s['ping_ms']} ms")
+print(f"TX {s['kbps_sent']:.1f} KB/s payload, {s['wire_kbps_sent']:.1f} KB/s on the wire")
+```
+
+#### `engine.network_message_types(include_idle=False)` → `list[dict]`
+
+Traffic per message type, heaviest first. Each row: `id`, `name`, `channel`, `packets_sent`,
+`packets_received`, `bytes_sent`, `bytes_received`, `bytes_total`, `avg_bytes_sent`, `avg_bytes_received`,
+`max_bytes_sent`, `max_bytes_received` and `share` (fraction of all payload bytes, `0.0`–`1.0`). Engine
+messages carry their names (`Snapshot`, `DeltaSnapshot`, `EntitySync`, `RemoteCall`, `UserData`,
+`Custom`, …); an unknown id shows up as `Type_<id>`. `include_idle=True` also lists every known type that
+has no traffic yet.
+
+The `max_bytes_*` columns catch oversized messages: ENet splits a packet larger than its MTU (about
+1400 bytes) into fragments, and losing any fragment loses the whole message.
+
+```python
+for row in engine.network_message_types()[:5]:
+    flag = '  <- fragmented' if max(row['max_bytes_sent'], row['max_bytes_received']) > 1400 else ''
+    print(f"{row['name']:<18} {row['share']:6.1%}  avg {row['avg_bytes_sent']:.0f} B{flag}")
+```
+
+#### `engine.network_channels()` → `list[dict]`
+
+The same statistics grouped by ENet channel — `control`, `state` (snapshots and entity sync), `input`
+(input and rollback) and `voice` — with the same row keys (`id`, `name`, packets, bytes, `bytes_total`,
+averages, maxima, `share`).
+
+#### `engine.network_history(seconds=0)` → `list[dict]`
+
+The per-second ring buffer of the last 120 seconds, oldest first: `t` (profiler seconds), `bytes_sent`,
+`bytes_received`, `packets_sent`, `packets_received`, their wire twins `wire_bytes_sent`,
+`wire_bytes_received`, `wire_packets_sent`, `wire_packets_received`, `ping_ms` and `players`. Every value
+covers one second, so bytes are bytes per second. `seconds=N` keeps only the newest `N` samples.
+
+```python
+last = engine.network_history(10)
+print('last 10 s TX:', sum(s['bytes_sent'] for s in last) / 1024 / max(1, len(last)), 'KB/s')
+```
+
+#### `engine.network_peers()` → `list[dict]`
+
+Connection quality per peer: on a server one row per connected client, on a client one row for the link
+to the host. Keys: `id`, `name`, `is_host`, `route` (`'local'`, `'lan'`, `'direct'`, `'relay'` or `'web'`,
+empty when unknown), `rtt_ms`, `rtt_variance_ms`, `lowest_rtt_ms`, `packet_loss_percent` (ENet's smoothed
+loss of reliable packets), `packets_lost` (in the current 10-second loss window), `mtu`, `bytes_sent`,
+`bytes_received` (payload of this connection) and `connected_sec`. A Web build fills only `rtt_ms` (the
+engine's own ping) of the transport fields; on a native server the transport fields of a `'web'` peer
+describe the hop to the WebSocket bridge or gateway, not the browser itself.
+
+```python
+for peer in engine.network_peers():
+    if peer['packet_loss_percent'] > 2.0 or peer['rtt_ms'] > 150:
+        print(f"{peer['name']}: {peer['rtt_ms']} ms, {peer['packet_loss_percent']:.1f}% loss via {peer['route']}")
+```
+
+#### `engine.network_config()` → `dict`
+
+The settings that shape the traffic: `role`, `port`, `max_players`, `tick_rate`, `snapshot_rate`,
+`full_state_rate_hz`, `interpolation_delay_ms` (the effective, possibly adaptive, delay),
+`delta_compression`, `packet_compression`, `encryption`, `area_of_interest`, `area_of_interest_radius`,
+`prediction`, `lag_compensation`, `validation`, `voice_chat`, `dedicated_server` and `trust_model`
+(`'competitive'` or `'coop'`). Every trace stores the same dict, so you can tell which settings produced it.
+
+#### `engine.network_rollback()` → `dict`
+
+The rollback-netcode state: `running`, `synchronized`, `session` (`'idle'`, `'p2p'` or `'synctest'`),
+`local_handle`, `players`, `current_frame`, `confirmed_frame`, `predicted_frames`, `rollbacks_per_second`,
+`avg_rollback_frames`, `max_rollback_frames`, `frame_advantage` and `remote_ping_ms`. The frame fields are
+meaningful only while `running` is `True`.
+
+#### `engine.network_reset()` → `bool` and `engine.network_save_report(path='')` → `str`
+
+`network_reset()` zeroes the totals, the per-type statistics and the history; a running trace is not
+affected. `network_save_report()` writes the current counters to a JSON file — totals, wire counters,
+message types, channels, the 120-second history, peers and network settings — and returns the file's full
+path, or `''` on failure. Without a path the file goes to `Tools/Helpers/NetworkProfiler/` in the project
+(`network_profile_<date>_<time>.json`); a relative path is taken from the project folder, and missing
+folders are created. Read a report back with `browser.read_json(path)`.
+
+#### Network traces
+
+A **trace** records the traffic from start to stop: one sample per second (aligned to the trace's own
+start), the per-type and per-channel traffic, and the wire counters — independently of `network_reset()`,
+so a reset in the middle does not spoil it. When it stops, the engine computes a summary, stores the
+network settings and the peer list of that moment, writes everything to
+`Tools/Helpers/NetworkProfiler/<name>.json` and keeps it in the session's trace list (the newest 20).
+The same traces can be recorded from the Network Profiler tab and from Lua (`NetworkProfiler.StartTrace`).
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `engine.network_start_trace(name='')` | `bool` | Start recording. The name defaults to `NetTrace_<date>_<time>`; a taken name gets `_1`, `_2`, … `False` when a trace is already recording |
+| `engine.network_stop_trace()` | `dict` | Stop, save and return the summary; `{}` when nothing was recording |
+| `engine.network_is_tracing()` | `bool` | Is a trace recording? |
+| `engine.network_traces()` | `list[dict]` | Summaries of this session's traces, oldest first |
+| `engine.network_trace(index=-1)` | `dict` | One trace in full; `-1` is the newest, `{}` when there is no such trace |
+| `engine.network_load_trace(path)` | `dict` | A saved trace file in the same format as `network_trace()` — also traces from earlier editor sessions; `{}` (and a warning in the log) when the file cannot be read |
+
+A **summary** holds: `name`, `file`, `started_at`, `role` (the session the trace saw), `duration_sec`,
+`truncated`, `sample_count`, `spike_count`, the payload totals `bytes_sent`, `bytes_received`,
+`packets_sent`, `packets_received`, the wire totals `wire_available`, `wire_bytes_sent`,
+`wire_bytes_received`, `wire_packets_sent`, `wire_packets_received`, the rates `avg_kbps_sent`,
+`avg_kbps_received`, `peak_kbps_sent`, `peak_kbps_received`, `p95_kbps_sent`, `p95_kbps_received`,
+`avg_pps_sent`, `avg_pps_received`, `peak_pps_sent`, `peak_pps_received`, their wire twins
+`wire_avg_kbps_*`, `wire_peak_kbps_*`, `wire_p95_kbps_*`, plus `ping_min_ms`, `ping_avg_ms`,
+`ping_max_ms`, `players_min` and `players_max`. `network_trace()` and `network_load_trace()` add
+`message_types` and `channels` (rows as in `network_message_types()`), `config` (as in
+`network_config()`), `peers` (as in `network_peers()`), `samples` (rows as in `network_history()`, with `t`
+counted from the trace start) and `spikes` — the indices of the samples whose sent or received traffic
+exceeded twice the trace average (seconds under 1 KB are never spikes).
+
+Averages divide the totals by the full duration; peaks and P95 come from the complete seconds (a trace
+shorter than a second reports its average there). Samples stop after 24 hours (`truncated` becomes `True`)
+while the totals keep counting. The file itself uses camelCase keys (`avgKbpsSent`, …) under `summary`.
+
+```python
+# Before/after: compare today's run with a trace saved before the optimisation
+before = engine.network_load_trace('Tools/Helpers/NetworkProfiler/lobby_8p.json')
+after = engine.network_trace()
+for key in ('avg_kbps_sent', 'p95_kbps_sent', 'wire_avg_kbps_sent', 'avg_pps_sent'):
+    print(f"{key:<20} {before[key]:9.2f} -> {after[key]:9.2f}")
+```
+
+#### A complete network profiling session
+
+```python
+# Host a session in Play mode, record one minute, then report where the bandwidth goes.
+def start():
+    if not editor.is_play_mode():                 # play mode begins on a following frame
+        editor.defer(start)
+        return
+    lua.exec('Network.StartServer(7777, 8)')      # skip when the game hosts by itself;
+                                                  # clients (another editor, a build) join port 7777
+    engine.network_start_trace('lobby_8p')
+    editor.set_timer(60.0, report)
+
+def report():
+    summary = engine.network_stop_trace()
+    trace = engine.network_trace()
+    print(f"{summary['name']}: {summary['duration_sec']:.0f} s, up to {summary['players_max']} players")
+    print(f"TX avg {summary['avg_kbps_sent']:.1f} KB/s, P95 {summary['p95_kbps_sent']:.1f}, "
+          f"peak {summary['peak_kbps_sent']:.1f}, spikes {summary['spike_count']}")
+    if summary['wire_available'] and summary['bytes_sent']:
+        print(f"wire TX {summary['wire_avg_kbps_sent']:.1f} KB/s "
+              f"({summary['wire_bytes_sent'] / summary['bytes_sent']:.2f}x payload)")
+    for row in trace['message_types'][:5]:
+        print(f"  {row['name']:<18} {row['share']:6.1%}  avg {row['avg_bytes_sent']:.0f} B  "
+              f"max {max(row['max_bytes_sent'], row['max_bytes_received'])} B")
+    for peer in trace['peers']:
+        print(f"  {peer['name']}: {peer['rtt_ms']} ms, {peer['packet_loss_percent']:.1f}% loss")
+    print(summary['file'])
+    editor.stop()
+
+editor.play()
+editor.defer(start)
+```
+
+> A trace records the traffic of the machine it runs on: on the host it shows what the server sends to
+> every client, on a client what that one client costs. Record on both when you need both sides.
 
 ---
 
@@ -5806,7 +6053,7 @@ Evaluates a Lua expression and returns its value rendered as a string. Errors co
 
 ```python
 print(lua.eval('_VERSION'))
-print(lua.eval('Time.GetDeltaTime()'))
+print(lua.eval('GetDeltaTime()'))
 ```
 
 #### `lua.call_global(function_name)` → `bool`
@@ -5883,12 +6130,17 @@ if lua.has_level_function('OnLevelStart'):
 | `lua.get_upvalues(level=0)` | `list[dict]` | `name`, `value`, `type` |
 | `lua.get_environment(source_name)` | `list[dict]` | Variables of one script environment |
 | `lua.get_table(expression, max_depth=2)` | `list[dict]` | Expand a Lua table expression |
-| `lua.is_debug_paused()` | `bool` | Is the Lua debugger stopped on a breakpoint? |
-| `lua.is_debug_hook_active()` | `bool` | Is a debug hook installed? |
+| `lua.is_debug_paused()` | `bool` | Is a script paused in the Lua debugger (breakpoint, step, error stop or hang watchdog)? |
+| `lua.is_debug_hook_active()` | `bool` | Is the Lua debugger watching the VM right now (a debug hook is installed)? |
 | `lua.is_runtime_active()` | `bool` | Is the Lua runtime bound to a scene (play mode)? |
 | `lua.memory_kb()` | `float` | VM memory usage in KB |
 | `lua.collect_garbage()` | — | Run a full Lua GC cycle |
 | `lua.info()` | `dict` | VM snapshot: memory, level-script state, debugger state, global count |
+
+> While a script is paused in the Lua debugger, `get_call_stack()`, `get_locals(level)` and
+> `get_upvalues(level)` describe that script — level `0` is the function that stopped — and
+> `lua.eval()` / `lua.get_table()` are evaluated inside it, so its local variables are
+> visible. `lua.exec()` is refused until the script continues.
 
 ```python
 print(f"Lua exposes {len(lua.get_globals())} globals, using {lua.memory_kb():.0f} KB")
@@ -5973,10 +6225,10 @@ print(project.get_config('Engine')['Physics']['GravityY'])
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
-| `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json` |
+| `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json`; the plugin is loaded or unloaded on the next editor frame |
 | `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
 | `project.set_mod_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Mods.json` |
-| `project.reload_plugin_config()` | — | Re-read both registries from disk |
+| `project.reload_plugin_config()` | — | Rescan `Plugins/` and `Mods/`, re-read both registries from disk and reload what is enabled, on the next editor frame |
 
 ```python
 for p in project.get_plugins():
@@ -5984,7 +6236,12 @@ for p in project.get_plugins():
     print(f"[{state}] {p['name']} {p['version']} — {p['description']}")
 ```
 
-> Enabling a plugin writes the config; the plugin itself is loaded on the next editor start.
+> `set_plugin_enabled` writes the config at once, but the plugin itself is loaded or unloaded on the
+> **next editor frame**, never underneath the script that asked for it: `get_plugins()` reports the new
+> `enabled` immediately and the new `loaded` one frame later. Plugins that depend on it follow — they are
+> unloaded before it goes and loaded again once it is back. `reload_plugin_config()` is deferred the same
+> way: on the next frame every plugin and mod is unloaded, both folders are rescanned and the enabled
+> plugins are loaded again — the enabled mods too if the game is running.
 
 ---
 
@@ -6419,10 +6676,10 @@ icebox.log.trace('entering import loop')
 | `Flipbook` | ✅ | Frame animation. Flipbook path, speed, color, playback. |
 | `Audio` | ✅ | Sound sources. Sound path, volume, pitch, loop, spatial sound. |
 | `Animator` | ❌ | State Machine animation. Animation path, current state, frame. |
-| `Skeleton` | ❌ | Skeletal (2D bone) animation. Skeleton path, current animation/skin, playback, color, ragdoll. |
+| `Skeleton` | ❌ | Skeletal (2D bone) animation. Skeleton path, current animation/skin, playback, color, ragdoll, dynamics (hair, cloth, dynamic bones). |
 | `Tilemap` | ✅ | Tilemaps. Tilemap path, visibility, flip. |
 | `FX` | ✅ | Particle systems. FX path, playback, loop, speed. |
-| `Widget` | ✅ | UI widgets. Widget path, visibility, screen space, scale, order, flip (x/y), interactable, player index. |
+| `Widget` | ✅ | UI widgets. Widget path, visibility, screen space, scale, order, interactable, player index. |
 | `PointLight` | ✅ | Point light. Color, intensity, radius, falloff, shadows. |
 | `SpotLight` | ✅ | Spotlight. Color, direction, cone angles, shadows. |
 | `PointMarker` | ✅ | Point marker (editor). Color, shape, size. |
@@ -6498,6 +6755,8 @@ All enum-valued component fields, with their integer meanings.
 
 **Camera / Widget `player_index`** — `-1` all players, `0..3` a specific split-screen slot.
 
+**Audio `group`** — `-1` From Asset (the sound asset decides), `0` Master, `1` Music, `2` SFX, `3` Voice, `4` Ambient, `5` UI. **Audio `volume` / `pitch`** — `-1` uses the sound asset value.
+
 **Sprite / Flipbook / Skeleton `cast_shadow_mode`** — `0` Colliders, `1` Contour.
 
 **Skeleton `shadow_origin`** — `0` Bottom, `1` Center, `2` Top.
@@ -6532,10 +6791,11 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | `dont_block_shadows` | SpriteRenderer, Flipbook, FX | Do not occlude other shadows |
 | `vertex_effects` | SpriteRenderer, Flipbook | Nested dict of vertex-shader effects (see 5.13) |
 | `current_frame` | Flipbook | Current animation frame |
-| `flip_x` / `flip_y` | Widget, FX | Mirror horizontally / vertically |
+| `flip_x` / `flip_y` | FX | Mirror horizontally / vertically |
 | `player_index` | Widget | Owning player: `-1` = all, `0..3` = specific player (clamped) |
 | `rolloff` | Audio | Spatial distance rolloff |
 | `override_loop` / `override_spatial` | Audio | Use the instance's own `loop` / `spatial` instead of the sound asset's |
+| `stop_on_destroy` | Audio | Stop the sound when the entity is destroyed; `False` lets a playing sound finish on its own |
 | `thickness` | PointMarker | Line thickness |
 | `arrow_head_size` | PointMarker | Arrow head size (Arrow shape) |
 | `arrow_direction` | PointMarker | Arrow direction in degrees (Arrow shape) |

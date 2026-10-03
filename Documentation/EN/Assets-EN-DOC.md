@@ -63,6 +63,7 @@
    - 4.3 [Flipbook (`.ice_flipbook`)](#43-flipbook-ice_flipbook)
    - 4.4 [Animation / State Machine (`.ice_animation`)](#44-animation--state-machine-ice_animation)
    - 4.5 [Skeleton (`.ice_skeleton`)](#45-skeleton-ice_skeleton)
+     - 4.5.1 [Dynamic bones, hair and cloth](#451-dynamic-bones-hair-and-cloth)
    - 4.6 [Tileset (`.ice_ts`)](#46-tileset-ice_ts)
    - 4.7 [Tilemap (`.ice_tm`)](#47-tilemap-ice_tm)
    - 4.8 [Material (`.ice_material`)](#48-material-ice_material)
@@ -211,12 +212,9 @@ the original path encoded so one flat folder can hold the whole registry. Redire
 **outside** `Content/` on purpose — they are project metadata, not shipped content, so they
 never appear in the browser, never end up in a build, and never confuse a reference scan.
 
-The registry is loaded once and kept in memory. On load the engine:
-
-* **Prunes stale redirectors** — if the target of a redirector no longer exists, the
-  redirector file is deleted.
-* **Migrates legacy redirectors** — any `.ice_redirect` files left inside `Content/` by
-  older engine versions are moved into `Saved/Redirectors/` automatically.
+The registry is loaded once and kept in memory. On load the engine **prunes stale
+redirectors**: if the target of a redirector no longer exists, the redirector file is
+deleted.
 
 Redirector chains are followed up to a safety limit (20 hops). You can **consolidate**
 redirectors (collapse chains, rewrite the files that still point at old paths, and remove
@@ -247,16 +245,19 @@ options are covered in
 
 ### 2.5 External changes & auto-refresh
 
-The editor **watches the whole `Content/` folder** while it is open, so you do not have to
-work exclusively through the Content Browser. Every asset extension is watched — all
-`.ice_*` types, `.icemap`, images, audio, fonts, video, `.lua` and `.txt` — including
-sub-folders.
+The editor **watches the whole `Content/` folder**, sub-folders included, while it is open,
+so you do not have to work exclusively through the Content Browser. It watches every engine
+asset type — all `.ice_*` files and `.icemap` — plus the source formats the engine imports
+(`.png`, `.jpg`, `.jpeg`, `.wav`, `.ogg`, `.mp3`, `.flac`, `.ttf`, `.otf`, `.mp4`, `.avi`,
+`.mkv`, `.mov`, `.webm`) and `.lua` / `.txt`.
 
 When a file is **created** outside the editor (copied in with Explorer/Finder, produced by
 an external tool, pulled in by version control), the engine does the same sidecar work the
 importer would: a missing `.ice_texture`, `.ice_sound`, `.ice_font` or `.ice_video` is
 generated with default settings. Dropping a `.png` straight into `Content/Textures/` is
-therefore a perfectly valid way to add art.
+therefore a perfectly valid way to add art — it simply gets no type prefix and no
+name-conflict check, which only [importing through the browser](#39-importing-external-files)
+adds.
 
 When a file is **created, modified or deleted**, the editor:
 
@@ -264,13 +265,27 @@ When a file is **created, modified or deleted**, the editor:
   contents;
 * reloads every class instance in the open level, so an edited class updates in place;
 * reloads the game localization tables when a `.ice_localization` changed;
-* lists what changed in a small **file-changes** notification window (each entry stays for a
-  few seconds; **Clear** empties the list).
+* lists the change in a small floating **File Changes** window (`Created` / `Modified` /
+  `Deleted` and the file name). Each line stays for 5 seconds, **Clear** empties the list
+  and closing the window dismisses it; the window only appears outside Play mode.
 
-A short cooldown after the editor's own writes stops its own saves from triggering a reload
-storm. Note that the watcher **does not** rewrite references — moving or renaming assets
-outside the editor still breaks links, because nothing rewrites the paths or drops a
-redirector. Reorganize through the Content Browser
+The Content Browser's folder tree and item grid show files and folders created, renamed or
+deleted outside the editor within about a second and a half; changes made from the browser
+itself appear at once.
+
+The editor acts on at most one external change every two seconds, and holds off for a few
+seconds after its own saves so they do not trigger a reload storm. When many files arrive at
+once — a whole folder copied in — the refresh still picks all of them up, but only the first
+one gets its sidecar from the watcher: the others work with default settings until you first
+save their settings (or bring them in with **+ Import**, which writes every sidecar).
+
+Class scripts are a separate case: with **Edit → Auto-Compile on Play** on, a changed
+`.ice_class` hot-reloads its script on the live entities — see
+[Editor → Edit](Editor-EN-DOC.md#32-edit).
+
+Note that the watcher **does not** rewrite references — moving or renaming assets outside
+the editor still breaks links, because nothing rewrites the paths or drops a redirector.
+Reorganize through the Content Browser
 ([3.10](#310-moving-copying--renaming-sidecar-aware)); use the file system for *adding* and
 *editing* files.
 
@@ -359,8 +374,8 @@ filters:
 
 `Levels`, `Classes`, `Views`, `Cinemas`, `Sprites`, `Flipbooks`, `Animations`,
 `Skeletons`, `Tilesets`, `Tilemaps`, `Materials` (material / instance / function /
-collection), `FX`, `Widgets`, `Textures`, `Audio`, `Fonts`, `Localization`, `AI`,
-`Video`, `Scripts`, `Text`.
+collection), `Decals`, `FX Effects`, `Widgets`, `Textures`, `Audio`, `Fonts`,
+`Localization`, `AI Brains`, `Video`, `Scripts`, `Text`.
 
 The **All** button at the top of the panel clears every filter at once; it is highlighted
 green while no filter is active.
@@ -370,53 +385,97 @@ assets from the current folder and everything below it (from the whole project w
 are at the root). Folders themselves are hidden while a filter is on, because the result
 is a flat list of assets, not a directory listing.
 
-With **no** filter active, everything is shown (sidecars and redirector files remain
-hidden).
+With **no** filter active, everything is shown (sidecars remain hidden).
+
+Search and filters work on a cached listing of the folder that is refreshed in the background,
+so they respond instantly even in very large projects. While a recursive listing is being
+gathered for the first time, three pulsing dots are shown in the content area.
 
 ### 3.5 Thumbnails & live previews
 
 **Folders are always listed first**, then files, and the content area renders rich,
-type-aware thumbnails:
+type-aware thumbnails. Every preview is drawn by the engine's own renderer with the asset's
+real settings, so a thumbnail looks the way the asset does in the game and in its editor:
 
 * **Folders** are drawn as a folder tile. A folder that **has contents** is filled and
   shows sheets peeking out of it plus a small **item-count badge** (`99+` past ninety-nine);
   an **empty** folder is drawn dimmed and hollow, so you can tell the two apart at a
   glance. The tile uses the folder's own color when one is set (see
   [3.2](#32-navigation--the-folder-tree)) and the default amber otherwise, and it brightens
-  on hover. The count ignores hidden sidecar and redirector files, so it matches what you
-  actually see when you enter the folder.
-* **Textures** show the image itself (with a checkerboard behind transparency), honoring
-  the texture's filtering settings and its aspect ratio.
+  on hover. The count ignores hidden sidecar files, so it matches what you actually see
+  when you enter the folder.
+* **Textures** show the image itself (with a checkerboard behind transparency) exactly as
+  the engine displays it: the texture's filtering, **Max Texture Size**, **sRGB**,
+  **Pixel Format** and **Premultiply Alpha** settings are applied, and the aspect ratio is
+  kept.
 * **Sprites** show only their `SourceRect` region of the texture, over a checkerboard —
-  so a sprite cut out of a sheet looks exactly like the sprite, not like the sheet.
+  so a sprite cut out of a sheet looks exactly like the sprite, not like the sheet. The
+  sprite's blend mode is respected (Masked cut-outs, Opaque), and a sprite that uses a
+  **material** or Additive blending is drawn by the engine renderer exactly as in the game;
+  materials that change over time animate while you hover the tile.
 * **Flipbooks** show their first frame and **animate while you hover them**, at the
-  flipbook's own per-frame timing. Move the pointer away and the preview resets.
-* **Audio** files get a **play button** in the middle of the tile: click it to preview the
-  clip (using its `.ice_sound` settings, forced to non-spatial and non-looping); the icon
-  turns into a stop button while it plays, and clicking again stops it. Only one preview
-  plays at a time, and it stops on its own when the clip ends.
+  flipbook's own per-frame timing. Frames are aligned by their pivots exactly as in the
+  game, and the flipbook's material override is honored. A non-looping flipbook plays
+  once, holds its last frame for a moment and starts over. Move the pointer away and the
+  preview resets.
+* **Animations** (`.ice_animation`) show the flipbook of their **default state** and
+  animate on hover with that state's speed and loop setting.
+* **Skeletons** show the skeleton with its default skin, posed by its default animation,
+  and play that animation (including dynamics) while you hover them. A skeleton that has
+  no attachments yet is drawn as its bones.
+* **Audio** files show their **waveform**, like the Sound Editor: the parts cut away by the
+  start/end trim are dimmed and marked with yellow lines, and the loop region is tinted
+  green when looping is enabled. A round **play button** sits in the middle of the tile:
+  click it to preview the clip (using its `.ice_sound` settings, forced to non-spatial and
+  non-looping). While the clip plays, the button shows a stop icon, the part that has
+  already played is highlighted, a white **playhead** moves across the waveform and a
+  **progress bar** runs along the bottom of the tile; clicking the button again stops it.
+  Only one preview plays at a time, and it stops on its own when the clip ends.
 * **Video** files show the decoded **first frame** framed by a film-strip border.
-* **Fonts** are rendered live as an `Aa` sample using the font's own settings.
+* **Fonts** are rendered as a crisp `Aa` sample using the font's own settings.
 * **Tilesets** show the source texture with the **tile grid** drawn on top (using the
   tileset's tile size), inside an orange frame.
-* **Tilemaps** are rendered live — the painted layers, plus a green cell grid overlay
-  (subsampled for very large maps).
-* **Widgets** are rendered live as a miniature of the canvas: element rectangles, colors,
-  sprites/flipbooks, text, nine-slice, toggles, checkboxes and progress/slider fills,
-  including elements **inherited from a parent widget** and the results of
-  [Desired Size](#4131-shared-element-properties) layout.
-* **FX** assets show a small static particle preview built from the emitter's modules.
-* **Materials and classes** are rendered **live** into off-screen thumbnails by dedicated
-  mini-renderers, so a material thumbnail shows the actual compiled shader (with a preview
-  light) and a class thumbnail shows the assembled entity.
+* **Tilemaps** are rendered the way the game draws them — every visible layer, all of the
+  map's tilesets, rotated and multi-cell tiles, tileset materials and isometric or
+  hexagonal projections — over the map area with a faint cell grid, as in the Tilemap
+  Editor (the grid is left out when the cells become too small to read). Animated tiles
+  play while you hover the tile.
+* **Widgets** are rendered by the runtime widget renderer, so the thumbnail matches the
+  Widget Editor canvas: every element type, text, images, nine-slice, toggles, checkboxes
+  and progress/slider fills, including elements **inherited from a parent widget** and the
+  results of [Desired Size](#4131-shared-element-properties) layout.
+* **FX** assets are really simulated — all enabled emitters with their sub-effects and
+  particle lights. The thumbnail shows the effect after a short warm-up (one-shot effects
+  are captured at their fullest moment), and the effect plays live while you hover it;
+  one-shot effects start over when they finish.
+* **Materials** and **material instances** show the real compiled shader on the material
+  preview surface (post-process materials over the preview scene), with the material's
+  textures and parameter values — including the instance's overrides — and a preview light
+  for Lit materials. Materials that change over time animate while you hover them.
+* **Decals** are drawn like in the Decal Editor: the first texture variant (its source
+  rectangle), size, pivot, rotation, tint, blend and shading mode and the decal's
+  material, over a checkerboard.
+* **Classes** show the assembled entity with all of its visible components — sprites,
+  flipbooks, the skeleton, tilemaps, decals, particle effects and widgets (world-space and
+  screen-space) — in the same draw order as the Class Editor viewport, including
+  everything inherited from parent classes. Hidden components are not drawn. Animated
+  components (flipbooks, skeleton animation, effects, animated tiles and materials) move
+  while you hover the tile.
 * Anything without a preview (levels, scripts, notes, AI, Cinema, Views, material
-  instances/functions/collections, plugin types) shows a colored tile with its **type
-  badge**.
+  functions/collections, plugin types) shows a colored tile with its **type badge**.
 
-Thumbnails and parsed asset data are cached. The cache re-checks file timestamps about
-twice a second and rebuilds only what changed, and the texture cache is trimmed once it
-grows past its budget, so a folder with thousands of assets stays responsive. Off-screen
-rows are skipped entirely.
+A thin strip in the asset's **type color** runs along the bottom of every thumbnail. While a
+preview is being prepared, the tile shows three pulsing dots. Previews are prepared in the
+background and spread over several frames, only for the tiles that are on screen, so
+opening a large folder, scrolling, searching or toggling filters stays smooth, and they are
+rendered at the tile's real on-screen resolution, so they stay sharp with UI scaling and on
+high-DPI displays.
+
+Thumbnails refresh by themselves when the asset or anything it uses changes — its texture
+or texture settings, material, sprites, parent class, tilesets and so on. Saving an asset in
+its editor updates the affected thumbnails right away; files changed outside the editor are
+picked up within about two seconds. Video memory used by thumbnails is capped, and the
+thumbnails you have not looked at for the longest time are released first.
 
 **Hovering** an asset for half a second shows a tooltip with its type
 (e.g. `.ice_sprite (Sprite)`); hovering a **folder** shows its item count, or
@@ -450,7 +509,7 @@ are created in the current folder:
   [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
 * **Logic ▸**
   * **Create Ice Class** (`.ice_class`) — a reusable game object with components and scripting.
-  * **Create Cinema** (`.ice_cinema`) — a camera/event timeline (cutscene).
+  * **Create Cinema** (`.ice_cinema`) — a cutscene timeline (camera, actors, dialogue, audio, screen effects, events).
   * **Create AI Brain** (`.ice_ai`) — a behavior tree.
 * **Graphics ▸**
   * **Create Sprite** (`.ice_sprite`)
@@ -565,16 +624,23 @@ On import, the engine:
 
 * **Auto-prefixes** the file name by media type so content stays organized:
   `T_` for textures, `S_` for audio, `F_` for fonts, `V_` for video (skipped if the
-  name already has the prefix).
+  name already has the prefix). The `V_` prefix is added by **+ Import** only — a video
+  dragged in from the OS keeps its own name.
 * **Auto-creates the sidecar** with default settings: `.ice_texture` for images,
   `.ice_sound` for audio, `.ice_font` for fonts, `.ice_video` for video (the latter is
-  probed for width/height/FPS/duration via FFmpeg when available).
+  probed for width/height/FPS/duration via FFmpeg when available). **+ Import** writes every
+  sidecar straight away; for files dragged in from the OS the
+  [content watcher](#25-external-changes--auto-refresh) writes it, so when you drop many
+  files at once only the first gets its sidecar immediately and the rest use default settings
+  until you first save their settings.
 * For **`.gif`** files, runs the [GIF importer](#52-gif-importer) (produces a flipbook
   of sprites) instead of a plain copy.
 * For **`.json`** files that are **Aseprite** exports, runs the
   [Aseprite importer](#51-aseprite-importer) (locating the matching PNG automatically).
   A `.json` that is *not* an Aseprite export is reported in the Console and skipped.
-* Records the import on the undo stack, so a mistaken drop is one `Ctrl+Z` away.
+* Records the import on the undo stack, so a mistaken drop is one `Ctrl+Z` away. This
+  covers plain file imports; the assets generated by the GIF and Aseprite importers are not
+  on the undo stack — delete them if you did not want them.
 
 **If the name is already taken**, a **file-conflict dialog** appears with three choices:
 
@@ -674,62 +740,123 @@ and re-applies or rolls back the associated reference updates. Operations that t
 files at once are grouped into a **single batch** and undo together. The stack keeps the
 last 50 entries (never splitting a batch).
 
+Every **Apply to All** of the [Property Matrix](#314-bulk-editing--property-matrix) is recorded
+here too, as one batch: undo writes back the previous content of every file it changed and
+removes the settings files it created; redo writes the applied content again. An apply whose
+undo data would exceed 256 MB (for example, many very large tilemaps at once) is not recorded,
+and a warning is logged instead.
+
 ### 3.14 Bulk editing — Property Matrix
 
 Select several assets **of the same kind**, right-click, and choose
-**Bulk Edit via Property Matrix** to open the **Property Matrix** panel.
+**Bulk Edit via Property Matrix** to open the **Property Matrix** panel. If the panel still
+holds unapplied edits for another selection, you are asked whether to apply them first.
 
 It is not a spreadsheet — it is a **merged property sheet**. The panel shows one set of
 controls for the whole selection; changing any control writes that value into **every**
-selected asset. Where the selected assets currently disagree, the field is highlighted and
-shows `---` (checkboxes get a `(*)` marker), so you can see at a glance which properties
-are uniform and which are not.
+selected asset (and into every matching element, module, instance or tile inside them — see
+the table below). Where the selected assets currently disagree, the field is highlighted and
+shows `---` (checkboxes and colors get a `(*)` marker), so you can see at a glance which
+properties are uniform and which are not.
+
+Labels, value ranges and tooltips match the dedicated editor of each asset type. A field that
+only matters in a certain mode (for example *LOD Bias* while mipmaps are on, or *Border Color*
+for clamp-to-border wrapping) appears as soon as **at least one** selected asset uses that
+mode — and the change is still written to all of them.
+
+**The selected assets list.** The top of the panel lists every file with a status color
+(hover a row for the full path and the details); summary lines under the list count each
+status:
+
+| Status | Meaning |
+| ------ | ------- |
+| normal | Loaded and up to date. |
+| yellow — *missing parameters* | The file lacks some parameters (for example, it was written by hand or by a script). **Apply** writes them with their default values — the same values the engine already uses when it loads such a file — so the asset behaves exactly as before and the file becomes complete. |
+| blue — *no settings file yet* | A texture, sound, font or video whose `.ice_texture` / `.ice_sound` / `.ice_font` / `.ice_video` sidecar does not exist yet. **Apply** creates it (sound defaults come from the project audio settings and the WAV loop region, exactly as in Sound Settings; video resolution, frame rate and duration are read from the video file, exactly as on import). |
+| orange — *changed on disk* | Something else (another editor, version control, a script) modified the file after the panel loaded it. **Apply** re-reads the new version and replays your edits on top of it, so only the properties you actually changed are overwritten. |
+| red | The file could not be loaded (missing, unreadable or damaged), or the last apply failed for it. It is skipped; the rest of the selection still works. |
 
 | Control | Meaning |
 | ------- | ------- |
-| **Selected assets** (collapsible) | The list of files you are editing. |
-| **Apply to All** | Write the current values back to every selected asset file. |
-| **Revert All** | Reload from disk and discard the pending edits. |
+| **Apply to All** | Write the current values to every loaded asset (see below). Also works with no edits at all — use it to write the missing parameters into every loaded file. |
+| **Revert All** | Reload everything from disk and discard the pending edits. |
 | unsaved marker | Shown while there are unwritten changes. |
+| result line | After an apply: how many files were written, left unchanged, or failed. |
 
-The panel has its own undo/redo (`Ctrl+Z` / `Ctrl+Y` while it is focused).
+What **Apply to All** does:
+
+* Only files whose content actually changes are written; files that would stay identical are
+  left alone (their timestamps do not change either).
+* Files are written in the engine's normal format, and every write is safe: the new content
+  is written to a temporary file first and then swapped in, so a crash or a full disk never
+  leaves a half-written asset.
+* If a file fails, it is marked in red with the reason in its tooltip, the other files are
+  still written, and your edits stay pending so you can retry.
+* The whole apply is recorded as **one step** on the Content Browser file-undo stack
+  ([3.13](#313-undo--redo-of-file-operations)): focus the Content Browser and press `Ctrl+Z`
+  to restore every file exactly as it was (sidecars the apply created are removed), `Ctrl+Y`
+  to re-apply.
+* Afterwards the assets are refreshed (sounds only refresh audio, videos only reload the
+  settings of the videos that are playing), open editors of the
+  affected assets reload automatically (an editor with unsaved changes of its own is left
+  untouched and a warning is logged), class instances in the level are rebuilt when textures,
+  sprites, flipbooks or classes changed, and open classes that inherit from or embed an edited
+  class reload too.
+
+**Update All Assets** also applies pending Property Matrix edits, and closing the panel with
+pending edits asks whether to apply them.
+
+While there are no pending edits, the panel follows the files: when an asset is changed
+elsewhere (another editor, a file-undo, version control), the panel reloads it
+automatically. With pending edits it marks the file *changed on disk* instead and merges on
+apply. Renaming or moving an asset in the Content Browser keeps it in the panel.
+
+The panel has its own undo/redo (`Ctrl+Z` / `Ctrl+Y` while it is focused); a whole slider
+drag or a whole typed value is one step.
 
 Supported kinds — the panel picks the right property set automatically and refuses mixed
 selections:
 
 | Kind | What you can bulk-edit |
 | ---- | ---------------------- |
-| **Textures** | The full `.ice_texture` sidecar: filtering, wrapping, mipmaps, sRGB, premultiply, max size, anisotropy, LOD bias, pixel format, compression, atlas. |
-| **Sprites** | Pivot, material mode + shading/blend/alpha clip, collision flags, density/friction/restitution, events, one-way, collision group and mode. |
-| **Sounds** | The whole `.ice_sound` definition: playback, group, priority, trim & fades, randomization, 3D/attenuation/cone, and the DSP chain. |
-| **Flipbooks** | Default FPS, loop, material mode and the shading/blend/alpha-clip overrides. |
-| **Tilesets** | Tile size, material, shared render attributes, and the shared tile physics/shadow defaults. |
-| **Tilemaps** | Map settings, chunking, show-coordinates and the animated-tile playback settings. |
-| **Classes** | Component instances by type — colliders, lights, and other repeated instances across the selected classes. |
-| **Widgets** | Canvas settings (size, desired size, scale-with-screen, stretch mode, safe area). |
-| **FX** | Emitter settings across every emitter of every selected effect. |
+| **Textures** | The full `.ice_texture` sidecar: min/mag filter, anisotropy, wrapping and border color, mipmaps and LOD bias, sRGB, premultiplied alpha, max size, pixel format, compression, atlas. |
+| **Sprites** | Pivot (X/Y and the nine presets), material mode and the built-in shading/blend/alpha clip. Collision physics — density, friction, restitution, sensor, one-way and its direction, contact/sensor/hit/pre-solve events, collision group and mode — is applied only to sprites that have a collision polygon (the panel shows how many). |
+| **Sounds** | The whole `.ice_sound` definition: group, volume, pitch, pan and their random variation; loop, fades, trim and loop region; variation mode; voices (priority, max instances, steal mode, retrigger cooldown); game pause / time scale; 3D (attenuation, distances, rolloff, doppler, panning, occlusion, cone); the complete effect chain with every parameter (low/high/band pass, low shelf, peak, high shelf, distortion, bitcrusher, compressor, modulation, tremolo, delay, reverb, stereo width); loading & cooking. |
+| **Flipbooks** | Default FPS, **Set from FPS** (sets every frame duration from each flipbook's own FPS), loop, material mode and the shading/blend/alpha-clip overrides. |
+| **Tilesets** | Tile size, shading/blend/alpha clip, and the settings of every tile that has tile data: shadows, collider, destructible fragments, sensor, one-way, collision events, physics material, collider mode, collision group and mode. |
+| **Tilemaps** | Tile size, coordinates display, chunking and chunk size, and the animated tiles: playback speed plus the same shadow/collision/physics settings as tileset tiles. |
+| **Classes** | Every component by type: Transform, Stencil, Replication, Rigidbody, Camera, Animator, Skeleton, Destructible and AI, plus all instances of Sprite, Flipbook, Tilemap, Audio, FX, Widget, Point Marker, Decal, Joint and Class Component, box/sphere/capsule colliders, point and spot lights. In child classes, components show their effective (inherited) values and an edit is stored as an override, exactly like in the Class Editor; inherited instances are edited in the parent class. |
+| **Widgets** | Canvas settings (size, desired size, scale with screen, stretch mode, safe area) and every element grouped by type: transform, appearance and lighting, text, value and fill, check/toggle state, 9-slice, layout, scroll view, size box, throbber, switcher, tooltip, interaction and state colors. In child widgets, inherited elements are included where the child already overrides them. |
+| **FX** | Emitter settings (enabled, duration, loop, start delay, max particles, warm-up, simulation stages and mode, transform) and every module grouped by type with all of its parameters — spawning, initial values, forces, orbit, noise, attractor, collision, light, fluid, renderers, stretch, kill conditions, events, curl noise, vortex, wind, speed-based size/color, density, springs, particle collision, conditional and sub-FX. |
 | **Decals** | Appearance, rotation, lifetime and placement of the selected decal assets, plus the weight and source rect of every texture variant inside them. |
+| **Fonts** | The `.ice_font` switches: **Antialiased**, **Nearest Filter**, **Bold**, **Italic** and **Keep Ranges in Auto-subset**. Default size, character ranges and atlas size stay per font — they depend on the font and the languages it covers, so change them in the Font Editor. |
+| **Videos** | The `.ice_video` runtime settings: **Is Post Processed** and **Is Lit**. Full-screen videos that are already playing pick the new values up right after **Apply**. |
+
+Per-asset content — file paths, names, texts, scripts, curves, gradients, frames, polygons,
+layers and tile layouts — is not bulk-edited; use the asset's own editor for that.
 
 This is ideal for large, repetitive edits that would be tedious one asset at a time — for
-example switching a hundred pixel-art textures to `Nearest` filtering, or giving every
-footstep sound the same group and attenuation.
+example switching a hundred pixel-art textures to `Nearest` filtering, giving every
+footstep sound the same group and attenuation, or filling in the missing parameters of a
+whole folder of assets in one click.
 
 ### 3.15 Dragging assets into the scene
 
-Drag an asset from the content area into the **Viewport** or **Level Outliner** to use
-it in the level. The browser tags the drag with a payload the rest of the editor
-understands:
+Drag an asset from the content area into the **Viewport** or the **Level Outliner** to place
+it in the level. Three kinds of asset can be placed this way: a **Class** (`.ice_class`)
+becomes a new entity, a **View** (`.ice_view`) becomes a post-process / nav-grid volume and a
+**Cinema** (`.ice_cinema`) becomes a cutscene trigger (cinemas only on the Viewport, where they
+get a position). Every other type is ignored by the scene — sprites, sounds, materials and the
+rest reach a level through a class: add them to a component in the
+[Class Editor](#417-class-ice_class) and place the class. The exact rules are in
+[Editor → Dragging assets into the scene](Editor-EN-DOC.md#55-dragging-assets-into-the-scene).
 
-* **Classes** (`.ice_class`) use a dedicated payload so dropping one **instantiates the
-  class** as a new entity.
-* Other assets use a generic payload that the drop target interprets by type (e.g.
-  dropping a sprite creates a sprite entity; dropping a material assigns it).
-
-The same payload is what every **asset picker** in the editor accepts, so you can drag a
+The same drag is what every **asset picker** in the editor accepts, so you can drag a
 sprite straight from the browser onto a *Sprite* field in the Properties panel, the Class
 Editor, the Widget Editor and so on — the picker only accepts assets of a type it allows.
 
-Multi-selections are dragged as a group (the drag preview shows how many items).
+Dragging a multi-selection moves the whole group onto a folder (the drag preview shows how
+many items); the scene and the asset pickers take one asset at a time.
 
 ### 3.16 Migrating assets to another project
 
@@ -874,11 +1001,13 @@ lossy attempt entirely; `Always Compressed` keeps the build's format without ver
 * **R / G / B / A** buttons above the preview isolate individual channels — the fastest way
   to inspect an alpha mask or a packed data texture.
 * Settings are grouped into **Filtering**, **Wrapping**, **Mipmaps**, **Advanced** and
-  **Atlas**; every field has a tooltip, and **Max Texture Size** is a preset list
+  **Texture Atlas**; every field has a tooltip, and **Max Texture Size** is a preset list
   (`Full`, 32 … 4096).
 * **Save** writes the sidecar (and reloads dependent assets), **Reset** restores engine
   defaults, and a **Create Sprite** button in the corner makes a `.ice_sprite` for the whole
-  image without going back to the browser.
+  image without going back to the browser. It is named `SP_<name>` (the texture name without
+  its `T_`) and replaces a sprite of that name if one already exists — unlike the browser's
+  *Create Sprite (.ice_sprite)*, which picks a free name.
 
 #### 4.1.2 Audio and the `.ice_sound` sidecar
 
@@ -886,38 +1015,80 @@ lossy attempt entirely; `Always Compressed` keeps the build's format without ver
 
 The sound sidecar is a full per-clip mixing and DSP definition:
 
-* **Playback** — Default Volume, Default Pitch, Pan (−1 left … +1 right), Loop,
-  **Group** (`Master`, `Music`, `SFX`, `Voice`, `Ambient`, `UI`), Priority (0–255).
-* **Randomization** — Volume / Pitch / Pan Variation (±) for natural-sounding repeats.
-* **Trim & fades** — Start Time, End Time, Fade In, Fade Out (seconds).
+* **Volume & Pitch** — **Group** (`Master`, `Music`, `SFX`, `Voice`, `Ambient`, `UI`),
+  Default Volume, Default Pitch, Pan (−1 left … +1 right), and Volume / Pitch / Pan Variation
+  (±) for natural-sounding repeats.
+* **Playback** — Loop, Fade In, Fade Out (seconds), **Playback Trim** (Start Time, End Time)
+  and, for looping sounds, a **Loop Region** (Loop Start, Loop End).
+* **Variations** — extra audio files that are picked instead of the main file, and the
+  **Selection** mode: Random, Random (No Repeat), Sequence or Shuffle.
+* **Voices & Priority** — Priority (0–255, higher = more important), **Max Instances**
+  (how many copies may play at once), **When Limit Is Reached** (Stop Oldest, Stop Quietest or
+  Ignore New Play) and **Retrigger Cooldown**.
+* **Game Pause & Time Scale** — **On Game Pause** (Group Default, Pause, Keep Playing) and
+  **Time Scale** (Group Default, Follow Time Scale, Ignore Time Scale).
 * **3D / spatial** — Spatial toggle, Force Mono, **Attenuation Model**
-  (`None`, `Inverse`, `Linear`, `Exponential`), Min/Max Distance, Rolloff,
-  Doppler Factor, and a directional **cone** (Inner/Outer angle, Outer volume).
-* **Effects (DSP)** — Low-Pass filter, High-Pass filter, Lo-Shelf EQ, Hi-Shelf EQ,
-  Delay/Echo (time, decay/feedback, wet, dry), and Reverb (decay, wet, room size,
-  damping).
+  (`None`, `Inverse`, `Linear`, `Exponential`), Min/Max Distance, Rolloff, Doppler Factor,
+  **Panning Strength**, **Occlusion**, and a directional **cone** (Inner/Outer angle,
+  Outer volume).
+* **Effects (DSP)** — fourteen stages that run in this order: Low-Pass and High-Pass filters
+  (with Resonance), Band-Pass filter, Lo-Shelf EQ, Peak EQ, Hi-Shelf EQ, Distortion (Soft,
+  Hard, Fuzz), Bitcrusher, Compressor, Chorus / Flanger, Tremolo, Delay/Echo (time,
+  decay/feedback, wet, dry), Reverb (decay, wet, room size, damping, pre-delay, width) and
+  Stereo Width.
+* **Loading & Cooking** — **Load Mode** (Auto, Decompress Into Memory, Stream), **Cook
+  Format** (Project Default, Keep Original, Ogg Vorbis, Opus) and **Cook Bitrate**
+  (0 = project default).
 
 **The Sound Settings panel** starts with a **Preview** block: a Play/Stop button, a
-progress bar following the playhead, and a line with the clip's **duration, sample rate and
-channel count**. The preview uses your current (unsaved) settings, so trim points, fades,
-randomization, pitch and the DSP chain can be auditioned before saving. It plays through the
-game's own mixer — exactly the playback path a build uses — so its group volume and the
+progress bar following the playhead, a **waveform**, and lines with the clip's **duration,
+sample rate, channel count** and its **peak / RMS level**. The waveform shows the trim points as
+yellow lines, the loop region as a green area and the playhead as a white line; click anywhere
+on it to play the preview from that time. The preview uses your current (unsaved) settings, so
+trim points, fades, variations, randomization, pitch and the DSP chain can be auditioned
+before saving. It plays through the game's own mixer — exactly the playback path a build uses —
+so its group volume, the group's bus effects and the
 [editor audio monitor](Editor-EN-DOC.md#42-editor-audio-monitor) apply, and it is always
-non-spatial. While it plays, **Volume**, **Pitch**, **Pan**, **Loop** and every **effect**
-follow the sliders live; trim, fades, randomization and **Force Mono** take effect the next
-time you press **Play**, and **Stop** uses the **Fade Out** time (press it again to cut the
-fade short). The rest of the panel is
-the grouped settings list — Playback, Group, Randomization, Trim & fades, Spatial and
-Effects — followed by **Save** and **Reset to Defaults**.
+non-spatial. While it plays, **Volume**, **Pitch**, **Pan**, **Loop**, **Group** and every
+**effect** follow the sliders live; changing trim, the loop region, variations, **Force Mono**
+or **Load Mode** restarts the preview so you hear the result at once, and **Stop** uses the
+**Fade Out** time (press it again to cut the fade short). The rest of the panel is the settings
+list in the order above, followed by **Save** and **Reset to Defaults**. New sounds start with
+the default distances from Preferences > Audio.
 
 A few settings behave in ways worth knowing:
 
 * **Start Time / End Time** edges get a 5 ms fade so a cut in the middle of a waveform does
   not click; leave both at `0` for a seamless loop of the whole file.
+* **Loop Region** — a looping sound plays from Start Time to Loop End once, then jumps back to
+  Loop Start without a gap, so everything before Loop Start works as an intro. Loop End `0` means
+  the end of the sound. **Import WAV Loop Points** reads the loop that audio editors store
+  inside a WAV file (its `smpl` chunk).
+* **Variations** share every other setting of the sound. A variation with a different sample
+  rate or channel count is converted when it loads. Scripts can ask for one file with the
+  `variation` play option.
+* **Max Instances** `1` (the default) keeps a single copy: playing the sound again
+  restarts it. With a higher value each play starts another copy until the limit is reached.
+  **Retrigger Cooldown** ignores plays that come faster than the given time — useful for
+  footsteps or bullet impacts triggered many times per frame.
+* **Priority** is also used by the project voice limit (**Max Voices** in Preferences > Audio):
+  when too many sounds play, the least important one is stopped first.
+* **On Game Pause / Time Scale** — Group Default uses the switches of the sound's group in
+  Preferences > Audio; Pause / Keep Playing and Follow / Ignore override them for this sound.
+* **Panning Strength** only narrows the left/right placement of a 3D sound (0 = always centered);
+  the distance attenuation stays the same.
+* **Occlusion** makes walls (physics colliders) between the listener and a 3D sound muffle and
+  quiet it; how strong that is and which colliders count is set in Preferences > Audio >
+  Occlusion.
 * **Force Mono** downmixes the clip when it loads, which also halves its memory.
-* Clips whose decoded audio is longer than 30 seconds are streamed instead of being held in
-  memory ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)); every setting works the same
-  either way.
+* **Load Mode** — with Auto, clips whose decoded audio is longer than 30 seconds (or larger than
+  24 MB) are streamed instead of being held in memory
+  ([Engine → 6](Engine-EN-DOC.md#6-the-audio-engine)); **Decompress Into Memory** always keeps
+  the clip in memory (the fastest start) and **Stream** always reads it from disk. Every
+  setting works the same either way.
+* **Cook Format / Cook Bitrate** override the audio format of the build settings for this file
+  only (for example keep a short UI click as WAV, or use Opus at a higher bitrate for music).
+  Variation files are cooked with the settings of the sound that lists them.
 
 > The Content Browser has its own one-click preview on the audio tile itself
 > ([3.5](#35-thumbnails--live-previews)); it always plays non-spatial and non-looping so a
@@ -934,13 +1105,15 @@ The font sidecar (`FontSettings`) controls glyph atlas generation:
 | **Default Size** | Pixel size the Font Editor preview is baked at (default 24); at runtime every pixel size a script or widget asks for is its own font instance. |
 | **Antialiased** | Smooth glyph edges. |
 | **Nearest Filter** | Crisp/pixel font rendering. |
-| **Bold / Italic** | Synthetic style flags. |
-| **Char Range Start / End** | Codepoint range the font is declared to cover (default `32`–`1103`, covering Latin + Cyrillic). |
-| **Additional Ranges** | Extra codepoint ranges (e.g. CJK blocks, symbols). |
+| **Bold / Italic** | Synthetic styles for a family that has no real Bold or Italic file: **Bold** thickens every glyph by about 1/24 of the font size (the advance grows with it, so letters do not run into each other) and **Italic** slants every glyph by about 12°. They apply wherever the font draws — widgets, `Draw.Text`, the system font, the Font Editor preview. A real Bold or Italic file of the family still looks better. |
+| **Char Range Start / End** | Codepoint range the font is declared to cover (default `32`–`1279`: Latin with its extended letters and the whole Cyrillic block). |
+| **Additional Ranges** | Extra codepoint ranges (e.g. CJK blocks, symbols). A new font starts with one, `8192`–`8959`: typographic punctuation and symbols — dashes, curly quotes, ellipsis, currency signs, `№`, `™`, arrows, math signs. Ranges go up to `1114111` (U+10FFFF), so emoji and the other supplementary-plane blocks fit too. |
+| **Keep Ranges in Auto-subset** | Off by default. With **Font Mode = Auto-subset** a build keeps only printable ASCII and the characters found in the project's text; turn this on for a font that shows text made while the game runs (console, player names, chat), and it keeps every range declared above as well. See [Profiling & Building Games → 9](Profiling-And-Building-EN-DOC.md#9-asset-cooking). |
 | **Atlas Width / Height** | Size of one glyph atlas page (default 1024×1024). |
 
 The renderer supports **right-to-left** scripts (Arabic, Hebrew) and bidirectional
-text. The declared glyph ranges also drive font **subsetting** when cooking.
+text. The declared glyph ranges also drive font **subsetting** when cooking with
+**Font Mode = Subset**, and with **Auto-subset** for a font that keeps its ranges.
 
 At runtime glyphs are rasterized **on demand**. Loading a font — or a new pixel size of
 it — only opens the face and allocates one empty atlas page of **Atlas Width × Height**;
@@ -958,17 +1131,33 @@ subsets to and what the Font Editor preview bakes eagerly, so keep them honest.
   look at the generated glyph atlas texture itself (the fastest way to tell whether your
   ranges overflow the atlas size).
 * **Presets** — one-click character ranges: `ASCII`, `Extended`, `Cyrillic`, `Chinese`,
-  `Japanese`, `Arabic`, `Hebrew`, `Hindi` and `All languages`. They fill in the main range
-  and the additional ranges for you.
+  `Japanese`, `Arabic`, `Hebrew`, `Hindi`, `Korean` and `All languages`. A preset replaces
+  the main range **and** the whole list of additional ranges with everything its script
+  needs, punctuation included: `Extended` is the Latin of every European language
+  (through Latin Extended-B, so Polish or Czech letters are in), `Cyrillic` adds the
+  whole Cyrillic block, and the Chinese, Japanese and Korean presets carry their own
+  punctuation and fullwidth forms. Every preset except `ASCII` also keeps the
+  typographic punctuation and symbols. The ranges are written into the sidecar at the
+  moment you click, so a font set up in an earlier engine version keeps what it was
+  saved with until you click its preset again.
 * **+ Add Range** appends a custom start/end codepoint pair for anything the presets miss
   (symbols, emoji blocks, private-use areas).
-* **Loaded font info** reports the size actually baked, line height and ascender/descender.
-* **Save Settings** writes the sidecar; **Apply & Reload** re-bakes the atlas so every
-  widget and text draw in the editor picks up the change immediately.
+* **Loaded font info** reports how many glyphs the preview has baked, the line height and
+  the ascender.
+* **Save Settings** writes the sidecar and reloads every font that uses it, so every widget
+  and text draw in the editor picks up the change immediately; **Apply & Reload** re-bakes
+  only the preview, to try settings out before saving them.
 
 > Adding large ranges (CJK in particular) can exceed a 1024×1024 atlas in the Font Editor
 > preview. At runtime extra pages are added automatically, but a larger
 > **Atlas Width/Height** still saves page switches for glyph-heavy scripts.
+
+> With **Font Mode = Auto-subset** the cooker trims every font to printable ASCII plus the
+> characters it finds in your project's text, whatever ranges the font declares — a font
+> set up with the `Japanese`, `Korean` or `All languages` preset ships only the glyphs your
+> game really uses. Text made at runtime is invisible to that scan: tick **Keep Ranges in
+> Auto-subset** for a font that shows such text, and it keeps its declared ranges as well
+> (see [Profiling & Building Games → 9](Profiling-And-Building-EN-DOC.md#9-asset-cooking)).
 
 **Referencing a font.** Wherever a font is given by path — a widget element's font,
 `Draw.Text`, `SystemFont.Set`, the dyslexia-friendly font, `Prewarm.Font` — the `.ttf` /
@@ -987,8 +1176,10 @@ which does not exist on Web and Xbox. See
 
 **Source:** `.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`  **Sidecar:** `.ice_video`  **Editor:** Video Player
 
-Video decoding uses **FFmpeg**. On import the engine probes the file and writes the
-sidecar with **Width, Height, FPS** and **Duration**. Videos can be played back in-game as
+The editor and the Windows, Linux, macOS and Android runtimes decode video with **FFmpeg**;
+an iOS build uses AVFoundation, a Web build the browser's own decoder and the Xbox consoles
+Media Foundation. On import the engine probes the file and writes the sidecar with
+**Width, Height, FPS** and **Duration**. Videos can be played back in-game as
 full-screen movies or as textures on sprites, `Draw` geometry, materials and decals — all
 driven from script (see the [Lua API](LuaAPI-EN-DOC.md#56-video--runtime-video-playback)).
 
@@ -1037,12 +1228,12 @@ visual unit.
 | Field | Meaning |
 | ----- | ------- |
 | `TexturePath` | Source texture. |
-| `PivotOffset` | Normalized pivot (default center `0.5, 0.5`). |
-| `SourceRect` | Sub-rectangle within the texture (for sheets). |
+| `PivotOffset` | Normalized pivot (default center `0.5, 0.5`): `0, 0` is the bottom-left corner, `1, 1` the top-right. |
+| `SourceRect` | Sub-rectangle within the texture (for sheets), in pixels from the texture's top-left corner like any image rectangle. |
 | `MaterialMode` | `Default` (engine material) or `Custom` (`MaterialPath`). |
 | `DefaultShadingMode` / `DefaultBlendMode` / `DefaultAlphaClipThreshold` | Default render attributes (see the shared note above). |
-| `AttachPoints[]` | Named local anchors (name, position, rotation) — e.g. *muzzle*, *hand* — for attaching effects or other entities. |
-| `CollisionPolygon[]` | Convex/closed polygon for physics (up to 32 points). |
+| `AttachPoints[]` | Named local anchors (name, position, rotation) — e.g. *muzzle*, *hand* — for attaching effects or other entities. Positions are normalized like the pivot; rotation is in degrees, clockwise positive. |
+| `CollisionPolygon[]` | Convex/closed polygon for physics (up to 32 points), normalized like the pivot. |
 | Collision physics | `CollisionDensity`, `CollisionFriction`, `CollisionRestitution`, `CollisionIsSensor`, contact/sensor/hit/pre-solve event toggles, one-way platform flag + direction, collision group index, and the **collision mode** (`No Collision`, `Query Only`, `Physics Only`, `Query and Physics`). |
 
 The **Sprite Editor** is a preview on the left and the property list on the right:
@@ -1192,45 +1383,78 @@ parameters.
 **Editor:** Skeleton Editor
 
 A full **2D skeletal animation** system (bones, slots, skins, meshes, constraints,
-events and physics) — comparable to Spine-style rigs.
+events, physics, hair and cloth) — comparable to Spine-style rigs. It is not limited to
+characters: the same asset rigs animals, trees and foliage, ropes and banners, vehicles
+and machines.
 
 | Group | Contents |
 | ----- | -------- |
 | **Bones** | Hierarchy with position, rotation, scale, shear, length, and inherit-rotation/scale flags. |
-| **Slots** | Draw slots bound to a bone, with color, blend mode (`Normal`/`Additive`/`Multiply`/`Screen`) and the current attachment. |
+| **Slots** | Draw slots bound to a bone, with color, blend mode (`Normal`/`Additive`/`Multiply`/`Screen`) and the current attachment. The order of the slot list is the draw order — later slots draw on top. |
 | **Attachments** | `Region` (textured quad), `Mesh` (weighted deformable mesh with vertices/UVs/triangles/weights), `Point`, or `BoundingBox`. |
 | **Skins** | Named sets of slot→attachment overrides (e.g. costume variants). |
 | **Animations** | Timelines per target: `Rotate`, `Translate`, `Scale`, `Shear`, `SlotColor`, `SlotAttachment`, `Deform`, `DrawOrder`, `IKMix`. Keyframes support `Linear`/`Stepped`/`Bezier` curves. Plus **events** at points in time. |
 | **Constraints** | **IK** (target, mix, softness, bend, compress/stretch), **Transform** (rotate/translate/scale/shear mixes + offsets), and **Path** (follow a spline). |
 | **Physics bones** | Per-bone physics (shape with local offset, density, friction, joints with limits/motors). Drives the animated bone colliders and the ragdoll. |
+| **Dynamic bones** | Spring physics on a bone, optionally on its whole chain of children — tails, ears, antennas, ponytails, branches, chains, vehicle suspension. |
+| **Hair** | Procedural strand groups grown from a line of emitter points — hairstyles, beards, fur, manes, grass and leaves. |
+| **Cloth** | A physics layer over a `Mesh` attachment with per-vertex pins — cloaks, skirts, loose trousers, flags, curtains. |
+| **Dynamics colliders** | Circles and capsules bound to bones that hair, cloth and dynamic bones collide with. |
 
 Global settings include the default skin, default animation, pixels-per-unit, and the
 shared render attributes.
 
-**The Skeleton Editor** is a viewport with a tabbed inspector:
+**The Skeleton Editor** has the lists on the left, the viewport in the middle and a tabbed
+inspector on the right:
 
-* **Viewport** — the live pose. Select and drag bones, slots and point attachments; the
-  pose reflects the current animation time, so what you see is what the runtime produces.
+* **Toolbar** — **Save**, **Play / Pause / Stop**, the viewport tools **Select / Move /
+  Rotate**, **Auto Key**, **Bones** (show or hide the bone overlay), **Simulate** (run
+  hair, cloth and dynamic bones in the preview) and **Reset Simulation**. Below it are the
+  time slider and the duration of the selected animation.
+* **Lists** — Bones, Slots (**Move Up / Move Down** change the draw order), Skins (with
+  **Default Skin**), Animations (with **Default Animation**), Physics Bones, Constraints
+  and Dynamics. Selecting an entry shows it in the matching inspector tab.
+* **Viewport** — the live pose. It reflects the current animation time, so what you see is
+  what the runtime produces. Meshes are drawn textured, with the wireframe and vertices of
+  the selected slot's mesh on top; bounding boxes, physics shapes, dynamics colliders and
+  the selected IK target or path are drawn as overlays.
+  * **Select** — click a bone to select it; drag a point attachment or a mesh vertex.
+  * **Move** — drag a bone by its origin.
+  * **Rotate** — drag anywhere to rotate the selected bone, or start the drag on another
+    bone to rotate that one.
+  * With **Auto Key** off these edits change the setup pose. With it on, and an animation
+    selected, they write `Translate`, `Rotate` and `Deform` keys at the current time.
+  * Right mouse pans, the wheel zooms, and dragging with the **middle mouse button** moves
+    the whole character so you can watch hair and cloth react to motion.
 * **Bone** tab — the bone hierarchy (**Add Bone**, reparent, remove) with position,
-  rotation, scale, shear, length and the inherit-rotation / inherit-scale flags.
-* **Slot** tab — draw slots bound to a bone, with color, blend mode, draw order and the
-  default attachment. **Add Region / Add Mesh / Add Point / + BBox** create attachments;
-  **Convert to Mesh** turns a region into an editable mesh. For meshes you edit vertex
-  positions, add bone **weights** and **Normalize** them; bounding boxes take an arbitrary
+  rotation, scale, shear, length and the inherit-rotation / inherit-scale flags. A bone
+  cannot be parented to one of its own descendants.
+* **Slot** tab — draw slots bound to a bone, with color, blend mode and the default
+  attachment. **Add Region / Add Mesh / Add Point / + BBox** create attachments;
+  **Mesh Grid** sets how many columns and rows a new mesh gets, **Convert to Mesh** turns
+  a region into an editable mesh and **Rebuild Grid** regenerates a mesh with the current
+  grid. For meshes you edit vertex positions (in the list or by dragging them in the
+  viewport), add bone **weights** and **Normalize** them; bounding boxes take an arbitrary
   point list. **Skins** group slot→attachment overrides — **Add Skin** and **Set Active**
   switch costumes.
 * **Animation** tab — the timeline. **Add Animation**, set its duration, then key
   `Rotate`, `Translate`, `Scale`, `Shear`, `Slot Color`, `Slot Attachment`, `Deform` and
   `Draw Order` tracks; keyframes support `Linear`, `Stepped` and `Bezier` interpolation.
-  **Add Event** places a named event at a point in time for gameplay to react to.
+  The **Timelines** list expands every track into its keys: jump to a key, change its
+  time, value and curve, or delete it. **Add Event** places a named event at a point in
+  time for gameplay to react to, with optional **Int**, **Float** and **String** values
+  that scripts receive with the event.
   **Play / Pause / Stop** scrubs the animation in the viewport.
 * **Constraints** tab — **IK** (target bone, mix, softness, bend direction, compress /
-  stretch), **Transform** (rotate/translate/scale/shear mixes plus offsets) and **Path**
-  (a spline of points with spacing, closed flag and percent position).
+  stretch, and **Key IK Mix** to animate the mix), **Transform** (rotate/translate/scale/shear
+  mixes plus rotation, position and scale offsets) and **Path** (a spline of points with
+  spacing, percent spacing, closed flag, percent position and a rotation offset).
 * **Physics** tab — per-bone physics: enable, shape with local offset, width and length
   scale, density, friction, restitution, the joint type with its lower/upper **limits**,
   **motor torque**, **break force** and a self-collision flag. These drive the animated
   bone colliders and the ragdoll.
+* **Dynamics** tab — dynamic bones, hair, cloth and their colliders; see
+  [4.5.1](#451-dynamic-bones-hair-and-cloth).
 
 `Point` attachments are the skeleton's **sockets**. They are drawn in the Skeleton
 Editor viewport as a diamond marker with a forward arrow and the attachment name,
@@ -1239,6 +1463,131 @@ move it — the drag writes back into the attachment's bone-local `Offset`, so w
 see is exactly what `GetSkeletonAttachPointWorld` will report at runtime. Because
 socket positions come from the live pose, they also follow bone overrides
 (`SetSkeletonBoneOverride`), IK constraints and ragdoll.
+
+#### 4.5.1 Dynamic bones, hair and cloth
+
+Three kinds of **secondary motion** are simulated on top of the animation: springy bones,
+strands of hair and cloth. They need no physics bodies, follow the entity's movement,
+rotation, scale and Flip X, keep working during crossfades, layers, IK and ragdoll, and
+are purely visual — they never push gameplay objects.
+
+In the **Dynamics** list pick the kind (**Dynamic Bones / Hair / Cloth / Colliders**) and
+press **Add**, then tune the selected entry in the **Dynamics** inspector tab:
+
+* a **dynamic bone** is added for the selected bone;
+* **hair** is anchored to the selected slot and gets a two-point emitter on the selected
+  bone;
+* **cloth** takes the selected slot's active mesh attachment and pins its top edge;
+* a **collider** is added on the selected bone.
+
+With **Simulate** on the viewport runs the simulation live. **Preview Wind** blows on it,
+dragging with the middle mouse button moves the character, and **Reset Simulation** puts
+everything back to rest.
+
+Parameters shared by all three kinds:
+
+| Parameter | Meaning |
+| --------- | ------- |
+| **Enabled** | Simulate this entry. A disabled hair group is not drawn at all. |
+| **Damping** | How quickly motion fades — higher is calmer, with less swinging. |
+| **Inertia** | How much of the character's own movement is felt: `0` moves rigidly with the character, `1` lags fully behind. |
+| **Gravity** | Multiplier of the scene gravity. Negative values float upward. |
+| **Wind Influence** | How strongly the global and local wind push the entry. |
+| **Collision Radius** | Thickness used against colliders, in pixels. |
+| **Collide With Colliders** | Collide with this skeleton's dynamics colliders. |
+| **Collide With World** | Collide with the physics shapes of the level. Costs more than skeleton colliders. |
+
+**Dynamic bones** — spring physics for bones the animation leaves alone or only nudges.
+New entries have no gravity and no wind; raise them for things that hang or flutter.
+
+| Parameter | Meaning |
+| --------- | ------- |
+| **Bone** | The bone to simulate. |
+| **Include Children** | Apply to this bone and every bone below it, so one entry drives a whole tail, braid or branch. |
+| **Stiffness** | How strongly the bone is pulled back to its animated pose: `0` fully loose, `1` rigid. |
+| **Tip Falloff** | Makes the chain softer toward its tip. `0` = the same stiffness everywhere. |
+| **Max Angle** | The furthest the bone may swing away from its animated direction, in degrees. |
+| **Stretch** | Lets the bone lengthen under load. `0` = fixed length. |
+| **Position Spring** | Maximum distance in pixels the bone origin may spring away from the animation. `0` = off. Use it for vehicle suspension, a bouncing belly or a wobbling antenna base. |
+| **Mix** | Blend between the animation (`0`) and the simulation (`1`). |
+
+**Hair** — strands grown procedurally along an emitter line and drawn as tapered ribbons.
+
+| Parameter | Meaning |
+| --------- | ------- |
+| **Draw At Slot**, **Draw Behind** | Where the group sits in the draw order: right after the chosen slot (on top of it), or right before it (underneath) with **Draw Behind**. Without a slot it is drawn on top of everything, or behind everything with **Draw Behind**. |
+| **Only In Skin** | Show the group only while this skin is active — one hairstyle per costume. |
+| **Texture** | Optional strand sprite: its top maps to the root, its bottom to the tip. Empty = solid color. |
+| **Blend Mode** | `Inherit` uses the component's blend mode; otherwise `Masked`, `Additive`, `Translucent` or `Opaque`. |
+| **Cast Shadow** | Let the strands cast 2D shadows. Off by default. |
+| **Emitter Points** | Strands grow along the line through these points. Each point follows its own bone, so the line bends with the rig; drag the points in the viewport. A single point makes a tuft. |
+| **Strands**, **Segments** | Number of strands (`1`–`512`) and of segments per strand (`1`–`24`). |
+| **Seed** | Random seed of the variations. |
+| **Length**, **Length Variance** | Strand length in pixels and its random spread. |
+| **Angle**, **Angle Variance** | Growth direction relative to the emitter line, clockwise — `90` is perpendicular — and its random spread in degrees. |
+| **Fan** | Spreads the direction from the first strand to the last by this many degrees. |
+| **Curl**, **Curl Variance** | Bend added at every segment, in degrees, and its random spread. |
+| **Root Width**, **Tip Width** | Ribbon width at both ends, in pixels. |
+| **Root Color**, **Tip Color**, **Color Variance** | Color gradient along the strand and a random brightness spread between strands. |
+| **Stiffness** | How strongly a strand resists bending. |
+| **Shape Retention** | Pulls each strand back to its styled shape. Raise it for spiky or sculpted hair. |
+
+**Cloth** — turns a `Mesh` attachment into fabric. The mesh keeps following its bones and
+deform keys; the simulation moves the vertices that are not pinned.
+
+| Parameter | Meaning |
+| --------- | ------- |
+| **Slot**, **Mesh Attachment** | The mesh to simulate. |
+| **Stretch Stiffness** | How firmly the mesh keeps the length of its edges. |
+| **Bend Stiffness** | How strongly it resists folding. |
+| **Follow Animation** | Pulls free vertices back to the animated mesh. Raise it for clothing that should keep its fit. |
+| **Max Distance** | Maximum distance in pixels a free vertex may move away from the animated mesh. `0` = unlimited. |
+| **Iterations** | Solver passes per step (`1`–`16`). More passes make the fabric stiffer and cost more. |
+| **Pins** | Per-vertex value from `0` (free) to `1` (glued to the animation). |
+
+Pins are edited in three ways. **Paint Pins** turns the mouse into a brush: drag over the
+vertices in the viewport to give them the **Pin Value** — red vertices are pinned, green
+ones are free. **Pin Edge** with **Falloff** and **Apply** pins one side of the mesh
+(`Top`, `Bottom`, `Left` or `Right`) and fades the pin toward the opposite side; with a
+falloff of `0` only the row of vertices on that edge is pinned.
+**Pin All** and **Free All** reset every vertex.
+
+Cloth needs a mesh with enough vertices: set **Mesh Grid** (for example `4` × `6`) before
+**Add Mesh**, **Convert to Mesh** or **Rebuild Grid**. Rebuilding the grid changes the
+vertices, so apply the pins again afterwards.
+
+**Colliders** — shapes hair, cloth and dynamic bones slide around: a head, a torso, a
+shoulder.
+
+| Parameter | Meaning |
+| --------- | ------- |
+| **Bone** | The bone the collider follows. |
+| **Shape** | `Circle` or `Capsule`. |
+| **Offset**, **Radius** | Position in the bone's local space and size in pixels. |
+| **Length**, **Rotation** | Capsule only: its length and direction relative to the bone. |
+
+How the same tools cover more than characters:
+
+* **Tail, ponytail, ears, antennas** — one dynamic bone on the first bone of the chain with
+  **Include Children**.
+* **Tree** — dynamic bones on the trunk and branches with a little **Wind Influence**, hair
+  groups for leaves or needles; the global wind moves the whole forest together.
+* **Vehicle** — **Position Spring** on the body bone gives suspension; a dynamic bone on
+  an antenna or a flag pole; cloth for the flag.
+* **Catapult, crane, rope bridge** — animate the main motion and let dynamic bones add the
+  overshoot and swing.
+* **Level dressing** — curtains, banners and laundry are a skeleton with one bone, a grid
+  mesh and cloth pinned along the top edge.
+
+Performance: by default a skeleton outside every camera freezes its dynamics (see
+**Simulate Offscreen** on the [Skeleton component](#4171-component-reference)). The cost
+of hair grows with strands × segments — a few wide textured strands usually look better
+and run faster than hundreds of thin ones — and the cost of cloth with vertices ×
+iterations. Skeleton colliders are much cheaper than **Collide With World**.
+
+At runtime everything here can be switched, retuned, recolored and pushed around from
+scripts, and wind is set globally or per skeleton — see the Lua API,
+[Skeleton → Dynamics](LuaAPI-EN-DOC.md#105-skeleton--bone-animation-and-ragdoll).
 
 ### 4.6 Tileset (`.ice_ts`)
 
@@ -1257,10 +1606,13 @@ painting tilemaps.
     `Query Only`, `Physics Only`, `Query and Physics`).
   * **Shadows** — cast shadow on/off, cast mode (`Contour` or `Colliders`), shadow origin
     (`Top` / `Center` / `Bottom`), Z-order, edge fade, and a *don't block shadows* flag.
-  * **Fragments** (when the tile is destructible) — fragment count and break **pattern**
-    (`Grid`, `Radial`, `Random`), lifetime and fade time, gravity scale, density, friction,
-    restitution, sensor flag, event toggles, collision group, and the fragments' own shadow
-    settings.
+  * **Fragments** (when the tile is destructible) — fragment count, break **pattern**
+    (`Grid`, `Radial`, `Random`), piece **shape** (`Rectangles`, `Triangles`, `Shards`,
+    `Splinters`) and seed, lifetime (`0` = permanent) and fade time, gravity scale, density,
+    friction, restitution, linear and angular damping, sensor flag, event toggles, collision
+    group, the fragments' own shadow settings, and **Debris Breaking** (generations, pieces
+    per break, impact threshold, min size, force scale) so tile debris can keep breaking into
+    smaller pieces.
   * An optional **data name/tag** you can read from script to identify the tile type.
 
 **The Tileset Editor** shows the texture sliced into its grid on the left and the selected
@@ -1330,7 +1682,7 @@ several projections.
   flipbook frame), its collider polygon, its shadow caster, its nav-grid footprint and the
   fragments it shatters into. A
   tile using the plain full-tile collider is unchanged by rotation, so box merging and
-  chunking keep working exactly as before. The eyedropper also picks up the rotation of
+  chunking treat it exactly like an unrotated tile. The eyedropper also picks up the rotation of
   the sampled cell.
 * **Tile Span** — a tile does not have to be one cell. The sidebar shows the current brush
   span (`W x H` and the total cell count) with **Narrower / Wider**, **Shorter / Taller**,
@@ -1396,7 +1748,7 @@ The node palette is extensive. The **Add Node** menu groups it into nine sub-men
 | **Math** | Add, Subtract, Multiply, Divide, Lerp, Clamp, One Minus, Power, Abs, Floor, Ceil, Frac, Sign, Step, SmoothStep, Min, Max, Sine, Cosine, Tangent, ATan2, Saturate, Fmod, Sqrt, Round, Remap, If. |
 | **Vector Operations** | Dot Product, Distance, Length, Normalize, Append, Cross Product. |
 | **Make / Break** | Make Float2/3/4, Break Float2/3/4, Component Mask. |
-| **Utility** | Time, Desaturate, Fresnel, Simple Noise, Sphere Mask, Linear Gradient, Radial Gradient, World Position, Screen UV, Pixel Size, Scene Color, Custom Expression. |
+| **Utility** | Time, Desaturate, Fresnel, Noise, Sphere Mask, Linear Gradient, Radial Gradient, World Position, Screen UV, Pixel Size, Scene Color, Decal Data, Custom Expression. |
 | **Parameters** | Scalar Param, Vector Param, Texture Param, Collection Param. |
 | **Functions** | Material Function Call. |
 
@@ -1452,14 +1804,14 @@ compiled — unreachable nodes are ignored.
 
 | Node | In | Out | Does |
 | ---- | -- | --- | ---- |
-| **Texture Coordinates** | — | `UV` (Vector2) | The interpolated UV of the surface being shaded. |
+| **Texture Coordinates** | — | `UV` (Vector2) | The interpolated UV of the surface being shaded, in texture space: `u` grows to the right and `v` downward from the image's top-left corner (the same raster layout as every pixel rectangle). |
 | **Vertex Color** | — | `RGB`, `A` | The per-vertex color — for a sprite this is the tint set on the instance. |
 | **Camera Position** | — | `XY` (Vector2), `X`, `Y` | The active camera's world position. |
 | **Camera View** | — | `World Size` (Vector2), `Rotation`, `Zoom` | The slice of world the camera currently covers: its size in world units, its roll in degrees (clockwise positive) and how many world units one rendered pixel spans. |
 | **Screen To World** | `UV` (Vector2) | `XY` (Vector2), `X`, `Y` | Turns a screen coordinate into the world position under it, camera roll included. Leave `UV` unconnected and it resolves to the pixel being shaded. |
 | **World To Screen** | `World` (Vector2) | `UV` (Vector2), `U`, `V` | The inverse — where a world position lands on screen, camera roll included. |
-| **Panner** | `UV`, `Speed X` (`1`), `Speed Y` (`0`) | `UV` (Vector2) | Scrolls UVs with time: `UV + vec2(SpeedX, SpeedY) * Time`. Conveyors, water, scrolling skies. |
-| **Rotator** | `UV`, `Speed` (`1`), `Center` (`0.5,0.5`) | `UV` (Vector2) | Rotates UVs around `Center` at `Speed` radians per second. |
+| **Panner** | `UV`, `Speed X` (`1`), `Speed Y` (`0`) | `UV` (Vector2) | Scrolls UVs with time: `UV + vec2(SpeedX, SpeedY) * Time`. Conveyors, water, scrolling skies. It moves the *sampling coordinates* in texture space, so on a sprite a positive `Speed X` slides the image to the left and a positive `Speed Y` slides it up. |
+| **Rotator** | `UV`, `Speed` (`1`), `Center` (`0.5,0.5`) | `UV` (Vector2) | Rotates UVs around `Center` at `Speed` radians per second. The *sampling coordinates* turn clockwise in texture space (`v` down), so on a sprite the image itself turns counter-clockwise; use a negative `Speed` to spin the image clockwise. |
 | **Tiler** | `UV`, `Tiling` (`1,1`), `Offset` (`0,0`) | `UV` (Vector2) | `UV * Tiling + Offset` — repeats or shifts a texture. |
 
 ##### Math
@@ -1527,7 +1879,7 @@ secondary pins (`Min`/`Max`, `Alpha`, `Exp`) are adapted to it.
 | **Time** | — | `Time`, `Sin Time`, `Cos Time` | Seconds since start, plus its sine and cosine — the standard driver for animated materials. |
 | **Desaturate** | `Color` (Vector3, `1,1,1`), `Amount` (`1`) | `Result` (Vector3) | Blends the color toward luminance grey by `Amount`. |
 | **Fresnel** | `Power` (`5`), `Normal` (`0,0,1`) | `Result` (Float) | Rim factor — bright where the surface faces away from the viewer. Higher `Power` = tighter rim. |
-| **Simple Noise** | `UV`, `Scale` (`10`) | `Result` (Float) | Smoothed value noise in `0..1` at the given scale. |
+| **Simple Noise** | `UV`, `Scale` (`10`) | `Result` (Float) | Smoothed value noise in `0..1` at the given scale. Listed as *Noise* in the **Add Node** menu. |
 | **Sphere Mask** | `A`, `B` (`0.5,0.5`), `Radius` (`0.5`), `Hardness` (`1`) | `Result` (Float) | `1` inside a circle of `Radius` around `B`, falling to `0` outside; `Hardness` sets how soft the edge is. |
 | **Linear Gradient** | `UV` | `Horizontal`, `Vertical` | The U and V coordinates as two 0→1 ramps. |
 | **Radial Gradient** | `UV`, `Center` (`0.5,0.5`), `Radius` (`0.5`) | `Result` (Float) | `1` at the center falling linearly to `0` at `Radius`. |
@@ -1573,8 +1925,8 @@ for (int i = 0; i < 16; i++) {
 output = acc / 16.0 * input1;
 ```
 
-> **Legacy nodes.** Code that has no `output` identifier is still treated as a single expression, with an optional leading
-> `return`, exactly as before. Existing materials written as `return input0;` keep working unchanged.
+> **Expression form.** Code that never mentions `output` is treated as a single expression, with an optional leading
+> `return` — `input0 * 2.0` and `return input0 * 2.0;` both work.
 
 > Because the code is inlined verbatim, a GLSL syntax error surfaces as a material compile error with the shader log — check
 > the Material Editor's error banner.
@@ -1790,11 +2142,11 @@ Every module, grouped by the stack it belongs to. Modules can be toggled individ
 | **Gravity** | **Gravity** — a constant acceleration vector (default pulls down). |
 | **Drag** | **Drag Coefficient** — air resistance; slows particles proportionally to speed. |
 | **Acceleration** | **Acceleration** — a constant vector added every frame. |
-| **Orbit** | **Orbit Speed** (deg/s) and **Orbit Radius** — particles circle the emitter. |
+| **Orbit** | **Orbit Speed** (deg/s, positive = clockwise) and **Orbit Radius** — particles circle the emitter. |
 | **Noise** | **Noise Strength** — turbulence pushing particles around; **Noise Frequency** — spatial scale (lower = larger swirls). |
 | **Curl Noise** | Divergence-free turbulence — smoke, magic, fire swirls. **Strength**; **Frequency** (smaller = larger swirls); **Animation Speed**; **Octaves** (layers of detail); **Lacunarity** (frequency step between octaves); **Persistence** (amplitude falloff between octaves). |
 | **Attractor** | **Attractor Position**; **Strength** (positive attracts, negative repels); **Attractor Radius** — range of influence; **Attractor Falloff** — how the force weakens with distance; **Relative To Emitter** — position it relative to the emitter instead of in world space. |
-| **Vortex Force** | Rotational force around a point — tornados, portals, whirlpools. **Center**; **Tangential Strength** (positive = counter-clockwise); **Radius**; **Falloff**; **Inward Pull** (positive pulls in, negative pushes out); **Relative To Emitter**. |
+| **Vortex Force** | Rotational force around a point — tornados, portals, whirlpools. **Center**; **Tangential Strength** (positive = clockwise); **Radius**; **Falloff**; **Inward Pull** (positive pulls in, negative pushes out); **Relative To Emitter**. |
 | **Wind Force** | **Direction**; **Strength**; **Turbulence Amount** and **Turbulence Frequency** (random perpendicular displacement); **Gust Strength** and **Gust Frequency** (occasional bursts); **Wind Drag** — how strongly particles are dragged toward wind speed. |
 | **Spring Force** | Pulls particles back to their spawn position — jelly, soft bodies, elastic effects. **Stiffness** (how strongly they return); **Damping** (velocity lost to oscillation). |
 
@@ -1822,7 +2174,7 @@ Every module, grouped by the stack it belongs to. Modules can be toggled individ
 | **Event Handler** | **Trigger** — `On Spawn`, `On Collision`, `On Death`; the **FX asset** to spawn; **Spawn Count**; **Inherit Velocity** + **Velocity Scale**. |
 | **Conditional** | If/Else logic per particle. **Check Value** — `Speed`, `Age`, `Size`, `Alpha`, `Density (Fluid)`; **Comparison** — `>`, `<`, `=`; **Threshold**; then an **Action** and **Value** for the TRUE branch and for the FALSE branch. Actions are `Do Nothing`, `Multiply Alpha`, `Multiply Size`, `Multiply Velocity`, `Kill Particle`. |
 | **Sub FX** | Attaches another `.ice_fx` as a child effect that follows this emitter. **FX Asset**; **Position Offset**; **Scale**; **Rotation**; **Start Delay**. |
-| **Custom Script** | A Lua snippet run per particle each frame; it can read and modify the particle's fields. |
+| **Custom Script** | A Lua snippet run per particle each frame. It must define `function Update(p, dt)`; `p` holds the particle's `x, y, z`, `vx, vy, vz`, `r, g, b, a`, `sx, sy` (size), `rotation` and `rotationSpeed` (degrees and degrees per second, clockwise positive — like every rotation in the engine), plus the read-only `age`, `lifetime`, `t` (normalized age `0..1`) and the emitter position `ex, ey, ez`. Whatever the function writes into the writable fields is applied to the particle. |
 
 ##### Update — special
 
@@ -1916,12 +2268,13 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | Property | Meaning |
 | -------- | ------- |
 | **Name** | Element name — also how scripts look the element up. Unique within the widget. |
-| **Position** | Offset from the anchor, in canvas pixels. |
+| **Position** | Offset from the anchor, in canvas pixels: X grows to the right and Y downward, as in every UI layout (a vertical box stacks from the top). |
 | **Size** | Width and height. Read-only (and driven by the content) while **Desired Size** is on. |
 | **Desired Size** | Off by default. While on, the element sizes itself to its content instead of a fixed value — measured text, sprite/flipbook pixel size, sub-widget canvas, throbber diameter, children bounds, or the horizontal/vertical box flow (spacing + padding) — and the **Size** field shows the live computed value. |
 | **Scale** | X/Y multiplier applied around the pivot. |
-| **Pivot** | Normalized origin for rotation and scaling (default `0.5, 0.5`). |
-| **Rotation** | Degrees. |
+| **Pivot** | Normalized pivot point (default `0.5, 0.5` — the center): `0, 0` is the element's bottom-left corner, `1, 1` its top-right. This is the point that is placed at **Position**, and the element rotates and scales around it. |
+| **Rotation** | Rotation in degrees around the **Pivot**: positive values turn clockwise, negative ones counter-clockwise. Children rotate together with their parent, and hover and clicks follow the rotation. |
+| **Flip X** / **Flip Y** | Off by default — the element is drawn exactly as authored. On mirrors the element horizontally / vertically **in place, around its own center**, together with all of its children: sprites, 9-slice frames, fills, slider thumbs, toggle handles and text glyphs are mirrored too. On a rotated element the mirror follows the element's own rotated axes. Flips nest: a child flipped on the same axis as its flipped parent faces its original way again, at the mirrored position. **Position**, **Size** and the layout are not changed. Hover, clicks, sliders, input fields, scroll views and gamepad navigation follow the mirrored image (a mirrored slider grows from the other side, the D-pad still moves its thumb in the pressed direction). An open dropdown list and tooltips are never mirrored, so they stay readable. The canvas previews flips live, and its selection frame and resize handles follow the mirrored element. |
 | **Opacity** | `0..1`, multiplies down through children. |
 | **Anchor** | One of 9 corner/edge presets plus 7 stretch variants (`StretchLeft/Center/Right`, `StretchTop/Middle/Bottom`, `StretchAll`). Picking one keeps the element where it is and only rewrites `Position`; **Shift + click** snaps it to `Position = 0,0` of that anchor instead. Stretch anchors make the element fill the parent rectangle on that axis, and `Scale` then grows or shrinks that rectangle around the pivot. |
 | **Custom Anchors** | Use free **Anchor Min** / **Anchor Max** ranges (`0..1`) instead of a preset, so each edge tracks the parent independently. |
@@ -1944,8 +2297,24 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | Property | Meaning |
 | -------- | ------- |
 | **Tooltip Text** | Text shown when the player hovers this element at runtime. |
+| **Tooltip Localization Key** | A key from the game localization table ([4.18](#418-localization-ice_localization)). When set and a localization is loaded, the tooltip shows the key's translation for the current game language instead of **Tooltip Text**, and switches the moment the language changes — exactly like a Text element's **Localization Key**. A key missing from the table shows the key itself; with no localization loaded, **Tooltip Text** is used. |
 | **Tooltip Delay** | Seconds the pointer must hover before it appears. |
-| **Font** / **Font Size** | Shown once a tooltip text exists, for element types that have no text block of their own. |
+| **Tooltip Mode** | `Dynamic` (default) — the tooltip follows the cursor. `Static` — it stays where it appeared until the pointer leaves the element. |
+| **Tooltip Corner** | Corner of the cursor the tooltip opens from: `Bottom Right` (default), `Bottom Left`, `Top Right` or `Top Left`. Near a screen edge it flips to the opposite side, so it always stays on screen. |
+| **Font** / **Font Size** / **Text Color** | The tooltip's own text style — independent of the element's text, so a Text or Input Field element can have a tooltip styled differently from its content. Default: the system font, `24` px, white. |
+| **Background** | A `.ice_sprite` (static image) or `.ice_flipbook` (animated) drawn behind the tooltip text. `None` keeps the default dark box with a thin border and a drop shadow. |
+| **Background Color** | Tint multiplied with the background sprite or flipbook. Shown while a background is set. |
+| **Use 9-Slice** / **Border (L,T,R,B)** | Sprite backgrounds only — stretch the sprite with fixed corners, so a framed background keeps its border at any tooltip size. |
+| **Tooltip Size** | Width and height of the whole tooltip, in pixels. `0` on an axis fits that side to the text; a fixed width wraps the text to it, a fixed height centers the text vertically. |
+| **Padding (L,T,R,B)** | Space between the tooltip edges and its text (default `8` on every side). |
+
+Everything below **Tooltip Delay** appears once a tooltip text or a tooltip localization key is set. A tooltip works on every
+element type — **Interactable** is not required, so a plain Text or Image label shows its tooltip
+too — and it never takes clicks or hover callbacks away from the elements underneath. The tooltip
+that appears is taken from the topmost element under the pointer that is interactable or has a
+tooltip; when that element has none, its nearest parent with a tooltip is used, up to and including
+the SubWidget element that embeds it — so a tooltip set on a SubWidget element covers everything
+inside that sub-widget. Tooltips are drawn above every widget, in screen pixels.
 
 **Clipping** *(all elements)* — **Clip Children** masks descendants to this element's rectangle.
 
@@ -1955,13 +2324,15 @@ Toggle and Dropdown. **Use 9-Slice** stretches the sprite with fixed corners; **
 
 **Gamepad Navigation** *(interactable elements)* — **Nav Up / Down / Left / Right** each
 point at another element, or `Auto` to let the engine pick the nearest neighbour in that
-direction.
+direction. Neighbours are picked by where the elements actually are on screen, taking the
+rotation of the elements and of their parents into account.
 
 **Interaction**
 
 | Property | Meaning |
 | -------- | ------- |
-| **Interactable** | Allow the element to receive hover, click and focus input. Everything below appears only while it is on. |
+| **Interactable** | Allow the element to receive hover, click and focus input. The callbacks, state colors and state sounds below appear only while it is on. |
+| **Modal** | Off by default. While a modal element is visible, mouse, touch, keyboard and gamepad input reaches only it and its children: the other elements of this widget and every widget drawn below it stop reacting to hover, clicks, the wheel and navigation. If several modal elements are visible, the one drawn on top of the others wins. The flag is independent of **Interactable** — it normally goes on the root panel of a dialog or overlay, so opening or closing the window is just toggling that panel's **Visible**. |
 | **OnClick / OnHover / OnUnhover / OnPressed / OnReleased** | Names of Lua functions called on those events. |
 | **OnValueChanged** | Only for Slider, InputField, Checkbox, Dropdown and Toggle. |
 | **OnFocusGained / OnFocusLost** | Called when the element gains or loses input focus. |
@@ -1989,12 +2360,12 @@ direction.
 | **Text** | Common | A text label. | **Text** (multi-line) or **Localization Key**; **Font**, **Font Size**, **Text Color**; **Horizontal / Vertical Alignment**; **Text Wrap**. |
 | **Button** | Common | A clickable element with hover/press states. | Uses the shared sprite, state colors and state sounds; its label is normally a child Text element. |
 | **Image** | Common | A sprite or flipbook. | Uses the shared sprite and 9-slice groups. |
-| **Input Field** | Input | An editable text box. | The Text group (text, font, size, color, alignment, wrap) plus **Max Length** (`0` = unlimited). |
-| **Slider** | Input | A draggable value control. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**; **Thumb Sprite/Flipbook**. |
+| **Input Field** | Input | An editable text box with a caret and selection on every platform. A tap or click focuses it, puts the caret where it landed and opens the on-screen keyboard on phones; dragging selects text, a double tap / click selects a word, a triple one everything, and arrows, Home / End, word jumps, undo / redo and Ctrl (Cmd on Apple) +C / X / V / A work on a hardware keyboard. Enter, the keyboard's *Done* key or Esc removes the focus (firing **OnFocusLost**) and hides the keyboard. Tapping a focused field brings back a keyboard the player hid, a long press selects a word and opens **Cut / Copy / Paste / Select all**, and text longer than the field scrolls inside it — see [Screen keyboard](LuaAPI-EN-DOC.md#screen-keyboard-mobile-ime). | The Text group (text, font, size, color, alignment, wrap) plus **Max Length** (`0` = unlimited). |
+| **Slider** | Input | A draggable value control. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**; **Fill Sprite/Flipbook**; **Thumb Sprite/Flipbook**. |
 | **Checkbox** | Input | An on/off box. | **Is Checked**; **Check Color**; **Check Sprite**. |
 | **Toggle** | Input | A sliding on/off switch. | **Toggled**; **Toggled Color**; **Untoggled Color**; **Handle Ratio** (`0.2`–`0.8`) sizes the handle relative to the track; **Handle Sprite**. |
 | **Dropdown** | Input | A selection list. | **Options** list (add / edit / remove); **Selected Index**; **Max Height** before the list scrolls; **Font**, **Font Size**, **Text Color**. |
-| **Progress Bar** | Display | A fill bar. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**. |
+| **Progress Bar** | Display | A fill bar. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**; **Fill Sprite/Flipbook**. |
 | **Throbber** | Display | A loading spinner. | **Speed**; **Radius**; **Dots**; **Clockwise**; **Paused**. |
 | **HorizontalBox** | Layout | Lays children out left to right. | **Spacing** between children; **Padding (L,T,R,B)**. |
 | **VerticalBox** | Layout | Lays children out top to bottom. | **Spacing**; **Padding (L,T,R,B)**. |
@@ -2007,6 +2378,28 @@ direction.
 
 > The categories match the **+ Add Element** menu, which is grouped into *Common*, *Input*,
 > *Display*, *Layout* and *Misc*.
+
+> **Text Wrap.** With **Text Wrap** on, the text is broken into lines that fit the element's
+> width — in the game and on the editor canvas alike. Lines break at spaces; Chinese and
+> Japanese text can also break between any two characters, but closing punctuation
+> (`。`, `、`, `」`, `）`, `!`, `?` …) never starts a line and an opening bracket never ends
+> one; Korean, like European languages, breaks at spaces. A line can also break after a
+> hyphen or a slash inside a word, a word longer than the whole line is split between
+> characters, and line breaks typed into the text — blank lines included — are kept.
+
+> **Slider and Progress Bar fill.** The filled part covers the share of the element's width
+> that **Value** takes between **Min** and **Max**, starting from the left edge. Without a
+> **Fill Sprite/Flipbook** it is drawn as a flat **Fill Color**; a `Slider` that has a
+> **Bar Sprite/Flipbook** draws no flat fill at all — only the bar and the thumb are visible.
+> **Fill Sprite/Flipbook** gives the fill its own image, tinted by **Fill Color**, and it is
+> always drawn, including on a `Slider` on top of the bar image. With **Use 9-Slice** on, a
+> sprite is fitted into the filled area using the same **Border (L,T,R,B)** as the bar, so
+> rounded caps stay intact; without 9-slice, and for a flipbook, the image is cropped from
+> the right by the value.
+
+> **Vertical Slider.** A Slider is horizontal by itself; a vertical one is made by rotating
+> it — **Rotation** `90` (the value grows top to bottom) or `-90` (bottom to top). Clicks and
+> dragging are measured along the slider itself at any angle.
 
 > **Layout containers own the placement of their children.** `HorizontalBox`, `VerticalBox`,
 > `SizeBox` and `Overlay` rewrite the position of every child (and, for `SizeBox` and
@@ -2027,9 +2420,9 @@ direction.
 
 **Editor:** View Editor
 
-A **view** defines a **post-processing volume** and/or a **navigation-grid volume**
-with bounds, blend radius and priority — like a camera/post-process volume that the
-active camera blends into.
+A **view** defines a **post-processing volume**, a **navigation-grid volume** and/or an
+**audio volume** with bounds, blend radius and priority — like a camera/post-process volume
+that the active camera blends into.
 
 The post-process stack is extensive:
 
@@ -2052,13 +2445,24 @@ The **navigation grid** settings define how AI pathfinding is built in that volu
 **Mode** (`Top View` for top-down grids or `Side View` for platformers), **Cell Size**,
 **Allow Diagonal**, **Auto Build From Colliders**, **Agent Radius** and **Agent Height**,
 the side-view **Max Jump Height / Max Jump Distance / Max Fall Height** limits, and its own
-bounds (or **Infinite / Unbound**).
+bounds (or **Infinite Unbound**).
 
-**The View Editor** mirrors the asset: a **Volume settings** block (name, bounds or
-infinite/unbound, blend radius, priority), then two independently-toggled sections —
-**Post-Process Volume** and **Nav Grid Volume**. Every effect is a collapsible group that
-only shows its parameters when enabled, and each field has a tooltip. Saving rebuilds the
-post-process volumes in the open level, so changes are visible in the viewport at once.
+The **audio volume** applies a mixer snapshot (Preferences > Audio > Mixer Snapshots) while
+the listener is inside the view: choose the **Snapshot**, and it fades in over the **Blend
+Radius** as the listener enters. When audio volumes overlap, the one with the highest
+**Priority** wins; an **Infinite Unbound** audio volume applies its snapshot everywhere in the
+level. Typical uses are caves, underwater areas and interiors — for example a snapshot that
+lowers the music and adds a low-pass and reverb to the SFX bus.
+
+**The View Editor** mirrors the asset: the name, then three independently-toggled sections —
+**Post Process Volume**, **Navigation Grid Volume** and **Audio Volume**. The **Volume
+Settings** block (bounds or **Infinite Unbound**, blend radius, priority) is shared by the
+post-process and the audio volume and is shown under whichever of them is enabled. Inside the
+post-process section, **Enable Post Process** switches the whole effect stack on or off; every
+effect is a collapsible group that only shows its parameters when enabled, and each field has
+a tooltip. Saving
+rebuilds the volumes in the open level, so changes are visible in the viewport at once; bounded
+audio-only volumes are drawn in purple.
 
 > A view is used by placing it as a **world asset** in a level; see the
 > [Editor](Editor-EN-DOC.md) document for placing and blending volumes, and
@@ -2068,33 +2472,154 @@ post-process volumes in the open level, so changes are visible in the viewport a
 
 **Editor:** Cinema Editor
 
-A **cinema** is a **timeline-based editor** for cutscenes and scripted camera moves.
+A **cinema** is a timeline for cutscenes, in the spirit of a film sequencer: camera moves,
+actors that walk, turn, animate and talk, dialogue lines, audio, screen effects (fade,
+letterbox, flash, shake), **nested shots**, events and markers. A cinema plays when Lua calls
+`Cinema.Play` (see [Lua API → Cinema](LuaAPI-EN-DOC.md#23-cinema--cinematics)), when the level
+starts (**Auto Play**) or when a tagged entity walks into its trigger box (**Trigger On
+Overlap**) — the last two are set on its placement in the level
+(see [Editor → World Settings](Editor-EN-DOC.md#8-world-settings)).
 
-* **Duration**, **Frame Rate**, **Loop**, **Playback Rate**, and a starting camera
-  position/zoom/rotation.
-* **Tracks**, each holding **keyframes**, with a name and **mute** / **lock** flags.
-  A keyframe is either a **Camera** key (position + zoom + rotation) or a **Lua Callback** key (fire a
-  named function at that time), with an **easing** curve (`Linear`, `EaseIn`, `EaseOut`,
-  `EaseInOut`, `Bounce`, `Elastic`) and a duration.
+The asset stores **Duration**, **Frame Rate**, **Loop**, **Playback Rate**, the **start camera**
+(position, zoom, rotation), the cinema **settings**, the **tracks** with their **keys**, and the
+**markers**.
 
-**The Cinema Editor** is a track/timeline UI:
+#### Tracks and keys
 
-* **Toolbar** — duration, frame rate, loop, playback rate, **Snap** (snap the playhead and
-  keyframes to whole frames), and the timeline zoom.
-* **Start camera** — the position/zoom/rotation the shot begins at, with **Capture Start** to take the
-  current editor camera and **Go To Start** to send the editor camera back there.
-* **Tracks** — **+ Add Track**, **Duplicate Track**, delete, mute and lock. Add keyframes of
-  either type, drag them along the timeline, and multi-select to move several at once.
-* **Inspector** — the selected keyframe's time, duration, easing and payload. For a camera
-  key, **Capture Current Camera** writes the *current editor camera* position, zoom and rotation into
-  the keyframe — frame the shot in the viewport, then press the button. **Go To** does
-  the reverse and moves the editor camera to the stored value.
-* **Preview** — scrub or play the timeline and watch the editor camera follow it.
+Each track has a **type** that decides which keys it holds, plus a name, a color and
+**Mute** (ignored everywhere) / **Lock** (can't be edited) flags. A key has a **Time**, a
+**Duration** (`0` = instant) and, for keys that animate, an **Easing** curve: `Linear`,
+`EaseIn`, `EaseOut`, `EaseInOut`, `Bounce`, `Elastic`, `EaseInCubic`, `EaseOutCubic`,
+`EaseInOutCubic`, `EaseInOutSine`, `EaseOutBack` or `Step`.
 
-> Camera positions are stored **relative to the cinema's placement in the level**, so the
-> same cutscene can be reused at different spots in a map. Rotation is stored in **degrees**,
-> clockwise positive, and is interpolated directly rather than along the shortest arc — a key at
-> `360` therefore spins the camera a full turn instead of standing still.
+| Track | Keys and what they do |
+| ----- | --------------------- |
+| **Camera** | Move the camera to a **position / zoom / roll** over the key's duration. **Path**: `Linear` (a straight line, speed follows the easing), `Smooth` (a rounded path through the neighboring keys) or `Cut` (an instant jump). **Follow Actor** aims at an actor track instead of a fixed point (with a **Follow Offset**) and keeps tracking it until the next camera key. |
+| **Actor** | Drive a bound entity. Each key has an **Action**: **Transform** (position, rotation and/or scale — only the ticked channels are animated, the others keep the actor's own values; with the same **Path** choice as camera keys), **Visibility**, **Flip X**, **Animation** (force an animator state, fire an animator trigger, set an animator bool / int / float, swap the flipbook, or play a skeleton animation with a blend time) or **Call** (call a function in the actor's class script with arguments). |
+| **Dialogue** | Show a line: **Speaker**, **Text** (or, with **Localized**, game localization keys), **Portrait**, **Voice** (played with the line, stopped when it ends), **Typing Speed** (characters per second, `0` = at once), **Wait For Input** (the cinema pauses at the end of the line until an advance button is pressed), **Box Position** (bottom, top or above an actor) and **Duck Music** (lower the music by this many dB while the line is shown). **Fit To Text** / **Fit To Voice** size the key for you. |
+| **Audio** | Play a sound or music: **Sound**, **Play As Music**, **Volume**, **Pitch**, **Attach To Actor** (a 3D sound that follows the actor), **Fade In**, **Fade Out**, **Stop With Cinema** and **Length** (see below). |
+| **Events** | Call a function or send an event at a moment (**Lua Callback** keys). The **Target** is `Level / Global`, `All Scripts`, `Actor Script` or `Event (On)`; **Arguments** are passed in order; **Fire On Skip** makes the call happen even when the cinema is skipped before it. See [Lua API → Event keys](LuaAPI-EN-DOC.md#event-keys). |
+| **Fade** | Cover the screen with a color. **Opacity** is the value reached at the end of the key; it changes from the previous fade value over the key's duration. |
+| **Letterbox** | Cinema bars. **Amount** `0`–`1` and **Aspect Ratio** — the shape of the picture between the bars (for example `2.35`); screens already wider than that get no bars. |
+| **Camera Shake** | Shake the camera by **Intensity** screen pixels at **Frequency** Hz; it fades out over the key's duration. |
+| **Flash** | A color flash with a peak **Intensity** that fades out over the key's duration. |
+| **Shots** | Play another `.ice_cinema` **inside** this one for the length of the key, from a **Start Offset**. Its camera (if it controls the camera), actors, dialogue, audio and events run as part of this cinema and share its origin; shots can be nested up to 4 levels. **Fit To Shot** sizes the key to the rest of the shot. |
+| **Generic** | Any key except actor keys. Cinemas made before track types existed load their tracks as Generic. |
+
+Instant keys (events, calls, audio, visibility, flip, animation, markers) fire once each time
+the playhead passes them; a key at `0` fires as soon as the cinema starts and again on every
+loop. Seeking with `Cinema.SetTime` or `Cinema.JumpToMarker` does not fire the keys it jumps over.
+
+**Audio keys:** with **Stop With Cinema** on, the sound stops when the cinema stops, loops or is
+skipped, or when **Length** runs out (`0` = only when the cinema stops) — using **Fade Out** if it
+is set; with it off the sound always plays to its end. The file's `.ice_sound` settings (group,
+effects, variations) are used.
+
+#### Actor binding
+
+An **Actor** track names who it drives:
+
+* **Entity Tag** — an entity already in the level, found by its tag. **Relative To Actor** makes
+  the key positions offsets from where that entity stands when the cinema starts, so one
+  cinema works anywhere; **Restore When Finished** puts the entity back (position, rotation,
+  scale, visibility, flip) when the cinema ends.
+* **Spawn Class** — a new entity is spawned from a `.ice_class` when the cinema starts, at the
+  position of its first move key; **Destroy When Finished** removes it at the end.
+* **Take Over Physics** — while the cinema moves the actor, its rigidbody becomes kinematic so
+  physics does not fight the keys; the body type is restored at the end.
+
+Lua can bind any entity to a track by name with `Cinema.BindActor` — for example the actual
+player instead of a tag. Actors inside a hierarchy work too: moving a child entity updates its
+local transform relative to its parent.
+
+#### Positions and the origin
+
+Camera keys, actor keys (unless **Relative To Actor**) and spawn positions are stored relative
+to the cinema's **origin**: its placement in the level, the point passed to `Cinema.PlayAt`, or
+the world origin when it has neither. The same cutscene can therefore be reused at different
+spots in a map. Positions are in pixels (Y+ up); rotations are in **degrees**, clockwise
+positive, and are interpolated directly rather than along the shortest arc — a key at `360`
+spins the camera a full turn instead of standing still.
+
+#### Markers
+
+**Markers** are named points in time with a color, shown in their own lane above the tracks.
+Lua can jump to them (`Cinema.JumpToMarker`) and react when the playhead passes them
+(`OnCinemaMarker`, `Cinema.OnMarker`).
+
+#### Settings
+
+The **Settings** tab of the Cinema Editor holds the options of the whole cinema:
+
+| Group | Setting | Meaning |
+| ----- | ------- | ------- |
+| Camera | **Control Camera** | The cinema drives the game camera with its camera keys. Off = the gameplay camera stays in control in the game (the editor still previews the keys). |
+| | **Start Camera** | Position, zoom and rotation the shot begins at. **Capture Start** takes the current editor camera, **Go To Start** sends the editor camera there. |
+| | **Blend In** / **Blend Out** | Seconds to blend from the gameplay camera into the cinema camera when it starts, and back when it finishes or is skipped (`0` = cut). A `Cinema.Stop` always cuts. |
+| | **Blend Easing** | Curve of both blends. |
+| Audio | **Audio Listener** | Where 3D sounds are heard from while the cinema controls the camera: **Cinema Camera** (the center of the shot, so what the shot shows is what you hear) or **Gameplay Camera** (as without the cinema). |
+| Gameplay | **Block Gameplay Input** | Game input reads as released while the cinema plays; skip and dialogue buttons still work. |
+| | **Hide HUD** | Hide screen-space widgets while the cinema plays. |
+| | **Letterbox Color** | Color of the letterbox bars. |
+| Skipping | **Skippable** | The player may skip the cinema (Lua can change it with `Cinema.SetSkippable`). |
+| | **Skip Mode** | **Press** — one press skips; **Double Press** — the first press shows the prompt and a second press within **Second Press Window** seconds skips; **Hold** — hold a button for **Hold Time** seconds while a bar fills. |
+| | **Skip Buttons** | Input bindings in the [action binding format](LuaAPI-EN-DOC.md#action-system-action-bindings): `escape`, `enter`, `space`, `mouse_left`, `gamepad_a`, `gamepad_start`, `touch`, … |
+| | **Show Prompt** / **Prompt Text** | A prompt in the top-right corner (Double Press and Hold). The text is a game localization key or plain text; empty = the game key `ICE_CinemaSkipAgain` (Double Press) or `ICE_CinemaSkipHold` (Hold), falling back to built-in English text when the game has no such key. |
+| | **Skip Fade** | Total time of the fade to black and back when skipping (`0` = skip at once). |
+| Dialogue | **Dialogue UI** | **Built-in Box**, **Custom Widget** or **None (Lua only)** — with None, show lines yourself from `OnCinemaDialogue`. |
+| | **Widget** | The `.ice_widget` used with Custom Widget. Elements named `Speaker`, `SpeakerPanel`, `Text`, `Portrait` and `Continue` are filled in automatically (`SpeakerPanel` hides when there is no speaker, `Portrait` when the line has no portrait, and `Continue` shows while a line waits for input). |
+| | **Advance Buttons** | Buttons that reveal the whole line at once or continue after a line that waits for input. |
+| | **Box Color**, **Text Color**, **Speaker Color**, **Font**, **Font Size**, **Box Width**, **Max Lines** | Look of the built-in box. Font size is in pixels at 1080p and scales with the screen height; width is a fraction of the screen width; longer text scrolls up as it is typed. |
+| | **Continue Indicator** | A blinking marker when a line waits for input. |
+
+#### Screen overlay
+
+Letterbox bars, fades, flashes, the dialogue box and the skip prompt are drawn by the engine
+**above the HUD**, in this order: fade, letterbox, flash, script fade (`Cinema.FadeOut`), then
+the dialogue and the skip prompt on top — so lines stay readable over a fade to black. Right-to-
+left languages and CJK text are laid out correctly in the built-in box.
+
+#### The Cinema Editor
+
+* **Toolbar** — **Save**, **+ Add Track**, **+ Marker**, **Cinema Mode**, **Frame All**,
+  **Snap** (snap to whole frames), **Duration**, **FPS**, **Loop** and **Rate**.
+* **Timeline** — track headers (color, name, the bound tag or spawn class, and mute / lock
+  toggles), a time ruler, the marker lane and the keys: keys with a duration are bars with a
+  label, instant keys are diamonds. Keys snap to the playhead, markers and other keys' edges
+  while dragging (hold `Alt` to turn snapping off). Hover the top-left corner for the full list
+  of mouse controls and shortcuts:
+
+  | Input | Action |
+  | ----- | ------ |
+  | Click / drag the ruler | Move the playhead |
+  | Click a key | Select (`Ctrl` + click toggles, `Shift` + click adds); drag in empty space to box-select |
+  | Drag keys / a bar's right edge | Move keys / change a key's duration |
+  | Double-click a key or marker | Move the playhead to it |
+  | Right-click | Context menus for tracks, lanes, keys and markers |
+  | Wheel / `Ctrl` + wheel / `Shift` + wheel / middle drag | Scroll tracks / zoom / scroll time / pan |
+  | `Space` / `Home` / `End` | Play–pause / go to start / go to end |
+  | `←` / `→` (`Shift` = next key) | Step one frame (or select the previous / next key) |
+  | `K` / `M` / `F` / `Del` | Add a key on the selected track / add a marker / frame all / delete |
+  | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` / `Ctrl+S` | Copy / paste at the playhead / duplicate / save |
+
+* **Inspector** tab — the selected key (time, duration, easing and everything above), the
+  selected track (name, type — changeable while the track is empty —, color, mute, lock and
+  actor binding) or the selected marker. For camera keys **Capture Current Camera** stores the
+  editor camera and **Go To** shows the key's view; for actor keys **Capture From Actor** stores
+  the actor's current transform.
+* **Settings** tab — the settings above.
+* **Transport** — play / pause, stop, previous / next frame, a time slider and the frame counter.
+
+**Cinema Mode** previews the cinema in the viewport: the editor camera follows the cinema camera,
+tag-bound actors move, animate and show or hide, audio and voices play, and the overlay (letterbox,
+fades, dialogue box) is drawn on the viewport. The viewport also shows guides — the camera path,
+the frame of every camera key (the selected one highlighted), the frame at the playhead, each
+actor's path in its track color and markers for spawned actors. The trigger box of a placement with
+**Trigger On Overlap** is always drawn in the viewport.
+The preview never changes the level: actors get their original state back when you leave Cinema
+Mode, press Play or close the editor, and saving the level always writes their original state.
+Spawned actors appear only in the game. Cinema Mode is not available while the game runs in Play
+mode.
 
 ### 4.16 AI / Behavior Tree (`.ice_ai`)
 
@@ -2121,10 +2646,29 @@ Supporting systems: the **Blackboard** (typed key/value memory), **EQS**
 * **Blackboard keys** — **+ Add Key**, name it and give it a type; every node that consumes a
   key picks from this list instead of accepting free text, so typos cannot silently break a
   tree.
-* **Graph** — **Create Root (Selector)** starts the tree; each node's context menu offers
-  **Add Node** (filtered to what that node type accepts), **Add Service** and
-  **Delete Node**. Children are ordered left to right, which is the order composites
-  evaluate them in.
+* **Graph** — **Create Root (Selector)** starts the tree; the root can be neither deleted
+  nor given a parent. Each node has an input strip at the top and, if it can take children,
+  an output strip at the bottom:
+  * **Adding nodes.** Right-click empty canvas for **Add Node** — the new node goes under the
+    selected node when that node accepts children, otherwise under the root — and for
+    **Paste** once something has been copied. Dragging a wire out of a node's bottom strip
+    onto empty canvas opens the same list and adds the node under that parent.
+  * **Node context menu.** **Add Node** (filtered to what that node type accepts), **Add
+    Service** (composites), **Copy**, **Duplicate** and **Delete Node**. With several nodes
+    selected the menu acts on all of them (*Delete Selected (N)*). **Services** are drawn as
+    rows inside the node they belong to: click one to edit it in the properties pane,
+    right-click it for **Delete**.
+  * **Re-parenting.** Drag from a node's bottom strip to another node's top strip to move
+    that node, with its whole subtree, under the new parent; a link that would create a
+    cycle is refused. Deleting a link moves the child under the root.
+  * **Order.** Children run left to right: drag a node sideways to change its place. Each
+    child of a `Selector`, `Sequence` or `Parallel` carries a numbered badge with its
+    position in that order; the children of a `RandomSelector` have none, because it picks
+    one at random.
+  * **Shortcuts** (graph focused): `Ctrl+C`, `Ctrl+X`, `Ctrl+V` (pastes at the mouse) and
+    `Ctrl+D` copy, cut, paste and duplicate the selection, `Delete` removes the selected
+    nodes or the selected service, and `Ctrl+Z` / `Ctrl+Y` undo and redo inside the editor.
+    Node positions are saved with the asset, so a tree reopens exactly as you laid it out.
 * **Node properties** — the selected node's parameters (the table above), each with a
   tooltip. `BlackboardCondition` also has an **Abort (Observer)** mode that decides whether a change in
   the key can interrupt a branch that is already running — the standard way to make an enemy
@@ -2234,7 +2778,7 @@ Instances can be reordered (**move up/down**), and any component header offers
 | -------- | ------- |
 | **Sprite** | The `.ice_sprite` to draw. |
 | **Color** | Tint (RGBA). |
-| **Flip X / Flip Y** | Mirror the sprite on each axis. |
+| **Flip X / Flip Y** | Mirror the sprite horizontally / vertically around its pivot. Both off = the image exactly as authored. |
 | **Material** | `Shading Mode`, `Blend Mode` and `Alpha Clip Threshold` for this instance, or a custom material assigned on the sprite asset. |
 | shadows, visibility, socket/collider attach | See the shared tables above. |
 
@@ -2244,7 +2788,7 @@ Instances can be reordered (**move up/down**), and any component header offers
 | -------- | ------- |
 | **Tilemap** | The `.ice_tm` to draw (drag one in from the Content Browser). |
 | **Layers** | Read-out of the map's layers. |
-| **Flip X / Flip Y** | Mirror the map. |
+| **Flip X / Flip Y** | Mirror the whole map — the layout, every tile image and every tile collider and shadow — for orthogonal, isometric and hexagonal maps alike. Both off = the map as painted in the Tilemap editor. |
 | — | Shadows are authored **per tile** in the Tileset and Tilemap editors, not here. |
 
 **Flipbook** — one or more flipbook instances.
@@ -2272,13 +2816,18 @@ Instances can be reordered (**move up/down**), and any component header offers
 | -------- | ------- |
 | **Skeleton** | The `.ice_skeleton` asset. |
 | **Animation** | The animation to play, and **Loop**. |
-| **Color**, **Flip X / Flip Y** | As for sprites. |
+| **Color**, **Flip X / Flip Y** | As for sprites: Flip X / Flip Y mirror the whole rig — bones, attachments, meshes, sockets, bone colliders and the ragdoll. |
 | **Shading Mode**, **Blend Mode**, **Material** | Render attributes for the whole rig. |
 | **Bone Colliders** | Per-bone physics colliders that follow the animation and become dynamic when the ragdoll activates. |
 | **Ragdoll Enabled** | Allow the physics ragdoll to be switched on at runtime. |
 | **Ragdoll on Start** | Activate the ragdoll as soon as Play begins. |
 | **Ragdoll Angular Damping** | Angular damping while the ragdoll is active (higher = less flailing). |
 | **Ragdoll Gravity Scale** | Gravity multiplier while the ragdoll is active. |
+| **Dynamics** | Simulate the dynamic bones, hair and cloth defined in the skeleton asset ([4.5.1](#451-dynamic-bones-hair-and-cloth)). Off = hair is drawn in its rest shape and cloth follows the animation rigidly. |
+| **Simulate Offscreen** | Keep simulating while the skeleton is outside every camera. Off = frozen offscreen, which is cheaper. |
+| **Local Wind** | Extra wind for this skeleton only, in pixels per second squared (X right, Y up). Added to the global wind. |
+| **Global Wind Scale** | How much of the global wind this skeleton feels (`0` = sheltered). |
+| **Dynamics Gravity Scale** | Gravity multiplier for the hair, cloth and dynamic bones of this skeleton. |
 | shadows, visibility | See the shared tables above. |
 
 **Camera** *(single)*
@@ -2295,7 +2844,7 @@ Instances can be reordered (**move up/down**), and any component header offers
 
 **Decal** — decals placed by hand as part of the level: graffiti, cracks, stains. Runtime
 marks (bullet holes, blood) are spawned from script instead — see
-[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62.
+[Lua API → Decal](LuaAPI-EN-DOC.md#62-decal--bullet-holes-blood-splatter-scorch-marks).
 
 A placed instance uses the asset's own look, including its base rotation, size variance,
 tint variance and random mirroring. Those random parts are derived from the instance
@@ -2328,7 +2877,7 @@ not expire.
 | **Direction** | | ● | Where the spot points, in degrees. |
 | **Inner Angle** | | ● | Cone angle of full brightness in the center. |
 | **Outer Angle** | | ● | Cone angle where the light fades to zero; must be ≥ the inner angle. |
-| **Cookie Texture** | ● | ● | A texture that masks/patterns the light, with its own **Cookie Intensity** and **Cookie Rotation**. |
+| **Cookie Texture** | ● | ● | A texture that masks/patterns the light, with its own **Cookie Intensity** and **Cookie Rotation** (degrees, clockwise positive). The image is projected as authored — upright on a point light, and upright on a spot light whose beam points down, turning with the beam. |
 
 ##### Collisions
 
@@ -2399,20 +2948,30 @@ properties.
 | Property | Meaning |
 | -------- | ------- |
 | **Enabled** | Allow this entity to fracture at runtime. |
-| **Destruct On Start** | Fracture automatically when Play mode starts. |
+| **Destruct On Start** | Fracture automatically when Play mode starts (or when the entity is spawned during play). |
 | **Health** | Hit points before it fractures, reduced by damage and qualifying impacts. |
-| **Pattern** | `Grid`, `Radial` (from the impact) or `Random` shards. |
-| **Fragment Count** | How many fragments it breaks into. |
+| **Pattern** | How the cuts are laid out: `Grid`, `Radial` (around the impact point) or `Random`. |
+| **Fragment Shape** | How the pieces are cut: `Rectangles` (classic boxes), `Triangles`, `Shards` (irregular polygons — glass, stone, ice) or `Splinters` (long slanted strips along the longest side — wood, beams, planks). Every shape except rectangles gets matching polygon colliders and polygon shadows. |
+| **Fragment Count** | How many fragments it breaks into (`2..128`). |
+| **Seed** | `0` = a different cut every time; any other value always produces the same pieces. |
 | **Explosion Force** | Outward impulse applied to the fragments. |
-| **Impact Threshold** | Minimum hit speed that auto-fractures it (`0` = manual only). |
-| **Fragment Lifetime** / **Fragment Fade Time** | Seconds a fragment lives, then how long it takes to fade out. |
+| **Inherit Velocity** | `0..1` — how much of the entity's own movement and spin the pieces keep when it breaks. |
+| **Impact Threshold** | Minimum hit speed (pixels per second) that breaks it by itself (`0` = only from scripts). Needs Hit Events on its collider (or on what it hits). |
+| **Impact Damage Scale** | Above `0`, hits at or above the Impact Threshold deal *hit speed × scale* damage to Health instead of breaking it at once; it breaks when Health reaches `0`. |
+| **Fragment Lifetime** / **Fragment Fade Time** | Total seconds a fragment exists (fade-out included; `0` = permanent debris), and how many of those seconds it spends fading out. |
 | **Fragment Gravity / Density / Friction / Restitution** | Physics of the debris. |
+| **Fragment Linear / Angular Damping** | Drag that slows the movement / spinning of the debris over time. |
 | **Fragment Is Sensor** | Make fragments non-blocking sensors instead of solid debris. |
 | **Fragment Contact / Sensor / Hit / Pre-Solve Events** | Which callbacks fragments fire. |
 | **Fragment Collision Group** | Collision group for the debris (`Default (Debris)` uses the built-in group). |
 | **Max Debris Count** | Cap on live debris entities; the oldest are removed first. |
+| **Debris Generations** | How many more times debris can break into smaller debris (`0..8`, `0` = never). Each generation breaks the pieces of the previous one and keeps their motion. |
+| **Pieces Per Break** | How many smaller pieces a debris piece splits into each time it breaks (`2..32`). |
+| **Debris Impact Threshold** | Minimum hit speed (pixels per second) that breaks a debris piece (`0` = only scripts and explosions). |
+| **Debris Min Size** | Debris pieces smaller than this (pixels) never break further. |
+| **Debris Force Scale** | Share of the explosion force used each time debris breaks again. |
 | **Fragment shadow settings** | Cast Shadow, Don't Block Shadows, Shadow Origin, Shadow Edge Fade, Shadow Z Order — as in the shared shadow table, applied to fragments. |
-| **Destroy Original** | Remove the original entity once it fractures. |
+| **Destroy Original** | Remove the original entity once it fractures. When off, the original is hidden instead — its sprites, colliders and physics body are switched off — and `RestoreDestructible()` brings it back. |
 
 ##### Audio & Effects
 
@@ -2420,12 +2979,14 @@ properties.
 
 | Property | Meaning |
 | -------- | ------- |
-| **Sound** | The audio file to play (its `.ice_sound` sidecar supplies the defaults). |
-| **Group** | Mixing group: `Master`, `Music`, `SFX`, `Voice`, `Ambient`, `UI`. |
-| **Volume** / **Pitch** | `-1` uses the asset default; otherwise the custom value. |
-| **Override Loop** + **Loop** | Override the asset's loop flag. |
+| **Sound** | The audio file to play (its `.ice_sound` sidecar supplies the defaults). **Preview** plays it in the editor with the instance settings. |
+| **Audio Group** | **From Asset (…)** (the default) uses the group of the sound asset; `Master`, `Music`, `SFX`, `Voice`, `Ambient` or `UI` overrides it for this instance. |
+| **Custom Volume** / **Custom Pitch** | Off — the asset value is used and shown next to the checkbox; on — the instance's own value. |
+| **Override Loop** + **Loop** | Override the asset's loop flag; without the override the asset's choice is shown. |
 | **Play On Wake** | Start playing when the entity spawns / Play begins. |
-| **Override Spatial** + **Spatial (3D)** | Override the asset's 3D flag, then **Min Distance**, **Max Distance** and **Rolloff**. |
+| **Stop On Destroy** | On (default) — the sound stops when the entity is destroyed; off — a playing sound finishes on its own at the last position. |
+| **Override Spatial** + **Spatial (3D)** | Override the asset's 3D flag, then **Min Distance**, **Max Distance** and **Rolloff** (they start from the asset values). Without the override the asset's 3D settings are shown. |
+| **Position / Scale / Rotation** | Local transform of the source. For a directional sound the cone points along the local +X axis, so rotating the instance or the entity turns it. |
 
 **FX** — one or more particle effects.
 
@@ -2451,7 +3012,6 @@ properties.
 | **Render Order** | Sorting among widgets. |
 | **Interactable** | Whether the widget receives input. |
 | **Player Index** | `-1` = shared across all players (HUD); `0`–`3` = visible only in that local player's split-screen viewport. |
-| **Flip X / Flip Y** | Mirror the widget (world-space use). |
 
 **Point Marker** — editor-visible debug markers.
 
@@ -2498,15 +3058,16 @@ properties.
 | **Stencil ID** | Reference value (`1`–`255`). Writers and readers with the same ID interact. |
 | **Compare Function** | `Equal` or `NotEqual` — used in `Read` mode to decide which pixels pass. |
 
-**Replication** — multiplayer synchronization.
+**Replication** — multiplayer synchronization. Every field below **Replicate** appears once
+it is ticked.
 
 | Property | Meaning |
 | -------- | ------- |
-| **Replicate** | Replicate this entity over the network. Off = purely local, exactly like singleplayer. |
-| **Owner** | `Server` (the host simulates it) or `Player` (the given player owns it — client-predicted characters), with **Owner Player ID**. |
-| **Transform / Velocity / Visuals** | Which parts to sync every tick: position-rotation-scale; rigidbody linear velocity; sprite, flipbook, skeleton and animator parameters. |
-| **Full State** + **Full State Rate** | Periodically sync the remaining component settings (lights, tilemap, AI …) whenever they change, at this rate in Hz (`0` = the global replication rate). |
-| **Scripts On Replicas** | Whether Lua callbacks run on clients for this entity when someone else owns it (`Auto` follows the global gating setting). |
+| **Replicate** | Replicate this entity over the network: the host simulates it and clients receive its state. Off = purely local, exactly like singleplayer. |
+| **Owner** | `Server` (the host simulates it) or `Player` (the given player owns it — client-predicted characters). With `Player`, **Owner Player ID** (`0`–`255`, the owner's network player ID) appears. |
+| **Transform / Velocity / Visuals** | Which parts to sync every tick: position-rotation-scale; rigidbody linear velocity; the first sprite and the first flipbook, the skeleton, and the animator's state and parameters. With **Visuals** off, the visual components are sent once, when the entity appears on a client. |
+| **Full State** + **Full State Rate** | Sync every other component setting whenever it changes — the remaining sprite and flipbook instances, lights, tilemap, audio, FX, widgets, AI, the rigidbody's and colliders' physics state, and components added or removed on the host. Only the changed fields are sent. **Full State Rate** (shown while Full State is on, `0`–`60` Hz) is how often changes are checked; `0` = the global replication rate. |
+| **Scripts On Replicas** | `Auto`, `Always Run` or `Never Run` — whether Lua callbacks run on a client for this entity when someone else owns it. `Auto` follows the global replica script gating, which is on by default (the host simulates the entity, the client only applies its state); `Always Run` / `Never Run` override that for this entity. Turning the gating off with `Network.SetReplicaScriptGating(false)` lets every replica run its scripts — see [Lua API → Automatic replication](LuaAPI-EN-DOC.md#automatic-replication-recommended). |
 | **Relevancy** | `Area Of Interest` (sent only to nearby players) or `Always Relevant` (sent to everyone — bosses, objectives). |
 | **Kinematic On Clients** | Make the rigidbody kinematic on clients so local physics never fights the replicated position. |
 
@@ -2529,7 +3090,7 @@ editor's own UI language). Structure:
 
 At runtime the game loads this asset, picks a language, and looks up keys (with
 `{}`-style format arguments and automatic RTL handling for Arabic/Hebrew). Widgets can
-bind text directly to a localization key.
+bind text and tooltips directly to a localization key.
 
 **The Localization Creator** manages the language list and the key/translation grid:
 
@@ -2577,8 +3138,6 @@ tilemaps, materials, classes, widgets, etc.).
   Double-clicking one opens the **Text Note editor**: a syntax-neutral code editor with a
   *File ▸ Save* (`Ctrl+S`) and an *Edit* menu (undo/redo, copy/cut/paste, select all).
   Useful for design notes, TODO lists and small data files.
-
----
 
 ### 4.21 Decal (`.ice_decal`)
 
@@ -2631,7 +3190,7 @@ the surface it was placed on, so blood never hangs off the edge of a character).
 
 Decals are spawned from script with the `Decal.*` API, and can also be **placed by hand**
 with the **Decal** component in the Class Editor. See
-[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) section 62 for the scripting side.
+[Lua API → Decal](LuaAPI-EN-DOC.md#62-decal--bullet-holes-blood-splatter-scorch-marks) for the scripting side.
 
 ---
 
@@ -2643,32 +3202,43 @@ native assets automatically.
 ### 5.1 Aseprite importer
 
 Drop an **Aseprite JSON export** (the `.json` produced by Aseprite's *Export Sprite
-Sheet* with JSON data) onto the browser, or use **Import Aseprite Spritesheet** on an Aseprite `.json`
-already in the project. The importer:
+Sheet* with JSON data, in either the *Hash* or the *Array* layout) onto the browser or pick it
+with **+ Import**, or use **Import Aseprite Spritesheet** on an Aseprite `.json` already in the
+project. The importer:
 
 * Detects whether the JSON is an Aseprite file and **finds the matching PNG**
-  automatically (from the JSON's image reference); if the PNG is missing it says so in the
-  Console instead of producing half an import.
-* **Copies the sheet in** as `T_<name>.png` with a default `.ice_texture` sidecar.
+  automatically — the image named in the JSON, or else a `.png` with the JSON's own name, in
+  the JSON's folder; if the PNG is missing it says so in the Console instead of producing
+  half an import.
+* **Copies the sheet in** as `T_<name>.png` with a default `.ice_texture` sidecar. A sheet that
+  already sits next to the JSON inside the project is used where it is, and an existing
+  texture of the same name is never overwritten — so after changing the art in Aseprite,
+  replace the texture yourself and re-import to refresh the sprites and flipbooks.
 * Slices the sheet into **sprites** named `SP_<name>_0`, `SP_<name>_1`, … using the frame
-  rectangles, with a centered pivot.
-* Reconstructs **flipbooks** from Aseprite **frame tags**: one `FB_<name>_<tag>` per tag
-  (or a single `FB_<name>` when the file has no tags), with per-frame durations taken from
-  the JSON and the default FPS derived from the real total duration. A tag's
+  rectangles, with a centered pivot and the default sprite settings.
+* Reconstructs looping **flipbooks** from Aseprite **frame tags**: one `FB_<name>_<tag>` per
+  tag (or a single `FB_<name>` when the file has no tags), with per-frame durations taken
+  from the JSON and the default FPS derived from the real total duration. A tag's
   **direction** is honored — `reverse` flips the frame order and `pingpong` appends the
-  return leg.
+  return leg; any other direction plays forward. A tag whose frame range is invalid is
+  skipped with a Console error.
 
-This is the fastest path from Aseprite to in-engine animated sprites: draw, export with
-JSON data, drop the JSON into the browser, done.
+Re-importing overwrites the generated sprites and flipbooks of the same name. This is the
+fastest path from Aseprite to in-engine animated sprites: draw, export with JSON data, drop
+the JSON into the browser, done.
 
 ### 5.2 GIF importer
 
-Importing a **`.gif`** decodes every frame and produces a complete, ready-to-use set:
+Importing a **`.gif`** (drag & drop or **+ Import**) decodes every frame and produces a
+complete, ready-to-use set — the `.gif` itself is not copied into the project:
 
-* All frames are packed into a **single spritesheet texture** (a near-square grid) with a
-  default `.ice_texture` sidecar.
-* One **sprite** per frame, pointing at its cell in that sheet.
-* One **flipbook** whose per-frame durations come from the GIF's own frame delays.
+* All frames are packed into a **single spritesheet texture** `T_<name>.png` (a near-square
+  grid) with a default `.ice_texture` sidecar. If that name is taken, the sheet gets a numbered
+  name (`T_<name>_1.png`, …) instead of overwriting the existing texture.
+* One **sprite** per frame, `SP_<name>_0`, `SP_<name>_1`, …, pointing at its cell in that
+  sheet (centered pivot, default sprite settings).
+* One looping **flipbook** `FB_<name>` whose per-frame durations come from the GIF's own
+  frame delays (a frame without a delay lasts 100 ms).
 
 Great for quickly bringing in animated pixel art or reference loops.
 
@@ -2752,7 +3322,10 @@ plugin declares; double-clicking one calls the plugin's own open handler.
 | Font | `F_` | `title.ttf` → `F_title.ttf` |
 | Video | `V_` | `intro.mp4` → `V_intro.mp4` |
 
-A file that already starts with the right prefix is left alone.
+A file that already starts with the right prefix is left alone. Videos get `V_` only through
+**+ Import** (one dragged in from the OS keeps its name), and files copied straight into
+`Content/` outside the editor get no prefix at all ([2.5](#25-external-changes--auto-refresh)).
+The GIF and Aseprite importers name their output as described in [section 5](#5-importers).
 
 ### 7.4 Default names for new assets
 
@@ -2774,7 +3347,8 @@ with a number appended if the name is taken (`SP_NewSprite1`, `SP_NewSprite2`, �
 | Decal | `DC_NewDecal` | | |
 
 Assets created **from another asset** ([3.8](#38-the-item-context-menu)) derive their name
-from the source, dropping the source's prefix first:
+from the source. Those made from a texture keep the texture's full name; the others drop the
+source's own prefix first:
 
 | Action | Result |
 | ------ | ------ |

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-1.0.1-brightgreen?style=for-the-badge" alt="Release 1.0">
+  <img src="https://img.shields.io/badge/Release-1.0.1-brightgreen?style=for-the-badge" alt="Release 1.0.1">
   <img src="https://img.shields.io/badge/C%2B%2B-26-blue?style=for-the-badge&logo=cplusplus" alt="C++26">
   <img src="https://img.shields.io/badge/CMake-4.3%2B-064F8C?style=for-the-badge&logo=cmake" alt="CMake 4.3+">
   <img src="https://img.shields.io/badge/vcpkg-Managed-purple?style=for-the-badge" alt="vcpkg">
@@ -33,13 +33,13 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 
 **Scripting:**
 - **Lua** — game scripting language for gameplay classes, UI, levels and more
-- **Python** — engine-side scripting for editor tools and automation, automation, unattended runs from the command line, and `pip`-installable libraries
+- **Python** — engine-side scripting for editor tools, automation, unattended runs from the command line, and `pip`-installable libraries
 
 ---
 
 ## ✨ Features
 
-- **Rendering** — Data-driven 2D renderer built on a **render graph**, batching thousands of sprites per draw call with GPU culling and instancing, a node-based **material editor** (instances, functions and shared parameter collections), **decals** (bullet holes, blood splatter, scorch marks), an immediate-mode draw API for procedural geometry, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, native Metal (plus Metal via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
+- **Rendering** — Data-driven 2D renderer built on a **render graph**, batching thousands of sprites per draw call with frustum culling and instancing, a node-based **material editor** (instances, functions and shared parameter collections), **decals** (bullet holes, blood splatter, scorch marks), an immediate-mode draw API for procedural geometry, and a multi-backend RHI: OpenGL 3.3/4.6, OpenGL ES 3.0/3.2, Vulkan 1.1-1.4, Direct3D 12, native Metal (plus Metal via ANGLE & MoltenVK), WebGL 2.0 and WebGPU.
 - **Lighting & shadows** — Point, spot and directional lights with texture **cookies**, real-time 2D shadows ray-cast from colliders or from the traced outline of the artwork itself, and optional hardware **ray-traced global illumination**.
 - **Post-processing** — Bloom, ACES tonemapping, depth of field, SSAO, SSR, volumetric fog, colour grading and more, blended from **post-process volumes** placed in the level.
 - **Particles & FX** — Stack-based emitters (Spawn / Initialize / Update / Render) driven by editable curves and gradients, **CPU or GPU** simulation, forces from curl noise to vortices, **SPH fluids**, light-emitting particles and ribbon trails.
@@ -50,7 +50,7 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 - **Animation** — Skeletal animation with IK, skins, deformable meshes and per-bone physics, flipbooks, animation state machines, and timeline-driven clips.
 - **Text & UI** — In-engine UI widgets (19 element types, anchors and stretch layouts, nine-slice, keyframed animation, gamepad navigation) and high-quality text via FreeType, HarfBuzz, and SheenBidi (full Unicode shaping with right-to-left support).
 - **Accessibility** — Colourblind modes, a dyslexia-friendly font, **text-to-speech** for hovered and focused UI, a field-of-view lens, game speed and forced mono audio — all readable by the game, so a shipped build honours the player's choices.
-- **Audio** — Spatial mixing and playback (miniaudio) with per-sound filters, EQ, delay and reverb, six mixer groups, multiple listeners, streamed music, and Opus / Vorbis codec support.
+- **Audio** — Spatial mixing and playback (miniaudio) with a fourteen-stage effect chain per sound and per group bus (filters, EQ, distortion, bitcrusher, compressor, chorus/flanger, tremolo, delay, reverb, stereo width), six mixer buses with ducking and snapshots, audio zones, occlusion, voice limits and priorities, sound variations and loop regions, gapless music playlists, groups that follow the game pause and time scale, multiple listeners, streamed music, a live Audio Mixer in the editor, and Opus / Vorbis codec support.
 - **Voice** — Microphone capture, Opus encode/decode, real-time volume analysis and WAV recording — available to single-player games as well as networked ones.
 - **Video** — Video playback into a texture with frame-accurate seeking, 0.25×–4× speed with pitch correction and looping of any part of a clip, plus a cinematic / cutscene editor (FFmpeg; AVFoundation on iOS, the browser on Web, Media Foundation on the Xbox consoles).
 - **Input** — Keyboard, mouse, four gamepads with rumble and motion sensors, eight raw joysticks, ten-finger touch with pinch and swipe, pen/stylus, force-feedback **haptics** and device sensors, all through SDL3.
@@ -62,7 +62,7 @@ IceBoxEngine is a cross-platform 2D game engine designed for creating games of a
 - **Local multiplayer** — Split-screen for up to four players, each with its own camera, UI, audio listener and input device.
 - **Platform services** — Ads, in-app purchases, Play Games / Game Center, cloud saves, analytics, notifications, GDPR consent, in-app review, deep links, runtime permissions, Bluetooth and Web3, bridged per platform and exposed to Lua.
 - **Assets** — 25 asset types, each with its own editor, hidden sidecars for import settings, redirectors, a reference viewer, bulk editing, Aseprite and GIF importers, and **asset cooking** (WebP / KTX2 / Opus / Vorbis / VP9 / font subsetting) with a lossless guard that leaves hard-edged pixel art untouched.
-- **Localization** — 14 built-in editor languages with right-to-left support and game localization editable from the localization panel.
+- **Localization** — 15 built-in editor languages with right-to-left support and game localization editable from the localization panel.
 - **Extensibility** — Drop-in **plugin** system and **mod** support (players can install mods from inside the game, on desktop and mobile alike), with a **Plugin Builder** that compiles native plugins on their own, without an engine build — for the editor and desktop games, and for Android, iOS, Web and Xbox games.
 - **Building** — One-click **Build Game** for all seven platforms: cooked content packed into zstd `IcePak` archives behind a virtual file system, SHA-256 manifests, NSIS `.exe` and WiX `.msi`, `.deb` and `.AppImage`, macOS `.dmg` / `.pkg` with code signing and optional notarization, Android `.apk` / `.aab`, iOS `.ipa`, Xbox `MicrosoftGame.config` layouts and `.msixvc` / `.xvc` packages via the Microsoft GDK, DLC paks that mount over the base game, and headless dedicated servers. The **Android editor** builds signed `.apk` files on the phone itself, with no PC in the loop.
 - **Tooling** — Built-in Tracy profiler, a frame profiler with recorded traces, per-pass GPU timings, memory and VRAM tracking and hitch detection, **23 debug overlays** (colliders, nav grids, light heatmaps, shadow edges, Z-depth, frozen culling and more), stats overlays, a developer console with commands and CVars, a crash reporter that reports only to an endpoint you configure, **Remote Preview** to an Android device over USB, and a hot-key reference.
@@ -236,9 +236,12 @@ In the Launcher, open the **New Project** tab, choose a name, location and licen
 
 ### 4. Build your game
 
-In the Editor, go to **Tools → Build Game**, select the target platform (Windows, Linux, macOS, iOS, Android, or Web), and build. The output is a ready-to-distribute package with the Runtime included — and, when you ask for one, an NSIS `.exe`, a `.deb` package or a macOS `.pkg` / `.dmg` installer next to it.
+In the Editor, go to **Tools → Build Game**, select the target platform (Windows, Linux, macOS, iOS, Android, Web or Xbox), and build. The output is a ready-to-distribute package with the Runtime included. What each target needs installed on the build machine is in [Profiling & Building → 14. Toolchain prerequisites](Documentation/EN/Profiling-And-Building-EN-DOC.md#14-toolchain-prerequisites).
 
-Step-by-step walkthroughs: **[Getting Started](Documentation/EN/Getting-Started-EN-DOC.md)** for the installer, the Launcher and the Updater; **[Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md)** for every build option and platform setting.
+On the **Android editor** the target is always Android: fill in the package name, version,
+orientation, icon and signing keystore, press **Build**, and the editor writes a signed `.apk`
+into its Builds folder. **Install APK** hands it to the system installer and **Share APK**
+sends it to any other app — a messenger, a cloud drive or your PC.
 
 ---
 
@@ -578,7 +581,7 @@ publisher ID, Title ID, Store ID, Xbox network — is documented in
 
 ## 📖 Documentation
 
-The full technical documentation ships with the engine in **[`Documentation/`](Documentation)**, in English (`EN/`) and Russian (`RU/`). It is also readable inside the editor through **Help → Documentation**, with full-text search and a table-of-contents sidebar.
+The full technical documentation ships with the engine in **[`Documentation/`](Documentation)**, in English (`EN/`) and Russian (`RU/`). It is also readable inside the editor through **Help → Documentation**, a GitHub-style Markdown reader with search across all documents, a table of contents, back / forward history and clickable cross-document links.
 
 Start here: **[Documentation/README.md](Documentation/README.md)** — an index of every document with a short description of what is inside.
 
@@ -592,7 +595,7 @@ Start here: **[Documentation/README.md](Documentation/README.md)** — an index 
 | [Profiling & Building Games](Documentation/EN/Profiling-And-Building-EN-DOC.md) | Profilers, statistics, building for all seven platforms, installers, DLC, headless servers. |
 | [Plugins & Mods](Documentation/EN/Plugins-And-Mods-EN-DOC.md) | Native C++ plugins and Lua/content mods. |
 | [Lua API](Documentation/EN/LuaAPI-EN-DOC.md) | The complete gameplay scripting reference, opening with a full Lua course for beginners. |
-| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling: entities, levels, panels, the console log, a bridge into the game Lua VM, project config, asset validation, installing PyPI packages with pip, and running the editor unattended from the command line. |
+| [Python API](Documentation/EN/PythonAPI-EN-DOC.md) | Editor automation and tooling: entities, levels, panels, the console log, a bridge into the game Lua VM, CPU and network profiling, project config, asset validation, installing PyPI packages with pip, and running the editor unattended from the command line. |
 
 Russian versions of all of the above live next to them in **[`Documentation/RU/`](Documentation/RU)**.
 

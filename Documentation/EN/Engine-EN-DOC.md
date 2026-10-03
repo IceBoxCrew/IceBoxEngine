@@ -40,6 +40,7 @@
    - 2.5 [The job system](#25-the-job-system)
    - 2.6 [Time, pause & suspend](#26-time-pause--suspend)
    - 2.7 [Determinism & random streams](#27-determinism--random-streams)
+   - 2.8 [Coordinate conventions](#28-coordinate-conventions)
 3. [Physics — beyond the basics](#3-physics--beyond-the-basics)
    - 3.1 [What this section adds](#31-what-this-section-adds)
    - 3.2 [Collision modes, per shape](#32-collision-modes-per-shape)
@@ -151,7 +152,7 @@ One iteration of the main loop, in order:
    and touch deltas are rolled over for the next frame.
 10. **Counters** — entity/component statistics and the profiler are updated.
 11. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
-    order, followed by the network profiler in Debug builds.
+    order, followed by the network profiler in the editor and in Debug builds.
 12. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
     planes, backend, lighting) into the engine; a level's rendering override is re-applied
     if it is enabled.
@@ -180,9 +181,18 @@ One iteration of the main loop, in order:
    ([5.7](#57-automatic-replication)).
 5. **Widgets** — the UI runtime updates and then processes pointer/text input, with
    [split-screen routing](#43-cameras-ui--audio-per-player) in standalone builds.
-6. **Camera** — a playing cinema takes the camera; otherwise a free (ejected) camera or
-   the primary Camera component drives it, with optional camera lag; then camera shake is
+6. **Camera** — the primary Camera component (with optional camera lag) or a free (ejected)
+   camera sets the gameplay view. A playing cinema that controls the camera is then blended
+   over it — by its blend-in / blend-out weight, zoom and roll included — and `Cinema.ShakeCamera`
+   is added. The resulting frame is what is rendered, what `Cinema.GetCameraPosition`, the
+   screen ↔ world conversions and the cinema audio listener use. Finally camera shake is
    decayed for the primary and every split-screen camera.
+
+   While the editor camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), the free
+   camera is the frame as it is: no cinema is blended over it and no shake is added. The
+   audio listener, occlusion and audio zones are then updated in this step from the centre of
+   that frame instead of in **`Update.Audio`**, so they keep following the free camera while
+   the game is paused.
 
 The scene simulation itself runs these stages, each of which appears by name in the
 [Profiler](Profiling-And-Building-EN-DOC.md#43-cpu-tab):
@@ -195,10 +205,13 @@ The scene simulation itself runs these stages, each of which appears by name in 
 | **`Update.Scripts`** | `OnUpdate` for every scripted entity and the level script. |
 | **`Update.BehaviorTree`** | AI behavior trees tick. |
 | **`Update.Perception`** | AI perception (sight/hearing) updates — parallelized across worker threads at 8 or more perceiving agents. |
+| **`Update.Cinema`** | Cinemas advance: event keys and markers fire, actors are posed, dialogue, audio and nested shots update, and cinema hooks are delivered to scripts. It runs after scripts and physics interpolation, so an actor ends the frame exactly where its keys put it. |
 | **`Update.Hierarchy`** | Parent→child transforms are propagated. |
 | **`Update.Audio`** | Listener position(s) and every spatial audio source position — the entity transform combined with the instance's local offset — are pushed to the audio engine ([4.3](#43-cameras-ui--audio-per-player), [6](#6-the-audio-engine)). |
-| **`Update.Debris`** | Destruction fragments age, fade and expire. |
-| *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. |
+| **`Update.Video`** | Video players advance on the real (unscaled) frame delta. |
+| **`Update.CinemaTriggers`** | Placed cinemas with **Trigger On Overlap** check their trigger boxes and start when a matching entity enters. |
+| **`Update.Debris`** | Destructible entities spawned during play with **Destruct On Start** break, destruction fragments age, fade and expire (permanent debris is kept), and the live debris cap is enforced. |
+| *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. Skeletons also simulate their dynamic bones, hair and cloth here ([3.7](#37-ragdolls--bone-physics)). |
 | **`Update.SocketAttachments`** | Entities attached to bones/sockets are placed. |
 | *(late)* | `OnLateUpdate` for scripts, then socket attachments are resolved **a second time** so anything a late-update moved is still correctly attached. |
 | *(sync)* | Sprite/flipbook collision shapes bound to physics bodies are re-synchronized. |
@@ -278,6 +291,12 @@ rendering and playing audio whenever the window loses focus, is minimized or is
 backgrounded, on all seven platforms. The loop then blocks on an event wait instead of
 spinning. A dedicated server never suspends, which is what lets it run unattended.
 
+A **debugger stop** is different again: when the
+[Lua Script Debugger](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual) pauses a
+script in the editor, the frame is frozen in the middle of that script call — nothing
+else in the frame runs until you continue — and the time spent stopped is left out of the
+frame delta, so the game does not jump ahead afterwards.
+
 ### 2.7 Determinism & random streams
 
 Determinism matters for [rollback netcode](#58-rollback-netcode), replays and reproducible
@@ -295,6 +314,24 @@ procedural generation, so randomness is a service rather than a global:
 Physics contributes the other half of determinism: it advances in **fixed steps** with a
 sanitized timestep and sub-step count ([Graphics → 13.1](Graphics-EN-DOC.md#131-the-simulation-loop)),
 so the same inputs produce the same result at any framerate.
+
+### 2.8 Coordinate conventions
+
+One set of rules holds on every renderer and platform, in the editor and in every API:
+
+* **X+** is right and **Y+** is up — in the world, on screen and in normalized spaces.
+* **Rotation** is in degrees and **clockwise is positive**.
+* **Pivots** and other normalized points run from `(0, 0)` at the bottom-left to `(1, 1)` at
+  the top-right.
+* **Flip X / Flip Y** off means *as authored*; on, they mirror horizontally / vertically — the
+  same for sprites, flipbooks, skeletons, tilemaps, widget elements, FX and decals.
+* **Screen pixels** (input, `Draw` screen space, screen↔world conversion) have their origin
+  at the bottom-left of the game viewport.
+
+The deliberate exceptions are rectangles and UVs *inside an image* (raster layout, origin
+top-left), widget layout positions (they grow downward, like any UI layout) and the raw grid
+coordinates of isometric and hexagonal tilemaps. The full table, with the API functions
+each rule covers, is in the [Lua API](LuaAPI-EN-DOC.md#coordinate-conventions).
 
 ---
 
@@ -357,7 +394,7 @@ entities:
   creates no part bodies at all.
 * Part bodies carry the **same user data as the owner entity**, so a contact on a wheel is
   reported as a contact on the entity that owns it.
-* Every frame after the solve, `SyncPhysicsPartsToInstances` writes each part body's world
+* Every frame after the solve, the engine writes each part body's world
   transform **back into the collider instance's local transform**, so the shapes you see in
   the editor overlays and in the shadow system follow the simulation.
 * A **sprite or flipbook instance** can name a part in its **Attach To Collider** field. On
@@ -423,7 +460,7 @@ Box2D reports events per **shape**; the engine turns them into per-**entity** ca
 | ----- | ------------ |
 | **Begin touch** | Collision-enter on both entities, with the other's tag, id and the local collider name. |
 | **End touch** | Collision-exit. The pair is remembered while touching, so the exit still carries the right tags and collider names even if a shape was destroyed in between. |
-| **Hit** | A collision whose approach speed exceeds the world's **Hit-Event Threshold**, with the speed converted back to world units. This is also what feeds impact-triggered [destruction](Graphics-EN-DOC.md#137-joints-queries--destruction). |
+| **Hit** | A collision whose approach speed exceeds the world's **Hit Event Threshold**, with the speed converted back to world units. This is also what feeds impact-triggered [destruction](Graphics-EN-DOC.md#137-joints-queries--destruction). |
 | **Sensor begin/end** | Sensor-enter/exit, dispatched to the sensor and to the visitor. |
 | **Stay** | Recomputed each step by walking the set of currently-touching pairs — **only for entities whose script actually implements a stay callback**. If nobody wants them, the whole pass is skipped. |
 | **Pre-solve** | Used internally to cancel contacts for [one-way platforms](Graphics-EN-DOC.md#136-one-way-platforms). |
@@ -438,10 +475,12 @@ The script-side signatures are in the [Lua API](LuaAPI-EN-DOC.md#14-collision--c
 
 A **Joint** instance names its second body in one of three ways, resolved in this order:
 
-1. **Target Part Name** — a named **Separate Body** collider on the *same* entity
+1. **Target Part** — a named **Separate Body** collider on the *same* entity
    ([3.3](#33-separate-bodies--multi-body-entities)). If the part does not exist or has no
    body, the joint is skipped with an explicit warning naming the part.
-2. **Target Entity UUID** — an exact entity, stable across renames.
+2. **Target entity UUID** — an exact entity, stable across renames. It is not a field in the
+   Properties panel: the engine stores it once a tag has resolved (below), and an editor
+   Python script can set it directly.
 3. **Target Entity Tag** — the first entity with that tag. If several match, the engine
    warns with the count and uses the first, so ambiguity is visible rather than silent.
 
@@ -496,6 +535,32 @@ ragdoll values, and restores them exactly when the ragdoll is switched off.
 Skeleton bone bodies are included in the body→entity map, so a bullet that hits a forearm
 reports a hit on the character.
 
+**Dynamic bones, hair and cloth** are a separate, lighter kind of simulation: they are not
+Box2D bodies. Once a skeleton's pose is resolved — animation, layers, constraints, ragdoll —
+the engine simulates them directly on that pose and adds the result to the same list of
+parts as the rest of the rig. They are therefore lit, shadowed, culled and drawn like any
+other part, and a script that draws the skeleton through `Draw.Skeleton` gets them too.
+
+* The simulation runs in the skeleton's own space and is told how the entity moved,
+  rotated, scaled or flipped since the previous frame; the **Inertia** setting decides how
+  much of that motion an element feels. A jump of roughly 300 px or more within one frame
+  counts as a **teleport** and is not felt at all, and a flip mirrors the state instead of
+  swinging it across the character.
+* A frame is split into at most four sub-steps of up to 20 ms, and frame times above 80 ms
+  are clamped — a hitch slows hair down for a moment instead of making it explode.
+* Gravity is the scene gravity. Wind is the **global wind** set from script, scaled by the
+  component's **Global Wind Scale**, plus its **Local Wind**.
+* Collisions use the skeleton's own **dynamics colliders** — a handful of circles and
+  capsules. **Collide With World** additionally gathers the physics shapes around the
+  element (colliders of other entities, tiles, bone bodies; never sensors and never the
+  skeleton's own entity) and slides it along them. Nothing in the physics world is pushed
+  back: bodies never feel hair or cloth.
+* A skeleton that no camera has drawn for a few frames **freezes** its dynamics unless
+  **Simulate Offscreen** is set. Frozen elements keep their shape and carry on when the
+  skeleton is seen again.
+* They are cosmetic: they are not replicated, so in multiplayer every machine simulates
+  its own.
+
 ### 3.8 Interpolation, teleports & threading
 
 The renderer draws bodies interpolated between the previous and current fixed steps
@@ -531,7 +596,10 @@ mask, so it stays inert.
 **Flipping.** Flipping an entity horizontally mirrors its collision: the collider set is
 rebuilt on the mirrored side, part bodies are recreated, and joint anchors and axes are
 mirrored to match. The engine tracks the last flip sign it built for, so this happens
-exactly once per flip rather than every frame.
+exactly once per flip rather than every frame. Hand-placed collider primitives and joints
+follow this horizontal *facing* only; a vertical flip (Flip Y) mirrors the visuals and the
+collision generated from them — sprite and flipbook polygons, tilemap tiles and skeleton
+bone colliders — but not the collider primitives.
 
 ### 3.10 Physics quick reference
 
@@ -540,10 +608,11 @@ exactly once per flip rather than every frame.
 | Collision mode | Per collider / per sprite polygon / per tile | NoCollision, QueryOnly, PhysicsOnly, QueryAndPhysics ([3.2](#32-collision-modes-per-shape)) |
 | Separate Body | Per collider instance | Own dynamic body; needs an active Rigidbody ([3.3](#33-separate-bodies--multi-body-entities)) |
 | Attach To Collider | Per sprite/flipbook instance | Glues the visual to a named part body |
-| Joint target | Per joint instance | Part name → UUID → tag, in that order ([3.6](#36-joints-at-runtime-targets--breaking)) |
+| Joint target | Per joint instance | Target Part → entity UUID → Target Entity Tag, in that order ([3.6](#36-joints-at-runtime-targets--breaking)) |
 | Break Force / Break Torque | Per joint instance | `0` disables that test; raises a break event |
 | Bone Colliders Enabled | Skeleton component | Kinematic hit bodies driven by animation |
 | Ragdoll Enabled + blend | Skeleton component | Dynamic bodies; blend scales joint motor torque |
+| Dynamics (dynamic bones, hair, cloth) | Skeleton asset + Skeleton component | Not physics bodies; cosmetic, frozen offscreen by default |
 | Parallel transform read-back | Automatic | ≥ 64 rigidbodies |
 | Teleport snap threshold | Automatic | Velocity × step × 4 + 1 metre |
 
@@ -642,6 +711,12 @@ listener is placed at the primary camera, and one at each additional registered 
 camera, up to however many listeners the audio engine supports. Spatial sounds are then
 mixed for all of them, so a sound near player 2 is audible even when player 1 is far away.
 Outside split-screen the engine falls back to a single listener at the primary camera.
+While a cinema controls the camera, the primary listener moves with the cinema's frame
+(blended by the cinema's camera weight) unless the cinema's **Audio Listener** is set to
+**Gameplay Camera**, so 3D sounds are heard from what the shot shows. In the editor, while
+the camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), all of this is replaced by a
+single listener at the centre of the free camera's frame — 3D sounds, occlusion and audio
+zones are heard from where you are looking — and **Inject** puts the listeners back.
 
 ### 4.4 What runs where
 
@@ -698,7 +773,10 @@ Both transports carry the same wire format: a **one-byte message type** followed
 payload, optionally encrypted. Native sessions also enable ENet's **range-coder
 compression** on the whole host when packet compression is on (and log a warning and carry
 on uncompressed if the range coder is unavailable). The network profiler instruments both
-paths identically, which is why its per-message-type breakdown works on Web too.
+paths identically, which is why its per-message-type breakdown works on Web too. On native
+builds it also reads ENet's own socket counters, so it can show what really went over the
+wire after compression and protocol overhead
+([Profiling → 5.4](Profiling-And-Building-EN-DOC.md#54-the-network-profiler)).
 
 `Initialize()` sets up libsodium and ENet, and is called **lazily** — starting a server or
 connecting initializes the subsystem if you did not do it yourself.
@@ -881,8 +959,8 @@ component is off by default, so a singleplayer project is completely unaffected.
 | ------- | ------ |
 | **Replicate** | Master switch. |
 | **Owner** | **Server** (the host simulates it) or **Player** + an **Owner Player ID** (that client owns it — the setup for a predicted character). |
-| **Transform / Velocity / Visuals / Full State** | Which groups are synchronized. Transform, velocity and visuals go every tick; full state is checked periodically. |
-| **Full State Rate** | How often, in Hz, full state is re-checked (`0` = use the global rate, 8 Hz by default). |
+| **Transform / Velocity / Visuals / Full State** | Which groups are synchronized. Transform, velocity and visuals go every tick. Full state covers every other component setting — lights, tilemap, AI, the body's runtime physics settings, collider settings, and components removed on the host — and is compared periodically, so only what actually changed is sent. |
+| **Full State Rate** | How often, in Hz, full state is re-checked (`0` = use the global rate, 8 Hz by default; the field is shown while **Full State** is ticked). |
 | **Scripts On Replicas** | **Auto** (follow the global gating setting), **Always Run** or **Never Run** — whether Lua callbacks execute on clients for an entity somebody else owns. |
 | **Relevancy** | **Area Of Interest** (sent only to nearby players) or **Always Relevant** (sent to everyone — bosses, objectives). Feeds directly into [5.5](#55-delta-compression--area-of-interest). |
 | **Kinematic On Clients** | Make the replicated body kinematic on clients so local physics never fights the incoming position. |
@@ -892,17 +970,36 @@ unflagged ones are dropped; owner changes are pushed through; each entity is ann
 a **spawn** message (including its prefab path and its UUID so clients can bind to an
 entity that already exists in the level) and then pushed every tick; entities that vanished
 are **despawned**; and, if it changed, the level's **world-settings override** is broadcast
-so everyone simulates with the same gravity and physics settings. When a new player joins,
-every entity is **re-announced** so the newcomer receives the whole world.
+so everyone simulates with the same gravity and physics settings. A client asks for the
+world itself: when it joins, and again every time it finishes loading a level, it sends the
+server a **state request**. The server answers **that player alone** with the current world
+settings and every replicated entity with its full current state, followed by an
+acknowledgement, so nobody else is re-sent anything. The client repeats the request until
+that acknowledgement arrives, which makes the hand-over independent of timing: whichever
+side finishes loading a level first, the client ends up with the complete world. Requests
+are rate-limited per player. Animator **triggers** fired on the host travel as separate
+reliable messages, so a trigger that lives for a single frame is never lost between two
+snapshots.
 
-**On clients**, each tick: pending spawns, despawns, full states and level changes are
-drained (a spawn whose prefab is not ready yet is retried for up to 30 seconds instead of
-being dropped), then every replicated entity is either **reconciled** (if prediction is on
-and this client owns it) or made kinematic and **driven** from the replicated state.
+**On clients**, each tick: pending spawns, despawns, state updates, animator triggers and
+level changes are drained in exactly the order the server sent them (a spawn that binds to
+a level entity which is not loaded yet is retried for up to 30 seconds instead of being
+dropped, and everything addressed to that entity waits behind it), then every replicated
+entity is either **reconciled** (if prediction is on and this client owns it) or **driven**
+from the replicated state — its body made kinematic first, unless **Kinematic On Clients**
+is off. State updates are applied in place, field by field, so a change to one component
+never restarts a sound, particle system or widget that belongs to another. A spawn message
+for an entity the client already tracks — the answer to a state request, for instance — only
+refreshes that state: the replica is never re-created, and what a predicting owner simulates
+locally is left alone. When the session
+ends, replicas spawned from a prefab are removed and level entities are released back to
+local simulation with their original body type.
 
 Level changes are part of the protocol: the server can broadcast a **level change** and
 clients load the named level through a callback, so the session stays together across
-level transitions.
+level transitions. Replication state is per level on both sides — the host re-announces its
+entities when its new level starts, and each client re-requests the world when its own load
+finishes — so the two sides may pass through loading screens of different length.
 
 ### 5.8 Rollback netcode
 
@@ -937,6 +1034,15 @@ detected** when they disagree. The other events are synchronizing, synchronized,
 (this peer runs ahead and briefly stalls), **connection interrupted** (a player dropped out
 of the network session), **resumed** (it came back; the inputs it missed are resent) and
 **disconnected** (it stayed away for 10 seconds, or the initial handshake timed out).
+
+**Time sync** keeps the peers on the same frame number. From the frame counters and
+acknowledgements already present in the input packets, each peer works out how far it runs
+ahead of every other peer *and* how far that peer runs ahead of it; half the difference is
+the real frame offset, in which network latency cancels out. Only the peer that is really
+ahead waits: when the offset averaged over about a second reaches two frames, it skips up
+to nine frames, one at a time with a few frames between them, and re-evaluates no sooner
+than 240 frames later. A session may be stopped or restarted from inside any of its
+callbacks; the tick in progress ends at once.
 
 Two session types exist: **P2P** for real play, and **SyncTest**, which runs locally and
 deliberately rolls back every frame by a chosen distance and compares checksums — the
@@ -1126,9 +1232,13 @@ because they need UDP.
 | Router port mapping | on for online rooms, off for `StartServer` | UPnP IGD / NAT-PMP |
 | Rendezvous server ports | UDP 7790–7792, TCP 7793 | Relays on UDP 7800–7899 |
 
-Defaults live in `Config/Engine.json` and are edited in
-[Preferences → Network](Editor-EN-DOC.md#109-network); the live test harness is
-[Network Manager](Editor-EN-DOC.md#11-network-manager-enet).
+The defaults above are the engine's built-in values — what a shipped game starts with.
+[Preferences → Network](Editor-EN-DOC.md#109-network) keeps its own values in the project's
+`Config/Engine.json` and applies them to the editor session (the
+[Network Manager](Editor-EN-DOC.md#11-network-manager-enet) test harness and Play mode). A
+game build drops that section, so a game that needs other values sets them from script —
+`Network.StartServer(port, maxPlayers, …)`, `Network.SetTickRate`, `Network.SetSnapshotRate`
+and the rest of [Lua API → Network](LuaAPI-EN-DOC.md#32-network--multiplayer-network).
 
 ---
 
@@ -1140,12 +1250,35 @@ and the engine registers an additional **Opus** decoding backend so
 [cooked Opus audio](Profiling-And-Building-EN-DOC.md#9-asset-cooking) plays back with no
 special case. The file type is recognised from its contents, not its extension, so a cooked
 file that keeps its original name decodes correctly. Sounds are registered by **name**,
-which is the handle every later call uses.
+which is the handle every later call uses; every play also returns a **voice id** that controls
+just that play.
 
-**Groups and volume.** Every sound belongs to a group — **Master**, **Music**, **SFX**,
-**Voice**, **Ambient** or **UI**. A sound's audible level is its own volume × its group's
-volume × the master volume × the global gain, and any group (or the master) can be muted
-independently. The mixer is configured in [Preferences → Audio](Editor-EN-DOC.md#107-audio).
+**Groups, buses and the mix.** Every sound belongs to a group — **Master**, **Music**, **SFX**,
+**Voice**, **Ambient** or **UI** — and every group is a **mixing bus** with its own effect
+chain; the Master bus carries the whole mix. A sound's audible level is its own volume × its
+group's volume × the master volume × the global gain, shaped further by the active snapshot,
+ducking and occlusion, and any group (or the master) can be muted independently. **Ducking**
+lowers one group while another is audible (the music under dialogue) with attack, release and
+threshold, or once on demand. **Snapshots** are named mixes — a volume and optional bus effects
+for each group — that scripts apply by name and that **audio zones** (View assets with an Audio
+Volume) apply while the listener is inside; changes blend over the snapshot's fade time or the
+zone's blend radius. Video players and incoming voice chat follow the volume and mute of a
+chosen group. The mixer is configured in [Preferences → Audio](Editor-EN-DOC.md#107-audio) and
+can be watched live in the [Audio Mixer](Editor-EN-DOC.md#the-audio-mixer-panel).
+
+**Voices.** A sound asset can play several copies at once (**Max Instances**, with a steal mode
+for when all of them are busy), pick one of several files for every play (**Variations**:
+random, random without repeat, sequence or shuffle) and ignore plays that come too quickly
+(**Retrigger Cooldown**). A project-wide **voice limit** keeps the number of playing sounds under
+control: the least important voice by **Priority** — then the oldest — makes room for a new one.
+A single play can be delayed, faded in, started at a given time, placed in the world, looped or
+given its own volume, pitch and pan. Every copy of a streamed sound gets its own stream.
+
+**Game pause & time scale.** Each group can pause while the game is paused (`PauseGame()`, a
+time scale of 0 or the editor's Pause button) and can follow the game time scale with its pitch,
+so slow motion sounds slowed down; a sound asset can override both for one sound. Sounds started
+during a pause play normally, so pause menus keep their music and clicks. Both switches are off
+by default.
 
 **Streaming vs. resident.** Nothing is ever decoded on the audio thread, which is what keeps
 playback free of crackles on slow devices:
@@ -1155,26 +1288,43 @@ playback free of crackles on slow devices:
 | **Sound** | Decoded **once, when it is loaded**, into memory. Every sound loaded from the same file at the same settings shares that memory. | **Streamed** automatically on a background streaming thread with a ¾-second buffer. |
 | **Music** | Always **streamed** (and defaults to the Music group and to looping). | Always streamed. |
 
+A sound asset's **Load Mode** can force either way: **Decompress Into Memory** keeps even a long
+sound (or music) in memory, up to 256 MB of samples, and **Stream** always streams it.
+
 Loading a short sound therefore costs its decode time up front — load sounds with the
 level or behind a loading screen rather than in the middle of a hot loop. A file whose sample
 rate differs from the engine's is converted with a high-quality filter at that moment; a sound
 loaded with **Loop** on is converted as a continuous loop, and streamed loops wrap without
-resetting the converter, so the loop point stays seamless either way. Assets that live
-inside a packed build are read through the virtual file system and decoded from a memory
-buffer, so packing changes nothing about playback.
+resetting the converter, so the loop point stays seamless either way. A **loop region** (loop
+start and end, or the loop points an audio editor stored in a WAV file) turns everything before
+it into an intro that plays once. Assets that live inside a packed build are read through the
+virtual file system and decoded from a memory buffer, so packing changes nothing about playback.
+Editing a sound file or its `.ice_sound` while the editor runs reloads just that sound in place;
+a playing sound continues from the same position.
 
 **Spatial audio.** A sound can be 2D or **3D**, with position, velocity, direction, a
 min/max distance pair, a rolloff, a Doppler factor and an optional **cone** (inner angle,
 outer angle, outer volume). The engine supports **multiple listeners**, which is what
 [split-screen](#43-cameras-ui--audio-per-player) uses; outside split-screen exactly one
 listener is active and it follows the primary camera. Global defaults for distance, rolloff,
-speed of sound and Doppler are engine-wide settings.
+speed of sound and Doppler are engine-wide settings. Distances are in world units (pixels); the
+speed of sound is given in meters per second and converted with the physics pixels-per-meter.
+Velocities for the Doppler effect can be calculated automatically from movement (teleports are
+ignored). **Panning Strength** narrows how far a 3D sound pans without changing its
+attenuation, and **occlusion** casts rays against the physics colliders — optionally only
+static ones and only chosen collision groups — to muffle and quieten 3D sounds behind walls,
+smoothly and at a configurable rate. Entity sound sources follow their entity every frame, their
+cone turns with the entity's rotation and horizontal flip, and a source can keep playing after
+its entity is destroyed.
 
-**Per-sound effects.** Each sound can carry its own effect chain: a **low-pass** and
-**high-pass** filter, **low-shelf** and **high-shelf** EQ, a **delay** (time, decay, wet,
-dry) and a **reverb** (decay, wet, room size, damping). Changing a setting while the sound
-plays glides to the new value instead of jumping, switching an effect on or off crossfades
-over about 10 ms, and the delay and reverb **tails keep ringing** after the sound stops.
+**Per-sound effects.** Each sound — and each group bus — can carry its own effect chain of
+fourteen stages: **low-pass**, **high-pass** and **band-pass** filters (with resonance),
+**low-shelf**, **peak** and **high-shelf** EQ, **distortion** (soft, hard, fuzz), a
+**bitcrusher**, a **compressor**, **chorus / flanger**, **tremolo**, a **delay** (time, decay,
+wet, dry), a **reverb** (decay, wet, room size, damping, pre-delay, width) and **stereo width**.
+Changing a setting while the sound plays glides to the new value instead of jumping, switching
+an effect on or off crossfades over about 10 ms, and the delay, reverb and modulation **tails
+keep ringing** after the sound stops.
 Cutoff frequencies are kept safely below the Nyquist limit of the current sample rate, and
 a chain that ever produces invalid samples resets itself to silence instead of exploding.
 Fades — fade to a target volume over a duration, fade in, fade out — are handled by the
@@ -1183,7 +1333,7 @@ engine rather than by your update loop.
 **Click-free playback.** Every discontinuity is smoothed at the sample level: stopping,
 pausing, resuming and seeking apply a 5–6 ms ramp (a sound started from its beginning keeps
 its attack exactly as authored); playing a sound that is already playing restarts it with a
-short **crossfade**; trimmed **Start Time / End Time** edges are
+short **crossfade** (when its asset allows one instance); trimmed **Start Time / End Time** edges are
 faded so a cut in the middle of a waveform does not click; volume and pan changes glide; and
 3D sources that pass through the listener fade their left/right panning out inside the
 **Min Distance** instead of flipping sides. Stopping a sound applies its asset's
@@ -1196,7 +1346,8 @@ look-ahead. Many loud sounds overlapping are held just under full scale instead 
 into distortion, and invalid samples are replaced with silence.
 
 **Quality.** The **Sound Quality** preset selects the engine sample rate (from 8 kHz to
-96 kHz). Changing it re-creates the audio engine and **restores every loaded sound** —
+96 kHz). Changing it — or switching the output device — re-creates the audio engine and
+**restores every loaded sound** —
 including whether it was playing or paused, its cursor position, volume, pitch, pan, loop
 flag, effects and 3D placement — so a settings menu can change audio quality without
 interrupting the game.
@@ -1204,9 +1355,12 @@ interrupting the game.
 **Devices & platforms.** The mixer renders whatever block size the platform asks for, so
 it never has to produce oversized blocks at once. On **Android** it uses a low-latency
 AAudio stream (OpenSL ES on older systems) and grows the output buffer automatically if the
-system reports an underrun. On **iOS** the audio session uses the *Playback* category, so
-Bluetooth headphones keep their high-quality stereo profile, and playback restarts by itself
-after an interruption such as a phone call. If the output device disappears or refuses to
+system reports an underrun. On **iOS** the audio session category is chosen in
+Preferences → Audio → Platform: *Playback* (the default — always audible, and Bluetooth
+headphones keep their high-quality stereo profile), *Ambient* (mixes with other apps and follows
+the silent switch) or *Solo Ambient*; playback restarts by itself after an interruption such as
+a phone call. The editor picks its output device in the Audio Mixer and a game in its options
+(`Settings.SetAudioOutputDevice`); when the saved device is missing, the system default is used. If the output device disappears or refuses to
 start — headphones unplugged, a Bluetooth switch — the engine keeps retrying in the
 background and resumes without any action from the game. On **Web**, browsers start audio
 only after the first user interaction, and streamed music keeps being fed while the tab is in
@@ -1217,10 +1371,15 @@ the background (unless the game suspends itself when it loses focus).
 fades it back in, so neither makes a pop. In the editor, a separate **monitor volume and
 mute** scale what *you* hear while editing — game audio in Play mode and every sound preview —
 without touching project settings — the toolbar control described in
-[Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). Editor builds can also tap the
-output for [Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio streaming.
+[Editor → 4.2](Editor-EN-DOC.md#42-editor-audio-monitor). The
+[Audio Mixer](Editor-EN-DOC.md#the-audio-mixer-panel) adds per-group mute and solo for the
+editor, live meters and the list of playing voices. Stopping Play stops every sound the game
+started, music included, and resets the mixer to the project values; editor previews keep
+playing. Editor builds can also tap the output for
+[Remote Preview](Editor-EN-DOC.md#12-remote-preview) audio streaming.
 
-The live state of the mixer — voices, streams and limiter activity — is published as
+The live state of the mixer — voices, delayed voices, streams, listeners, stolen and rejected
+voices, and limiter activity — is published as
 **Audio** counters in the profiler
 ([Profiling & Building → 2.3](Profiling-And-Building-EN-DOC.md#23-counters)).
 
@@ -1276,10 +1435,10 @@ underneath.
 | **Async level loading** | Loads a level without stalling the frame: the level JSON is parsed on a **worker thread**, then its textures are preloaded on the main thread in phases (*Parsing → Preloading Assets → Ready → Complete*), each with a progress fraction and a status string you can drive a loading screen from. The finished level is applied either automatically or when you ask for it, so you control the exact frame the world swaps. |
 | **Scene state snapshots** | Capture and restore the whole scene as data — the mechanism behind checkpoints, save-states and rollback's save/load callbacks. |
 | **Replay system** | Samples tracked entities (transform, velocity, visibility) at a fixed rate into frames, plus arbitrary named numbers and strings you record per frame. It runs in two modes: **recording** to a growing buffer you save to disk, and a **circular buffer** of the last N seconds that can be captured on demand — which is how killcams work. Playback applies samples back onto entities with optional interpolation, looping and speed control. |
-| **Destruction** | Fractures sprites, flipbooks and tiles into real physics debris on impact; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces a per-entity debris cap. |
+| **Destruction** | Fractures sprites, flipbooks, skeletons and tiles into real physics debris — rectangles, triangles, shards or splinters — on impact, on damage or from script, and lets debris break into smaller debris for several generations; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces the debris cap. |
 | **Navigation** | Nav grids are built from **view volumes** ([Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view)): each volume owns its own grid with its own cell size, agent radius, diagonal flag and mode (top-view or side-view, the latter with jump/fall limits). Several grids can coexist; a path query picks the grid that contains the endpoints, runs A\* and can smooth the result. |
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
-| **Command system & CVars** | Named commands and console variables registered from C++ or Lua, executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
+| **Command system & CVars** | Named commands and console variables — the engine's own plus those your scripts register from Lua — executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
 | **Crash reporter** | Installed by every IceBoxEngine application; it records the active renderer, GPU and driver at startup so a crash report always names them. Reporting options are set per build in [Profiling & Building → Crash Reporter](Profiling-And-Building-EN-DOC.md#73-crash-reporter). |
 | **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web, Media Foundation on the Xbox consoles) that decodes video into a texture the game can draw and streams the audio track alongside it, with play/pause/resume/stop, a **skippable** flag, volume, looping of the whole video or of a chosen part, frame-accurate seeking, playback speed from 0.25× to 4× with or without pitch correction, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
 | **Localization** | The editor UI and game text are separate: the editor reads `Config/Languages/*.json` ([Editor → 2.5](Editor-EN-DOC.md#25-language-fonts--rtl-layout)), while your game reads a `.ice_localization` asset ([Assets → 4.18](Assets-EN-DOC.md#418-localization-ice_localization)), which hot-reloads when it changes on disk. |
@@ -1349,8 +1508,8 @@ either a higher limit or a server-side move; alternatively switch the **Trust Mo
 
 **Players join but see an empty world.**
 Entities only replicate when their **Replication** component has **Replicate** ticked. The
-server re-announces everything when a player joins, so a genuinely empty world means nothing
-is flagged.
+server sends the whole replicated world to every player who joins, so a genuinely empty world
+means nothing is flagged.
 
 **Bandwidth is fine locally but the server melts with many players.**
 Turn on **Area Of Interest** and mark only genuinely global entities as **Always Relevant**.

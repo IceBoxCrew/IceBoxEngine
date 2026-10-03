@@ -404,10 +404,13 @@ OF SUCH DAMAGE.
 11. SIL OPEN FONT LICENSE, VERSION 1.1
 ========================================================================
 Used by:
-- Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew, Noto Sans JP, and Noto Sans SC (bundled fonts used to render Latin, Cyrillic, Arabic, Hebrew, Devanagari, Japanese and Simplified Chinese text in the editor and in games) - https://github.com/notofonts
+- Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew, Noto Sans JP, Noto Sans KR, and Noto Sans SC (bundled fonts used to render Latin, Cyrillic, Arabic, Hebrew, Devanagari, Japanese, Korean and Simplified Chinese text in the editor and in games) - https://github.com/notofonts
+- Noto Emoji (bundled monochrome emoji font, shipped with the editor only; used by the Documentation panel to draw emoji the same way on every platform) - https://github.com/googlefonts/noto-emoji
 - Tiny5 (bundled pixel font used by the Platformer example UI) - https://github.com/Gissio/font_tiny5
 
-Copyright The Noto Project Authors, with Reserved Font Name "Noto".
+Copyright 2022-2024 The Noto Project Authors (https://github.com/notofonts) - Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew.
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source' - Noto Sans JP, Noto Sans KR, Noto Sans SC.
+Copyright 2013-2026 Google LLC (https://github.com/googlefonts/noto-emoji) - Noto Emoji.
 Copyright The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5).
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.

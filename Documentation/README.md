@@ -9,7 +9,7 @@ The documentation is available in two languages:
 | 🇬🇧 English  | [`EN/`](EN) | Primary reference set. |
 | 🇷🇺 Русский  | [`RU/`](RU) | Полный перевод всей документации. |
 
-Every document is also readable **inside the editor** through the `Help → Documentation` panel, which supports full-text search, a table-of-contents sidebar, scrollable tables, clickable links, and the same font stack (FreeType) used by the rest of the ImGui editor.
+Every document is also readable **inside the editor** through the `Help → Documentation` panel, which renders the Markdown the way GitHub shows it — alerts, task lists, tables, syntax-highlighted code blocks with a copy button, emoji — and adds search within a document and across all documents, a collapsible table of contents, back / forward history, clickable links between sections, documents and languages, text selection and copying, and an adjustable text size.
 
 ---
 
@@ -45,7 +45,7 @@ A short guide to each document in the [`EN/`](EN) folder:
 | [Engine-RU-DOC.md](RU/Engine-RU-DOC.md) | Движок, мультиплеер и физика — архитектура рантайма и цикл кадра, система задач, детерминизм, **мультиплеер** (сплит-скрин/локальный и онлайновый: репликация, rollback, голос, поиск серверов, безопасность), **продвинутая физика** сверх документа по графике, а также стеки аудио и ввода. |
 | [LuaAPI-RU-DOC.md](RU/LuaAPI-RU-DOC.md) | Полный справочник Lua API — все модули, классы и функции, доступные игровым скриптам, начиная с полного курса Lua для новичков. |
 | [PythonAPI-RU-DOC.md](RU/PythonAPI-RU-DOC.md) | Python API для автоматизации редактора: инструменты, работа с ассетами, кастомные шаги сборки. |
-| [Assets-RU-DOC.md](RU/Assets-RU-DOC.md) | Система ассетов и Контент-браузер — все типы ассетов, сайдкары, редиректоры, импорт и редактирование. |
+| [Assets-RU-DOC.md](RU/Assets-RU-DOC.md) | Система ассетов и Браузер контента — все типы ассетов, сайдкары, редиректоры, импорт и редактирование. |
 | [Profiling-And-Building-RU-DOC.md](RU/Profiling-And-Building-RU-DOC.md) | Профайлинг (в редакторе и рантайме) и сборка игр под все семь платформ — подготовка, упаковка, манифесты, инсталляторы, DLC. |
 | [Plugins-And-Mods-RU-DOC.md](RU/Plugins-And-Mods-RU-DOC.md) | Системы плагинов и модов — создание нативных C++-плагинов и Lua/контент-модов: API, манифесты, жизненный цикл, панель редактора и поставка. |
 
