@@ -1,11 +1,29 @@
-Noto Sans font family
+Noto fonts (Noto Sans family and Noto Emoji)
 Used: Noto Sans, Noto Sans Arabic, Noto Sans Devanagari, Noto Sans Hebrew,
-Noto Sans JP, Noto Sans SC (bundled in Config/Fonts to render Latin, Cyrillic,
-Arabic, Hebrew, Devanagari, Japanese and Simplified Chinese text).
+Noto Sans JP, Noto Sans KR, Noto Sans SC (bundled in Config/Fonts to render Latin,
+Cyrillic, Arabic, Hebrew, Devanagari, Japanese, Korean and Simplified Chinese text),
+and Noto Emoji (bundled in Config/Fonts with the editor only; the Documentation
+panel draws emoji with it).
 https://github.com/notofonts
+https://github.com/googlefonts/noto-emoji
 
-Copyright The Noto Project Authors (https://github.com/notofonts), with
-Reserved Font Name "Noto".
+Noto Sans:
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)
+
+Noto Sans Arabic:
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)
+
+Noto Sans Devanagari:
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/devanagari)
+
+Noto Sans Hebrew:
+Copyright 2024 The Noto Project Authors (https://github.com/notofonts/hebrew)
+
+Noto Sans JP, Noto Sans KR, Noto Sans SC:
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+
+Noto Emoji:
+Copyright 2013-2026 Google LLC (https://github.com/googlefonts/noto-emoji)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

@@ -19,6 +19,7 @@
    - [Visual Scripting reference](#visual-scripting-reference)
    - [Class editor: `.ice_class` components](#class-editor-ice_class-components)
    - [Lua script editor](#lua-script-editor)
+   - [Coordinate conventions](#coordinate-conventions)
 2. [Lua Language Basics — Full Course for Beginners](#2-lua-language-basics--full-course-for-beginners)
    - [What is Lua?](#what-is-lua)
    - [Comments](#comments)
@@ -140,9 +141,9 @@ IceBoxEngine offers two ways to author gameplay logic. The mode is chosen **once
 **Visual Scripting** replaces the code editor with a **node graph**. Instead of typing, you drag nodes and wire them together:
 
 - **Event nodes** are entry points (`On Create`, `On Update`, `On Collision Enter`, …) — the same lifecycle callbacks listed in [Script lifecycle](#3-script-lifecycle).
-- **Action / value nodes** wrap the engine's Lua functions (`Set Position`, `Is Key Pressed`, `Add Force`, `Play Sound`, …). Every global function in this document is available as a node, with typed nodes for the most common categories (Transform, Physics, Input, Entity, Audio, Camera, and more).
+- **Action / value nodes** wrap the engine's Lua functions (`Set Position`, `Is Key Pressed`, `Add Force`, `Play Sound`, …). Every engine function in this document — global, module (`Audio.Play`) or object method — is available as a node, with typed nodes for the most common categories (Transform, Physics, Input, Entity, Audio, Camera, and more).
 - **Flow control nodes** add the structure a visual graph needs: `Branch` (if), `Sequence`, `For Loop` (+ with Break), `While`, `For Each` (+ with Break), `Do Once`, `Flip Flop`, `Do N`, `Gate`, `MultiGate`, `Switch` on Int / String / Enum, `Delay`, `Retriggerable Delay` and `Timeline`.
-- **Variable nodes** (`Get` / `Set` / `Increment` / `Decrement`) plus **math and logic nodes** (`+`, `-`, `*`, `/`, `%`, `>`, `==`, `AND`, `Min`, `Clamp`, `Make Vec2`, …) let you compute and store values. The arithmetic and comparison nodes are wildcards: one node adapts to `Int`, `Float`, `Vec2`, `Vec3` and `Color` (see [Math and operator nodes](#math-and-operator-nodes)).
+- **Variable nodes** (`Get` / `Set` / `Increment` / `Decrement`) plus **math and logic nodes** (`+`, `-`, `*`, `/`, `%`, `>`, `==`, `AND`, `Min`, `Clamp`, `Make Vec2`, …) let you compute and store values. The arithmetic and comparison nodes are wildcards: one node adapts to `Int`, `Float`, `Vec2`, `Vec3`, `Vec4` and `Color` (see [Math and operator nodes](#math-and-operator-nodes)).
 
 Under the hood the graph is **compiled to the exact same Lua** and runs through the same engine. This means:
 
@@ -174,7 +175,7 @@ compiles to plain Lua, so the rest of this document still describes what each no
 | **Int** | teal | A whole number (a Lua integer). |
 | **Float** | green | A number. |
 | **String** | magenta | Text. |
-| **Vec2** / **Vec3** | yellow / orange | `{x=, y=}` / `{x=, y=, z=}` tables. |
+| **Vec2** / **Vec3** / **Vec4** | yellow / orange / dark orange | `{x=, y=}` / `{x=, y=, z=}` / `{x=, y=, z=, w=}` tables. |
 | **Color** | blue | `{r=, g=, b=, a=}` table, components 0..1. |
 | **Entity** | light blue | An entity id (a number); `nil` means *none*. |
 | **Table** | violet | Any Lua table. With a name it is a **struct** declared in the graph (`Table<Name>`). |
@@ -191,14 +192,14 @@ Containers change the pin shape: **Array** (a 3×3 grid of squares), **Set** (th
 A wire is accepted when the types match, plus these conversions:
 
 * `Int` ↔ `Float`.
-* `Int`, `Float`, `Bool`, `Entity`, `Vec2`, `Vec3` and `Color` into a `String` pin — the value is
-  turned into text when the script runs: `42`, `2.5`, `true`, `X=1 Y=2`, `R=1 G=0 B=0 A=1`. The
+* `Int`, `Float`, `Bool`, `Entity`, `Vec2`, `Vec3`, `Vec4` and `Color` into a `String` pin — the value
+  is turned into text when the script runs: `42`, `2.5`, `true`, `X=1 Y=2`, `R=1 G=0 B=0 A=1`. The
   *Key* pin of **Get Field** / **Set Field** is the one exception: it passes the value unchanged,
   because the table keys `5` and `"5"` are different keys.
 * `Enum` ↔ `String` — an enum value *is* its name.
 * The operand pins of the math and comparison nodes take the types listed in
   [Math and operator nodes](#math-and-operator-nodes).
-* `Vec2`, `Vec3` and `Color` into a plain `Table` pin. Structs and containers also connect to
+* `Vec2`, `Vec3`, `Vec4` and `Color` into a plain `Table` pin. Structs and containers also connect to
   and from a plain `Table` pin.
 * A struct connects only to the same struct (or to a plain `Table`).
 * Containers connect only to the same container kind with compatible elements
@@ -247,12 +248,12 @@ pins adapt to whatever you connect.
 
 | Node | Operands | Result |
 |------|----------|--------|
-| **Add (+)**, **Subtract (-)** | `Int`, `Float`, `Vec2`, `Vec3`, `Color` | the widest operand type |
-| **Multiply (\*)**, **Divide (/)** | `Int`, `Float`, `Vec2`, `Vec3`, `Color` | the widest operand type |
+| **Add (+)**, **Subtract (-)** | `Int`, `Float`, `Vec2`, `Vec3`, `Vec4`, `Color` | the widest operand type |
+| **Multiply (\*)**, **Divide (/)** | `Int`, `Float`, `Vec2`, `Vec3`, `Vec4`, `Color` | the widest operand type |
 | **Modulo (%)** | `Int`, `Float` | the widest operand type |
-| **Negate** | `Int`, `Float`, `Vec2`, `Vec3`, `Color` | the operand type |
+| **Negate** | `Int`, `Float`, `Vec2`, `Vec3`, `Vec4`, `Color` | the operand type |
 | **Min**, **Max**, **Clamp**, **Abs**, **Sign** | `Int`, `Float` | the widest operand type |
-| **Lerp** | *A*, *B*: `Float`, `Vec2`, `Vec3`, `Color`; *T*: `Float` | the type of *A* / *B* |
+| **Lerp** | *A*, *B*: `Float`, `Vec2`, `Vec3`, `Vec4`, `Color`; *T*: `Float` | the type of *A* / *B* |
 | **In Range** | `Int`, `Float` | `Bool` |
 | **Greater**, **Greater Equal**, **Less**, **Less Equal** | `Int` and `Float`, or `String` | `Bool` |
 | **Equal**, **Not Equal** | any type | `Bool` |
@@ -281,7 +282,7 @@ What the operators do at runtime:
 | `Int / Int` | A whole number, **truncated toward zero**: `7 / 2 = 3`, `-7 / 2 = -3`. Connect a `Float` to either pin to get `3.5`. |
 | Division by zero | `0` — for vectors, every component divided by zero becomes `0`. Never an error, never `inf`. |
 | **Modulo** | The remainder takes the sign of *B*: `-1 % 5 = 4`, which is exactly what cycling an index needs. `% 0` gives `0`. |
-| **Equal** / **Not Equal** on `Vec2`, `Vec3`, `Color` | Compares the components: two vectors with the same values are equal. |
+| **Equal** / **Not Equal** on `Vec2`, `Vec3`, `Vec4`, `Color` | Compares the components: two vectors with the same values are equal. |
 | **Greater** / **Less** on `String` | Alphabetical (byte) order. |
 | **Clamp** with *Min* greater than *Max* | Values below *Min* give *Min*, values above *Max* give *Max*. |
 
@@ -301,6 +302,15 @@ More math and logic nodes:
   *From Angle* and *Clamp Length*. Angles are in degrees and follow the engine: a **positive
   angle turns clockwise**, `0°` points to the right (+X) and `90°` points down (−Y) — the same
   convention as `RotatePoint`, `AngleToDirection` and `DirectionToAngle`.
+* **Vec3** nodes: *Length*, *Length Squared*, *Normalize*, *Dot*, *Cross*, *Distance*,
+  *Distance Squared*, *Direction To* and *Clamp Length*; **Vec4** nodes: *Length* and *Dot*. With
+  the wildcard nodes above (**Add**, **Multiply**, **Lerp**, **Equal**, …) they do in a graph
+  what the methods of the Lua `Vec2`, `Vec3` and `Vec4` values do in code
+  ([section 25](#25-math--math-and-noise)).
+* **Make Vec2 / Vec3 / Vec4 / Color** build a value from its components and **Break Vec2 / Vec3 /
+  Vec4 / Color** split it. **Make Rect** / **Break Rect** (*X*, *Y*, *W*, *H*) and **Make Transform** /
+  **Break Transform** (*X*, *Y*, *Z*, *Rotation*, *Scale X*, *Scale Y*) do the same for the Lua `Rect`
+  and `Transform` values.
 * **Equal (Case Insensitive)** compares two strings ignoring letter case.
 * **Format Number** turns a number into text with a fixed number of *Decimals* and, with
   *Min Integer Digits*, leading zeros — `Format Number(7.456, 2, 2)` gives `"07.46"`, handy for
@@ -311,7 +321,7 @@ More math and logic nodes:
 #### Literal values and the **fx** button
 
 Unconnected typed inputs show an inline value editor — numbers, text and check boxes, and also
-X / Y / Z fields for `Vec2` / `Vec3` and a color swatch for `Color`. In the **Details** panel every
+X / Y / Z / W fields for `Vec2` / `Vec3` / `Vec4` and a color swatch for `Color`. In the **Details** panel every
 unconnected input also has an **fx** button: it switches the pin to a **Lua expression**
 typed as text (the button turns orange). Use it for values a literal cannot express —
 `math.pi / 4`, `{x = GetMouseX(), y = 0}`, a global defined in Lua. Press **fx** again to go
@@ -322,7 +332,7 @@ back to the literal.
 Add variables in the **Variables** panel — member variables of the graph, or local
 variables while a function is open. A variable has a **Type** (including the graph's enums
 and structs), a **Container** (`Single`, `Array`, `Set`, `Map` + key type) and a **Default**.
-Arrays, sets and maps of simple types (Bool, Int, Float, String, Vec2, Vec3, Color, Enum)
+Arrays, sets and maps of simple types (Bool, Int, Float, String, Vec2, Vec3, Vec4, Color, Enum)
 have an item editor for their default contents. Member variables can carry a **Tooltip**,
 shown when you hover the variable.
 
@@ -334,7 +344,7 @@ In **class** graphs a member variable also has these options:
 
 | Option | Effect |
 |--------|--------|
-| **Instance Editable** (the eye icon in the list) | Every placed instance of the class shows the variable in the **Properties** panel and can set its own value. Supported types: Bool, Int, Float, String, Vec2, Vec3, Color, Entity, Enum, and arrays, sets and maps of them. An `Entity` value points at another entity of the level. |
+| **Instance Editable** (the eye icon in the list) | Every placed instance of the class shows the variable in the **Properties** panel and can set its own value. Supported types: Bool, Int, Float, String, Vec2, Vec3, Vec4, Color, Entity, Enum, and arrays, sets and maps of them. An `Entity` value points at another entity of the level. |
 | **Expose on Spawn** | The variable becomes an input pin on the **Spawn Class** node, and `SpawnEntity(classPath, x, y, z, vars)` accepts it by name. Any type can be exposed. |
 | **Category** | Groups instance-editable variables in the Properties panel. |
 | **Value Range** | Int / Float only: clamps the default and the per-instance values while you edit them. |
@@ -363,11 +373,11 @@ re-runs after you edit a value — and in the game.
   It and **Array Shuffle** use the engine's random generator, so `SetRandomSeed` makes them
   repeatable.
 * **Array Resize** removes elements from the end or appends default values: `0`, `0.0`,
-  `false`, `""`, a zero vector, white for `Color`, the first value of an enum, a struct with
+  `false`, `""`, a zero vector (`w = 1` for `Vec4`), white for `Color`, the first value of an enum, a struct with
   every field at its default. Arrays of `Entity`, `Function` and `Any` can only shrink.
 * **Array Sort** sorts numbers or strings — ascending, or descending with *Descending*.
-* **Contains**, **Find**, **Add Unique** and **Remove Item** compare `Vec2`, `Vec3` and `Color`
-  elements by value.
+* **Contains**, **Find**, **Add Unique** and **Remove Item** compare `Vec2`, `Vec3`, `Vec4` and
+  `Color` elements by value.
 
 #### Spawn Class node
 
@@ -442,7 +452,7 @@ The same control is available to Lua through `tl.SetReversed(bool)` / `tl.IsReve
 
 #### Engine function nodes
 
-Every function of this document is a node. Functions that only *read* something (`Get…`,
+Every engine function of this document is a node. Functions that only *read* something (`Get…`,
 `Is…`, `Has…`, math) are **pure** value nodes; the rest are actions with Exec pins.
 
 * Functions that return several values get one output pin per value.
@@ -450,6 +460,23 @@ Every function of this document is a node. Functions that only *read* something 
   engine's own default applies. A value you set on such a pin is always passed.
 * Functions with a variable number of arguments (`Str.Format`, …) get extra *Arg* pins with
   **Add Pin** / **Remove Pin** in Details.
+* Objects the API creates work the same way: the node that makes one (`NoiseBuffer.new`,
+  `PixelBuffer.new`, `QuadBuffer.new`, `RNG.Stream`, `ObjectPool`, `StateMachine`, `Timeline`, …)
+  outputs it, and every method of that object is a node with a **Target** pin for it. Its palette
+  category is the object type (`NoiseBuffer`, `RandomStream`, …).
+* `Vec2`, `Vec3`, `Vec4`, `Color`, `Rect` and `Transform` values are the exception: a graph builds and
+  reads them with the Make / Break and vector nodes of
+  [Math and operator nodes](#math-and-operator-nodes) instead of `.new` and method nodes.
+* The palette offers the functions the script of that graph can call:
+  * a **class** graph — the global functions and every entity function;
+  * a **level** graph — the global functions and the
+    [level script API](#level-script-level-script): the Entity, Camera, Component and
+    Destruction functions that work on any entity (`FindEntityByTag`, `SpawnEntity`,
+    `GetEntityPosition`, `SetCameraPosition`, `EntityHasComponent`, `FractureEntity`, …) and every
+    trace and overlap function (`LineTrace`, `OverlapCircle`, …). Functions that act on the
+    script's own entity (`DestroySelf`, `GetEntityId`, `SetTag`, `Fracture`, …) stay class-only;
+  * a **widget** graph — the global functions and the short-name functions of the widget's own
+    script (`SetElementText`, `GetElementPosition`, … — see [section 21](#21-widget--ui-widgets)).
 
 #### Problems panel
 
@@ -461,19 +488,6 @@ a *Spawn Class* without a class (or with a class that no longer exists), variabl
 a variable that is not a number, and custom events, functions or parameters named like a Lua
 library the generated script relies on (`math`, `string`, `table`, `pairs`, …) or starting
 with `__`. Click an entry to select its node.
-
-#### Graph format and upgrades
-
-Graphs are saved with `"version": 3`. A graph saved by an older editor is upgraded when it
-loads: nodes whose engine function turned into a value node (or back) keep their old pin
-layout so existing wires stay valid, Lua-expression values of former `Any` pins stay
-expressions (**fx** on), and the old *Get Entities In Radius* node — it had only a *Radius*
-pin and could not work — becomes **GetEntitiesInMyRadius** (entities around this entity).
-The math and comparison nodes keep their pins and simply become wildcards. The one behavior
-that changed is `Int / Int`, which used to give a fractional result: a **Divide** node from a
-version 2 graph whose inputs are whole numbers is kept as the old divide, so the result does not
-change — replace it with a new **Divide** node to get whole-number division.
-Save the asset once to store the upgraded graph.
 
 ### File types
 
@@ -503,9 +517,9 @@ Save the asset once to store the upgraded graph.
 > **Under the hood:** entity functions are attached to a script's environment **on first use**, one
 > API group at a time, so an entity only pays for the groups it actually touches. Normal code never
 > notices — `SetPosition(...)`, `_ENV.SetPosition` and `Interfaces.Call(id, "SetPosition", …)` all
-> behave exactly as before. The difference is visible only when you inspect the environment itself:
-> `pairs(_ENV)` and `rawget(_ENV, "SetPosition")` see an entity function only after the script has
-> used it.
+> behave exactly as if every group were attached up front. The difference is visible only when you
+> inspect the environment itself: `pairs(_ENV)` and `rawget(_ENV, "SetPosition")` see an entity
+> function only after the script has used it.
 
 ### Class inheritance
 
@@ -524,6 +538,37 @@ function OnCreate()
     health = 100
 end
 ```
+
+How the parent and child scripts combine:
+
+- The parent's script runs first, then the child's. A callback the child does not define keeps the
+  parent's version — a child without its own `OnUpdate` runs the parent's `OnUpdate`. A callback the
+  child defines replaces the parent's one; call the parent's version from it (`Parent.OnUpdate(dt)`
+  in `OnUpdate`) to run the parent's code too.
+- The parent's other functions and global values are copied into the child before the child's script
+  runs, so the child can call a parent helper directly or redefine it under the same name.
+- `Parent` is always a table — an empty one in a class without a parent. `OnParent` is the same table
+  under a second name.
+
+When you create a child class (**Create Child Class**) or give a class a parent, the Class Editor adds
+one line to the start of each lifecycle callback (`OnConstruct`, `OnCreate`, `OnUpdate`, …) in its Lua
+script that does not call the parent yet. The Widget Editor does the same for the `OnInit`,
+`OnUpdate`, `OnDestroy` and `OnLanguageChanged` of a child widget:
+
+```lua
+function OnUpdate(dt)
+    if OnParent and OnParent.OnUpdate then OnParent.OnUpdate(dt) end -- __IB_AUTO_ONPARENT__
+end
+```
+
+The `__IB_AUTO_ONPARENT__` marker lets the editor remove these lines again when the parent is
+cleared. Delete a line to skip the parent's version of that callback.
+
+In a **Visual Script** class or widget, **Parent** nodes (`Parent: On Create`, `Parent: On Update`, …,
+category *Parent*) do the same job. When the class or widget gets a parent, the editor puts one right
+after each event node that has a parent version, and it does the same for every event node you add
+later; when the parent is cleared, the Parent nodes are removed. Delete a Parent node to skip the
+parent's version of that event.
 
 ### Child Entities (Children)
 
@@ -710,7 +755,7 @@ local neighbors = grid.GetNeighbors(3, 3, true)
 local found = grid.Find(9)
 local first = grid.FindFirst(9)
 local count = grid.Count(1)
-grid.ForEach(function(x, y, value) Print(x, y, value) end)
+grid.ForEach(function(x, y, value) Print(x .. ", " .. y .. ": " .. tostring(value)) end)
 local manhattan = grid.ManhattanDistance(1, 1, 5, 6)
 local chebyshev = grid.ChebyshevDistance(1, 1, 5, 6)
 grid.FloodFill(1, 1, 3)
@@ -739,10 +784,10 @@ local id = se.Add({
     tickInterval = 1.0,
     stacks = 1,
     maxStacks = 3,
-    onApply = function(eff) Print("Apply", eff.name) end,
-    onTick = function(eff) Print("Tick", eff.name) end,
-    onExpire = function(eff) Print("Expire", eff.name) end,
-    onRemove = function(eff) Print("Remove", eff.name) end
+    onApply = function(eff) Print("Apply " .. eff.name) end,
+    onTick = function(eff) Print("Tick " .. eff.name) end,
+    onExpire = function(eff) Print("Expire " .. eff.name) end,
+    onRemove = function(eff) Print("Remove " .. eff.name) end
 })
 
 se.Update(dt)
@@ -778,10 +823,10 @@ stats.ClearModifiers("hp")
 
 ```lua
 local tm = TurnManager({
-    onTurnStart = function(actor, idx) Print("Turn", idx) end,
-    onTurnEnd = function(actor, idx) Print("End turn", idx) end,
-    onRoundStart = function(round) Print("Round", round) end,
-    onRoundEnd = function(round) Print("Round end", round) end
+    onTurnStart = function(actor, idx) Print("Turn " .. idx) end,
+    onTurnEnd = function(actor, idx) Print("End turn " .. idx) end,
+    onRoundStart = function(round) Print("Round " .. round) end,
+    onRoundEnd = function(round) Print("Round end " .. round) end
 })
 
 tm.AddParticipant(FindEntityByTag("Player"), 0)
@@ -844,10 +889,35 @@ Inside the `Class Editor` there is a built-in Lua script editor for `.ice_class`
 - `Compile` checks the script for errors and **executes `OnConstruct`** in the class viewport.
 - Shows line/column cursor position and line count.
 - View parent script in read-only mode (if inheritance exists).
-- Autocomplete from the Lua API database.
+- Autocomplete. It opens after the first two characters of a name, and right after a module name and a
+  dot (`Audio.`, `PP.`, `string.`). It lists what this kind of script can call — the global and module
+  functions of a class, level or widget script, the Lua standard library, the engine callbacks, the
+  functions of the open script and the functions of every plugin that ships a `VisualScriptAPI.json`
+  node catalog. After `object:` or `object.` and a first letter it lists the methods of
+  the engine's objects (`NoiseBuffer`, `RandomStream`, `StateMachine`, …), plus the `string` functions
+  after `:`. The selected entry's signature is shown below the list. `↑` / `↓` choose, `Tab` / `Enter`
+  insert, `Esc` closes; it stays closed inside comments and strings.
 - Find/replace, go-to line, list of functions.
 - Quick snippets for common callbacks.
-- Code folding.
+
+### Coordinate conventions
+
+Every renderer, every platform, the editor and every scripting API share one set of rules. Whenever a value is a
+position, a direction, an angle, a pivot or a flip, it follows this table; the few deliberate exceptions are listed at
+the end of it.
+
+| Topic | Rule |
+|---|---|
+| **Axes** | **X+** is right, **X−** is left; **Y+** is up, **Y−** is down — in the world, on screen and in every normalized space below. |
+| **Rotation** | Degrees, **clockwise is positive**, counter-clockwise negative: entity and instance transforms, physics bodies and rotated queries (`OverlapBoxRotated`, `BoxTraceRotated`, …), joints, the camera roll, widgets, tiles, decals, attach points, light cookies and particles (Initial Rotation, Rotation Over Life, Orbit, Vortex, Custom Script). `RotatePoint`, `AngleToDirection`, `DirectionToAngle` and `SignedAngle` follow the same rule: `0°` points right, `90°` points down. |
+| **Pivots and normalized points** | `0..1`, **`(0, 0)` is the bottom-left corner**, `(1, 1)` the top-right: `SetSpritePivot`, `Draw.SetPivot` and the `px, py` fields, frame-region pivots, attach points, collision polygons, widget element pivots, decal pivots. |
+| **Flip X / Flip Y** | Both **off** = exactly as authored. **Flip X** mirrors horizontally and **Flip Y** vertically, around the pivot — the same for sprites, flipbooks, skeletons (the whole rig), tilemaps (layout, tile images and tile colliders), FX and decals. A widget element flips in place around its own center, together with all of its children, so its layout slot does not move. |
+| **Screen space** | Pixels of the game viewport with the **origin at the bottom-left corner**, Y up: `Draw` in `screen` space, `GetMousePosition` / `GetMouseX` / `GetMouseY`, `GetTouchPositionPixels`, `GetPointerScreenPosition`, `ScreenToWorld` / `WorldToScreen`, `SetCursorPosition`, the gamepad cursor, `OverlapAtScreenPoint`, `GetEntitiesInScreenRect`. `GetViewportSize()` returns its size. |
+| **Normalized screen** | `0..1` over the game viewport, origin at the bottom-left: `GetTouchPosition`, virtual sticks and virtual buttons. |
+| **Directions from input** | Y+ is up: mouse, touch and swipe deltas, gamepad sticks and the `lefty` / `righty` axes (pushed up = `+1`), virtual stick axes, `GetUniversalMovement`, local-player movement and aim. |
+| **Exception — inside an image** | A rectangle or UV *inside an image* keeps the image's own raster layout, **origin at the top-left**, `v` growing downward: `SetSpriteRegion`, a sprite's `SourceRect`, the `sx, sy` of `Draw.Region` / `Draw.Quad`, the `u, v` of `Draw`, frame-region `x, y`, atlas and slicer rectangles, and material texture coordinates (including the Panner, Rotator and Tiler nodes). |
+| **Exception — UI layout** | Widget element *positions* are layout offsets from the anchor that grow **downward**, like every UI layout tool (a vertical box stacks from the top). Element pivots, rotation and flips follow the rules above. |
+| **Exception — isometric / hexagonal tiles** | Orthogonal tilemaps put `y = 0` on the bottom row. Isometric and hexagonal maps address cells by their raw grid coordinates (see [Projection](#projection-orthogonal--isometric--hexagonal)). |
 
 ---
 
@@ -2705,10 +2775,10 @@ scripts and widget scripts):
 
 | Library | Available | Notes |
 | ------- | --------- | ----- |
-| `base` | ✅ | `print` is redirected to the engine log; prefer `Print`. |
+| `base` | ✅ | `print` is redirected to the engine log, like `Print`. Unlike `Print` it takes any number of values of any type and joins them with tabs, as in standard Lua. |
 | `string` | ✅ | Lua patterns, `string.format`, … |
 | `table` | ✅ | `table.insert`, `table.sort`, … |
-| `math` | ✅ | See also the engine `Math.*` helpers. |
+| `math` | ✅ | See also the engine math functions (`Clamp`, `Lerp`, `Remap`, … — [section 25](#25-math--math-and-noise)). |
 | `coroutine` | ✅ | See also `StartCoroutine` / `WaitSeconds` below. |
 | `utf8` | ✅ | `utf8.len`, `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.offset`, `utf8.charpattern`. |
 | `package` | ✅ | `require` — see [Modules and require](#modules-and-require). |
@@ -2735,7 +2805,7 @@ Print(#text)            -- 12 — bytes
 Print(utf8.len(text))   -- 6  — characters
 
 for position, codepoint in utf8.codes(text) do
-    Print(position, codepoint, utf8.char(codepoint))
+    Print(position .. ": " .. codepoint .. " " .. utf8.char(codepoint))
 end
 ```
 
@@ -2849,14 +2919,19 @@ end
 -- COLLISIONS (Box2D physics)
 -- ═══════════════════════════════════
 
-function OnCollisionEnter(otherTag, otherEntityId)
+function OnCollisionEnter(otherTag, otherEntityId, selfCollider)
     -- Collision with a physics body started
+    -- selfCollider = name of this entity's collider that touched, e.g. "Feet"
     if otherTag == "Enemy" then
         health = health - 10
     end
 end
 
-function OnCollisionExit(otherTag, otherEntityId)
+function OnCollisionStay(otherTag, otherEntityId, selfCollider)
+    -- Every physics step while the bodies keep touching
+end
+
+function OnCollisionExit(otherTag, otherEntityId, selfCollider)
     -- Collision ended
 end
 
@@ -2864,7 +2939,7 @@ end
 -- SENSORS (TRIGGERS)
 -- ═══════════════════════════════════
 
-function OnSensorEnter(otherTag, otherEntityId)
+function OnSensorEnter(otherTag, otherEntityId, selfCollider)
     -- Enter sensor zone (collider with isSensor flag)
     if otherTag == "Coin" then
         DestroyEntity(otherEntityId)
@@ -2872,7 +2947,11 @@ function OnSensorEnter(otherTag, otherEntityId)
     end
 end
 
-function OnSensorExit(otherTag, otherEntityId)
+function OnSensorStay(otherTag, otherEntityId, selfCollider)
+    -- Every physics step while the other body stays in the sensor zone
+end
+
+function OnSensorExit(otherTag, otherEntityId, selfCollider)
     -- Exit sensor zone
 end
 
@@ -2880,7 +2959,7 @@ end
 -- HIT
 -- ═══════════════════════════════════
 
-function OnHit(otherTag, otherEntityId, speed)
+function OnHit(otherTag, otherEntityId, speed, selfCollider)
     -- Called when hit with a certain speed
 end
 
@@ -2890,6 +2969,14 @@ end
 
 function OnFracture(fragments, impactX, impactY)
     -- The entity broke into debris (fragments = { entityId, ... })
+end
+
+-- ═══════════════════════════════════
+-- JOINTS — see section 35
+-- ═══════════════════════════════════
+
+function OnJointBreak(jointIndex, jointName, targetTag)
+    -- One of this entity's breakable joints broke
 end
 
 -- ═══════════════════════════════════
@@ -2911,11 +2998,11 @@ end
 -- ═══════════════════════════════════
 
 function OnPause()
-    -- Called on SetTimeScale(0) / PauseGame()
+    -- Called when the game pauses: PauseGame() or a time scale of 0
 end
 
 function OnResume()
-    -- Called on ResumeGame()
+    -- Called when the game resumes: ResumeGame() or a time scale above 0 again
 end
 
 -- ═══════════════════════════════════
@@ -2952,6 +3039,14 @@ function OnCinemaDialogueEnd(path, keyId)
 end
 ```
 
+> **Collision, sensor and hit callbacks.** `selfCollider` is the name of this entity's collider that
+> took part — the instance name shown in its Collider component (`"Feet"`, `"Box Collider"`, …) — or
+> `""` when the touching shape is not one of those colliders (a tilemap or skeleton body). A contact
+> is reported to an entity only when the **other** entity has a non-empty tag. `OnCollisionStay` and
+> `OnSensorStay` run every physics step while the contact lasts, and only for scripts that define
+> them. The full delivery rules are in
+> [Engine → How collision events reach your code](Engine-EN-DOC.md#35-how-collision-events-reach-your-code).
+
 ### Level script (Level Script)
 
 Written in `.icemap`. Has its own callbacks:
@@ -2966,12 +3061,28 @@ function OnLevelUpdate(dt)
     -- Every frame (level)
 end
 
+function OnLevelFixedUpdate(dt)
+    -- Every fixed physics step (level)
+end
+
 function OnLevelLateUpdate(dt)
     -- Every frame after animations update, right before rendering
 end
 
 function OnLevelEnd()
     -- When level ends
+end
+
+function OnPause()
+    -- Called when the game pauses: PauseGame() or a time scale of 0
+end
+
+function OnResume()
+    -- Called when the game resumes: ResumeGame() or a time scale above 0 again
+end
+
+function OnLanguageChanged(newLang, oldLang)
+    -- Game language changed
 end
 ```
 
@@ -3201,7 +3312,7 @@ end
 
 -- Tree sway: bottom fixed, top sways, with wind
 function OnBegin()
-    SetSpritePivot(0.5, 1.0)  -- pivot at bottom center
+    SetSpritePivot(0.5, 0.0)  -- pivot at bottom center
     GLSL_SetSway(3.0, 2.0, math.random() * 6.28, 1.0)  -- gradient=1 → bottom fixed
     GLSL_SetWind(1.5, 1.2)
 end
@@ -3806,7 +3917,7 @@ local continuous = IsWorldContinuousEnabled()
 
 ```lua
 -- Key held?
-if IsKeyPressed("space") then Jump() end
+if IsKeyPressed("space") then Jump(500) end
 if IsKeyPressed("w") then MoveUp() end
 
 -- Key just pressed? (one frame)
@@ -3845,7 +3956,7 @@ local moveX = GetAxis("a", "d")     -- A = -1, D = +1
 local move = GetAxis2D("a", "d", "s", "w")
 SetVelocity(move.x * speed, move.y * speed)
 
--- Universal movement (keyboard + gamepad automatically)
+-- Universal movement (keyboard + gamepad automatically) → {x, y}, Y+ is up
 local input = GetUniversalMovement("a", "d", "s", "w")
 ```
 
@@ -3863,7 +3974,8 @@ if IsMouseJustReleased(1) then StopShoot() end
 -- is; on a desktop with a real mouse this is always false.
 if not IsMouseFromTouch() and IsMouseJustPressed(1) then Throw() end
 
--- Mouse position (screen coordinates)
+-- Mouse position in screen pixels: origin at the BOTTOM-LEFT corner of the game
+-- viewport, Y up — the same space as Draw's "screen" space
 local mx = GetMouseX()
 local my = GetMouseY()
 local mpos = GetMousePosition()  -- → {x, y}
@@ -3872,9 +3984,10 @@ local mpos = GetMousePosition()  -- → {x, y}
 local wpos = GetMouseWorldPosition()  -- → {x, y}
 
 -- Screen ↔ world coordinate conversion.
--- Screen coordinates are the same space GetMouseX/GetMouseY report, and the
--- conversion uses the real render viewport, so it stays correct in a resized
--- window and inside the editor viewport.
+-- Screen coordinates are the same space GetMouseX/GetMouseY report (pixels,
+-- origin bottom-left, Y up), and the conversion uses the real render viewport,
+-- so it stays correct in a resized window and inside the editor viewport.
+-- GetViewportSize() returns the size of this space.
 -- While a cinema controls the camera, these use the frame the cinema shows.
 local world = ScreenToWorld(400, 300)  -- → {x, y}
 local screen = WorldToScreen(10, 20)   -- → {x, y}
@@ -3884,7 +3997,7 @@ local scroll = GetMouseScroll()          -- vertical
 local scrollX = GetMouseScrollX()        -- horizontal (trackpad, tilt wheel)
 
 -- Mouse delta per frame (for camera, drag, etc.)
-local delta = GetMouseDelta()  -- → {x, y} pixels
+local delta = GetMouseDelta()  -- → {x, y} pixels, X+ right, Y+ up
 
 -- Relative mouse mode (FPS — captures and hides mouse, reports deltas only)
 SetRelativeMouseMode(true)               -- enable
@@ -3908,7 +4021,7 @@ local hasCursor = HasCustomCursor()
 local cursorPath = GetCustomCursorPath()
 local animated = IsCursorAnimated()
 local cursorType = GetCursorType()  -- "None" | "Sprite" | "Flipbook"
-SetCursorPosition(400, 300)
+SetCursorPosition(400, 300)         -- warp the OS cursor; screen pixels, origin bottom-left
 ```
 
 > **Game cursor vs editor cursor.** Everything above drives the **game** cursor and
@@ -3939,12 +4052,12 @@ local count = GetGamepadCount()
 local name = GetGamepadName()
 
 -- Buttons (strings or PlayStation names)
-if IsGamepadButtonPressed("a") then Jump() end       -- Xbox: A
-if IsGamepadButtonPressed("cross") then Jump() end    -- PS: ×
+if IsGamepadButtonPressed("a") then Jump(500) end    -- Xbox: A
+if IsGamepadButtonPressed("cross") then Jump(500) end -- PS: ×
 if IsGamepadButtonJustPressed("x") then Attack() end  -- Xbox: X / PS: □
 if IsGamepadButtonJustReleased("b") then ... end
 
--- Sticks → {x, y} (-1 to 1)
+-- Sticks → {x, y} (-1 to 1): X+ = right, Y+ = up (stick pushed up → y = 1)
 local left = GetGamepadLeftStick()
 local right = GetGamepadRightStick()
 
@@ -3952,7 +4065,7 @@ local right = GetGamepadRightStick()
 local lt = GetGamepadTriggerLeft()
 local rt = GetGamepadTriggerRight()
 
--- Universal axis
+-- Universal axis ("lefty"/"righty": up = +1, same as the sticks)
 local axis = GetGamepadAxis("leftx")  -- "leftx", "lefty", "rightx", "righty", "lt"/"l2", "rt"/"r2"
 
 -- Rumble
@@ -3980,7 +4093,7 @@ local pstate = GetGamepadPowerState()     -- "battery" / "charging" / "charged" 
 -- Touchpad (DualSense / DualShock 4)
 if GamepadHasTouchpad() then
     local maxFingers = GetGamepadTouchpadFingerCount()  -- max supported fingers
-    local finger = GetGamepadTouchpadFinger(0)          -- → {down, x, y, pressure}
+    local finger = GetGamepadTouchpadFinger(0)          -- → {down, x, y, pressure}; x, y 0..1 from the pad's bottom-left
 end
 
 -- Gamepad sensors (DualShock 4 / DualSense / Joy-Con)
@@ -4054,13 +4167,13 @@ if IsTouchPressed() then ... end
 if IsTouchJustPressed(0) then ... end  -- Finger 0
 if IsTouchJustReleased(0) then ... end
 
--- Finger position (normalized 0..1)
+-- Finger position (normalized 0..1 over the game viewport, origin bottom-left, Y up)
 local pos = GetTouchPosition(0)  -- → {x, y}
 
--- Finger position (pixels)
+-- Finger position (screen pixels, origin bottom-left — same space as GetMousePosition)
 local pix = GetTouchPositionPixels(0)  -- → {x, y}
 
--- Delta (movement)
+-- Delta (movement this frame, normalized, Y+ up)
 local delta = GetTouchDelta(0)  -- → {x, y}
 
 -- Pressure
@@ -4069,7 +4182,7 @@ local pressure = GetTouchPressure(0)
 -- Multi-touch gestures
 local pinching = IsPinching()
 local scale = GetPinchScale()
-local rotation = GetPinchRotation()
+local rotation = GetPinchRotation()  -- degrees turned this frame, clockwise positive
 ```
 
 ### Swipe gestures
@@ -4091,7 +4204,7 @@ if IsSwipeDown() then ... end
 local count = GetSwipeCount()
 for i = 0, count - 1 do
     local dir = GetSwipeDirection(i)
-    local delta = GetSwipeDelta(i)         -- → {x, y} (normalized delta)
+    local delta = GetSwipeDelta(i)         -- → {x, y} (normalized delta, Y+ up)
     local velocity = GetSwipeVelocity(i)   -- speed (distance/second)
     local distance = GetSwipeDistance(i)    -- traveled distance (normalized)
 end
@@ -4109,7 +4222,7 @@ local maxDur = GetSwipeMaxDuration()
 | `IsSwipeLeft()` / `Right()` / `Up()` / `Down()` | Swipe in specific direction |
 | `GetSwipeCount()` | Number of swipes this frame |
 | `GetSwipeDirection(index?)` | Direction: `"left"`, `"right"`, `"up"`, `"down"` |
-| `GetSwipeDelta(index?)` | `{x, y}` — normalized finger displacement |
+| `GetSwipeDelta(index?)` | `{x, y}` — normalized finger displacement (X+ right, Y+ up) |
 | `GetSwipeVelocity(index?)` | Swipe speed (distance/second) |
 | `GetSwipeDistance(index?)` | Swipe length (normalized, 0..1) |
 | `SetSwipeMinDistance(float)` | Min distance to trigger (default `0.05`) |
@@ -4337,12 +4450,17 @@ local nearCm = GetDeviceSensorData("proximity").x
 ### Text input
 
 ```lua
-StartTextInput()               -- Enable text input (opens keyboard on mobile)
+StartTextInput()               -- Enable text input (opens keyboard on mobile; call again to bring back a keyboard the player hid)
 local text = GetTextInput()    -- Get entered text
 ClearTextInput()               -- Clear buffer
-StopTextInput()                -- Disable input
+StopTextInput()                -- End the text input started by StartTextInput()
 local active = IsTextInputActive()
 ```
+
+`IsTextInputActive()` is `true` while any text input is running: your own `StartTextInput()`, a focused
+**InputField** widget or the developer console. `StopTextInput()` ends only your own request — while an
+InputField has focus the engine keeps text input on for it and turns it off by itself when the field loses
+focus.
 
 ### Screen keyboard (mobile IME)
 
@@ -4362,6 +4480,63 @@ end
 |---|---|
 | `HasScreenKeyboardSupport()` | The platform has a software keyboard (Android/iOS true; desktop usually false) |
 | `IsScreenKeyboardShown()` | The soft keyboard is currently visible on the focused window |
+| `SetScreenKeyboardAvoidance(enabled)` | `true` (default) keeps a tapped **InputField** above the soft keyboard; `false` leaves the layout to your script. Takes effect the next time a field is focused and is reset to `true` when the level stops |
+| `IsScreenKeyboardAvoidanceEnabled()` | Current state of the switch above |
+
+How the soft keyboard behaves on Android and iOS:
+
+* **Hiding the keyboard keeps the focus.** Closing it with the system *hide keyboard* / *Back* key, the
+  keyboard's own hide button or the iPad dismiss key leaves the field focused. Tapping a focused
+  **InputField** again brings the keyboard back; for your own text input call `StartTextInput()` again when
+  the player taps your field.
+* **Enter / Done finishes a single-line field.** A focused **InputField** gets a *Done* key on the keyboard.
+  Pressing it — or Enter / Esc on a hardware keyboard — removes the focus, fires the field's
+  **OnFocusLost** callback and hides the keyboard. Check `IsKeyJustPressed("enter")` inside **OnFocusLost**
+  to tell a confirmed entry (for example, sending a chat line) from a tap somewhere else.
+* **Caret and selection.** A tap or click puts the caret exactly where the finger or pointer lands, so a
+  single letter in the middle of a word can be fixed without retyping the rest. Dragging across the text
+  selects it, a double tap / double click selects a word and a triple tap / triple click selects everything;
+  typing replaces the selection. The keyboard's cursor control (sliding a finger over the space bar) moves
+  the caret too. Text longer than the field scrolls inside it so the caret always stays in view.
+* **Copy and paste.** Holding a finger on a word selects it and opens the system **Cut / Copy / Paste /
+  Select all** menu; a double tap opens it as well, and tapping the caret itself offers **Paste**. Cut and
+  Copy act on the selection. The keyboard's own clipboard and text-editing panels work too. Pasted line
+  breaks become spaces, and **Max Length** is respected. Paste from the keyboard also reaches the buffer of
+  your own `StartTextInput()`.
+* **Capital letters follow the text.** Automatic capitalization looks at the text before the caret, so the
+  keyboard capitalizes the start of a sentence — and only there — wherever the caret is moved.
+* **The field stays visible.** When the keyboard would cover an **InputField** the player tapped, the game
+  view is shifted up while the keyboard is open. If your UI already moves itself out of the keyboard's way
+  (for example, on `IsScreenKeyboardShown()`), call `SetScreenKeyboardAvoidance(false)` so the two do not
+  add up.
+
+On every platform, including PC, a focused **InputField** behaves like a regular text box with a hardware
+keyboard and mouse:
+
+| Input | Action |
+|---|---|
+| Click / drag | Place the caret / select text |
+| Double click / triple click | Select a word / select everything |
+| Shift+click, Shift+arrows, Shift+Home / End | Extend the selection |
+| ← / → | Move by one character (a whole emoji or accented letter at once) |
+| Ctrl+← / Ctrl+→ (Option on Apple) | Move by a word |
+| Home / End | Start / end of the line (Cmd+← / Cmd+→ on Apple) |
+| Ctrl+Home / Ctrl+End (Cmd+↑ / Cmd+↓ on Apple) | Start / end of the text |
+| ↑ / ↓ | Previous / next line of wrapped text; start / end of a single line |
+| Backspace / Delete | Delete a character or the selection; with Ctrl (Option on Apple) — a whole word |
+| Ctrl+A / C / X / V (Cmd on Apple) | Select all / copy / cut / paste; Shift+Delete, Ctrl+Insert and Shift+Insert also work outside Apple |
+| Ctrl+Z / Ctrl+Y (Cmd+Z / Shift+Cmd+Z on Apple) | Undo / redo |
+| Enter / Esc | Finish editing (removes the focus, fires **OnFocusLost**) |
+
+```lua
+-- Widget script; the chat InputField has OnFocusLost = "OnChatBlur"
+function OnChatBlur(name)
+    if IsKeyJustPressed("enter") then
+        SendChat(GetInputText(name))
+        SetInputText(name, "")
+    end
+end
+```
 
 ### Joystick (raw HID — wheels, HOTAS, arcade sticks, flight controllers)
 
@@ -4452,7 +4627,7 @@ if Pen.IsButtonPressed(2)     then PanCanvas() end
 | `Pen.IsSupported()` | Engine knows about pen events on this build |
 | `Pen.IsActive()` | Pen is currently in proximity (hovering or touching) |
 | `Pen.IsDown()` | Tip is touching the surface |
-| `Pen.IsJustPressed()` / `IsJustReleased()` | Edge events for this frame |
+| `Pen.IsJustPressed()` / `Pen.IsJustReleased()` | Edge events for this frame |
 | `Pen.GetPosition()` | `{x, y}` in pixels |
 | `Pen.GetPressure()` | 0..1 |
 | `Pen.GetTilt()` | `{x, y}` degrees |
@@ -4460,7 +4635,7 @@ if Pen.IsButtonPressed(2)     then PanCanvas() end
 | `Pen.GetRotation()` | barrel rotation in degrees |
 | `Pen.IsEraser()` | The eraser end is being used |
 | `Pen.IsButtonPressed(n)` | Side button `n` (1..32) currently held |
-| `Pen.IsButtonJustPressed(n)` / `IsButtonJustReleased(n)` | Edge events for side button `n` |
+| `Pen.IsButtonJustPressed(n)` / `Pen.IsButtonJustReleased(n)` | Edge events for side button `n` |
 
 ### Drag & Drop (files / text dropped onto the window)
 
@@ -4618,7 +4793,7 @@ function OnFixedUpdate(dt)
 
     -- Jump buffer: the press may have landed up to 6 frames before touching the ground
     if IsGrounded() and InputBuffer.WasPressed(UP, 6) then
-        Jump()
+        Jump(500)
     end
 end
 ```
@@ -4641,7 +4816,7 @@ BindAction("P2_Attack", "gamepad_1_x")   -- second gamepad, button X
 BindAction("P3_Jump", "gamepad_2_a")     -- third gamepad
 
 -- Check actions (any bound input)
-if IsActionPressed("Jump") then Jump() end
+if IsActionPressed("Jump") then Jump(500) end
 if IsActionJustPressed("Shoot") then Fire() end
 if IsActionJustReleased("Shoot") then StopFire() end
 
@@ -4679,9 +4854,10 @@ BindAxisAction("Zoom", "scroll_y")                                -- mouse scrol
 BindAxisActionKeys("MoveX", "a", "d")
 BindAxisActionKeys("MoveX", "left", "right", { scale = 0.5 })
 
--- Mouse delta sources
+-- Mouse delta sources (Y+ = mouse moved up)
 BindAxisAction("LookX", "mouse_deltax")
-BindAxisAction("LookY", "mouse_deltay", { scale = -1.0 })
+BindAxisAction("LookY", "mouse_deltay")
+BindAxisAction("LookYInverted", "mouse_deltay", { scale = -1.0 })   -- inverted look
 
 -- Read value
 local val = GetActionValue("Throttle")   -- float (with deadzone + scale)
@@ -4696,12 +4872,13 @@ UnbindAxisAction("Throttle")
 |---|---|---|
 | `"gamepad_AXIS"` | `"gamepad_leftx"`, `"gamepad_triggerleft"` | Gamepad 0 axis |
 | `"gamepad_N_AXIS"` | `"gamepad_1_righty"` | Gamepad N axis |
-| `"mouse_deltax"` | — | Mouse delta X |
-| `"mouse_deltay"` | — | Mouse delta Y |
+| `"mouse_deltax"` | — | Mouse delta X (X+ = right) |
+| `"mouse_deltay"` | — | Mouse delta Y (Y+ = up) |
 | `"scroll_x"` | — | Scroll wheel X |
 | `"scroll_y"` | — | Scroll wheel Y |
 
-**Axis names:** `leftx`, `lefty`, `rightx`, `righty`, `triggerleft` (`lt`, `l2`), `triggerright` (`rt`, `r2`)
+**Axis names:** `leftx`, `lefty`, `rightx`, `righty`, `triggerleft` (`lt`, `l2`), `triggerright` (`rt`, `r2`). Stick axes follow the
+engine axes: `leftx`/`rightx` right = +1, `lefty`/`righty` up = +1.
 
 **Options table (optional):** `{ scale = 1.0, deadzone = 0.0 }`
 
@@ -4734,10 +4911,10 @@ UnbindAxis2DAction("Move")
 
 | Format | Example | Description |
 |---|---|---|
-| `"gamepad_leftstick"` | — | Gamepad 0 left stick |
-| `"gamepad_rightstick"` | — | Gamepad 0 right stick |
+| `"gamepad_leftstick"` | — | Gamepad 0 left stick (X+ right, Y+ up) |
+| `"gamepad_rightstick"` | — | Gamepad 0 right stick (X+ right, Y+ up) |
 | `"gamepad_N_leftstick"` | `"gamepad_1_leftstick"` | Gamepad N left stick |
-| `"mouse_delta"` | — | Mouse movement delta |
+| `"mouse_delta"` | — | Mouse movement delta (X+ right, Y+ up) |
 
 ### Input Contexts
 
@@ -4884,24 +5061,27 @@ end
 ### Virtual controls (mobile)
 
 ```lua
+-- All positions and sizes are normalized 0..1 over the game viewport,
+-- origin at the BOTTOM-LEFT, Y up — the same space as GetTouchPosition.
+
 -- Virtual stick
-CreateVirtualStick("move", 0.15, 0.7, 0.12)  -- name, centerX, centerY, radius
+CreateVirtualStick("move", 0.15, 0.3, 0.12)  -- name, centerX, centerY, radius
 UpdateVirtualSticks()  -- Call every frame!
 
-local axis = GetVirtualStickAxis("move")  -- → {x, y}
+local axis = GetVirtualStickAxis("move")  -- → {x, y} -1..1, X+ right, Y+ up (like a gamepad stick)
 local knob = GetVirtualStickKnob("move")  -- → {x, y} knob position
 local active = IsVirtualStickActive("move")
-SetVirtualStickCenter("move", 0.15, 0.7)  -- Move center
+SetVirtualStickCenter("move", 0.15, 0.3)  -- Move center
 RemoveVirtualStick("move")
 
--- Virtual button
-CreateVirtualButton("jump", 0.8, 0.7, 0.1, 0.1)  -- name, x, y, w, h
+-- Virtual button: x, y is the BOTTOM-LEFT corner of the rectangle
+CreateVirtualButton("jump", 0.8, 0.2, 0.1, 0.1)  -- name, x, y, w, h
 UpdateVirtualButtons()  -- Call every frame!
 
 if IsVirtualButtonPressed("jump") then ... end
 if IsVirtualButtonJustPressed("jump") then ... end
 if IsVirtualButtonJustReleased("jump") then ... end
-SetVirtualButtonRect("jump", 0.8, 0.7, 0.12, 0.12)
+SetVirtualButtonRect("jump", 0.8, 0.18, 0.12, 0.12)
 RemoveVirtualButton("jump")
 
 -- Remove all virtual controls
@@ -4928,14 +5108,8 @@ every frame — no per-frame call from Lua is needed. While it is active it:
 -- Simplest form: enable and forget
 SetGamepadCursorEnabled(true)
 
--- Legacy form (still supported): speed, useRightStick, gamepadIndex.
--- It now drives the real pointer as well; stick scrolling stays off so the other
--- stick keeps whatever the game already used it for.
-EnableGamepadCursor()                              -- defaults: speed=400, rightStick, gamepad 0
-EnableGamepadCursor(600)                           -- custom speed
-EnableGamepadCursor(400, false, 0)                 -- speed, useRightStick, gamepadIndex
-
-DisableGamepadCursor()
+-- Turn it off again
+SetGamepadCursorEnabled(false)
 
 -- Everything at once (values below are the engine defaults unless noted)
 ConfigureGamepadCursor({
@@ -4969,14 +5143,15 @@ local cfg = GetGamepadCursorConfig()   -- every field above, plus active / devic
 -- State
 local enabled = IsGamepadCursorEnabled()   -- turned on
 local active = IsGamepadCursorActive()     -- on, pad connected and currently driving
-local pos = GetGamepadCursorPosition()     -- → {x, y} in window pixels
-local axis = GetGamepadCursorAxis()        -- → {x, y} raw stick this frame
+local pos = GetGamepadCursorPosition()     -- → {x, y} screen pixels (origin bottom-left, like GetMousePosition)
+local axis = GetGamepadCursorAxis()        -- → {x, y} stick this frame, Y+ up
 
 -- Position
 SetGamepadCursorPosition(960, 540)
 CenterGamepadCursor()
 
--- Keep the cursor inside a rectangle (window pixels); default is the whole window
+-- Keep the cursor inside a rectangle (screen pixels, x, y = bottom-left corner);
+-- default is the whole screen
 SetGamepadCursorBounds(0, 0, 1920, 1080)
 local bounds = GetGamepadCursorBounds()    -- → {x, y, width, height, custom}
 ClearGamepadCursorBounds()
@@ -5005,9 +5180,6 @@ local clickButton = GetGamepadCursorButton("Click")
 -- Which device owns the pointer right now
 local device = GetActivePointerDevice()   -- "mouse" | "gamepad" | "touch"
 SetActivePointerDevice("gamepad")
-
--- Kept for backwards compatibility, does nothing: the engine ticks the cursor itself
-UpdateGamepadCursor(dt)
 ```
 
 A complete point-and-click menu, with no focus navigation at all:
@@ -5057,7 +5229,7 @@ These functions automatically choose the active input source:
 gamepad cursor → touch → mouse (in that priority order).
 
 ```lua
--- Screen-space position (pixels)
+-- Screen-space position (pixels, origin bottom-left, Y up)
 local ptr = GetPointerScreenPosition()
 -- ptr.x, ptr.y   = screen coordinates
 -- ptr.source      = "mouse" | "touch" | "gamepad"
@@ -5223,8 +5395,8 @@ AddEntityImpulse(entityId, 0, -500)
 SetEntitySpriteFlipX(entityId, true)
 SetEntitySpriteFlipY(entityId, true)
 
--- Flip the WHOLE entity: every sprite, flipbook, skeleton, widget,
--- tilemap, FX and decal instance mirrors together. Returns true if anything changed.
+-- Flip the WHOLE entity: every sprite, flipbook, skeleton, tilemap,
+-- FX and decal instance mirrors together. Returns true if anything changed.
 SetEntityGlobalFlipX(entityId, true)
 SetEntityGlobalFlipY(entityId, true)
 local mirroredX = GetEntityGlobalFlipX(entityId)
@@ -5819,8 +5991,8 @@ SetSpriteTexture("Content/Weapons/T_Pistol.png", 1)
 SetSpriteOrder(5)
 local order = GetSpriteOrder()
 
--- Pivot (anchor point, 0..1)
-SetSpritePivot(0.5, 0)         -- Center-top
+-- Pivot (anchor point, 0..1): (0, 0) = bottom-left corner, (1, 1) = top-right
+SetSpritePivot(0.5, 0)         -- Bottom center (feet)
 local piv = GetSpritePivot()    -- → {x, y}
 
 -- Automatic Y sorting: the engine derives the draw order from the sprite's world Y
@@ -5860,7 +6032,7 @@ local dontBlock = GetSpriteDontBlockShadows()  -- → bool
 SetSpriteCastShadowMode(1)
 local mode = GetSpriteCastShadowMode()      -- → int
 
--- Shadow origin: 0 = Center, 1 = Top, 2 = Bottom
+-- Shadow origin: 0 = Bottom (default), 1 = Center, 2 = Top
 SetSpriteShadowOrigin(1)
 local origin = GetSpriteShadowOrigin()      -- → int
 
@@ -6105,7 +6277,7 @@ local dontBlock = GetFlipbookDontBlockShadows()  -- → bool
 SetFlipbookCastShadowMode(1)
 local mode = GetFlipbookCastShadowMode()    -- → int
 
--- Shadow origin: 0 = Center, 1 = Top, 2 = Bottom
+-- Shadow origin: 0 = Bottom (default), 1 = Center, 2 = Top
 SetFlipbookShadowOrigin(1)
 local origin = GetFlipbookShadowOrigin()    -- → int
 
@@ -6203,13 +6375,14 @@ local f = GetFlipbookFrameRegion()      -- optional flipbook index
 -- f.texture  -- resolved texture file, ready for Draw.Region / Draw.SetTexture
 -- f.x, f.y, f.w, f.h        -- source rectangle in pixels
 -- f.width, f.height         -- full texture size in pixels
--- f.pivotX, f.pivotY        -- pivot the renderer uses, normalized; pivotY is measured from the BOTTOM
+-- f.pivotX, f.pivotY        -- pivot the renderer uses, normalized: (0, 0) = bottom-left, (1, 1) = top-right
 
 local s = GetSpriteFrameRegion()        -- same shape, same fields
 ```
 
-`Draw` measures the pivot's `py` from the **top**, so pass `1 - f.pivotY` to `Draw.SetPivot` (or as the `py` field of
-`Draw.Quad`). To draw a flipbook asset with no entity behind it, use `Draw.Flipbook` (see the Draw chapter).
+`Draw` uses the same pivot convention, so pass `f.pivotX, f.pivotY` straight to `Draw.SetPivot` (or as the `px, py` fields
+of `Draw.Quad`). `f.x, f.y` are pixels inside the image, measured from its **top-left** corner like every source rectangle.
+To draw a flipbook asset with no entity behind it, use `Draw.Flipbook` (see the Draw chapter).
 
 This closes the loop for animated billboards in a raycaster: a flipbook is just a sprite animation, so an animated enemy
 is drawn exactly like a static one — you only swap the source rectangle each frame.
@@ -6223,7 +6396,7 @@ function DrawEnemy(enemyId, screenX, height, distance)
     local shade = math.max(0.2, 1 - distance / 20)
     Draw.SetSpace("screen")
     Draw.SetColor(shade, shade, shade, 1)
-    Draw.SetPivot(f.pivotX, 1 - f.pivotY)
+    Draw.SetPivot(f.pivotX, f.pivotY)
     Draw.Region(f.texture, screenX, 180, height * (f.w / f.h), height,
                 f.x, f.y, f.w, f.h, 0, -distance)
 end
@@ -6397,7 +6570,7 @@ end
 the component lives. This is what makes triggers replicable over the network: send `epoch` plus
 the last batch of names in **every** state packet, and the receiver replays a batch exactly once,
 when the incoming `epoch` exceeds the one it applied last. Because the data is resent every packet,
-a lost packet or a missed sampling window no longer swallows an animation.
+a lost packet or a missed sampling window never swallows an animation.
 
 ```lua
 local log = ConsumeAnimTriggers()
@@ -6411,6 +6584,11 @@ for _, name in ipairs(lastNames or {}) do trigSet[name] = true end
 
 Network.SyncEntityAnimatorParams(key, bools, { trigEpoch = lastEpoch }, nil, trigSet, false)
 ```
+
+> The journal is for the manual `SyncEntity*` path. For an entity under
+> [automatic replication](#automatic-replication-recommended) the engine reads the journal
+> itself and delivers every trigger to all clients reliably — do not call
+> `ConsumeAnimTriggers` on such an entity on the host, or there is nothing left to send.
 
 ### State
 
@@ -6594,9 +6772,10 @@ local skin = GetSkeletonSkin()
 SetSkeletonAttachment("weapon", "axe")
 SetSkeletonAttachment("weapon", "")            -- empty hides the slot
 
--- Tint and facing (FlipX = horizontal facing, FlipY = texture-V convention, default on)
+-- Tint and facing: FlipX mirrors the whole skeleton horizontally (facing), FlipY vertically
+-- (bones, attachments, meshes, sockets and ragdoll alike); both are off by default
 SetSkeletonColor(1, 0.5, 0.5)                  -- r, g, b [, a]
-SetSkeletonFlip(true, true)                    -- flipX, flipY
+SetSkeletonFlip(true, false)                   -- flipX, flipY: face left, stay upright
 
 -- Slot / skin enumeration
 local slots = GetSkeletonSlotNames()           -- array of slot names
@@ -6631,7 +6810,7 @@ local dontBlock = GetSkeletonDontBlockShadows()  -- → bool
 SetSkeletonCastShadowMode(1)
 local mode = GetSkeletonCastShadowMode()       -- → int
 
--- Shadow origin: 0 = Center, 1 = Top, 2 = Bottom
+-- Shadow origin: 0 = Bottom (default), 1 = Center, 2 = Top
 SetSkeletonShadowOrigin(1)
 local origin = GetSkeletonShadowOrigin()       -- → int
 
@@ -6934,7 +7113,7 @@ function OnUpdate(dt)
 end
 
 -- A hit ruffles the hair and the cloak, then a spell sets the hair on fire
-function OnHit(dirX, dirY)
+function TakeHit(dirX, dirY)
     ApplySkeletonDynamicsImpulse(dirX * 400, dirY * 400)
 end
 
@@ -6973,7 +7152,7 @@ function OnUpdate(dt)
     end
 end
 
-function OnHit(dirX, dirY)
+function TakeHit(dirX, dirY)
     EnableSkeletonRagdoll(0.9)
     ApplySkeletonBoneImpulse("torso", dirX * 500, dirY * 500)
 end
@@ -7049,9 +7228,6 @@ CameraFollowSmooth(0.1)         -- lerpFactor (0..1). Lower = smoother.
 -- follow target. Speed is in pixels/second.
 SetCameraLag(600, 120)          -- speed (px/s), max distance (px)
 
--- Back-compat alias of SetCameraLag (same stateful semantics).
-CameraFollowWithLag(600, 120)
-
 -- Query / disable.
 local lag = GetCameraLag()      -- → {speed, maxDistance, enabled}
 DisableCameraLag()              -- Turn lag off
@@ -7078,7 +7254,7 @@ local shaking = IsCameraShaking()
 
 The camera can roll around the centre of its view. Degrees, **clockwise positive** — the same convention as
 `SetSpriteLocalRotation` and every other rotation in the engine. `0` is the default and costs nothing: with no roll set,
-every view, cull and coordinate conversion takes exactly the same path it always did.
+every view, cull and coordinate conversion takes the plain, unrolled path.
 
 ```lua
 SetCameraRotation(15)          -- roll the view 15° clockwise
@@ -7124,15 +7300,15 @@ Culling widens automatically to the bounding box of the rolled view, so nothing 
 > pure screen-space. Godrays, volumetric fog and heat haze are positioned by **screen-space** settings you author, so
 > they deliberately stay where you put them on screen.
 >
-> At zero roll every one of these computes exactly what it computed before — the rolled paths are opt-in and cost
+> At zero roll every one of these takes its plain, unrolled path — the rolled paths are opt-in and cost
 > nothing when unused.
 >
 > **Custom post-process materials can follow the roll too.** Alongside `uCameraPosition` and `uScreenSize` they also
 > receive `uCameraView` — the view's size in world units plus the cosine and sine of the world-to-screen roll — and the material
 > editor exposes it as three nodes under **Coordinates**: **Screen To World**, **World To Screen** and
 > **Camera View**. Feed a screen coordinate through Screen To World and the effect stays anchored to the world at any
-> camera angle; keep working in screen UVs and it stays anchored to the screen. Both remain available, so a material
-> authored before this behaves exactly as it did.
+> camera angle; keep working in screen UVs and it stays anchored to the screen. Both are available, so pick whichever
+> anchoring the effect needs.
 
 ```lua
 -- A ship game where the world turns around the player
@@ -7151,6 +7327,21 @@ end
 > actually shows (including its blend with the gameplay camera). `GetCameraPosition` and the other camera-entity
 > functions keep working with the gameplay camera, which takes over again when the cinema ends;
 > `Cinema.GetCameraPosition()` returns the rendered frame.
+>
+> **While the editor camera is ejected.** The free camera you fly after **Eject** (`F2`) is the frame in the same way:
+> the same functions answer for it, `Cinema.GetCameraPosition()` returns its centre, and the audio listener, audio
+> zones and post-process volumes follow it. `IsCameraEjected()` tells a script that the frame belongs to the free
+> camera; in a built game it is always `false`.
+
+```lua
+-- A layer that has to stay in the frame (a parallax backdrop that rides on the player) follows
+-- the real frame whenever the gameplay camera is not the one on screen
+local anchorX = 0
+if Cinema.IsControllingCamera() or IsCameraEjected() then
+    anchorX = Cinema.GetCameraPosition().x - GetPositionX()
+end
+SetSpriteLocalPosition(anchorX, 0, IDX_BACKDROP)
+```
 
 ### Additional
 
@@ -7170,6 +7361,9 @@ local bounds = GetCameraWorldBounds()
 -- On-screen visibility check
 local visible = IsOnScreen(worldX, worldY)
 local visible = IsOnScreen(worldX, worldY, 50)  -- With padding
+
+-- The editor's free camera is ejected and owns the frame (always false in a built game)
+local ejected = IsCameraEjected()
 
 -- Viewport size
 local vp = GetViewportSize()  -- → {width, height}
@@ -7843,7 +8037,7 @@ local shadow = GetFXCastShadow()
 SetFXDontBlockShadows(true)
 local dontBlock = GetFXDontBlockShadows()  -- → bool
 
-SetFXShadowOrigin(1)                -- 0 = Center, 1 = Top, 2 = Bottom
+SetFXShadowOrigin(1)                -- 0 = Bottom (default), 1 = Center, 2 = Top
 local origin = GetFXShadowOrigin()  -- → int
 
 SetFXShadowEdgeFade(0.25)
@@ -8063,8 +8257,7 @@ have sleep toggle every frame.
 Emitters with **Interact With Other Fluids** enabled push against each other's particles, so
 water and lava keep a boundary instead of passing through. The push is weighted by the mass
 ratio, so the fluid with the lower **Particle Mass** is pushed harder and ends up floating on
-top of the heavier one. Emitters without the flag are invisible to each other, exactly as
-before.
+top of the heavier one. Emitters without the flag are invisible to each other.
 
 ```lua
 SetFXEmitterFlag("FluidInteract", true)
@@ -8076,7 +8269,7 @@ teleported into settled fluid with no velocity, which none of the automatic cond
 see. Omit the index to wake every instance on the entity.
 
 ```lua
-SetPosition(poolX, poolY)
+SetPosition(poolX, poolY, GetPositionZ())
 WakeFXFluid()          -- on the entity that owns the water FX
 ```
 
@@ -8146,7 +8339,7 @@ local val = GetFXEmitterParam("paramName", 1)  -- Second instance
 | `"Acceleration.X"` | float | Constant acceleration X |
 | `"Acceleration.Y"` | float | Constant acceleration Y |
 | `"Acceleration.Z"` | float | Constant acceleration Z |
-| `"OrbitSpeed"` | float | Orbital movement speed |
+| `"OrbitSpeed"` | float | Orbital speed in degrees per second, clockwise positive |
 | `"OrbitRadius"` | float | Orbit radius |
 | `"NoiseStrength"` | float | Noise strength |
 | `"NoiseFrequency"` | float | Noise frequency |
@@ -8167,7 +8360,7 @@ local val = GetFXEmitterParam("paramName", 1)  -- Second instance
 | `"VortexCenter.X"` | float | Vortex center X |
 | `"VortexCenter.Y"` | float | Vortex center Y |
 | `"VortexCenter.Z"` | float | Vortex center Z |
-| `"VortexStrength"` | float | Vortex strength |
+| `"VortexStrength"` | float | Vortex (tangential) strength, positive = clockwise |
 | `"VortexRadius"` | float | Vortex radius |
 | `"VortexFalloff"` | float | Vortex falloff |
 | `"VortexInwardPull"` | float | Pull strength toward the center |
@@ -8353,7 +8546,7 @@ local blend = GetFXEmitterMode("BlendMode")
 ### Example: complex usage
 
 ```lua
-function OnStart()
+function OnCreate()
     PlayFX()
     SetFXLoop(true)
     SetFXSpeed(1.5)
@@ -8431,8 +8624,8 @@ SetLightLocalRotation(45)
 local lr = GetLightLocalRotation()
 
 -- World transform (entity transform already applied — see the Sprite section).
--- Note: the local position accessors are named SetLightPosition/GetLightPosition
--- and SetSpotLightPosition/GetSpotLightPosition for historical reasons.
+-- Note: the local position accessors are SetLightPosition/GetLightPosition
+-- and SetSpotLightPosition/GetSpotLightPosition, without "Local" in the name.
 SetLightWorldPosition(120, 64, 0)
 local lwp = GetLightWorldPosition(0)         -- → {x, y, z}
 SetLightWorldRotation(30, 0)
@@ -8446,15 +8639,11 @@ local swr = GetSpotLightWorldRotation(0)     -- → number
 local sws = GetSpotLightWorldScale(0)        -- → {x, y}, read-only
 ```
 
-### Shadows and visibility
+### Shadows
 
 ```lua
 SetLightCastShadows(true)
 local shadows = GetLightCastShadows()
-
--- SetLightVisible / GetLightVisible control Enabled (backward compatibility)
-SetLightVisible(true)                   -- same as SetLightEnabled(true)
-local vis = GetLightVisible()           -- same as IsLightEnabled()
 ```
 
 ---
@@ -8505,13 +8694,9 @@ local ls = GetSpotLightLocalScale()     -- → {x, y}
 SetSpotLightLocalRotation(45)
 local lr = GetSpotLightLocalRotation()
 
--- Shadows and visibility
+-- Shadows
 SetSpotLightCastShadows(true)
 local sh = GetSpotLightCastShadows()
-
--- SetSpotLightVisible / GetSpotLightVisible control Enabled (backward compatibility)
-SetSpotLightVisible(true)               -- same as SetSpotLightEnabled(true)
-local vis = GetSpotLightVisible()       -- same as IsSpotLightEnabled()
 
 -- Batch set (color r,g,b + intensity + radius + dirX,dirY + innerAngle + outerAngle)
 SetSpotLight(1, 0.9, 0.7, 2.0, 300, 0, -1, 15, 30)
@@ -8528,7 +8713,7 @@ local p = GetLightCookie()              -- texture path
 SetLightCookieIntensity(0.75)           -- 0..4, default 1.0
 local i = GetLightCookieIntensity()
 
-SetLightCookieRotation(45.0)            -- degrees
+SetLightCookieRotation(45.0)            -- degrees, clockwise positive
 local r = GetLightCookieRotation()
 ```
 
@@ -8540,12 +8725,16 @@ local p = GetSpotLightCookie(0)
 
 SetSpotLightCookieIntensity(1.5, 0)
 local sci = GetSpotLightCookieIntensity(0)
-SetSpotLightCookieRotation(90.0, 0)
+SetSpotLightCookieRotation(90.0, 0)     -- degrees, clockwise positive
 local scr = GetSpotLightCookieRotation(0)
 ```
 
 All Set/Get accept an optional trailing `index` parameter (defaults to 0) to address
 specific lights when the entity has multiple PointLights or SpotLights.
+
+A cookie is projected **as authored**: a point light shows the image upright (its top
+row above the light), and a spot light shows it upright while the beam points down —
+the default direction — and turns the image together with the beam.
 
 ---
 
@@ -8898,7 +9087,7 @@ local capDontBlock = GetCapsuleColliderDontBlockShadows()  -- → bool
 #### Shadow origin and edge fade
 
 ```lua
--- Origin: 0 = Center (default), 1 = Top, 2 = Bottom
+-- Origin: 0 = Bottom (default), 1 = Center, 2 = Top
 SetBoxColliderShadowOrigin(1)
 local origin = GetBoxColliderShadowOrigin()       -- → int
 
@@ -9172,14 +9361,11 @@ local entities = OverlapCircle(cx, cy, radius, true, true, 0)
 -- cx, cy, radius, ignoreSensors?, debugDraw?, debugDuration?
 ```
 
-### OverlapBoxDebug / OverlapCircleDebug — overlap with debug draw
+### OverlapCircleDebug — exact circle overlap with debug draw
 
-> Kept for backwards compatibility. `OverlapBoxDebug` is equivalent to `OverlapBox` with the same arguments; prefer `OverlapBox` / `OverlapCircle` in new code. `OverlapCircleDebug` still differs in one way: it performs an **exact** test via `b2World_OverlapShape`, whereas `OverlapCircle` uses an AABB broad-phase test plus a center-distance check. Outline color: green on hit, red when empty.
+> `OverlapCircleDebug` takes the same arguments as `OverlapCircle`, but performs an **exact** test via `b2World_OverlapShape`, whereas `OverlapCircle` uses an AABB broad-phase test plus a center-distance check. Outline color: green on hit, red when empty.
 
 ```lua
-local entities = OverlapBoxDebug(cx, cy, halfW, halfH, true, true, 2.0)
--- cx, cy, halfW, halfH, ignoreSensors?, debugDraw?, debugDuration?
-
 local entities = OverlapCircleDebug(cx, cy, radius, true, true, 2.0)
 -- cx, cy, radius, ignoreSensors?, debugDraw?, debugDuration?
 ```
@@ -9195,11 +9381,11 @@ local entities = OverlapCapsule(ax, ay, bx, by, radius, true, true, 2.0)
 
 ### OverlapBoxRotated — oriented box (OBB) overlap
 
-> Unlike `OverlapBox` (AABB), this takes an **oriented** rectangle (OBB) with a rotation angle `angleRad` (radians, counter-clockwise). Exact test via `b2World_OverlapShape`.
+> Unlike `OverlapBox` (AABB), this takes an **oriented** rectangle (OBB) with a rotation angle `angleDeg` (degrees, clockwise positive — like every other rotation in the engine). Exact test via `b2World_OverlapShape`.
 
 ```lua
-local entities = OverlapBoxRotated(cx, cy, halfW, halfH, angleRad, true, true, 2.0)
--- cx, cy, halfW, halfH, angleRad, ignoreSensors?, debugDraw?, debugDuration?
+local entities = OverlapBoxRotated(cx, cy, halfW, halfH, angleDeg, true, true, 2.0)
+-- cx, cy, halfW, halfH, angleDeg, ignoreSensors?, debugDraw?, debugDuration?
 ```
 
 ### CircleTraceMulti / BoxTraceMulti — multi-hit shape sweeps
@@ -9214,7 +9400,7 @@ local hits = BoxTraceMulti(startX, startY, endX, endY, halfW, halfH, 10, true, t
 -- startX, startY, endX, endY, halfW, halfH, maxHits?, ignoreSensors?, debugDraw?, debugDuration?
 
 for _, h in ipairs(hits) do
-    Print(h.entityId, h.fraction)
+    Print(tostring(h.entityId) .. " " .. h.fraction)
 end
 ```
 
@@ -9236,16 +9422,16 @@ local hits = CapsuleTraceMulti(sAx, sAy, sBx, sBy, radius,
 
 ### BoxTraceRotated / BoxTraceRotatedMulti — OBB sweep
 
-> Sweeps an oriented box (OBB) with rotation angle `angleRad` from `(startX,startY)` to `(endX,endY)`. The rotation is fixed along the entire path.
+> Sweeps an oriented box (OBB) with rotation angle `angleDeg` (degrees, clockwise positive) from `(startX,startY)` to `(endX,endY)`. The rotation is fixed along the entire path.
 
 ```lua
 local hit  = BoxTraceRotated(startX, startY, endX, endY,
-                             halfW, halfH, angleRad,
+                             halfW, halfH, angleDeg,
                              true, true, 2.0)
 -- ignoreSensors?, debugDraw?, debugDuration?
 
 local hits = BoxTraceRotatedMulti(startX, startY, endX, endY,
-                                  halfW, halfH, angleRad,
+                                  halfW, halfH, angleDeg,
                                   10, true, true, 2.0)
 -- maxHits?, ignoreSensors?, debugDraw?, debugDuration?
 ```
@@ -9255,7 +9441,8 @@ local hits = BoxTraceRotatedMulti(startX, startY, endX, endY,
 ### Cursor & Screen Traces
 
 Convenience functions that automatically convert screen/cursor position to world space.
-They use mouse, touch, or gamepad cursor — whichever is active.
+They use mouse, touch, or gamepad cursor — whichever is active. Screen coordinates are pixels with the
+origin at the bottom-left corner, Y up — the space `GetMousePosition` reports.
 
 ```lua
 -- Overlap at cursor position (mouse or touch)
@@ -9374,8 +9561,8 @@ local nowMs = GetUnixTimeMs()  -- the same in milliseconds
 
 -- Broken down into fields (local time by default, pass true for UTC)
 local d = GetDateTable()
-Print(d.year, d.month, d.day, d.hour, d.min, d.sec)
-Print(d.wday, d.yday, d.isdst)   -- wday: 1 = Sunday, yday: 1..366
+Print(d.year .. "-" .. d.month .. "-" .. d.day .. " " .. d.hour .. ":" .. d.min .. ":" .. d.sec)
+Print(d.wday .. " " .. d.yday .. " " .. tostring(d.isdst))   -- wday: 1 = Sunday, yday: 1..366
 
 local utc = GetDateTable(now, true)
 
@@ -10238,7 +10425,8 @@ SetInputText("PlayerName", "Hero")
 -- Element type
 local type = GetElementType("Title")
 
--- Position and size (set and get)
+-- Position and size (set and get). Position is the layout offset from the anchor in
+-- canvas pixels: X grows to the right, Y downward (UI layout, like a vertical box)
 SetWidgetElementPosition("Title", 10, 20)
 local pos = GetWidgetElementPosition("Title")   -- → {x, y}
 SetWidgetElementSize("Title", 200, 40)
@@ -10269,6 +10457,14 @@ local rot = GetWidgetElementRotation("Icon")     -- → float
 -- (positive = clockwise) and scales around it.
 SetWidgetElementPivot("Icon", 0.5, 0.5)
 local pivot = GetWidgetElementPivot("Icon")  -- → {x, y}
+
+-- Flip (mirror) the element around its center together with all of its children — sprites,
+-- fills and text are mirrored too. On a rotated element the mirror follows its own rotated
+-- axes. Default false = drawn as authored. Layout and Position are not affected.
+SetWidgetElementFlipX("Portrait", true)
+local fx = GetWidgetElementFlipX("Portrait")    -- → bool
+SetWidgetElementFlipY("Portrait", false)
+local fy = GetWidgetElementFlipY("Portrait")    -- → bool
 
 -- Anchor
 SetWidgetElementAnchor("Title", "MiddleCenter")
@@ -10425,12 +10621,6 @@ local screen = IsWidgetScreenSpace()
 
 SetWidgetStretchMode("Letterbox")
 local mode = GetWidgetStretchMode()
-
-SetWidgetFlipX(true)
-local fx = GetWidgetFlipX()
-
-SetWidgetFlipY(false)
-local fy = GetWidgetFlipY()
 ```
 
 ### Additional UI settings
@@ -10636,7 +10826,7 @@ local hovSnd = GetWidgetHoveredSound("Button")   -- → string path
 SetWidgetPressedSound("Button", "Content/Audio/click.wav")
 local prsSnd = GetWidgetPressedSound("Button")   -- → string path
 
--- Getters for previously set-only properties
+-- Getters
 local pad = GetWidgetPadding("Row")              -- → {left, top, right, bottom}
 local drag = GetWidgetDragScroll("Inventory")    -- → bool
 local checkSprite = GetWidgetElementCheckedSprite("Toggle")
@@ -10776,6 +10966,12 @@ local rot = GetSubWidgetElementRotation("HealthBar", "Icon")
 -- Scale
 SetSubWidgetElementScale("HealthBar", "Icon", 1.5, 1.5)
 local scale = GetSubWidgetElementScale("HealthBar", "Icon")  -- → {x, y}
+
+-- Flip: mirror the inner element (and its children) around its center; default false
+SetSubWidgetElementFlipX("HealthBar", "Icon", true)
+local fx = GetSubWidgetElementFlipX("HealthBar", "Icon")      -- → bool
+SetSubWidgetElementFlipY("HealthBar", "Icon", false)
+local fy = GetSubWidgetElementFlipY("HealthBar", "Icon")      -- → bool
 
 -- Pivot: (0, 0) is the bottom-left corner, (1, 1) the top-right
 SetSubWidgetElementPivot("HealthBar", "Icon", 0.5, 0.5)
@@ -11248,6 +11444,10 @@ SetElementScale("Title", 1.5, 1.5)
 local sc = GetElementScale("Title")             -- → {x, y}
 SetElementPivot("Title", 0.5, 0.5)              -- (0, 0) = bottom-left corner, (1, 1) = top-right
 local pv = GetElementPivot("Title")             -- → {x, y}
+SetElementFlipX("Portrait", true)               -- mirror the element and its children; default false
+local fx = GetElementFlipX("Portrait")          -- → bool
+SetElementFlipY("Portrait", false)
+local fy = GetElementFlipY("Portrait")          -- → bool
 
 -- Appearance
 SetElementColor("Title", 1, 0.5, 0, 1)
@@ -11590,7 +11790,8 @@ local id = CreateElement("Text", "DynamicLabel", "Root")  -- type, name, parent
 RemoveElement("DynamicLabel")
 
 -- Element info
-local info = GetElement("Title")                 -- → {name, visible, text, ...}
+local info = GetElement("Title")                 -- → {name, visible, text, value, scale_x, scale_y,
+                                                 --    rotation, flip_x, flip_y, opacity}
 
 -- Animations
 PlayAnimation("FadeIn")
@@ -11619,7 +11820,7 @@ SetElementFont("Title", "Content/Fonts/Title.ice_font"); local f = GetElementFon
 SetElementPanelBlur("Glass", true);       local pb = GetElementPanelBlur("Glass")
 SetElementPanelBlurStrength("Glass", 16); local pbs = GetElementPanelBlurStrength("Glass")
 
--- Getters for previously set-only properties
+-- Getters
 local ns   = GetNineSlice("Panel")        -- → {enabled, left, top, right, bottom}
 local clip = GetClipChildren("Panel")
 local nav  = GetNavigation("PlayBtn")     -- → {up, down, left, right}
@@ -11691,6 +11892,8 @@ GetSubElementParent("HealthBar", "Icon")
 SetSubElementRotation("HealthBar", "Icon", 45);  GetSubElementRotation("HealthBar", "Icon")
 SetSubElementScale("HealthBar", "Icon", 1.5, 1.5); GetSubElementScale("HealthBar", "Icon")
 SetSubElementPivot("HealthBar", "Icon", 0.5, 0.5); GetSubElementPivot("HealthBar", "Icon")
+SetSubElementFlipX("HealthBar", "Icon", true);   GetSubElementFlipX("HealthBar", "Icon")
+SetSubElementFlipY("HealthBar", "Icon", false);  GetSubElementFlipY("HealthBar", "Icon")
 SetSubElementOpacity("HealthBar", "Label", 0.5); GetSubElementOpacity("HealthBar", "Label")
 GetSubElementPosition("HealthBar", "Icon")       -- → {x, y}
 GetSubElementSize("HealthBar", "Icon")           -- → {width, height}
@@ -11792,6 +11995,8 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `SetElementUseDesiredSize` | `SetWidgetElementUseDesiredSize` |
 | `SetCanvasUseDesiredSize` | `SetWidgetCanvasUseDesiredSize` |
 | `SetSubElementUseDesiredSize` | `SetSubWidgetElementUseDesiredSize` |
+| `SetElementFlipX` / `SetElementFlipY` | `SetWidgetElementFlipX` / `SetWidgetElementFlipY` |
+| `SetSubElementFlipX` / `SetSubElementFlipY` | `SetSubWidgetElementFlipX` / `SetSubWidgetElementFlipY` |
 | `SetElementColor` | `SetWidgetElementColor` |
 | `SetElementText` | `SetWidgetText` |
 | `SetElementVisible` | `SetWidgetElementVisible` |
@@ -12337,7 +12542,7 @@ PP.ClearAllCustomMaterialParams()      -- drop every override
 
 > The setters load the material if it is not loaded yet and return `false` if it cannot be found.
 > Parameter names must match the **Parameter Name** field of the node in the Material Editor.
-> Material Parameter Collections (`MPC.*`) still work and are still the right tool for values shared by many materials.
+> For values shared by many materials, use Material Parameter Collections (`MPC.*`).
 
 ### Post-Process Volume callbacks
 
@@ -12488,7 +12693,7 @@ Cinema.ClearActorBinding("Content/Cinema/intro.ice_cinema", "Hero")
 
 ### Camera (the real frame)
 
-These return the **frame actually rendered this frame** — the cinema camera, the blend between cinema and gameplay camera, or the gameplay camera when no cinema plays. While a cinema controls the camera, `GetCameraWorldBounds`, `IsOnScreen`, `GetMouseWorldPosition`, `GetPointerWorldPosition`, `ScreenToWorld`, `WorldToScreen` and the cursor traces use this frame too, so gameplay code stays correct during cutscenes.
+These return the **frame actually rendered this frame** — the cinema camera, the blend between cinema and gameplay camera, or the gameplay camera when no cinema plays. While a cinema controls the camera, `GetCameraWorldBounds`, `IsOnScreen`, `GetMouseWorldPosition`, `GetPointerWorldPosition`, `ScreenToWorld`, `WorldToScreen` and the cursor traces use this frame too, so gameplay code stays correct during cutscenes. In the editor the frame is the free camera while it is ejected (`IsCameraEjected()`, see [Camera](#11-camera--camera)): a playing cinema keeps running, but its camera is not shown until you inject.
 
 ```lua
 local camPos = Cinema.GetCameraPosition()    -- → {x, y, z}: center of the frame
@@ -13039,7 +13244,7 @@ What the 7 platforms can report:
 
 > **Android ABI names are normalized** so one comparison works everywhere: `armeabi-v7a` → `"arm32"`, `arm64-v8a` → `"arm64"`, `x86_64` → `"x64"`, `x86` → `"x86"`. Write `arch == Settings.ARCH_ARM64` once instead of matching per-platform ABI spellings.
 
-The value is a compile-time property of **the build that is running**, not a probe of the hardware: an x64 build executing on an ARM machine through emulation still reports `"x64"`, because that is the code actually running — which is exactly what you want when you are budgeting for it. The call is cheap (no syscalls, no I/O), so it is fine to use in `OnStart` or in a settings menu.
+The value is a compile-time property of **the build that is running**, not a probe of the hardware: an x64 build executing on an ARM machine through emulation still reports `"x64"`, because that is the code actually running — which is exactly what you want when you are budgeting for it. The call is cheap (no syscalls, no I/O), so it is fine to use in `OnCreate`, `OnLevelStart` or in a settings menu.
 
 Patterns:
 
@@ -13645,48 +13850,48 @@ Settings.ClearChangeListeners()
 
 ```lua
 -- 2D vector
-local v = Vec2(1.0, 2.0)
+local v = Vec2.new(1.0, 2.0)
 v.x = 3.0
 v.y = 4.0
 
 -- 3D vector
-local v3 = Vec3(1, 2, 3)
+local v3 = Vec3.new(1, 2, 3)
 
 -- 4D vector
-local v4 = Vec4(1, 2, 3, 4)
+local v4 = Vec4.new(1, 2, 3, 4)
 
 -- Color (RGBA)
-local c = Color(1, 0, 0)         -- Red (a=1 by default)
-local c = Color(1, 0, 0, 0.5)    -- Semi-transparent red
+local c = Color.new(1, 0, 0)         -- Red (a=1 by default)
+local c = Color.new(1, 0, 0, 0.5)    -- Semi-transparent red
 
 -- Rectangle
-local r = Rect(10, 20, 100, 50)  -- x, y, w, h
+local r = Rect.new(10, 20, 100, 50)  -- x, y, w, h
 
 -- Transform (position, rotation, scale)
-local t = Transform(Vec3(0, 0, 0), 0, Vec2(1, 1))
-t.position = Vec3(10, 20, 0)
+local t = Transform.new(Vec3.new(0, 0, 0), 0, Vec2.new(1, 1))
+t.position = Vec3.new(10, 20, 0)
 t.rotation = 45
-t.scale = Vec2(2, 2)
+t.scale = Vec2.new(2, 2)
 
 -- Vector methods
 local len2 = v:Length()
 local len2sq = v:LengthSq()
 local norm2 = v:Normalized()
-local dot2 = v:Dot(Vec2(1, 0))
-local dist2 = v:Distance(Vec2(0, 0))
-local lerp2 = v:Lerp(Vec2(5, 5), 0.5)
+local dot2 = v:Dot(Vec2.new(1, 0))
+local dist2 = v:Distance(Vec2.new(0, 0))
+local lerp2 = v:Lerp(Vec2.new(5, 5), 0.5)
 
 local len3 = v3:Length()
 local len3sq = v3:LengthSq()
 local norm3 = v3:Normalized()
-local dot3 = v3:Dot(Vec3(0, 1, 0))
-local cross3 = v3:Cross(Vec3(0, 1, 0))
-local dist3 = v3:Distance(Vec3(0, 0, 0))
-local lerp3 = v3:Lerp(Vec3(5, 5, 5), 0.5)
+local dot3 = v3:Dot(Vec3.new(0, 1, 0))
+local cross3 = v3:Cross(Vec3.new(0, 1, 0))
+local dist3 = v3:Distance(Vec3.new(0, 0, 0))
+local lerp3 = v3:Lerp(Vec3.new(5, 5, 5), 0.5)
 
 local len4 = v4:Length()
-local dot4 = v4:Dot(Vec4(1, 0, 0, 0))
-local lerp4 = v4:Lerp(Vec4(1, 1, 1, 1), 0.5)
+local dot4 = v4:Dot(Vec4.new(1, 0, 0, 0))
+local lerp4 = v4:Lerp(Vec4.new(1, 1, 1, 1), 0.5)
 ```
 
 ### Color utilities
@@ -13816,7 +14021,7 @@ local index = RandomWeighted({10, 5, 1})  -- First is 10x more likely than third
 SetRandomSeed(42)
 ```
 
-> **Determinism (new):** all of the functions above now run on the engine's deterministic
+> **Determinism:** all of the functions above run on the engine's deterministic
 > generator. Call `SetRandomSeed(n)` (or `RNG.SetSeed`) once and **every** `Random*` call, loot
 > roll, array shuffle and AI random selector becomes fully reproducible — the foundation for
 > seeded roguelike runs and replays. `SetRandomSeed` also reseeds the noise tables by default.
@@ -13827,8 +14032,8 @@ SetRandomSeed(42)
 > `math.random(m, n)` and `math.randomseed(s)` run on the same deterministic generator, keeping
 > their usual Lua semantics (no args → float in `[0,1)`, otherwise an integer in range). This
 > matters for rollback netcode: a raw Lua RNG would not be part of a rollback snapshot and would
-> desync on the first resimulated frame. Nothing to change in your code — existing calls simply
-> became reproducible.
+> desync on the first resimulated frame. Nothing extra to set up — plain `math.random` calls are
+> reproducible as they are.
 
 ### Perlin noise and others
 
@@ -14032,7 +14237,8 @@ local dist = DistanceToLine(px, py, ax, ay, bx, by)
 local proj = ProjectOnto(vx, vy, ax, ay)
 -- proj.x, proj.y
 
--- Perpendicular (rotate by 90°)
+-- Perpendicular: the vector turned 90° counter-clockwise, (-y, x)
+-- (for the clockwise one use RotatePoint(x, y, 90))
 local perp = Perpendicular(x, y)
 -- perp.x, perp.y → (-y, x)
 
@@ -14043,7 +14249,7 @@ local hit = LineIntersection(ax, ay, bx, by, cx, cy, dx, dy)
 -- hit.t = parameter on AB (0..1)
 -- hit.u = parameter on CD (0..1)
 
--- Signed angle between two vectors (positive = counter-clockwise)
+-- Signed angle between two vectors in degrees (positive = clockwise)
 local angle = SignedAngle(x1, y1, x2, y2)
 
 -- Smoothly rotate angle toward target (clamped speed)
@@ -14072,7 +14278,7 @@ seeding). Once a master seed is set, every run is fully reproducible: the same s
 produces the same dungeon, loot, and AI decisions. This is the backbone for seeded roguelike
 runs, daily challenges and replays.
 
-> All legacy helpers (`Random()`, `RandomRange`, `RandomInt`, `RandomBool`, `RandomChoice`,
+> All the global random helpers (`Random()`, `RandomRange`, `RandomInt`, `RandomBool`, `RandomChoice`,
 > `RandomWeighted`, `RandomPointInCircle`, … as well as `Array.Shuffle`, loot-table rolls and
 > Behavior-Tree random selectors) route through this same generator, so a single
 > `RNG.SetSeed(...)` makes **all** of them reproducible.
@@ -14343,6 +14549,11 @@ end
 Local achievement system with persistence. Supports two types: simple (`simple`) and incremental (`incremental`), as well as hidden achievements, auto-save, and unlock timestamps.
 
 Data is saved in `Saves/` as JSON via `PlatformPaths` — works on all platforms (Windows, Linux, Android, Web).
+
+> `savePath` and the path you pass to `Save`, `Load`, `HasSave` and `DeleteSave` are relative to `Saves/`.
+> Backslashes and doubled slashes become single forward slashes, so `"Slots\\achievements.json"` lands in the
+> same file on every platform, and names in any language work. A path that contains `..` or a drive letter
+> (`C:`), or starts with `/`, is refused and the call returns `false`.
 
 ```lua
 -- Create system
@@ -14620,6 +14831,12 @@ stats.Clear()                                  -- clear all data
 | `:Exists()` | bool | Does save file exist on disk |
 | `:Delete()` | bool | Delete the save file |
 
+> The path — the second argument of `PersistentTable` (default `<name>.json`) or the one passed to `Save` and
+> `Load` — is relative to the save folder. Backslashes and doubled slashes become single forward slashes, so
+> `"Stats\\stats.json"` lands in the same file on every platform, and names in any language work. A path that
+> contains `..` or a drive letter (`C:`), or starts with `/`, is refused: `Save`, `Load`, `Exists` and `Delete`
+> return `false`, and `Update` skips the auto-save.
+
 ---
 
 ## 28. Localization — Localization
@@ -14728,8 +14945,8 @@ ClearWorldText()
 ```lua
 function OnUpdate(dt)
     PrintScreen("FPS: " .. math.floor(1.0 / dt), 0, 1, 0, 1, 0.0, 1)
-    PrintScreen("HP: " .. self.hp,             1, 1, 0, 1, 0.0, 2, 1.5)
-    PrintScreen("Pos: " .. self.x .. ", " .. self.y, 0, 1, 1, 1, 0.0, 3)
+    PrintScreen("HP: " .. hp,                  1, 1, 0, 1, 0.0, 2, 1.5)
+    PrintScreen("Pos: " .. GetPositionX() .. ", " .. GetPositionY(), 0, 1, 1, 1, 0.0, 3)
 end
 
 PrintScreen("Connected to server", 0, 1, 0, 1, 4.0)
@@ -14786,7 +15003,7 @@ DrawDebugGrid(400, 300, 32, 10, 10, 0.3, 0.3, 0.3, 0.0)   -- duration 0 = one fr
 DrawDebugCoordinateSystem(0, 0, 50.0, 2.0)
 ```
 
-> **Careful with argument order:** `DrawArrow(x1, y1, x2, y2, r, g, b, duration, headSize)` takes `headSize` **last**, while `DrawDebugArrow(x1, y1, x2, y2, headSize, r, g, b, duration)` takes it **first**. The two are kept as-is for backwards compatibility.
+> **Careful with argument order:** `DrawArrow(x1, y1, x2, y2, r, g, b, duration, headSize)` takes `headSize` **last**, while `DrawDebugArrow(x1, y1, x2, y2, headSize, r, g, b, duration)` takes it **first**.
 
 ### Debug Draw (Physics) — extended aliases
 
@@ -14806,44 +15023,85 @@ ClearDebugDraw()
 
 ### Lua Script Debugger (Text and Visual)
 
-IceBoxEngine ships **two source-level debuggers** that attach to the live Lua VM during Play Mode. They share one runtime backend but are **mutually exclusive** — only one is ever attached, so they never fight over the VM:
+IceBoxEngine ships a **source-level debugger** for gameplay Lua. It covers every script the game runs — **class scripts** (parent classes and per-instance overrides included), the **level script**, **widget scripts**, **`.lua` modules** loaded with `require` and **mod scripts** — and has two faces on top of one backend:
 
-| Debugger | For projects in… | Breakpoints on… | Where it lives |
-|----------|------------------|-----------------|----------------|
-| **Text debugger** | Code mode (hand-written Lua) | source **lines** | the `Lua Script Debugger` panel |
-| **Visual debugger** | Visual mode (node graphs) | **nodes** | directly inside the node graph editor |
+| Debugger | For… | Breakpoints on… | Where it lives |
+|----------|------|-----------------|----------------|
+| **Text debugger** | hand-written Lua | source **lines** | the script editors and the `Lua Script Debugger` panel |
+| **Visual debugger** | node graphs | **nodes** | directly inside the node graph editor |
 
-> The coding mode is chosen per project in the launcher, so a project is either **Code** or **Visual** and you normally use just one. The engine guards against both attaching at once regardless of mode.
+Both work in the same Play session: execution can stop on a graph node and then step into a hand-written Lua module that the graph calls.
+
+#### How it works
+
+- **Nothing to attach.** Breakpoints are active every time you press Play in the editor. The `Debugger` checkbox — in the panel toolbar and in the graph debug bar — is the master switch.
+- **A true pause.** When execution stops, the script is frozen **on that very line**: the game, physics, timers and audio stand still while the editor stays fully interactive. `Continue` resumes from the same instruction — nothing is skipped and nothing runs twice.
+- **Everything is reachable.** Breakpoints work in `OnConstruct`, `OnCreate` and `OnLevelStart` (the debugger is armed before the first script line runs), in update callbacks, timers, events, coroutines and widget event handlers.
+- **No cost when idle.** The debugger hooks into the Lua VM only while there is something to watch — an enabled breakpoint, a step, `Break`, live values or the hang watchdog. Without them scripts run at full speed. While it is watching, the VM reports every executed line and Lua code runs several times slower, so disable the breakpoints (or switch `Debugger` off) when you measure performance.
+
+| Shortcut | Action |
+|----------|--------|
+| `F9` | Toggle a breakpoint on the current line of a script editor |
+| `F5` | Continue (while a script is paused) |
+| `F10` | Step Over |
+| `F11` | Step Into |
+| `Shift+F11` | Step Out |
+
+#### Text debugger — breakpoints in the script editors
+
+Click **to the left of a line number** (or press `F9`) in any Lua editor: the script of the Class Editor, the Script tab of the Widget Editor, the Level Script window, the Lua Script Editor for `.lua` files and the `Override Lua Script` editor in Properties. The source view of the `Lua Script Debugger` panel has the same margin.
+
+- A click on an empty or comment line puts the breakpoint on the next line of code.
+- Breakpoints **stay on their line** while you edit the text above them and are saved to `Config/DebugBreakpoints.json` together with the debugger settings.
+- Markers: red dot — plain breakpoint, orange dot — with a condition or a hit count, blue diamond — logpoint, hollow circle — disabled. The line about to run is marked with a yellow arrow.
+- While a script is paused, **hover a variable** in the code to see its value.
 
 #### Text debugger — the `Lua Script Debugger` panel
 
-Open the panel from the editor's window menu. It debugs the hand-written Lua embedded in your assets:
+The panel opens by itself when hand-written Lua stops (it is also in the editor's window menu):
 
-- **Pick an asset** — the left list shows every `.ice_class`, `.ice_widget` and `.icemap`. `Rescan Assets` rebuilds the list; the filter box narrows it.
-- **Attach / detach** — `Start Debug` installs the line hook, `Stop Debug` removes it. You can attach before or during Play.
-- **Breakpoints** — click the line gutter to toggle one. Each can be **enabled/disabled**, carry a **conditional expression** (it breaks only when the expression is truthy) and tracks a **hit count**. Double-click a breakpoint in the list to edit its condition.
-- **Execution control** — `Continue`, `Step Over`, `Step Into`, `Step Out`, and `Pause` (breaks on the next executed Lua line).
-- **Inspect while paused** — `Variables` shows Locals, upvalues, enclosing scopes and Globals (tables expand on demand); `Watch` evaluates arbitrary expressions; `Call Stack` lists the frames; the log records every hit and step. The paused line is marked in the source view.
-- **Live values** — even without pausing, the panel samples local values a few times per second so you can watch them change in real time.
+- **Script list** (left) — every `.ice_class`, `.ice_widget`, `.icemap` and `.lua` of the project, plus everything the running game has loaded (mod scripts, per-instance overrides). During Play the scripts that are not loaded are dimmed. `Rescan Assets` rebuilds the list; the filter box narrows it.
+- **Script Source** (centre) — during Play this is the code that is **actually running**; otherwise the saved file.
+- **Functions** (right) — click to jump to a function, double-click to toggle a breakpoint on its first line.
+- **Breakpoints** (below the script list) — the breakpoints of all scripts. The checkbox enables or disables one, a click jumps to it, `X` removes it and `...` opens its settings:
+  - **Condition** — a Lua expression; the script stops only when it is truthy. The local variables, upvalues and script variables of the function are visible to it. If the condition itself raises an error, the debugger stops there and shows the error.
+  - **Hit count** — stop every time, on the N-th hit only, from the N-th hit on, or on every N-th hit. Counters restart with each Play.
+  - **Log message** — turns the breakpoint into a **logpoint**: the text goes to the Debug Log and the Console and the script does **not** stop. Expressions go in braces: `hp = {health}, target = {target}`.
+- **Execution control** — `Continue`, `Step Over`, `Step Into`, `Step Out`, and `Break` (stops on the next Lua line that runs).
+- **Variables** — the `Locals`, `Upvalues` and `Globals` (the script's own variables) of the selected stack frame. Tables expand on demand. **Double-click a value to change it** — any Lua expression is accepted.
+- **Watch** — expressions evaluated on every stop, in the selected frame. The list is kept between editor sessions.
+- **Call Stack** — click a frame to see its code and its variables.
+- **Debug Log** — every stop, logpoint output and debugger message, with a **console** line at the bottom: while a script is paused, type a Lua expression or statement and it runs in the selected stack frame (`health`, `health = 100`, `Respawn()`).
+- **Break on errors** — stops on the line where an unhandled runtime error is raised, with the call stack and variables intact, before the error is reported. Errors caught by `pcall` do not stop the script.
+- **Hang watchdog** — stops a script that keeps executing for longer than the given number of seconds without returning (an endless loop) instead of letting it freeze the editor. From there you can inspect it, `Continue`, or press **STOP** to end it. The watchdog is **off by default**: while it is on, the VM counts instructions and Lua code runs noticeably slower (pure Lua up to about twice as slow), so switch it on when you are hunting a hang. Time the script spends waiting inside an engine call is not counted.
+- **Live values** (Variables tab, while the game runs) — samples the variables of the selected script a few times per second without pausing. It slows scripts down while it is on.
 
-> **Generated Lua is read-only.** Open a **visual** asset here and you'll see the Lua compiled from its node graph. The panel labels it as generated and **won't place line breakpoints** on it — debug the graph instead (below). Line breakpoints persist to `Config/DebugBreakpoints.json`.
-
-> **Level scripts** execute under the chunk name `LevelScript`, so breakpoints set in an `.icemap` resolve against the running level script.
+> **Generated Lua is read-only.** Select a **visual** asset in the panel and you see the Lua compiled from its node graph. Line breakpoints are not placed on it — debug the graph instead (below).
 
 #### Visual debugger — debugging inside the node graph
 
 In a **Visual Scripting** project you debug the **graph itself** — there is no need to read the generated Lua. Everything happens on the canvas of the Class, Widget or Level graph editor:
 
-- **Node breakpoints** — click the red dot at a node's top-left corner, or right-click the node → `Add Breakpoint` / `Remove Breakpoint`. They persist per asset to `Config/VSBreakpoints.json` and survive restarts.
-- **Active-node highlight** — when execution stops, the current node **pulses**; with `Follow` enabled the view re-centers on it automatically.
+- **Node breakpoints** — click the red dot at a node's top-left corner, or right-click the node → `Add Breakpoint` / `Remove Breakpoint`. They are saved per asset to `Config/VSBreakpoints.json`.
+- **Active-node highlight** — when execution stops, the current node **pulses**. If the graph is not on screen, its editor opens by itself; with `Follow` enabled the view centres on the node.
+- **Node-by-node stepping** — `Step` moves to the next node, `Step Into` enters functions and custom events, `Step Out` returns to the caller.
 - **Execution flow** — exec wires that just carried control **animate** with travelling pulses, so you can watch the path your logic took.
 - **Pin values** — while paused, output pins display their **live runtime values** as inline badges next to the pin.
-- **Debug toolbar** (top of the canvas during Play) — `Continue`, `Step Over`, `Step Into`, `Step Out`, `Pause`, `Stop`, `Focus`, a `Follow` toggle and a status indicator.
-- **Debug tab** (bottom, next to `Problems`) — `Call Stack` (click a frame to jump to its node), `Watches` (variable names or expressions) and the `Breakpoints` list (click to focus a node, or clear them all).
+- **Debug toolbar** (top of the canvas during Play) — `Continue`, `Step`, `Step Into`, `Step Out`, `Pause`, the `Debugger` switch, `Focus`, a `Follow` toggle and a status indicator.
+- **Debug tab** (bottom, next to `Problems`) — `Call Stack` (click a frame to select it and jump to its node), `Watches` (variable names or expressions) and the `Breakpoints` list (click to focus a node, or clear them all).
 
-> **Compile before you debug.** The runtime runs the **saved** Lua and the node→line mapping is rebuilt from the current graph, so **save the graph before pressing Play** — the same "compile first" rule. The debug hook only attaches when at least one node breakpoint exists (or you press `Pause`), so a graph with no breakpoints runs at full speed.
+> **The graph must match the running game.** Class and widget graphs are compiled when the asset is saved, so **save the graph before pressing Play** (the *Update All Assets on Play* preference does it for you). If a graph differs from the script that is running, the debug bar says so — save it and restart Play. The level graph is compiled every time Play starts.
 
-The visual debugger works across all three graph surfaces — **Class**, **Widget** and **Level** — and reuses the same step engine as the text debugger, so `Step Over/Into/Out` behave identically.
+The visual debugger works across all three graph surfaces — **Class**, **Widget** and **Level**.
+
+#### Good to know
+
+- The debugger works in **Play mode in the editor**. A built game contains no active debugger.
+- A breakpoint is skipped — with a note in the Debug Log — when its Lua code was started by the editor rather than by the running game (for example a command typed in the editor Console) or while a frame is being drawn.
+- While a script is paused, actions that would pull the ground from under it wait until it continues: hot reload of a saved script or widget, asset refresh and opening another level. **STOP** works at any moment.
+- If you edit a script during Play, its breakpoints still refer to the code that is running. Save the asset (hot reload) to bring them back in sync.
+- A per-instance **visual** override (`Override Lua Script` in a Visual Scripting project) is debugged as generated Lua in the panel.
+- Runtime errors name the script by its path — `Content/Classes/Player.ice_class:12: attempt to index a nil value` — so the file and the line are found at once.
 
 ### Debug functions: how to use
 
@@ -14939,12 +15197,12 @@ Supported flag names for `GetDebugFlag` / `SetDebugFlag` / `ToggleDebugFlag`:
 ```lua
 function OnUpdate(dt)
     if IsDebugBuild() then
-        PrintScreen("HP: " .. self.hp, 1, 1, 0, 1, 0)
-        DrawCircle(self.x, self.y, self.detectionRadius, 1, 0, 0)
+        PrintScreen("HP: " .. hp, 1, 1, 0, 1, 0)
+        DrawCircle(GetPositionX(), GetPositionY(), detectionRadius, 1, 0, 0)
     end
 end
 
-function OnBeginPlay()
+function OnCreate()
     if IsDebugBuild() then
         if not GetDebugColliders() then ToggleDebugColliders() end
         if not GetDebugNavGrid()   then ToggleDebugNavGrid()   end
@@ -15002,7 +15260,7 @@ SaveChromeTrace("boss_fight.json")       -- explicit file name / path
 
 ```lua
 -- Example: record a trace of a specific gameplay window and auto-export it.
-function OnBeginPlay()
+function OnLevelStart()
     StartProfilerTrace("IntroCutscene")
 end
 
@@ -15173,7 +15431,10 @@ SetTilemapVisible(true)
 SetTilemapVisible(false, 1)  -- Second tilemap
 local vis = IsTilemapVisible()
 
--- Flip
+-- Flip: mirrors the whole map — layout, tile images, tile colliders and shadows —
+-- for orthogonal, isometric and hexagonal maps. Tile coordinates (SetTileAt,
+-- TileToWorld, WorldToTile, …) keep addressing the same painted cells; world-space
+-- lookups such as GetTileAt and TileToWorld follow the mirrored map.
 SetTilemapFlipX(true)
 SetTilemapFlipY(false)
 local fx = GetTilemapFlipX()
@@ -15220,10 +15481,6 @@ local path = GetTilemapFilePath()
 ### Position and transform
 
 ```lua
--- Position (global)
-SetTilemapPosition(100, 200)
-local pos = GetTilemapPosition()  -- → {x, y}
-
 -- Local position (offset within entity)
 SetTilemapLocalPosition(10, 5)
 local lp = GetTilemapLocalPosition()        -- → {x, y}
@@ -15239,8 +15496,6 @@ SetTilemapLocalRotation(45)
 local lr = GetTilemapLocalRotation()
 
 -- World transform (entity transform already applied — see the Sprite section).
--- Note: SetTilemapPosition/GetTilemapPosition are older aliases of the
--- Local position accessors and behave identically.
 SetTilemapWorldPosition(120, 64, 0)
 local twp = GetTilemapWorldPosition(0)      -- → {x, y, z}
 SetTilemapWorldRotation(30, 0)
@@ -16012,10 +16267,11 @@ local has = HasComponent("Rigidbody")
 local has = HasComponent("Collider")
 local has = HasComponent("Animator")
 local has = HasComponent("Skeleton")
--- etc.: "Flipbook", "Audio", "FX", "PointLight", "Widget",
--- "Camera", "Tilemap", "SpotLight", "Joint", "PointMarker", "AI", "Destructible", "ClassComponent", "Hierarchy", "Interface", "GameplayTag"
+-- etc.: "Flipbook", "Audio", "FX", "Light" ("PointLight" and "SpotLight" check the same component), "Widget",
+-- "Camera", "Tilemap", "Joint", "PointMarker", "Decal", "AI", "Destructible", "ClassComponent",
+-- "Stencil", "Replication", "Hierarchy", "Interface", "GameplayTag"
 
--- Check by component name on another entity
+-- Check by component name on another entity (same names)
 local has = EntityHasComponent(entityId, "Sprite")
 ```
 
@@ -16052,6 +16308,10 @@ RemoveComponent("Sprite")
 RemoveComponent("Rigidbody")
 RemoveComponent("ClassComponent")
 -- etc. for all optional types
+-- Removing a component also releases what it owns in the physics world: sprite/flipbook
+-- collision shapes, collider shapes and their separate part bodies, skeleton bone bodies,
+-- the tilemap body, joints. Removing "Rigidbody" destroys the body together with every
+-- shape, part body and joint that was attached to it.
 
 -- Core components exist on EVERY entity and cannot be removed: Transform, Tag, ID,
 -- Stencil and Replication. RemoveComponent returns false and logs a warning for them.
@@ -16126,6 +16386,10 @@ local idx = AddEntityClassComponentInstance(entityId, "Weapon")
 local idx = AddEntityClassComponentInstance(entityId, "Shield", "Content/Classes/Shield.ice_class")
 
 -- RemoveEntityClassComponentInstance(entityId, index) → bool (true on success)
+-- Also removes everything the instance has built on the entity — the sprites, flipbooks,
+-- colliders, lights, joints, etc. named "[Name] ..." — together with their physics.
+-- Keep instance names unique: parts of two instances that share a name cannot be told
+-- apart, so they are left in place until the last such instance is removed.
 local ok = RemoveEntityClassComponentInstance(entityId, idx)
 
 -- Change class path / display name of an existing instance
@@ -16136,7 +16400,9 @@ SetEntityClassComponentInstanceName(entityId, 0, "MainWeapon")
 -- AddEntityClassComponentInstance only stores metadata (the class's components are
 -- merged when the level loads / the entity is spawned). Instantiate merges the class's
 -- sprites / flipbooks / colliders / lights / markers / etc. onto the entity immediately
--- and creates collider shapes on its runtime physics body.
+-- and creates collider shapes, separate part bodies, joints and tilemap collision on
+-- its runtime physics. The class path may be relative to the project ("Content/...")
+-- or to the Content folder, exactly as in SpawnEntity.
 -- InstantiateEntityClassComponent(entityId, name [, classPath]) → instance index, or -1
 local liveIdx = InstantiateEntityClassComponent(entityId, "Shield", "Content/Classes/Shield.ice_class")
 
@@ -16146,6 +16412,11 @@ ResolveEntityClassComponentInstance(entityId, idx)
 ```
 
 #### Local transform of a class component on another entity
+
+Changing the local transform moves everything the instance has already built on the
+entity (sprites, flipbooks, colliders, lights, joints, …): collider shapes, part bodies,
+joints and tilemap collision are rebuilt at the new place. Before the instance is built
+it only changes where the parts will appear.
 
 ```lua
 -- Position (relative to the entity transform)
@@ -16189,7 +16460,7 @@ local index = FindMyClassComponentIndex("Weapon")
 -- Add/remove class component instance
 local idx = AddClassComponentInstance("Weapon")                               -- Just name
 local idx = AddClassComponentInstance("Shield", "Content/Classes/Shield.ice_class") -- With path
-RemoveClassComponentInstance(idx)
+RemoveClassComponentInstance(idx)   -- also removes the parts the instance has built (see above)
 
 -- Set class path for an instance
 SetClassComponentInstancePath(0, "Content/Classes/NewWeapon.ice_class")
@@ -16202,6 +16473,9 @@ ResolveClassComponentInstance(liveIdx)
 ```
 
 #### Class component local transform
+
+Setting the local transform moves the parts the instance has already built, exactly as
+described for the entity-ID variants above.
 
 ```lua
 -- Position (relative to entity)
@@ -16969,15 +17243,15 @@ Network.OnRoomPlayerLeft(function(roomName, playerId) ... end)
 ### Automatic replication (recommended)
 
 Mark an entity once and the engine keeps it in sync for every connected client
-automatically — transform, velocity, animation and all visual components — and
-spawns/despawns a matching entity on every client. This is the high-level,
+automatically — transform, velocity, animation, every component and every component
+parameter — and spawns/despawns a matching entity on every client. This is the high-level,
 "set-and-forget" layer; the manual `SyncEntity*` calls below are the low-level API.
 
 ```lua
 -- Host/server only. Mark an entity for automatic replication.
 -- Returns a stable network id (netId) shared by all machines.
 local netId = Network.Replicate(entityId)
-local netId = Network.Replicate(entityId, { owner = playerId })          -- assign an owning player (metadata)
+local netId = Network.Replicate(entityId, { owner = playerId })          -- assign an owning player
 local netId = Network.Replicate(spawnedId, { prefab = "Content/Bullet.ice_class" })
 
 -- Stop replicating (level entities stay, runtime-spawned copies are removed on clients).
@@ -16988,13 +17262,19 @@ local on   = Network.IsReplicated(entityId)
 local id   = Network.GetNetId(entityId)        -- 0 if not replicated
 local ent  = Network.GetEntityByNetId(netId)   -- local entity id, or 0
 local count= Network.GetReplicatedCount()
+
+-- Host/server only. Change the owning player at runtime (0 = the host owns it again).
+-- The Replication component is updated and every client follows on its next snapshot:
+-- script gating, prediction and the kinematic body switch all move to the new owner.
 Network.SetReplicationOwner(entityId, playerId)
 
--- After changing a *config* component at runtime on the host (sprite swap, light
--- colour, tilemap, widget, AI tuning, ...), push a one-shot full-state update:
+-- Component changes made on the host are detected and sent automatically, so this is
+-- rarely needed. It re-sends the entity's complete state right now and makes every
+-- client re-apply it — use it with syncFullState = false, or to overwrite something a
+-- client changed locally.
 Network.ReplicateFullState(entityId)
 
--- Tune how often config full-state changes are checked/sent (default 8 Hz).
+-- Tune how often component changes are checked/sent (default 8 Hz).
 Network.SetReplicationRate(8)
 
 -- Declarative replication (recommended): tick "Replicate" on the entity's
@@ -17014,8 +17294,8 @@ Network.SetReplicationSettings(entityId, {
     owner = playerId,          -- setting a non-zero owner implies ownerMode "player"
     syncTransform = true,      -- position/rotation/scale every tick
     syncVelocity = true,       -- rigidbody linear velocity every tick
-    syncVisuals = true,        -- sprite/flipbook/skeleton/animator params every tick
-    syncFullState = true,      -- periodic config components (lights, tilemap, AI, ...)
+    syncVisuals = true,        -- first sprite/flipbook, skeleton, animator state + params every tick
+    syncFullState = true,      -- every other component setting, sent when it changes
     fullStateRate = 0,         -- Hz; 0 = use the global replication rate
     scriptMode = "auto",       -- "auto" | "always" | "never" (Lua callbacks on replicas)
     relevancy = "aoi",         -- "aoi" (culled by Area Of Interest) | "always"
@@ -17027,8 +17307,8 @@ Network.SetReplicationSettings(entityId, {
 Network.SetEntityReplicated(entityId, true)
 local on = Network.IsEntityReplicated(entityId)
 
--- The imperative Network.Replicate() below still works and now writes the same
--- component, so the Properties panel always reflects the live state.
+-- The imperative Network.Replicate() below writes the same component,
+-- so the Properties panel always reflects the live state.
 
 -- Replica script gating (default: enabled). While enabled, a client does NOT run
 -- Lua lifecycle callbacks (OnUpdate/OnFixedUpdate/OnLateUpdate, collision/sensor/hit
@@ -17050,6 +17330,10 @@ Network.OnNetworkLevelLoad(function(path) LoadLevel(path) end)
 -- host and clients take exactly the same code path. Without a handler the host
 -- falls back to a plain LoadLevel(path). The handler is responsible for loading
 -- the level and must not call Network.LoadNetworkLevel again.
+-- The level change goes to the players who are in the session at the moment of
+-- the call. Tell a player who joins later which level to load yourself (for
+-- example with an RPC from Network.OnPlayerJoined): as soon as it has loaded the
+-- level, the replicated world reaches it automatically.
 ```
 
 **Model.** Replication is **host-authoritative**: the host simulates everything and
@@ -17059,14 +17343,43 @@ clients apply the result. What is automatic, once an entity is marked:
   placed in a level are bound on clients by their level UUID; entities created at runtime
   carry a `prefab` path and are instantiated on clients via `SpawnEntity`. Destroying the
   entity on the host removes it on all clients.
-- **Every tick (smooth):** position, rotation, scale, velocity, animator parameters and
-  the active flipbook frame. Remote bodies are made kinematic so client physics never
-  fights the network.
-- **On change (throttled):** all other visual/config components (sprite, light, tilemap,
-  widget, destructible, AI, tags, ...), detected automatically and sent only when they
-  actually change.
-- Event-driven things (audio, particles/FX, one-shot effects) are intentionally **not**
-  auto-replicated — drive them with RPC (`Network.CallRPC`) so they fire exactly once.
+- **Every tick (smooth):** position, rotation, scale and velocity; the animator's current
+  state, state time and parameters; the first sprite's colour, visibility, flip and asset;
+  the first flipbook's playback (asset, frame, time, speed, playing) and its colour,
+  visibility and flip; the skeleton's animation, skin, time, visuals, ragdoll flag and
+  ragdoll bones. Playback runs locally between snapshots and is only re-anchored when it
+  drifts, so animations stay smooth at any snapshot rate. Remote bodies are made kinematic
+  so client physics never fights the network.
+- **Animator triggers** are delivered reliably, exactly once, the moment the host raises
+  them — a trigger is never lost between two snapshots. If a client's animator still ends
+  up in another state (`ForceAnimState` on the host, for example), it is moved to the
+  host's state automatically.
+- **On change (throttled):** every other component and every one of its parameters, for
+  **all** instances — sprites, flipbooks, skeleton, animator asset, audio, FX, widgets,
+  lights, point markers, decals, tilemaps, destructible, AI, class components, interfaces,
+  gameplay tags, stencil, the entity tag and its enabled/visible flags. Only the fields
+  that actually changed are sent, and they are applied in place: a playing sound, particle
+  system or widget on the client is not restarted by an unrelated change.
+- **Physics state (on change):** the Rigidbody and Collider settings, plus what scripts
+  change on the live body — body type, `SetBodyEnabled`, gravity scale, damping, fixed
+  rotation, bullet, sleeping, ragdoll, `Crouch`/`UnCrouch` — and on each collider shape —
+  collision filter, friction, restitution, density, event flags, one-way. A door whose
+  collider the host disabled is passable on every client.
+- **Added and removed components** — `AddComponent` / `RemoveComponent` of any component
+  type listed above is mirrored on clients, including for players who join later.
+  Script, Camera, Hierarchy and Joint components stay local to each machine.
+- **Late join, reconnect and level changes** — a client receives the current world
+  settings and every replicated entity in its present state, addressed to that player
+  only, when it joins and again each time it finishes loading a level
+  (`Network.LoadNetworkLevel`) — no matter whether it or the host finishes loading first.
+  When a session ends, runtime-spawned replicas are removed from the client and level
+  entities are handed back to local simulation.
+- One-shot **events** are intentionally **not** auto-replicated — drive them with RPC
+  (`Network.CallRPC`) so they fire exactly once: `PlayEntitySound`, re-triggering
+  `PlayFX` on an effect that is already playing, `Fracture`, widget contents (text,
+  progress), tile edits. The same goes for values a script animates every frame (UV
+  scroll, material parameters): run that code on the clients as well (for a purely
+  cosmetic entity, `scriptMode = "always"`) instead of sending it.
 
 Clients send **input** (e.g. `Network.SendInput`, RPC); the host moves the entities; the
 results replicate back. For fine-grained or custom needs the manual `SyncEntity*` API
@@ -17129,7 +17442,7 @@ local state = Network.GetEntityState(entityId)
 --   spotLightInnerAngle, spotLightOuterAngle, spotLightCastShadows, spotLightEnabled
 -- Tilemap: tilemapFlipX/Y, tilemapVisible, tilemapPath
 -- Widget: widgetVisible, widgetScreenSpace, widgetScale,
---   widgetRenderOrder, widgetInteractable, widgetFlipX/Y, widgetPath
+--   widgetRenderOrder, widgetInteractable, widgetPath
 -- Destructible: destructEnabled, destructHealth, destructFragmentCount,
 --   destructPattern, destructExplosionForce, destructOnStart, destructImpactThreshold,
 --   destructFragmentLifetime, destructFragmentFadeTime, destructFragmentGravityScale,
@@ -17242,7 +17555,9 @@ Network.SyncEntityFX(entityId, true, true, 1.0, false, false, true, true, "Conte
 -- playing, loop, speed, flipX, flipY, visible, reliable, path
 
 -- Rigidbody (body type, physics properties, ragdoll)
-Network.SyncEntityRigidbody(entityId, 2)                              -- bodyType (0=static, 1=kinematic, 2=dynamic)
+Network.SyncEntityRigidbody(entityId, 2)                              -- bodyType: an integer the receiver reads back as rigidbodyType
+-- The engine stores and sends bodyType as-is and never applies it to a body, so the numbering
+-- is yours to choose. The Rigidbody component's own order is 0=static, 1=dynamic, 2=kinematic.
 Network.SyncEntityRigidbody(entityId, 2, 1.0, false, 0.0, 0.0, false, true, true)
 -- bodyType, gravityScale, fixedRotation, linearDamping, angularDamping, isBullet, allowSleep, reliable
 Network.SyncEntityRigidbody(entityId, 2, 1.0, false, 0.0, 0.0, false, true, true, true, 1.0, 0.5)
@@ -17268,10 +17583,10 @@ Network.SyncEntityTilemap(entityId, false, false, true, true, "Content/Tilemaps/
 
 -- Widget (UI component, path)
 Network.SyncEntityWidget(entityId)                                    -- defaults
-Network.SyncEntityWidget(entityId, true, true, 1.0, 0, true, false, false, true)
--- visible, screenSpace, scale, renderOrder, interactable, flipX, flipY, reliable
-Network.SyncEntityWidget(entityId, true, true, 1.0, 0, true, false, false, true, "Content/Widgets/HUD.ice_widget")
--- visible, screenSpace, scale, renderOrder, interactable, flipX, flipY, reliable, path
+Network.SyncEntityWidget(entityId, true, true, 1.0, 0, true, true)
+-- visible, screenSpace, scale, renderOrder, interactable, reliable
+Network.SyncEntityWidget(entityId, true, true, 1.0, 0, true, true, "Content/Widgets/HUD.ice_widget")
+-- visible, screenSpace, scale, renderOrder, interactable, reliable, path
 
 -- Destructible (destruction component, extended)
 Network.SyncEntityDestructible(entityId)                              -- defaults
@@ -17514,10 +17829,9 @@ local pRecv = Network.GetPlayerBytesReceived(playerId)
 local uptime = Network.GetUptime()
 
 -- Network time
-Network.UpdateNetworkTime(dt)
-local netTime = Network.GetNetworkTime()
-Network.SetServerTimeDelta(0.01)
-local delta = Network.GetServerTimeDelta()
+local netTime = Network.GetNetworkTime()   -- server time on the host, client time on a client
+local delta = Network.GetServerTimeDelta() -- the client's current estimate of the server-time offset
+-- The engine advances network time and keeps the server offset in sync by itself.
 
 -- Limits and security
 Network.SetRateLimit(100, 65536)         -- max packets/sec, max bytes/sec
@@ -17540,7 +17854,7 @@ Network.BroadcastWorldSnapshot()  -- server-only
 -- Area of Interest (relevancy culling). When enabled, the server sends each player
 -- only the entities within their interest radius (plus entities they own), instead of
 -- the entire world. This is what makes large player counts (e.g. 100-player battle
--- royale) feasible on bandwidth. Off by default — behaviour is unchanged unless enabled.
+-- royale) feasible on bandwidth. Off by default — until enabled, every player gets the whole world.
 Network.SetAreaOfInterest(true, 2000)              -- enable, radius in world units
 local aoiOn = Network.IsAreaOfInterestEnabled()
 local aoiRadius = Network.GetAreaOfInterestRadius()
@@ -17613,7 +17927,7 @@ local done = Network.PollDiscoveryResult()    -- true once, when the answer arri
 > on the wire (only changed fields); packet compression shrinks *the bytes themselves* with an
 > adaptive range coder over every outgoing packet. Packet compression is on by default and costs
 > a little CPU per packet — on a 256-player server that is a real trade, so measure before
-> changing it: `NetworkProfiler.GetTotalWireBytesSent()` / `GetWireKBpsSent()` and the wire counters of the
+> changing it: `NetworkProfiler.GetTotalWireBytesSent()` / `NetworkProfiler.GetWireKBpsSent()` and the wire counters of the
 > Network Profiler show the actual effect on your traffic, which depends entirely on your payloads.
 > (`GetTotalBytesSent()` counts your payload *before* compression, so it does not change.)
 >
@@ -17699,8 +18013,9 @@ Network.StopMasterServer()
 > end
 > ```
 >
-> `Permissions.Has()` already returns `true` on Android 16 and older and in builds that
-> target API 36 or lower, so the same code is correct everywhere.
+> `Permissions.Has()` already returns `true` on Android 16 and older, in builds that target
+> API 36 or lower and on iOS, where the system asks for local network access by itself the
+> first time the game reaches the LAN, so the same code is correct everywhere.
 
 ### NetworkProfiler — runtime network profiler (debug only)
 
@@ -17903,11 +18218,11 @@ Inputs are resent until every peer acknowledges them, so lost or late packets ne
 | `Rollback.GetPlayerCount()` | `int`. |
 | `Rollback.GetCurrentFrame()` | `int` — the next frame to simulate. |
 | `Rollback.GetConfirmedFrame()` | `int` — the last **simulated** frame for which all inputs are confirmed (no prediction); its state is final. |
-| `Rollback.RecommendStallFrames()` | `int` — time-sync hint; how many frames you are ahead of the remote peer. |
+| `Rollback.RecommendStallFrames()` | `int` — how many stall frames time sync still has queued for this peer (`0` when the peers are in step). `Tick` applies them by itself. |
 | `Rollback.SetPlayerHandle(handle, netPlayerId, local)` | Manually map a player index to a network player id (auto-assigned by sorted id otherwise). |
 | `Rollback.GetInputs()` | Table of the inputs used for the current frame (`{ bits, predicted }`). |
-| `Rollback.GetStats()` | Table: `frame`, `confirmed_frame`, `predicted_frames`, `rollbacks_per_second`, `max_rollback_frames`, `avg_rollback_frames`, `frame_advantage`, `ping`, `synchronized`. |
-| `Rollback.OnSaveState(fn)` / `OnLoadState(fn)` / `OnAdvanceFrame(fn)` / `OnEvent(fn)` | Register the simulation and event callbacks. |
+| `Rollback.GetStats()` | Table: `frame`, `confirmed_frame`, `predicted_frames`, `rollbacks_per_second`, `max_rollback_frames`, `avg_rollback_frames`, `frame_advantage` (frames this peer runs ahead of the slowest peer; negative when it is behind), `ping`, `synchronized`. |
+| `Rollback.OnSaveState(fn)` / `Rollback.OnLoadState(fn)` / `Rollback.OnAdvanceFrame(fn)` / `Rollback.OnEvent(fn)` | Register the simulation and event callbacks. |
 | `Rollback.ClearCallbacks()` | Remove all registered callbacks. |
 
 `OnEvent(fn)` receives a table with `type`, plus `player`, `frame`, `count`, `total`, `frames_ahead`, `local_checksum`, `remote_checksum`:
@@ -17916,11 +18231,13 @@ Inputs are resent until every peer acknowledges them, so lost or late packets ne
 |---|---|
 | `"synchronizing"` | The handshake with the peers is in progress (`count` of `total` answered). |
 | `"synchronized"` | Every peer is ready; frame 0 starts. |
-| `"timesync"` | This peer runs ahead of the others by `frames_ahead` frames; `Tick` returns `"stall"` for a frame or two so they catch up. |
+| `"timesync"` | This peer runs ahead of the slowest peer by `frames_ahead` frames; over the next moments `Tick` returns `"stall"` on a few spread-out single frames so the others catch up. Network latency is not counted as running ahead — only a real difference in frame numbers is, and it is corrected at most once every few seconds. |
 | `"interrupted"` | Player `player` dropped out of the network session. The simulation keeps predicting its input and then waits for it (`Tick` returns `"stall"`) for up to 10 seconds. |
 | `"resumed"` | Player `player` is back in the network session (for example after an automatic reconnect); the inputs it missed are resent automatically. |
 | `"disconnected"` | Player `player` stayed away for 10 seconds, or the initial handshake timed out (`player` = `-1`, the session stops). After a player disconnects the session no longer waits for it and repeats its last input. With more than two players, end or restart the match on this event — the remaining peers may have received different amounts of that player's input. |
 | `"desync"` | The peers disagree on the state of confirmed frame `frame` (`local_checksum` ≠ `remote_checksum`; `player` is the peer that reported it): the simulation is not deterministic. Peers compare the checksums of confirmed frames automatically. |
+
+`Rollback.Stop()` and `Rollback.StartSession(...)` may be called from inside any of these callbacks — `OnAdvanceFrame`, `OnSaveState`, `OnLoadState` and the event handler (for example to end the match on `"desync"` or `"disconnected"`). The tick in progress, if any, ends right there: no further callbacks of the old session are invoked and that `Tick` call returns `"error"`.
 
 ### Complete example (1-byte input bitmask)
 
@@ -18255,7 +18572,7 @@ ApplySeparation(32.0, 1.0)
 > respect the AIComponent's **Movement Mode**:
 > - **Auto** (default) — if the entity has a dynamic/kinematic Rigidbody with a runtime body,
 >   movement is driven through the physics body (velocity), otherwise the Transform is moved directly.
-> - **Transform** — always move the Transform directly (legacy behavior; not for physics bodies).
+> - **Transform** — always move the Transform directly (not for physics bodies).
 > - **Physics** — always drive the Rigidbody velocity.
 >
 > When the entity stands on a **Side-View** nav grid, physics movement only sets horizontal (X)
@@ -18838,12 +19155,12 @@ local idx = CreateMotorJointToEntity(entityId, maxForce, maxTorque, correctionFa
 ### Runtime joint creation example
 
 ```lua
-function OnBeginPlay()
+function OnCreate()
     -- Spawn ragdoll parts
-    local torso = SpawnEntity("Classes/Torso.json", 100, 100)
-    local head  = SpawnEntity("Classes/Head.json",  100, 80)
-    local armL  = SpawnEntity("Classes/Arm.json",   85, 100)
-    local armR  = SpawnEntity("Classes/Arm.json",  115, 100)
+    local torso = SpawnEntity("Content/Classes/Torso.ice_class", 100, 100)
+    local head  = SpawnEntity("Content/Classes/Head.ice_class",  100, 80)
+    local armL  = SpawnEntity("Content/Classes/Arm.ice_class",   85, 100)
+    local armR  = SpawnEntity("Content/Classes/Arm.ice_class",  115, 100)
 
     -- Connect with revolute joints (by entity ID — safe with duplicate tags)
     local neck = CreateRevoluteJointToEntity(head, 0, 10, 0, -8)
@@ -18905,7 +19222,6 @@ SetJointLimits(-45, 45, 0)           -- (lower, upper [, jointIndex]) — degree
 EnableJointSpring(0, true)           -- (jointIndex, enabled)
 SetJointSpringHertz(4.0, 0)          -- (hertz [, jointIndex])
 SetJointSpringDamping(0.7, 0)        -- (damping [, jointIndex])
-SetJointSpringDampingRatio(0, 0.7)   -- (jointIndex, damping) — legacy alias of SetJointSpringDamping
 ```
 
 ### Joint break event
@@ -19331,7 +19647,7 @@ local name = Coalesce(customName, defaultName, "Unknown")
 >
 > ⚠️ **Bytes vs characters.** `Length`, `Sub`, `CharAt`, `Reverse`, `PadLeft`, `PadRight`, `Upper`
 > and `Lower` work on **bytes** and are safe for ASCII only. On Russian, Ukrainian, Arabic,
-> Hebrew, Hindi, Japanese or Chinese text they will count wrong and can cut a character in half.
+> Hebrew, Hindi, Japanese, Korean or Chinese text they will count wrong and can cut a character in half.
 > For anything the player can see, use the `String.Utf8*` functions below (or the `utf8`
 > standard library).
 
@@ -20452,7 +20768,7 @@ function OnUpdate(dt)
     if IsKeyJustPressed("r") then
         local x = GetGameFloat("checkpoint_x", GetPositionX())
         local y = GetGameFloat("checkpoint_y", GetPositionY())
-        SetPosition(x, y)
+        SetPosition(x, y, GetPositionZ())
     end
 end
 ```
@@ -20825,32 +21141,28 @@ launch, before the scan. Adding one does not rescan by itself; call `Mods.Refres
 If a mod in an extra path has the same `Name` as one already discovered, the later one is skipped and a warning is
 logged, so a mod under `Mods/` always wins over an external copy of itself.
 
-This is what lets **Steam Workshop** content act as mods without copying anything: Steam installs each subscribed
-item into its own folder, and you hand those folders to the mod system directly.
+This is what lets mods live outside the game folder without being copied: register the folders that hold them and
+rescan.
 
 ```lua
--- Level script or startup manager, with the IceBoxStorefront plugin enabled.
-function MountWorkshopMods()
-    if not Storefront.IsAvailable() then return end
-
+-- Level script or startup manager: scan extra mod folders, then load the enabled mods.
+function MountExtraModFolders(folders)
     Mods.ClearSearchPaths()
 
     local mounted = 0
-    for _, item in ipairs(Storefront.Workshop.GetSubscribed()) do
-        if item.installed and not item.needsUpdate and item.installFolder ~= "" then
-            if Mods.AddSearchPath(item.installFolder) then
-                mounted = mounted + 1
-            end
+    for _, folder in ipairs(folders) do
+        if Mods.AddSearchPath(folder) then
+            mounted = mounted + 1
         end
     end
 
     Mods.Refresh()
-    print("Mounted " .. mounted .. " Workshop item(s); " .. Mods.GetCount() .. " mod(s) total")
+    print("Mounted " .. mounted .. " folder(s); " .. Mods.GetCount() .. " mod(s) total")
 end
 ```
 
-Each Workshop item must ship a `mod.json` at the root of its uploaded content folder for the scan to pick it up —
-that is the only requirement the engine puts on it. Newly discovered mods start **disabled** (like any other mod
+Every mod in such a folder sits in its own subfolder with a `mod.json`, exactly as under `Mods/` — that is the only
+requirement the engine puts on it. Newly discovered mods start **disabled** (like any other mod
 missing from `Config/Mods.json`); enable the ones the player wants with `Mods.SetEnabled(name, true)`, which loads
 them immediately while a scene is running and persists the choice.
 
@@ -20864,8 +21176,8 @@ for _, path in ipairs(Mods.GetSearchPaths()) do print(path) end
 
 #### `Mods.ClearSearchPaths()`
 
-Removes every extra search path. The next `Mods.Refresh()` then sees only `Mods/`. Call this before re-registering
-Workshop folders so unsubscribed items do not linger.
+Removes every extra search path. The next `Mods.Refresh()` then sees only `Mods/`. Call this before registering
+the folders again so folders that are gone do not linger.
 
 #### `Mods.Import(options?, callback?)` → bool
 
@@ -21100,24 +21412,64 @@ folder) when you are done testing.
 
 ### Overview
 
-The **`DLC`** table provides a Lua API for working with downloadable content (DLC). A DLC consists of a manifest (`.json`) placed under `DLC/` next to the game executable, plus its content — either packed into a `.icepak` archive or shipped as loose files.
+The **`DLC`** table provides a Lua API for working with downloadable content (DLC). A DLC consists of a manifest (`<dlcId>.json`) plus its content — either packed into one or more `.icepak` archives or shipped as loose files. Both are produced in the editor by **Tools → DLC Packager** and delivered separately from the base game, so a DLC can be sold, given away or released later.
 
 On game startup the engine automatically:
-1. Scans the `DLC/` folder for manifests
-2. Mounts every `.icepak` file found in `DLC/` into the VFS (including split `_0.icepak`, `_1.icepak`, ...)
-3. Loose DLC files placed inside their `contentPrefix` directory (typically under `Content/`) are picked up by the normal content file index
+1. Scans the [DLC folders](#where-the-game-looks-for-dlc) for manifests
+2. Checks every DLC against the running game — its **minimum game version** and, for a cooked DLC, its **platform**
+3. Mounts the `.icepak` archives of every DLC that passed into the VFS, on top of the base game's content
 
-All DLC files become available through their regular content paths, so Lua code just calls e.g. `LoadLevel("Content/DLC/DarkForest/Levels/Forest.icemap")` as if it were base content.
+All DLC files become available through their regular content paths, so Lua code just calls e.g. `LoadLevel("Content/DLC/DarkForest/Levels/Forest.icemap")` as if it were base content. Scripts ask `DLC.IsInstalled()` first to know whether that content is there.
+
+Only the archives listed in a manifest are mounted: an `.icepak` placed in a DLC folder without its manifest is ignored.
+
+> The engine does not check ownership — a DLC counts as installed when its files are there. A store delivers the files only to the players who own the DLC; where you deliver them yourself, check the purchase before you do.
+
+### Platforms
+
+| Platform | DLC | Where the DLC files go |
+|----------|-----|------------------------|
+| Windows, Linux | Yes | `DLC/` next to the game executable |
+| macOS | Yes | `DLC/` next to the `.app` |
+| Android, iOS | Yes | The game's DLC folder in its private storage — `DLC.GetUserFolder()` |
+| Xbox | Yes | Inside a DLC package: mount it and add its `DLC/` folder with `DLC.AddSearchPath()` — see [63.11](#6311-xboxstore--packages-dlc-and-updates) |
+| Web | **No** | — |
+
+**Web builds do not support DLC.** A Web game is a single bundle the browser downloads, with nowhere to add files afterwards. There `DLC.IsSupported()` returns `false`, no DLC is ever found and `DLC.IsInstalled()` is always `false` — the rest of your Lua code runs unchanged.
+
+### Where the game looks for DLC
+
+Manifests are read from these folders, in this order:
+
+1. **`DLC/` in the game folder** — next to the executable (on macOS: `Contents/Resources/DLC/` inside the `.app`). This is where a store depot or an installer puts DLC on Windows and Linux.
+2. **`DLC/` next to the `.app`** — macOS only. DLC can be added and removed without touching the signed bundle.
+3. **The user DLC folder** — `DLC/` in the game's writable data folder; `DLC.GetUserFolder()` returns its full path. On Android and iOS the installed application cannot be changed, so this is where DLC goes.
+4. **Extra folders** the game adds with `DLC.AddSearchPath()` — a mounted Xbox package, a folder of your own launcher, an external drive.
+
+| Where the game runs | User DLC folder |
+|---|---|
+| Windows, Linux | `DLC/` next to the game when the game can write there; otherwise `DLC/` in the game's per-user data folder |
+| macOS | `DLC/` in the game's data folder, outside the `.app` |
+| Android, iOS | `DLC/` in the game's private storage |
+| Xbox | `DLC/` in the title's writable storage |
+
+When the same DLC ID is found in several folders, the copy that can actually be used wins: an installed one first, then an incompatible one, then a damaged one, then a missing one. Between equal copies the folder that is earlier in the list wins.
+
+Folders 1–3 are scanned when the game starts. After adding a search path, or after your code has put new files into one of the folders, call `DLC.Refresh()` — the changes are picked up without restarting the game.
+
+> **Delivering the files** is the job of the store or of your own code: a depot or an installer on desktop, a DLC package on Xbox, and on Android and iOS a native plugin or a downloader of yours that writes the manifest and the archives into `DLC.GetUserFolder()`. From there on the engine does the rest.
 
 ### Two packaging modes
 
 **Packed (`.icepak`)** — recommended for shipping:
 - Single archive file per DLC (or split archives if a size limit is set)
+- Works from every DLC folder, on every supported platform
 - Protects assets from casual modification, reduces file clutter
 - Mounted read-only into the VFS at runtime
 
 **Loose** — convenient for iteration, modding, or stores that prefer unpacked depots:
-- Content files are copied to the `contentPrefix` folder as-is
+- Content files are copied as-is, to the same `Content/...` path they have in the project (`contentPrefix`)
+- They have to sit inside the game folder, so loose DLC is meant for Windows, Linux and macOS
 - No archive, easy to diff / patch individual files
 
 ### DLC structure in a build
@@ -21132,7 +21484,8 @@ MyGame/
 │   ├── expansion01.json         ← DLC manifest
 │   ├── expansion01.icepak       ← DLC content archive
 │   ├── skins_pack.json
-│   └── skins_pack.icepak
+│   ├── skins_pack.0.icepak      ← split archive, part 1
+│   └── skins_pack.1.icepak      ← split archive, part 2
 └── game.json
 ```
 
@@ -21153,68 +21506,146 @@ MyGame/
 
 ### DLC manifest format
 
+The DLC Packager writes the manifest — it is not meant to be edited by hand. The file is named after the DLC ID: `expansion01.json` for `expansion01`.
+
 ```json
 {
+    "formatVersion": 1,
     "dlcId": "expansion01",
     "dlcName": "Dark Forest Expansion",
     "version": "1.0.0",
     "gameVersionMin": "1.0.0",
     "contentPrefix": "Content/DLC/DarkForest",
     "packed": true,
+    "cooked": false,
+    "platform": "",
     "fileCount": 15,
     "totalSize": 5242880,
-    "buildDate": "2025-07-15T10:30:00Z",
+    "buildDate": "2026-07-15T10:30:00Z",
+    "paks": [
+        {
+            "file": "expansion01.icepak",
+            "size": 3145728,
+            "sha256": "9f86d081..."
+        }
+    ],
     "files": [
         {
             "path": "Content/DLC/DarkForest/Levels/Forest.icemap",
-            "sha256": "a1b2c3d4...",
-            "size": 1024
+            "size": 1024,
+            "sha256": "a1b2c3d4..."
         }
     ]
 }
 ```
 
-`"packed": false` marks a loose DLC. The installed check for loose DLC validates that the `contentPrefix` directory exists at runtime root.
+| Field | Meaning |
+|-------|---------|
+| `formatVersion` | Version of the manifest format, currently `1` |
+| `dlcId` | Unique identifier: Latin letters, digits, `_` and `-`, up to 64 characters |
+| `dlcName` | Display name |
+| `version` | Version of the DLC itself |
+| `gameVersionMin` | Oldest game version the DLC works with |
+| `contentPrefix` | Content folder of the DLC, e.g. `Content/DLC/DarkForest` |
+| `packed` | `true` — `.icepak` archives, `false` — loose files |
+| `cooked`, `platform` | Set when the DLC was packaged with **Cook Assets**: `platform` names the platform it was prepared for. An empty `platform` means the DLC works on every supported platform |
+| `fileCount`, `totalSize` | Number of content files and their total size in bytes, before compression |
+| `buildDate` | When the DLC was packaged (UTC) |
+| `paks` | The archives of a packed DLC — file name, size and SHA-256 of each |
+| `files` | Every content file — path, size and SHA-256 |
+
+### Compatibility and status
+
+Each DLC the engine knows about has one of four statuses. `DLC.GetStatus()` returns it, and so does the `status` field of `DLC.GetInfo()` / `DLC.GetAll()`:
+
+| Status | Meaning |
+|--------|---------|
+| `"installed"` | The content is in place and loaded — `DLC.IsInstalled()` is `true` |
+| `"missing"` | The manifest is there, the content is not |
+| `"incompatible"` | The game is older than the DLC's **Min Game Version**, or the DLC was cooked for another platform. It is not loaded |
+| `"corrupted"` | Part of the content is missing, has the wrong size or cannot be opened. It is not loaded |
+
+**Game version.** The game's version is the **Version** set in Build Game (**Version Name** for an Android build); scripts read it with `DLC.GetGameVersion()`. Versions are compared number by number: `1.10.0` is newer than `1.9.5`, and `1.2` equals `1.2.0`. A leading `v` and anything after the numbers (`1.2.0-beta`) are ignored. When the game or the DLC has no version, the check is skipped.
+
+**Platform.** A DLC packaged with **Cook Assets** is prepared for one platform and loads only there. A DLC packaged without cooking works on every supported platform.
 
 ### Packaging DLC in the editor
 
 1. Create a DLC content folder inside `Content/`, e.g.: `Content/DLC/DarkForest/`
 2. Place levels, textures, scripts and other assets inside it
 3. Open **Tools → DLC Packager**
-4. Fill in the fields:
-   - **DLC ID** — unique identifier (`expansion01`, `dark_forest`)
+4. Click **New DLC** and fill in the fields:
+   - **DLC ID** — unique identifier (`expansion01`, `dark_forest`): Latin letters, digits, `_` and `-`
    - **DLC Name** — display name (`Dark Forest Expansion`)
    - **DLC Version** — DLC version (`1.0.0`)
-   - **Min Game Version** — minimum game version required (`1.0.0`)
+   - **Min Game Version** — oldest game version the DLC works with (`1.0.0`)
    - **Content Folder** — select the DLC content folder inside `Content/`
+   - **Exclude from the base game build** — keep the folder out of the game itself (on by default)
+   - **Installed in editor Play mode** — whether `DLC.IsInstalled()` reports this DLC in the editor (on by default)
    - **Pack as .icepak** — check for packed mode, uncheck for loose
    - **Max DLC Pak Size (MB)** — optional, split archive above this limit
-5. Click **Package DLC**
+5. Click **Package DLC** — or **Package All** to package every DLC of the project
 
-The output folder will contain either `DLC/<dlcId>.icepak` + `DLC/<dlcId>.json`, or the loose `contentPrefix/` tree + `DLC/<dlcId>.json`.
+The project keeps the list of its DLC: add one entry per DLC and come back to it for every update. The output folder will contain either `DLC/<dlcId>.icepak` + `DLC/<dlcId>.json`, or the loose `contentPrefix/` tree + `DLC/<dlcId>.json`. A split archive is named `DLC/<dlcId>.0.icepak`, `DLC/<dlcId>.1.icepak`, … Packaging the same DLC again replaces its previous files.
+
+Every option of the dialog — cooking, the output folder, what is checked — is described in [Profiling & Building → DLC packaging](Profiling-And-Building-EN-DOC.md#15-dlc-packaging).
+
+### Keeping DLC content out of the base game
+
+A DLC folder lives inside `Content/` next to everything else, so without care it would be shipped with the game — and every player would get the DLC for free. With **Exclude from the base game build** on, **Build Game** leaves the folder out of the game on every platform, and the content reaches players only through the DLC. The build log and the **Packages** section of the Build Game dialog list the folders that were left out.
+
+Base content must not depend on excluded content: a base level that references a DLC texture finds nothing when the DLC is not installed. Keep the references one-way — DLC content may use base content, and base content reaches DLC content only from Lua, behind a `DLC.IsInstalled()` check.
+
+### Testing DLC in the editor
+
+The editor reads the project's files directly, so nothing has to be packaged to test a DLC. In Play mode the `DLC` table reflects the list of the DLC Packager:
+
+- Every DLC with valid settings is returned by `DLC.GetAll()`
+- It is **installed** when **Installed in editor Play mode** is ticked — untick it to see how the game behaves without the DLC
+- **Min Game Version** is compared with the version entered in Build Game, so a DLC that needs a newer game is reported as `"incompatible"`
+
+The content itself is always readable in the editor. The switch only changes what `DLC.*` reports — exactly what your scripts will see in the shipped game.
+
+The DLC folders are not scanned in the editor, so `DLC.Refresh()` and `DLC.AddSearchPath()` can be called there but do not change the list.
 
 ### For distribution stores
 
 - **Base game** = one depot/upload
-- **Each DLC** = separate depot containing its `DLC/<id>.json` plus either `DLC/<id>.icepak` (packed) or the `contentPrefix/` files (loose)
+- **Each DLC** = separate depot containing its `DLC/<id>.json` plus either its `DLC/<id>*.icepak` archives (packed) or the `contentPrefix/` files (loose)
 - The store manages downloading/removing DLC files for players
 - Lua scripts check availability via `DLC.IsInstalled()` before loading DLC content
 
 ---
 
-### 42.1 DLC.IsInstalled
+### 42.1 DLC.IsSupported
+
+```lua
+DLC.IsSupported() -> bool
+```
+
+Returns `true` on every platform that can load DLC — Windows, Linux, macOS, Android, iOS and Xbox — and `false` in a Web build, where no DLC is ever found.
+
+```lua
+if DLC.IsSupported() then
+    SetWidgetElementVisible("DLCShopButton", true)
+end
+```
+
+---
+
+### 42.2 DLC.IsInstalled
 
 ```lua
 DLC.IsInstalled(dlcId) -> bool
 ```
 
-Checks whether a DLC is installed (its `.icepak` archive is present, or for loose DLCs, its `contentPrefix` directory exists).
+Checks whether a DLC is installed: its content is in place, it is compatible with the running game and it has been loaded.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `dlcId` | `string` | Unique DLC identifier |
 
-**Returns:** `true` if the DLC is installed, `false` otherwise.
+**Returns:** `true` if the DLC is installed, `false` otherwise (including an unknown ID).
 
 ```lua
 if DLC.IsInstalled("expansion01") then
@@ -21227,13 +21658,63 @@ end
 
 ---
 
-### 42.2 DLC.GetAll
+### 42.3 DLC.IsCompatible
+
+```lua
+DLC.IsCompatible(dlcId) -> bool
+```
+
+Tells whether a DLC fits the running game: the game is not older than the DLC's **Min Game Version** and, for a cooked DLC, the platform matches.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `dlcId` | `string` | Unique DLC identifier |
+
+**Returns:** `true` if the DLC is compatible, `false` if it is not or if the ID is unknown.
+
+```lua
+if not DLC.IsCompatible("expansion01") then
+    local info = DLC.GetInfo("expansion01")
+    if info then
+        Print("Update the game to " .. info.gameVersionMin .. " to play " .. info.name)
+    end
+end
+```
+
+---
+
+### 42.4 DLC.GetStatus
+
+```lua
+DLC.GetStatus(dlcId) -> string
+```
+
+Returns the status of a DLC as a string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `dlcId` | `string` | Unique DLC identifier |
+
+**Returns:** `"installed"`, `"missing"`, `"incompatible"` or `"corrupted"` (see [Compatibility and status](#compatibility-and-status)), or `"unknown"` when no manifest with this ID was found.
+
+```lua
+local status = DLC.GetStatus("expansion01")
+if status == "incompatible" then
+    Print("Update the game to use this DLC")
+elseif status == "corrupted" then
+    Print("The DLC files are damaged, download it again")
+end
+```
+
+---
+
+### 42.5 DLC.GetAll
 
 ```lua
 DLC.GetAll() -> table
 ```
 
-Returns an array of tables with all known DLCs (both installed and not — if a manifest is present).
+Returns an array of tables with all known DLCs (both installed and not — if a manifest is present), sorted by ID.
 
 **Returns:** 1-indexed array of tables with the following fields:
 
@@ -21242,11 +21723,17 @@ Returns an array of tables with all known DLCs (both installed and not — if a 
 | `id` | `string` | DLC identifier |
 | `name` | `string` | Display name |
 | `version` | `string` | DLC version |
-| `gameVersionMin` | `string` | Minimum game version required |
-| `installed` | `bool` | Whether installed (archive or loose folder present) |
+| `gameVersionMin` | `string` | Oldest game version the DLC works with |
+| `installed` | `bool` | Whether the DLC is installed and ready to use |
+| `compatible` | `bool` | `false` when the game is too old for the DLC or it was cooked for another platform |
+| `status` | `string` | `"installed"`, `"missing"`, `"incompatible"` or `"corrupted"` |
 | `packed` | `bool` | `true` if the DLC ships as `.icepak`, `false` if loose |
-| `fileCount` | `int` | Number of files |
+| `cooked` | `bool` | `true` if the DLC was packaged with **Cook Assets** |
+| `platform` | `string` | Platform a cooked DLC was prepared for — the names `Settings.GetPlatform()` returns; `""` for a DLC that works everywhere |
+| `fileCount` | `int` | Number of content files |
+| `totalSize` | `int` | Total size of the content in bytes, before compression |
 | `contentPrefix` | `string` | Path to DLC content |
+| `location` | `string` | Folder the manifest was found in |
 
 ```lua
 local allDLC = DLC.GetAll()
@@ -21258,13 +21745,13 @@ end
 
 ---
 
-### 42.3 DLC.GetInstalledIds
+### 42.6 DLC.GetInstalledIds
 
 ```lua
 DLC.GetInstalledIds() -> table
 ```
 
-Returns an array of strings — identifiers of all installed DLCs.
+Returns an array of strings — identifiers of all installed DLCs, sorted alphabetically.
 
 ```lua
 local ids = DLC.GetInstalledIds()
@@ -21276,7 +21763,7 @@ end
 
 ---
 
-### 42.4 DLC.GetInfo
+### 42.7 DLC.GetInfo
 
 ```lua
 DLC.GetInfo(dlcId) -> table | nil
@@ -21288,19 +21775,7 @@ Returns detailed information about a specific DLC.
 |-----------|------|-------------|
 | `dlcId` | `string` | DLC identifier |
 
-**Returns:** a table with fields, or `nil` if the DLC is not found.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | DLC identifier |
-| `name` | `string` | Display name |
-| `version` | `string` | DLC version |
-| `gameVersionMin` | `string` | Minimum game version required |
-| `installed` | `bool` | Whether installed |
-| `packed` | `bool` | `true` if packaged as `.icepak`, `false` if loose |
-| `fileCount` | `int` | Number of files |
-| `totalSize` | `int` | Total size in bytes |
-| `contentPrefix` | `string` | Content path |
+**Returns:** a table with the same fields as an entry of [`DLC.GetAll()`](#425-dlcgetall), or `nil` if the DLC is not found.
 
 ```lua
 local info = DLC.GetInfo("expansion01")
@@ -21311,7 +21786,7 @@ if info then
     Print("Files: " .. info.fileCount)
     Print("Size: " .. math.floor(info.totalSize / 1024 / 1024) .. " MB")
     Print("Content: " .. info.contentPrefix)
-    Print("Status: " .. (info.installed and "installed" or "not installed"))
+    Print("Status: " .. info.status)
 else
     Print("DLC expansion01 not found")
 end
@@ -21319,7 +21794,7 @@ end
 
 ---
 
-### 42.5 DLC.GetCount
+### 42.8 DLC.GetCount
 
 ```lua
 DLC.GetCount() -> int
@@ -21333,7 +21808,7 @@ Print("Total DLCs: " .. DLC.GetCount())
 
 ---
 
-### 42.6 DLC.GetInstalledCount
+### 42.9 DLC.GetInstalledCount
 
 ```lua
 DLC.GetInstalledCount() -> int
@@ -21347,7 +21822,113 @@ Print("Installed DLCs: " .. DLC.GetInstalledCount() .. " of " .. DLC.GetCount())
 
 ---
 
-### 42.7 Practical examples
+### 42.10 DLC.GetGameVersion
+
+```lua
+DLC.GetGameVersion() -> string
+```
+
+Returns the version of the running game — the **Version** it was built with in Build Game (**Version Name** for an Android build). This is the version every DLC's **Min Game Version** is compared with. It works on every platform, Web included.
+
+**Returns:** the version string, or `""` when the game was built without a version. In the editor's Play mode it is the version currently entered in Build Game.
+
+```lua
+SetWidgetText("VersionLabel", "v" .. DLC.GetGameVersion())
+```
+
+---
+
+### 42.11 DLC.Refresh
+
+```lua
+DLC.Refresh() -> int
+```
+
+Scans the DLC folders again without restarting the game. A DLC that appeared is loaded, a DLC whose files were removed is unloaded, and a DLC whose archives were replaced by another version is loaded again. Call it after your code has put DLC files into a folder, or after `DLC.AddSearchPath()`.
+
+**Returns:** the number of installed DLCs after the scan.
+
+Assets that are already in memory stay as they are, so refresh from a menu or a loading screen rather than in the middle of a level. With a large content tree the call takes a moment.
+
+```lua
+local before = DLC.GetInstalledCount()
+local now = DLC.Refresh()
+if now > before then
+    Print("New DLC installed: " .. (now - before))
+end
+```
+
+---
+
+### 42.12 DLC.AddSearchPath
+
+```lua
+DLC.AddSearchPath(path) -> bool
+DLC.ClearSearchPaths()
+DLC.GetSearchPaths() -> table
+```
+
+`DLC.AddSearchPath` adds one more folder to look for DLC in — a folder that holds manifests and archives, like the game's own `DLC/` folder. The folder is not scanned at once: call `DLC.Refresh()` afterwards. Added folders are kept until the game exits.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | `string` | Full path of the folder |
+
+**Returns:** `true` if the folder exists (or was added before), `false` otherwise.
+
+`DLC.ClearSearchPaths()` removes every folder added this way; after the next `DLC.Refresh()` the DLC found only there are gone. `DLC.GetSearchPaths()` returns the added folders as an array of strings.
+
+```lua
+if DLC.AddSearchPath("D:/MyLauncher/DLC") then
+    DLC.Refresh()
+end
+```
+
+---
+
+### 42.13 DLC.GetUserFolder
+
+```lua
+DLC.GetUserFolder() -> string
+```
+
+Returns the full path of the user DLC folder — the folder in the game's writable storage that is scanned on every platform (see [Where the game looks for DLC](#where-the-game-looks-for-dlc)). The engine does not create it: the code that delivers a DLC creates the folder and writes the manifest and the archives into it.
+
+**Returns:** the path, or `""` when the game has no writable storage.
+
+```lua
+Print("Download DLC into: " .. DLC.GetUserFolder())
+```
+
+---
+
+### 42.14 DLC.Verify
+
+```lua
+DLC.Verify(dlcId, deep?) -> bool, string
+```
+
+Checks the files of an installed DLC against its manifest.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `dlcId` | `string` | DLC identifier |
+| `deep` | `bool` | Optional, `false` by default. `false` — every archive (or loose file) exists and has the right size. `true` — the SHA-256 checksums are verified as well |
+
+**Returns:** `true` when everything matches. Otherwise `false` and a short English description of the first problem, meant for your log. A DLC that is not installed fails the check.
+
+A deep check reads the whole DLC from disk, which takes seconds for a large one — run it on a loading screen, for example when the player asks to repair the game. In the editor's Play mode the check always succeeds for an installed DLC.
+
+```lua
+local ok, problem = DLC.Verify("expansion01", true)
+if not ok then
+    Print("DLC check failed: " .. problem)
+end
+```
+
+---
+
+### 42.15 Practical examples
 
 #### Main menu with DLC content
 
@@ -21390,8 +21971,12 @@ function ShowDLCList()
     Print("=== Downloadable Content ===")
     for i, dlc in ipairs(allDLC) do
         local status
-        if dlc.installed then
+        if dlc.status == "installed" then
             status = dlc.packed and "Ready (packed)" or "Ready (loose)"
+        elseif dlc.status == "incompatible" then
+            status = "Needs game version " .. dlc.gameVersionMin
+        elseif dlc.status == "corrupted" then
+            status = "Damaged, download again"
         else
             status = "Not installed"
         end
@@ -21433,6 +22018,45 @@ function LoadGame()
     if hadDLC and not hasDLC then
         Print("⚠ This save uses a DLC that is no longer installed!")
     end
+end
+```
+
+#### Picking up a DLC downloaded while the game is running
+
+On Android and iOS your downloader writes `<dlcId>.json` and the archives into `DLC.GetUserFolder()`. Tell the engine when it is done:
+
+```lua
+-- Call this when the download of a DLC has finished
+function OnDLCDownloaded(dlcId)
+    DLC.Refresh()
+
+    if DLC.IsInstalled(dlcId) then
+        local ok, problem = DLC.Verify(dlcId, true)
+        if ok then
+            Print("DLC ready: " .. DLC.GetInfo(dlcId).name)
+        else
+            Print("Download is damaged: " .. problem)
+        end
+    else
+        Print("DLC is not usable: " .. DLC.GetStatus(dlcId))
+    end
+end
+```
+
+#### One code path for every platform
+
+```lua
+function CanOfferDLC()
+    -- Web builds have no DLC at all: hide the shop there
+    return DLC.IsSupported()
+end
+
+function GetDLCButtonText(dlcId)
+    local status = DLC.GetStatus(dlcId)
+    if status == "installed" then return "Play" end
+    if status == "incompatible" then return "Update the game" end
+    if status == "corrupted" then return "Repair" end
+    return "Get"
 end
 ```
 
@@ -21689,8 +22313,7 @@ Ads.LoadRewarded()
 
 Both values are attached to the **next** ad you load, so set them before `Ads.LoadRewarded()`.
 Grant the reward on your server when Google's verified callback arrives, and treat the client's
-`Ads.OnRewardEarned` as a UI cue only. Leaving both unset keeps the previous behaviour (no SSV
-options attached).
+`Ads.OnRewardEarned` as a UI cue only. With both left unset, no SSV options are attached.
 
 ---
 
@@ -21755,7 +22378,7 @@ local id = Ads.GetAdvertisingId()        -- "" until fetched / when the user opt
 
 | Function | Description |
 |---|---|
-| `Ads.RequestAdvertisingId()` | Fetches the identifier and fires `Ads.OnAdvertisingId(id, limitAdTracking)` |
+| `Ads.RequestAdvertisingId()` | Fetches the identifier and calls the `Ads.OnAdvertisingId` callback with `(id, limitAdTracking)` |
 | `Ads.GetAdvertisingId()` | Last known identifier, or `""` when unavailable or the user opted out |
 | `Ads.IsLimitAdTrackingEnabled()` | `true` when the user declined tracking (iOS: ATT not authorized) |
 
@@ -23245,7 +23868,7 @@ end
 The **`Bluetooth`** table provides a Lua API for **Bluetooth Classic** communication —
 device discovery, connection, and data transfer between devices.
 
-> **Platform:** Android (RFCOMM / Bluetooth Classic) and iOS (Bluetooth LE via CoreBluetooth). The Lua API is identical on both; the transport is not. On iOS a host advertises a GATT service and peers connect as centrals, so `address` is a CoreBluetooth peripheral/central UUID string rather than a MAC address, and `Bluetooth.RequestEnable()` cannot toggle the radio — it opens the app's Settings page and raises an error event. iOS frames every `Send` with a length prefix, so one `Send` always arrives as exactly one `OnDataReceived`; Android streams RFCOMM bytes and may split or coalesce. **Android and iOS peers cannot talk to each other.** On desktop and Web `Bluetooth.IsSupported()` returns `false`.
+> **Platform:** Android (RFCOMM / Bluetooth Classic) and iOS (Bluetooth LE via CoreBluetooth). The Lua API is identical on both; the transport is not. On iOS a host advertises a GATT service and peers connect as centrals, so `address` is a CoreBluetooth peripheral/central UUID string rather than a MAC address, and `Bluetooth.RequestEnable()` cannot toggle the radio — it opens the app's Settings page and raises an error event. iOS frames every message sent with `SendTo` / `SendToAll` with a length prefix, so one send always arrives as exactly one `OnDataReceived`; Android streams RFCOMM bytes and may split or coalesce. **Android and iOS peers cannot talk to each other.** On desktop and Web `Bluetooth.IsSupported()` returns `false`.
 >
 > **Build requirement:** Enable "Bluetooth" in the Build Game popup.
 >
@@ -23358,7 +23981,6 @@ end)
 ### 51.7 Data transfer
 
 ```lua
-Bluetooth.Send(data)              -- Send a string to all connected peers (legacy alias)
 Bluetooth.SendTo(address, data)   -- Send a string to a specific peer
 Bluetooth.SendToAll(data)         -- Send a string to all connected peers
 ```
@@ -23610,7 +24232,7 @@ end
 The **`Permissions`** table provides a Lua API for requesting **Android runtime permissions**, opening system settings screens for "special" permissions, checking notification and storage state, and resolving common Android storage paths.
 Includes built-in constants for every permission declared by the engine in `AndroidManifest.xml`, plus a `Permissions.Dirs` subtable with public storage directory names.
 
-> **Platform:** Android and iOS. The same `Permissions.CAMERA`, `Permissions.RECORD_AUDIO`, … constants work on both — on iOS the `android.permission.` prefix is stripped and the name is mapped onto the matching iOS authorization API (AVFoundation, Photos, CoreLocation, UserNotifications, CoreBluetooth, CoreMotion, App Tracking Transparency, Contacts, EventKit), so cross-platform scripts need no branching. Android-only concepts (`HasAllFilesAccess`, `CanDrawOverlays`, `CanWriteSettings`, `CanRequestInstallPackages`, `IsIgnoringBatteryOptimizations`, `IsNotificationPolicyAccessGranted`) return `false` on iOS and their request calls are no-ops; `ShouldShowRationale()` on iOS means "the user denied this once — explain why and send them to Settings", because iOS never re-prompts. Every permission you actually request needs a matching purpose string in Build Game → iOS → *Extra Usage Descriptions*. On desktop and Web `Permissions.IsSupported()` returns `false` and all calls are no-ops (numeric getters return `0`, string getters return `""`, boolean checks return `false`).
+> **Platform:** Android and iOS. The same `Permissions.CAMERA`, `Permissions.RECORD_AUDIO`, … constants work on both — on iOS the `android.permission.` prefix is stripped and the name is mapped onto the matching iOS authorization API (AVFoundation, Photos, CoreLocation, UserNotifications, CoreBluetooth, CoreMotion, App Tracking Transparency, Contacts, EventKit), so cross-platform scripts need no branching. Android-only concepts (`HasAllFilesAccess`, `CanDrawOverlays`, `CanWriteSettings`, `CanRequestInstallPackages`, `IsIgnoringBatteryOptimizations`, `IsNotificationPolicyAccessGranted`) return `false` on iOS and their request calls are no-ops; `ShouldShowRationale()` on iOS means "the user denied this once — explain why and send them to Settings", because iOS never re-prompts. Every permission you actually request needs a matching purpose string in Build Game → iOS → *Extra Usage Descriptions*. Android has the same rule for the manifest: only a permission the APK declares can be granted — the service toggles in Build Game → Android declare their own, every other one goes into *Extra Permissions* (`--permissions`), and a permission the manifest does not declare is denied at once, without a dialog. On desktop and Web `Permissions.IsSupported()` returns `false` and all calls are no-ops (numeric getters return `0`, string getters return `""`, boolean checks return `false`).
 
 ---
 
@@ -24848,17 +25470,17 @@ AutoAssignLocalPlayers()
 
 ```lua
 -- Movement (normalized -1..1). For keyboard player, default keys: WASD
-local move = GetPlayerMovement(0)               -- → {x, y}
+local move = GetPlayerMovement(0)               -- → {x, y}, X+ right, Y+ up
 local move = GetPlayerMovement(0, "left", "right", "down", "up")  -- Custom keys
 SetVelocity(move.x * speed, move.y * speed)
 
 -- Button state (abstract names or raw buttons)
-if IsPlayerButtonPressed(0, "jump") then Jump() end
+if IsPlayerButtonPressed(0, "jump") then Jump(500) end
 if IsPlayerButtonJustPressed(1, "attack") then Attack() end
 if IsPlayerButtonJustReleased(0, "confirm") then Confirm() end
 
 -- Right stick (gamepad) / mouse delta (keyboard player)
-local aim = GetPlayerAimStick(0)  -- → {x, y}
+local aim = GetPlayerAimStick(0)  -- → {x, y}: right stick, or mouse delta for keyboard & mouse; Y+ up
 
 -- Triggers (gamepad only, 0.0-1.0)
 local lt = GetPlayerTrigger(0, "left")   -- also "lt" or "l2"
@@ -24924,9 +25546,9 @@ SetSplitScreenDivider(0)                      -- disable divider
 local px = GetSplitScreenDividerPx()          -- → current thickness in pixels
 
 -- Get computed viewport rect for a player slot
-local rect = GetPlayerViewportRect(0)  -- → {x, y, width, height} (normalized 0-1)
+local rect = GetPlayerViewportRect(0)  -- → {x, y, width, height} (normalized 0-1, origin bottom-left)
 
--- Same rect in pixel coordinates (y is top-down, useful for HUD / scissor)
+-- Same rect in pixel coordinates (origin at the bottom-left like the normalized rect; useful for HUD / scissor)
 local pxRect = GetPlayerViewportPixels(0, windowW, windowH)
                                        -- → {x, y, width, height} (integers)
 ```
@@ -25035,7 +25657,7 @@ end
 | `IsPlayerButtonPressed(idx, btn)` | Button held |
 | `IsPlayerButtonJustPressed(idx, btn)` | Button just pressed |
 | `IsPlayerButtonJustReleased(idx, btn)` | Button just released |
-| `GetPlayerAimStick(idx)` | Right stick / mouse delta |
+| `GetPlayerAimStick(idx)` | Right stick / mouse delta (Y+ up) |
 | `GetPlayerTrigger(idx, side)` | Trigger value (0-1) |
 | `SetPlayerRumble(idx, lo, hi, ms)` | Start rumble |
 | `StopPlayerRumble(idx)` | Stop rumble |
@@ -25136,7 +25758,7 @@ console platforms the first frame shown is already the frame at `startTime`; on 
 then positioned, and `Video.IsSeeking` is `true` until the frame is there.
 
 Every other function takes the **channel name as its last, optional argument**. Without it the call works on the main
-channel exactly as before, so existing scripts keep working unchanged:
+channel:
 
 ```lua
 Video.Pause("tv")
@@ -25359,7 +25981,7 @@ from its class script. The sprite keeps everything it normally has: transform, s
 (`Lit`/`Unlit` shading of the sprite) and post-processing with the rest of the scene.
 
 ```lua
-function OnStart()
+function OnCreate()
     if Video.Play("Videos/news.mp4", { name = "tv_lobby", loop = true, volume = 0.4 }) then
         SetSpriteTexture(Video.GetTexture("tv_lobby"))   -- sprite instance 0 of this entity
     end
@@ -25376,7 +25998,7 @@ units).
 **With `Draw`** — any position, size, rotation and depth, every frame:
 
 ```lua
-function OnStart()
+function OnCreate()
     Video.Play("Videos/ads.mp4", { name = "billboard", loop = true })
 end
 
@@ -25392,7 +26014,7 @@ end
 **Picture-in-picture** — keep the main channel off the full screen and draw it into a corner:
 
 ```lua
-function OnStart()
+function OnCreate()
     Video.Play("Videos/briefing.mp4", { fullscreen = false })
 end
 
@@ -25401,7 +26023,7 @@ function OnUpdate(dt)
     local vp = Draw.GetViewportSize()
     Draw.Push()
     Draw.SetSpace("screen")
-    Draw.SetPivot(1, 1)                                            -- right edge, bottom edge (py is measured from the top)
+    Draw.SetPivot(1, 0)                                            -- right edge, bottom edge
     Draw.Sprite(Video.GetTexture(), vp.width - 16, 16, 480, 270)   -- bottom-right corner, 16 px margin
     Draw.Pop()
 end
@@ -25438,15 +26060,13 @@ channel name. A looping video never finishes on its own. Use the event system to
 transitions:
 
 ```lua
-function OnInit()
+function OnLevelStart()
     On("VideoFinished", function(videoPath, channel)
         if channel ~= Video.MAIN_CHANNEL then return end   -- ignore TVs and other named channels
         Print("Video finished: " .. videoPath)
         LoadLevel("Content/Maps/Level1.icemap")
     end)
-end
 
-function OnStart()
     Video.Play("Videos/intro.mp4")
     Video.SetSkippable(true)
 end
@@ -25458,16 +26078,14 @@ the file is opened asynchronously.
 ### Practical example — intro with fade transition
 
 ```lua
-function OnInit()
+function OnLevelStart()
     On("VideoFinished", function(path)
         Cinema.FadeOut(0.5)
         Delay(0.5, function()
             LoadLevel("Content/Maps/MainMenu.icemap")
         end)
     end)
-end
 
-function OnStart()
     Video.Play("Videos/studio_logo.mp4")
     Video.SetSkippable(true)
     Video.SetVolume(1.0)
@@ -25483,15 +26101,14 @@ function PlayCutscene(videoFile)
     Video.SetLooping(false)
 end
 
-function OnInit()
+function OnCreate()
     On("VideoFinished", function(path)
         Print("Cutscene ended, resuming gameplay")
     end)
 end
 
-function OnTriggerEnter(other)
-    local tag = Entity.GetTag(other)
-    if tag == "CutsceneTrigger" then
+function OnSensorEnter(otherTag, otherEntityId)
+    if otherTag == "CutsceneTrigger" then
         PlayCutscene("boss_intro.mp4")
     end
 end
@@ -25504,7 +26121,7 @@ local SPEEDS = { 0.5, 1.0, 1.5, 2.0 }
 local speedIndex = 2
 local loopFrom = nil
 
-function OnStart()
+function OnCreate()
     Video.Play("Videos/tutorial.mp4", { name = "tutorial", fullscreen = true })
 end
 
@@ -25624,7 +26241,7 @@ The Voice API gives Lua direct access to:
 - **Opus encoding/decoding** (the same codec used by `Network.EnableVoiceChat` — but available to any local game).
 - **Audio playback** of raw PCM or Opus-encoded data.
 - **Volume analysis** — real-time RMS, peak, dB, exponentially smoothed loudness.
-- **Voice detection** — IsSpeaking() / IsScreaming() against configurable thresholds.
+- **Voice detection** — `Voice.IsSpeaking()` / `Voice.IsScreaming()` against configurable thresholds.
 - **WAV recording** — write the live mic stream to a 16-bit PCM `.wav` file.
 - **Loopback** — pipe the mic straight to the speakers (stream-at-yourself effect).
 
@@ -25637,9 +26254,9 @@ Internally a frame queue is filled by `Voice.Update()` (call it once per frame, 
 | Voice.StartCapture(sampleRate?, channels?) | bool | Open the default mic. Defaults: 48000 Hz, 1 channel |
 | Voice.StopCapture() | — | Stop the mic |
 | Voice.IsCapturing() | bool | Is the mic running? |
-| Voice.StartPlayback(sampleRate?, channels?) | bool | Open the default playback device |
+| Voice.StartPlayback(sampleRate?, channels?) | bool | Open the default playback device. Calling it again with a different rate or channel count reopens playback in the new format |
 | Voice.StopPlayback() | — | Close playback |
-| Voice.IsPlaybackActive() | bool | Is playback initialized? |
+| Voice.IsPlaybackActive() | bool | Is playback open? `false` again after `StopPlayback` / `Shutdown` |
 | Voice.SetPlaybackVolume(volume) | — | 0.0–2.0, applied to all decoded/written PCM |
 | Voice.GetPlaybackVolume() | float | Current playback volume |
 | Voice.InitCodec(sampleRate?, channels?, bitrate?) | bool | Create Opus encoder+decoder. Defaults: 48000 Hz, 1 ch, 32000 bps |
@@ -25647,6 +26264,8 @@ Internally a frame queue is filled by `Voice.Update()` (call it once per frame, 
 | Voice.IsCodecReady() | bool | true if Opus is initialized and valid |
 | Voice.HasOpus() | bool | true if Opus encode/decode is available in this build |
 | Voice.Shutdown() | — | Stop everything (capture, playback, recording, codec) |
+
+The Voice state belongs to the play session, not to a level: capture, playback, the codec and every setting survive level changes. When the session ends (the game exits, or Play stops in the editor) everything is shut down automatically and the settings return to their defaults.
 
 ### Frame stream (microphone → Lua)
 
@@ -25727,7 +26346,7 @@ Writes a 16-bit PCM `.wav` using the current capture rate/channels. The file's R
 ### Example: "Scream higher to jump higher"
 
 ```lua
-function OnStart()
+function OnCreate()
     Voice.StartCapture()
     Voice.SetSmoothing(0.7)
     Voice.SetInputGain(1.5)
@@ -25736,7 +26355,7 @@ end
 function OnUpdate(dt)
     Voice.Update()
     local loudness = Voice.GetSmoothedVolume()
-    self.JumpForce = 200 + loudness * 1500
+    jumpForce = 200 + loudness * 1500
     if Voice.IsScreaming(0.6) then
         TriggerScreamAttack()
     end
@@ -25750,7 +26369,7 @@ end
 ### Example: "Record a voice clip and play it back"
 
 ```lua
-function OnStart()
+function OnCreate()
     Voice.StartCapture()
     Voice.StartPlayback()
 end
@@ -25775,7 +26394,7 @@ end
 ### Example: Local Opus round-trip (encode → decode → play)
 
 ```lua
-function OnStart()
+function OnCreate()
     Voice.StartCapture()
     Voice.StartPlayback()
     Voice.InitCodec(48000, 1, 32000)
@@ -25888,9 +26507,9 @@ end
 | `Replay.GetDuration()` | Total length of the active replay, in seconds. |
 | `Replay.GetFrameCount()` | Number of frames in the active replay. |
 | `Replay.GetProgress()` | `0..1` progress (`time / duration`). |
-| `Replay.SetSpeed(s)` / `GetSpeed()` | Playback speed: `0.5` = slow-mo, `2.0` = fast, `-1.0` = backwards. |
-| `Replay.SetLoop(b)` / `GetLoop()` | Loop the replay automatically. |
-| `Replay.SetInterpolation(b)` / `GetInterpolation()` | Linear interpolation between sampled frames (default `true`). Disable for snapshot-accurate playback. |
+| `Replay.SetSpeed(s)` / `Replay.GetSpeed()` | Playback speed: `0.5` = slow-mo, `2.0` = fast, `-1.0` = backwards. |
+| `Replay.SetLoop(b)` / `Replay.GetLoop()` | Loop the replay automatically. |
+| `Replay.SetInterpolation(b)` / `Replay.GetInterpolation()` | Linear interpolation between sampled frames (default `true`). Disable for snapshot-accurate playback. |
 
 During playback, the engine **overwrites** `TransformComponent` and (when present) the Box2D body transform / linear velocity / angular velocity of every recorded entity. Other systems (sprites, animator, camera) read from these components, so visuals follow automatically.
 
@@ -26497,10 +27116,15 @@ end
 | `PageUp/PageDown` | Scroll log |
 | `Mouse wheel` | Scroll log |
 | `Escape` | Close completions / close console |
+| `Left/Right`, `Home/End` | Move the cursor (`Shift` selects, `Ctrl` — `Option` on macOS — jumps by words) |
+| `Backspace/Delete` | Delete a character or the selection (`Ctrl` / `Option` — a whole word) |
+| Mouse click on the input line | Place the cursor (`Shift` extends the selection) |
 | `Ctrl+A` | Select all text |
 | `Ctrl+C` | Copy selected text |
 | `Ctrl+V` | Paste from clipboard |
 | `Ctrl+X` | Cut selected text |
+
+On macOS the clipboard shortcuts use `Cmd` instead of `Ctrl`.
 
 ### 60.9 Complete Example
 
@@ -26524,7 +27148,7 @@ function OnConstruct()
         for i = 1, count do
             local x = math.random(-200, 200)
             local y = math.random(-200, 200)
-            SpawnEntity("Enemy", x, y, 0)
+            SpawnEntity("Content/Classes/Enemy.ice_class", x, y, 0)
         end
         Console.Print("Spawned " .. count .. " enemies", 3)
     end, "Spawn a wave of enemies", "Debug", "spawn_wave")
@@ -26568,8 +27192,8 @@ The `Draw` API follows the engine conventions exactly:
 - **Z+** is toward the viewer (foreground), **Z-** is away (background) — same as `SetSpriteOrder`.
   World-space draws are depth-tested against sprites, tilemaps and everything else in the scene, so Z gives you
   correct per-pixel occlusion for free (for translucent scene content such as decals and particles, see *Layers*).
-- **Pivot** `px, py` is normalized `0..1`, and **`py` is measured from the top** — identical to `SetSpritePivot`.
-  The default pivot is `0.5, 0.5` (centre), so `x, y` is the centre of the quad unless you change it.
+- **Pivot** `px, py` is normalized `0..1`: `(0, 0)` is the **bottom-left** corner, `(1, 1)` the top-right — identical to
+  `SetSpritePivot`. The default pivot is `0.5, 0.5` (centre), so `x, y` is the centre of the quad unless you change it.
 - **UV** `u, v, uw, vh` is normalized `0..1` in exactly the same space as `SetSpriteRegion` divided by the texture size:
   `v = 0` is the **top** of the image and the image lands upright, identical to a sprite.
   Passing `sx, sy, sw, sh` instead lets you specify the source rectangle **in pixels**.
@@ -26626,7 +27250,7 @@ The draw state is global and persists between calls, so you set it once and subm
 Draw.SetTexture("Content/Textures/wall.png")  -- default texture for later calls; nil = white
 Draw.SetColor(1, 1, 1, 1)                     -- default tint
 Draw.SetZ(0)                                  -- default depth
-Draw.SetPivot(0.5, 0.5)                       -- default pivot (py measured from the top)
+Draw.SetPivot(0.5, 0.5)                       -- default pivot; (0, 0) = bottom-left, (1, 1) = top-right
 Draw.SetBlend("masked")                       -- "masked" | "additive" | "translucent" | "opaque"
 Draw.SetShading("unlit")                      -- "unlit" (default) | "lit"
 Draw.SetAlphaClip(0.5)                        -- alpha cutout threshold used by "masked"
@@ -26862,7 +27486,7 @@ Draw.Quad{
     w = 64,  h = 64,       -- size in world/screen units
     z = 0,                 -- depth (Z+ = front)
     rot = 0,               -- degrees, clockwise positive
-    px = 0.5, py = 0.5,    -- pivot, py from the top
+    px = 0.5, py = 0.5,    -- pivot, (0, 0) = bottom-left
     u = 0, v = 0, uw = 1, vh = 1,       -- normalized UV rect
     -- or a pixel source rect instead of u/v/uw/vh:
     -- sx = 0, sy = 0, sw = 16, sh = 16,
@@ -27076,7 +27700,7 @@ local frame = Draw.Flipbook("Content/FX/Explosion.ice_flipbook", x, y, time, {
     w = 64, h = 64,          -- size; give only one of them and the other follows the frame's aspect ratio
     scale = 1,               -- used when neither w nor h is given (default: the frame's pixel size)
     rot = 0, z = 0,
-    px = 0.5, py = 0.5,      -- pivot, py from the top (default: the pivot stored in the frame's sprite)
+    px = 0.5, py = 0.5,      -- pivot, (0, 0) = bottom-left (default: the pivot stored in the frame's sprite)
     frame = 3,               -- draw this frame index instead of sampling time
     loop = true,             -- default: the flipbook asset's own setting
     flipX = false, flipY = false,
@@ -27128,7 +27752,7 @@ local parts = Draw.Skeleton(entityId, {
     scale = 1,                   -- or scaleX / scaleY separately
     z = 0,                       -- depth of the backmost part (default: the entity's Z)
     zStep = 0.01,                -- depth added per part, back to front — the engine's own spacing
-    flipX = false, flipY = true, -- default: the skeleton's own flip settings
+    flipX = false, flipY = false, -- default: the skeleton's own flip settings
     r = 1, g = 1, b = 1, a = 1,  -- multiplies the skeleton's colours and the Draw.SetColor colour
     useAssetBlend = true,        -- false: ignore the skeleton's blend, shading, alpha clip and material
     blend = "additive", shading = "unlit", alphaClip = 0.5,   -- force these on every part
@@ -27614,7 +28238,7 @@ Decal.SpawnOnHit(DECAL_HOLE, hit.x, hit.y, hit.normalX, hit.normalY)   -- sits o
 local DECAL_HOLE  = "Content/Decals/DC_BulletHole.ice_decal"
 local DECAL_BLOOD = "Content/Decals/DC_Blood.ice_decal"
 
-function OnStart()
+function OnCreate()
     Decal.Preload(DECAL_HOLE)
     Decal.Preload(DECAL_BLOOD)
     Decal.SetBudget(384)
@@ -27686,7 +28310,7 @@ the runtime are present; it takes a feature name: `"XStore"`, `"XUser"`, `"XGame
 `"XTaskQueue"`, `"XThread"`, `"XAsync"`, `"XDisplay"`, `"XGame"`.
 
 ```lua
-function OnStart()
+function OnLevelStart()
     if not Xbox.IsSupported() then return end
 
     Print("Device family: " .. Xbox.GetDeviceFamily())
@@ -27734,7 +28358,7 @@ Xbox.OnSignIn(function(success, gamertag, message)
     end
 end)
 
-function OnStart()
+function OnLevelStart()
     Xbox.SignIn(false)
 end
 
@@ -27802,9 +28426,11 @@ Xbox One S does not.
 ```lua
 local device = Xbox.GetDeviceType()
 if device == "xbox_series_x" then
-    Settings.SetQualityPreset("high")
+    Settings.SetRenderScale(1.0)
+    Settings.SetMaxPointLights(64)
 elseif device == "xboxone" or device == "xboxone_s" then
-    Settings.SetQualityPreset("low")
+    Settings.SetRenderScale(0.75)
+    Settings.SetMaxPointLights(16)
 end
 ```
 
@@ -27875,7 +28501,7 @@ Xbox.OnSaveFolder(function(success, configurationId, pathOrError)
     end
 end)
 
-function OnStart()
+function OnLevelStart()
     if Xbox.IsSupported() then Xbox.GetSaveFolder("MyGameSaves") end
 end
 ```
@@ -27914,7 +28540,7 @@ Xbox.OnLicense(function(success, message)
     end
 end)
 
-function OnStart()
+function OnLevelStart()
     XboxStore.QueryLicense()
 end
 ```
@@ -28066,6 +28692,18 @@ function LoadInstalledDlc()
 end
 ```
 
+A package that carries a DLC made with the DLC Packager holds its `DLC/` folder (the manifest and
+the `.icepak` archives). Once the package is mounted, add that folder as a search path and rescan —
+from then on [`DLC.IsInstalled()`](#42-dlc--downloadable-content) and the rest of `DLC.*` see it:
+
+```lua
+Xbox.OnPackageMounted(function(success, packageIdentifier, pathOrError)
+    if success and DLC.AddSearchPath(pathOrError .. "/DLC") then
+        DLC.Refresh()
+    end
+end)
+```
+
 Package updates are the mandatory-update flow: query them, and if any entry has `isMandatory`,
 start the download before letting the player into the game.
 
@@ -28103,7 +28741,7 @@ scripts normally only ever read `Xbox.AreServicesReady()`. `Xbox.InitServices(sc
 titles that resolve the SCID at run time.
 
 `AreServicesReady()` only turns true **after a player signs in** — the Xbox Live context belongs to
-a user. Do your service calls from `Xbox.OnSignIn`, not from `OnStart`.
+a user. Do your service calls from `Xbox.OnSignIn`, not from `OnLevelStart`.
 
 > **What it costs.** Two Microsoft redistributables (`libHttpClient.GDK.dll` and `XCurl.dll`) are
 > staged next to the executable by the build and travel into the game layout automatically. There
@@ -28310,7 +28948,7 @@ XboxMultiplayer.OnInvite(function(success, operation, sender, payload)
     end
 end)
 
-function OnStart()
+function OnLevelStart()
     local pending = XboxMultiplayer.TakePendingInvite()
     if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
 end
@@ -28397,7 +29035,7 @@ which is what Partner Center support asks for.
 ```lua
 local licenceChecked = false
 
-function OnStart()
+function OnLevelStart()
     if not Xbox.IsSupported() then
         StartGame()
         return
@@ -28724,8 +29362,8 @@ end
 >
 > `SystemFont.Set` removes the dependency: point it at a font asset from the Content
 > Browser and every one of those systems draws with it, on every platform, identically.
-> The asset ships with the game like any other content. Leave it unset and nothing
-> changes — the engine keeps using the OS font exactly as before.
+> The asset ships with the game like any other content. Leave it unset and the engine
+> uses the OS font.
 
 ### Assigning a font
 
@@ -28879,11 +29517,13 @@ system font that covers every script your console and debug text print — a pix
 often has Latin only.
 
 The console and the debug text print strings made at runtime, which the cooker cannot see.
-With **Font Mode = Subset** the font keeps the ranges declared in its `.ice_font` (Latin and
-Cyrillic by default); with **Auto-subset** it keeps printable ASCII, the characters found in
-your widgets, localization, views and cinemas, and its **Additional Ranges**. If your logs or
-commands use other scripts, add their blocks to the font's Additional Ranges in the Font
-Editor (for example `0x0400`–`0x04FF` for Cyrillic), or cook fonts with PassThrough.
+With **Font Mode = Subset** the font keeps the ranges declared in its `.ice_font` (Latin,
+Cyrillic and the typographic punctuation and symbols by default). With **Auto-subset** it
+keeps only printable ASCII and the characters the cooker finds in your project's text, so
+tick **Keep Ranges in Auto-subset** for the system font in the Font Editor — it then keeps
+its declared ranges as well. If your logs or commands use scripts outside those ranges,
+add their blocks to the font's Additional Ranges (for example `880`–`1023` for Greek), or
+cook fonts with PassThrough.
 
 ### Reference
 
@@ -29249,7 +29889,7 @@ end
 | `FileDialog.List(folder)` | `table` | Entries of a folder; an empty table on failure. |
 | `FileDialog.GetInfo(path)` | `table` or `nil` | `{ path, name, isFolder, size, modified }`. |
 | `FileDialog.Exists(path)` | `bool` | The item exists and may be read. |
-| `FileDialog.CanRead(path)` / `CanWrite(path)` | `bool` | Access check only. |
+| `FileDialog.CanRead(path)` / `FileDialog.CanWrite(path)` | `bool` | Access check only. |
 | `FileDialog.CreateFolder(path)` | `bool` | Creates the folder and any missing parents inside a chosen folder. |
 | `FileDialog.Delete(path)` | `bool` | Deletes a file or a whole folder inside a chosen folder. |
 | `FileDialog.Import(path, saveFolder?, callback?, overwrite?)` | `bool` | Copies into the save folder in the background. |

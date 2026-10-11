@@ -23,9 +23,11 @@
 > packages to a project is expanded in [Plugins & Mods](Plugins-And-Mods-EN-DOC.md),
 > and the assets a project is built from in
 > [Assets & Content Browser](Assets-EN-DOC.md). The two scripting modes the
-> launcher asks you to pick between have their own references:
-> [Lua API](LuaAPI-EN-DOC.md) for Code Scripting, and the Visual Scripting chapter
-> of [The Editor & Interface](Editor-EN-DOC.md) for node graphs.
+> launcher asks you to pick between are both covered by the
+> [Lua API](LuaAPI-EN-DOC.md): it opens with
+> [Scripting modes: Code and Visual](LuaAPI-EN-DOC.md#scripting-modes-code-and-visual)
+> and the [Visual Scripting reference](LuaAPI-EN-DOC.md#visual-scripting-reference) for
+> node graphs, and every function it documents is also a node.
 
 ---
 
@@ -33,11 +35,12 @@
 
 1. [Introduction](#1-introduction)
 2. [Installation & the three apps](#2-installation--the-three-apps)
-   - 2.1 [Running the installer](#21-running-the-installer)
-   - 2.2 [What gets installed, and where](#22-what-gets-installed-and-where)
-   - 2.3 [Starting the Launcher and Updater](#23-starting-the-launcher-and-updater)
-   - 2.4 [The engine version scheme](#24-the-engine-version-scheme)
-   - 2.5 [Activating the engine](#25-activating-the-engine)
+   - 2.1 [System requirements](#21-system-requirements)
+   - 2.2 [Running the installer](#22-running-the-installer)
+   - 2.3 [What gets installed, and where](#23-what-gets-installed-and-where)
+   - 2.4 [Starting the Launcher and Updater](#24-starting-the-launcher-and-updater)
+   - 2.5 [The engine version scheme](#25-the-engine-version-scheme)
+   - 2.6 [Activating the engine](#26-activating-the-engine)
 3. [The Launcher](#3-the-launcher)
    - 3.1 [The window at a glance](#31-the-window-at-a-glance)
    - 3.2 [My Projects](#32-my-projects)
@@ -73,7 +76,7 @@ one installation folder:
 You almost never run the editor directly. The intended flow is **Launcher → pick a
 project → editor opens**, and **Updater whenever you want to move to a newer engine
 build**. Both the launcher and the updater are small, single-window ImGui
-applications that share the engine's look, its 14-language localization, its
+applications that share the engine's look, its 15-language localization, its
 font/theme preferences and its crash reporter, so they feel like one product.
 
 > Everything in this document uses the **default English** labels. Both apps are
@@ -84,7 +87,45 @@ font/theme preferences and its crash reporter, so they feel like one product.
 
 ## 2. Installation & the three apps
 
-### 2.1 Running the installer
+### 2.1 System requirements
+
+**The editor, the Launcher and the Updater (desktop)**
+
+| | |
+| --- | --- |
+| **OS** | Windows 10 or newer (x64, x86, arm64) · Linux — Ubuntu 22.04+ / Debian 12+ (x64, x86, arm64) · macOS 11.0 or newer (Apple Silicon or Intel) |
+| **CPU** | Dual-core processor |
+| **RAM** | 4 GB |
+| **GPU** | Windows / Linux: OpenGL 3.3 / 4.6, Vulkan 1.1–1.4 or Direct3D 12 (feature level 11_0). macOS: any Metal-capable GPU (native Metal, ANGLE or MoltenVK). 512 MB of video memory |
+| **Disk** | 10–20 GB free space |
+
+**The editor on Android**
+
+| | |
+| --- | --- |
+| **OS** | Android 8.0 (API 26) or newer — the APK for each CPU architecture is listed in [2.2](#22-running-the-installer) |
+| **RAM** | 4 GB (6 GB recommended — the editor keeps the whole project in memory) |
+| **GPU** | Vulkan 1.1–1.4, or OpenGL ES 3.2 with an automatic fallback to OpenGL ES 3.0 |
+| **Storage** | 2 GB free — the app unpacks its engine data on first run |
+| **Input** | Touch; a keyboard and a mouse over USB or Bluetooth work as ordinary input |
+
+**The games you ship**
+
+| Platform | What the player needs |
+| -------- | --------------------- |
+| **Windows, Linux** | The same OS versions and graphics APIs as the editor above |
+| **macOS** | macOS 11.0 or newer (a game can raise it with its **Deployment Target**); Metal |
+| **iOS** | iOS 14.0 or newer (iPhone and iPad, arm64); Metal — native or through MoltenVK |
+| **Android** | Android 7.0 (API 24) or newer (a game can raise its minimum SDK); OpenGL ES 3.2 / 3.0 or Vulkan 1.1–1.4 |
+| **Web** | A modern browser with WebGL 2.0 or WebGPU ([wasm64](Profiling-And-Building-EN-DOC.md#84-web) builds need Chrome/Edge 133+ or Firefox 134+) |
+| **Xbox** | Xbox Series X\|S and Xbox One, or Windows 10+ x64 through the Microsoft Store / Xbox app; Direct3D 12 |
+
+Building games additionally needs the toolchain of every target platform — Visual Studio,
+Xcode, the Android SDK, Emscripten and so on — on the machine that builds. What to install, and
+which host builds which platform, is in
+[Profiling & Building → 14. Toolchain prerequisites](Profiling-And-Building-EN-DOC.md#14-toolchain-prerequisites).
+
+### 2.2 Running the installer
 
 Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
@@ -130,18 +171,28 @@ Windows installs also write a small amount of registry state:
 `HKLM\…\CurrentVersion\Uninstall\IceBoxEngine`. Uninstalling removes the install
 folder, both shortcut sets, the file association and all of that state.
 
-**Linux.** The `.deb` package installs into `/opt/iceboxengine`, symlinks
+**Linux.** Install the `.deb` with your package manager or `sudo apt install
+./IceBoxEngine-…-Setup.deb`. The package first asks you to accept the
+**IceBoxEngine License Agreement** (a short summary followed by the question
+*Do you accept the IceBoxEngine License Agreement?*); declining cancels the
+installation (with a bare `dpkg -i`, which has already unpacked the files by then, the
+package is left unconfigured and tells you to remove it with
+`sudo dpkg --purge iceboxengine`). The full agreement is installed as
+`/opt/iceboxengine/LICENSE.txt` and `/usr/share/doc/iceboxengine/copyright`.
+
+The package installs into `/opt/iceboxengine`, symlinks
 `IceBoxEngineLauncher`, `IceBoxEngine` and `IceBoxEngineUpdater` into `/usr/bin`, installs
 `IceBoxEngineLauncher.desktop`, `iceboxengine.desktop` and `IceBoxEngineUpdater.desktop` into
-`/usr/share/applications` and registers the `application/x-iceproject` MIME type
-for `*.iceproject`.
+`/usr/share/applications`, puts the engine icon into the `hicolor` icon theme and
+registers the `application/x-iceproject` MIME type for `*.iceproject`.
 It depends on `libgl1`, `libx11-6` and `zenity`, and recommends
 `libasound2`/`libasound2t64`, `libpulse0`, `libwayland-client0`, `libxkbcommon0`,
 `libdecor-0-0` and `libvulkan1` (the Vulkan backend loads `libvulkan.so.1` at
 runtime). Removing the package deletes `/opt/iceboxengine` and refreshes the
 desktop and MIME databases.
 
-**macOS.** The `.pkg` is a `productbuild` package that installs system-wide into
+**macOS.** The `.pkg` is a `productbuild` package that shows the license agreement,
+then installs system-wide into
 `/Applications/IceBoxEngine`, where the three programs live as `.app` bundles
 (`IceBoxEngineLauncher.app`, `IceBoxEngine.app`, `IceBoxEngineUpdater.app`). Its post-install
 script places an **IceBoxEngineLauncher** alias on the desktop of the logged-in user and
@@ -179,8 +230,11 @@ preferences - language, font, theme and the renderer that was picked - so they s
 update, and because the folder sits in shared storage they also survive uninstalling and
 reinstalling the app.
 
-The Android app needs **Android 8.0 (API 26) or newer** on an **arm64-v8a** device, or
-**x86_64** for an emulator or a Chromebook.
+The Android app needs **Android 8.0 (API 26) or newer**. Take the APK that matches the
+device: **arm64-v8a** for practically every current phone and tablet, **x86_64** for an
+emulator or a Chromebook. The two 32-bit builds (**armeabi-v7a**, **x86**) run the full
+editor too, but a 32-bit process has far less address space, so a large project can run
+out of memory there.
 
 A project started on the phone does not have to stay there. **Build Game… → Project Export →
 Export Project (.zip)** writes the whole project to `IceBoxExports/` and to the phone's
@@ -189,7 +243,7 @@ The other way round, zip the project folder on the PC, copy it to the phone and 
 Project (.zip)…** on the launcher's *My Projects* tab. Details in
 [Profiling & Building, 8.8](Profiling-And-Building-EN-DOC.md#88-building-on-android-itself).
 
-### 2.2 What gets installed, and where
+### 2.3 What gets installed, and where
 
 | Platform | Install root |
 | -------- | ------------ |
@@ -212,16 +266,19 @@ Whatever the platform, the layout inside that folder is the same:
 │   ├── Editor.json              ← editor + build settings
 │   ├── Plugins.json  Mods.json  ← which packages the engine enables
 │   ├── CollisionGroups.json  VisualScriptAPI.json  DebugBreakpoints.json
-│   ├── Fonts/                   ← NotoSans + the CJK/Arabic/Hebrew/Devanagari faces
-│   └── Languages/               ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he
+│   ├── Fonts/                   ← NotoSans + its Arabic/Hebrew/Devanagari/CJK faces, Noto Emoji
+│   └── Languages/               ← en, ru, ua, zh, ar, hi, es, pt, ja, fr, de, it, pl, he, kr
 ├── Content/
 │   └── Examples/                ← bundled examples + the Examples.json catalog
 ├── Documentation/               ← this documentation set (EN/ and RU/)
 ├── Plugins/  Mods/              ← engine-level packages you can add to projects
-├── Tools/                       ← build system, helpers (logo/icons), preview app, Python scripts
+├── Tools/                       ← Build Game scripts & templates, Plugin Builder, Remote Preview
+│                                  companion app, Python scripts, helpers (logo/icons)
 ├── Source/  lib/                ← the SDK headers and prebuilt core libraries used to build games
-├── CMakeLists.txt  vcpkg.json
-├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  ThirdPartyLicenses/
+├── Lib/  DLLs/  python(.exe)    ← the Python runtime of the editor's Python scripting
+│                                  (Windows layout; Linux uses lib/python3.x/ and bin/python3)
+├── CMakeLists.txt  vcpkg.json   ← read by Build Game
+├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  PRIVACY_NOTICE.txt  ThirdPartyLicenses/
 └── Uninstall.exe                ← Windows only
 ```
 
@@ -235,7 +292,7 @@ and `Tools/BuildSystem` carries only the Android runtime template the editor rep
 games. The editor and the launcher are the one installed app rather than separate
 executables.
 
-### 2.3 Starting the Launcher and Updater
+### 2.4 Starting the Launcher and Updater
 
 There is no wrong way to start them:
 
@@ -265,11 +322,13 @@ back, so every later start goes straight to it:
 | **Windows** | Direct3D 12 → Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
 | **Linux** | Vulkan 1.1-1.4 → OpenGL 4.6 → OpenGL 3.3 |
 | **macOS** | Metal → Metal (MoltenVK) → Metal (ANGLE) |
+| **Android** (the launcher inside the app) | Vulkan → OpenGL ES 3.2 → OpenGL ES 3.0 |
 
 From then on the recorded `Rendering.RenderBackend` decides, and every failure steps
 exactly one rung further down the same chain: if Direct3D 12 fails to initialise the
 window is recreated on Vulkan and then on OpenGL; if Metal fails the window is recreated
-on MoltenVK and then on ANGLE; an OpenGL 4.6 context falls back to 3.3. Whatever the
+on MoltenVK and then on ANGLE; an OpenGL 4.6 context falls back to 3.3; on Android a
+failed Vulkan start moves on to OpenGL ES 3.2 and then 3.0. Whatever the
 tools end up on is written back and shown in their **Settings**. You never have to
 configure this by hand — it is only worth knowing if a machine has unusual drivers.
 
@@ -279,7 +338,7 @@ configure this by hand — it is only worth knowing if a machine has unusual dri
 > action you take inside the updater window, which keeps project work and engine
 > maintenance cleanly apart.
 
-### 2.4 The engine version scheme
+### 2.5 The engine version scheme
 
 Both apps speak the same version format:
 
@@ -325,7 +384,7 @@ version, and far more than the updater reads it:
 > numbers — it does not care whether a project was last saved by a Beta or a
 > Release build of the same `major.minor.patch`.
 
-### 2.5 Activating the engine
+### 2.6 Activating the engine
 
 A distributed IceBoxEngine build asks for a **license key** the first time you
 start it. Activation is a one-off step per computer: after it succeeds the
@@ -424,8 +483,10 @@ Device ID, with a **Copy activation details** button for support requests.
 
 | Message | Meaning |
 | ------- | ------- |
+| *Enter a license key first* | **Activate** was pressed with an empty box. |
 | *That does not look like an IceBoxEngine license key* | Part of the key is missing — copy the whole block again. |
 | *This key is not genuine* | The signature does not verify. The key was altered or did not come from IceBoxCrew. |
+| *This key belongs to a different product* | A genuine IceBoxCrew key, but not one issued for IceBoxEngine. Check that you pasted the right key. |
 | *This key was issued for a different computer* | A machine-locked key on the wrong machine. Send your Device ID to support. |
 | *This key unlocks one computer…* | Not an error. A single-machine key was recognised and the activation server was not reachable; send the `ICEQ-` activation request shown underneath to support and paste the key that comes back. |
 | *This key is already activated on another computer* | A single-machine key that the activation server has already bound to a different machine. If you changed computers, contact support with the key id. |
@@ -435,6 +496,8 @@ Device ID, with a **Copy activation details** button for support requests.
 | *This key has expired* / *has been revoked* | Contact support with the key id. |
 | *The activation could not be saved* | No storage location was writable. Start the launcher once as administrator (Windows) or check the home-directory permissions. |
 | *This activation belongs to a different computer* | A record copied from another machine was found. Enter your own key to activate this one. |
+| *The activation record is damaged* | The stored activation no longer verifies (it was edited, or a single-machine activation is missing its server confirmation). Enter your key again to activate. |
+| *This computer could not be identified, so activation is not possible* | The engine could not read any hardware identifier on this machine. Contact support with the details from **Copy**. |
 
 ---
 
@@ -449,7 +512,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 ┌───────────────────┬──────────────────────────────────────────────┐
 │   🧊 logo          │                                              │
 │ IceBoxEngine™     │            Active tab content                │
-│ Release 1.0.0     │   (My Projects / New Project / Plugins &     │
+│ Release 1.0.1     │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
 │ New Project       │                                              │
@@ -493,19 +556,48 @@ the list always stays usable.
 | Button | Action |
 | ------ | ------ |
 | **Add Existing Project…** | Opens a folder picker. Choose a folder that contains a `.iceproject` file to register it. If the folder has no `.iceproject`, or the project is already listed, the launcher tells you which of the two it was. |
-| **Scan All Drives…** | Spawns a background scan for `.iceproject` files — every drive letter on Windows, the whole filesystem from `/` on Linux and macOS — and adds anything new. A *Scanning all drives for projects…* indicator runs while it works and the button is disabled; you can keep using the launcher meanwhile, and closing it cancels the scan. When it finishes you get the number of projects added, or *No new projects found on any drive.* |
+| **Scan All Drives…** | Spawns a background search for project folders — any folder that holds a `.iceproject` file — in your home folder and on every local disk, and adds the ones that are not listed yet, including projects you removed from the list. A *Scanning all drives for projects…* indicator runs while it works and the button is disabled; you can keep using the launcher meanwhile, and closing it cancels the scan. When it finishes you get the number of projects added, or *No new projects found on any drive.* What exactly is searched is described below. |
 
 You can also **drag-and-drop** a project folder onto the window to add it. And on a
 completely fresh install — when there is no saved list yet — the launcher seeds
 itself from the default projects folder (`~/IceBoxProjects`).
 
+**What Scan All Drives covers.** The search starts in your home folder and then walks
+the local disks: every fixed and removable drive on Windows, `/Users` and `/Volumes` on
+macOS, the whole tree from `/` (plus `/run/media`) on Linux. To stay fast and to keep
+junk out of the list it skips:
+
+* **system locations** — `Windows`, `Program Files`, `Program Files (x86)`,
+  `ProgramData` and a File History backup (`FileHistory` in the root of a drive) on
+  Windows; `~/Library` on macOS; `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/boot`,
+  `/bin`, `/sbin`, `/lib*`, `/usr`, `/etc`, `/snap`, `/nix`, `/gnu`, `/sysroot`,
+  `/ostree`, `/lost+found` and the service folders of `/var` (`lib`, `cache`, `log`,
+  `tmp`, `spool`, `crash`, `backups`, `snap`) on Linux;
+* **hidden folders** — a name that starts with a dot on any system, plus the *Hidden*
+  attribute on Windows, which covers the Recycle Bin and `AppData`;
+* **network and optical drives**, and on macOS the volumes Finder does not show;
+* **symbolic links and junctions**, so nothing is visited twice.
+
+A folder the launcher may not read, or whose path is too long, is passed over on its
+own — it never stops the rest of the search. The home folder and the root of a drive
+are never taken for a project themselves. The search does not look inside a project it
+has found (unless that folder has neither `Content` nor `Config`, in which case it is
+added and searched further), and it ignores packaged games — a folder where a
+`game.json` with a `GameName` sits next to the `.iceproject` — so cooked copies under
+`Saved/Cooked` and staged build folders never show up as projects. On macOS the system
+may ask you to allow access to Desktop, Documents, Downloads and removable volumes;
+whatever you decline is simply skipped. A project that lives on a network or optical
+drive, or inside a hidden folder, is added with **Add Existing Project…** or
+drag-and-drop.
+
 On **Android** the two buttons are **Import Project (.zip)…**, which unpacks a project
 archive picked in the system file picker into `IceBoxProjects/`, and **Scan Device
 Storage…**, which searches the phone's shared storage and any memory card (both need
-All Files Access) plus the app's own folder for `.iceproject` files. The scan skips
-`Android/data`, `Android/obb` and hidden folders and does not look inside a project it
-has already found, so it also brings back projects you removed from the list. The
-default projects folder there is `/storage/emulated/0/IceBoxEngine/IceBoxProjects`.
+All Files Access) plus the app's own folder for `.iceproject` files. The scan follows
+the same rules as on desktop: it skips `Android/data`, `Android/obb` and hidden folders,
+does not look inside a project it has already found and ignores packaged games, so it
+also brings back projects you removed from the list. The default projects folder there
+is `/storage/emulated/0/IceBoxEngine/IceBoxProjects`.
 
 Every startup the list is **validated**: entries whose folder or `.iceproject` file
 has disappeared are dropped, the *Modified* timestamp of the survivors is refreshed,
@@ -731,7 +823,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "1.0.0",
+    "EngineVersion": "1.0.1",
     "StartScene": "",
     "ScriptingMode": "Code",
     "Description": "…",
@@ -755,7 +847,6 @@ sits directly inside `Content/Examples/`:
 
 ```json
 {
-    "Version": 1,
     "Examples": [
         {
             "Folder": "Platformer",
@@ -780,7 +871,6 @@ sits directly inside `Content/Examples/`:
 
 | Field | Meaning |
 | ----- | ------- |
-| `Version` | Catalog format version. The launcher understands `1`; a higher number still loads, with a log note that unknown fields are ignored. |
 | `Folder` | **Required.** The example's folder name inside `Content/Examples/`. A plain name only — no slashes, no backslashes, no colons, no `.`/`..`, and it may not start with a dot. `Path` is accepted as an alias. |
 | `Name` | Display name. Either a plain string, or an object of `"lang": "text"` pairs (the current language wins, then `"en"`, then the first entry). Defaults to the folder name. `DisplayName` is accepted as an alias. |
 | `NameKey` | Optional key from `Config/Languages/*.json`. When the key exists it wins over `Name` — use it for names you translate through the engine's own language files. |
@@ -886,9 +976,9 @@ included: it holds the libraries the Plugin Builder made for the game platforms
 manifest cannot be parsed even after repair, nothing is touched and you are told the
 apply failed.
 
-When a project's manifest has no `Plugins` / `Mods` key at all (an older project),
-the ticks are seeded from whatever folders already exist inside the project, so
-applying does not silently wipe packages the manifest never knew about.
+When a project's manifest has no `Plugins` / `Mods` key at all (for example, one
+written by hand), the ticks are seeded from whatever folders already exist inside the
+project, so applying does not silently wipe packages the manifest does not list.
 
 > Attaching a package here is about the **editor**. What actually ships with a
 > built game is decided later, in the Build Game dialog's **Include Plugins** /
@@ -903,23 +993,25 @@ applying does not silently wipe packages the manifest never knew about.
 
 Launcher **Settings** carry three preferences and one read-only readout:
 
-* **Language** — 14 built-in languages (English, Русский, Українська, 中文,
+* **Language** — 15 built-in languages (English, Русский, Українська, 中文,
   العربية, हिन्दी, Español, Português, 日本語, Français, Deutsch, Italiano, Polski,
-  עברית), laid out three per row. The active language is highlighted; click another
-  to switch instantly — no restart, and the whole window flips to a right-to-left
-  layout for Arabic and Hebrew.
+  עברית, 한국어), laid out three per row. The active language is highlighted; click
+  another to switch instantly — no restart, and the whole window flips to a
+  right-to-left layout for Arabic and Hebrew.
 * **Font Settings** — pick any `.ttf`/`.otf` from `Config/Fonts/`, set the **Size**
   (8–72 px), then **Apply** (the button only appears once you change something).
   **Refresh Fonts** rescans the folder, and a warning replaces the list when
-  `Config/Fonts/` is empty. The font atlas is rebuilt with Latin, Cyrillic,
-  Simplified Chinese, Japanese, Arabic, Hebrew and Devanagari ranges, so a single
-  face that covers your script is enough.
+  `Config/Fonts/` is empty. The chosen face is merged with the Noto fonts in
+  `Config/Fonts/` — Latin (extended letters included), Greek, Cyrillic, Hebrew,
+  Arabic, Devanagari, Simplified Chinese, Japanese and Korean — and every glyph is
+  rendered the first time it is drawn, so characters the chosen face lacks come from
+  those fonts and text stays sharp at any size.
 * **Theme** — **Dark** or **Light**, applied immediately across the whole launcher.
 * **Active renderer** — read-only: the graphics API the launcher itself is drawing
   with, and the **GPU** behind it. On its very first run the launcher probes the
   platform chain from the top — Windows: Direct3D 12 → Vulkan → OpenGL 4.6 →
   OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 → OpenGL 3.3; macOS: Metal →
-  Metal (MoltenVK) → Metal (ANGLE); Android: Vulkan → OpenGL ES 3.2 — and records the
+  Metal (MoltenVK) → Metal (ANGLE); Android: Vulkan → OpenGL ES 3.2 → OpenGL ES 3.0 — and records the
   first one that answers in
   `Config/Engine.json` (the per-user copy when the install folder is read-only), so
   every later start goes straight to it. The Updater shows
@@ -953,12 +1045,23 @@ after **Create Project** — the launcher:
    disk and was removed from the list.* and drops the entry.
 2. Records the project's **last-launched** time and saves the list.
 3. Locates the editor (`IceBoxEngine`) **next to itself** in the install folder.
-4. Launches the editor with the project path, and **exits** — handing the screen
-   over to the editor. If the editor cannot be started, the launcher stays open and
-   logs the failure.
+4. Launches the editor with the project path and turns its own window into the
+   start-up splash — *Launching editor…* under the project name — until the editor's
+   window has taken over (15 seconds at most), then **exits**. If the editor cannot be
+   started, the launcher stays open and logs the failure.
 
 Because the editor is resolved as a *sibling* of the launcher, the launcher and
 editor always stay a matched pair from the same installation.
+
+**The start-up splash.** The editor opens on the same splash and keeps it up while it
+loads: the engine logo, the project name, a progress bar with a percentage, *Step N of
+M*, and the current stage — *Loading editor…*, *Initializing renderer…*, *Compiling
+shaders…* (with a running *Shaders ready* count), *Initializing engine systems…*,
+*Initializing scripting…* (only in editors with Python scripting), *Loading level
+<name>…* and *Preparing workspace…*. Keyboard, mouse, touch and pen input is ignored
+until the splash fades into the editor, so nothing you press while it loads lands in a
+half-built workspace. On Android, where the launcher and the editor are one app, the
+hand-off happens inside that app and the splash simply continues.
 
 ---
 
@@ -1002,7 +1105,7 @@ enabled, and any time you press **Check for Updates**. Under the hood the update
 1. Asks the IceBoxEngine update service for the list of published releases. The address is
    part of the installed engine, so there is nothing to configure.
 2. Ignores **draft** releases and releases without a version tag, then sorts the rest
-   by the version rules from [2.4](#24-the-engine-version-scheme) and takes the newest.
+   by the version rules from [2.5](#25-the-engine-version-scheme) and takes the newest.
 3. Compares that newest release against your **current version**:
    * newer → **New version available: `<tag>`** (the **Install Update** button
      lights up, and release notes appear);
@@ -1012,8 +1115,8 @@ enabled, and any time you press **Check for Updates**. Under the hood the update
 The request verifies TLS, follows up to 10 redirects (HTTPS only), gives up on a
 connection after 15 s and on the whole request after 30 s, and aborts a stalled
 transfer. Transient failures — timeouts, dropped connections, HTTP
-408/429/500/502/503/504 — are **retried up to three times** with a growing pause
-(0.5 s, then 1 s). Everything runs on a background thread, so the window stays
+408/429/500/502/503/504 — are **tried up to three times in all**, with a growing
+pause between attempts (0.5 s, then 1 s). Everything runs on a background thread, so the window stays
 responsive.
 
 Failures map to a specific message rather than a generic error:
@@ -1052,9 +1155,9 @@ Pressing **Install Update** runs a careful download-verify-install pipeline:
 2. **Download.** The staging folder `<temp>/IceBoxUpdate/` is wiped and recreated,
    and the asset is downloaded into it with a live progress bar. The asset's name is
    sanitised before it becomes a local file name, so a strange name published in a
-   release can never escape the staging folder. A failed download is retried up to
-   three times (1 s, then 2 s pause), and a partial file is deleted rather than left
-   behind.
+   release can never escape the staging folder. A download that fails for a transient
+   reason is tried up to three times in all (with a 1 s, then a 2 s pause), and a
+   partial file is deleted rather than left behind.
 3. **Verify.** The status changes to *Verifying download…*. A download that turns out
    to be a **web page** rather than an installer is rejected immediately with its own
    message. The file must then be at least 1 KB and must match the size the service
@@ -1078,13 +1181,12 @@ Pressing **Install Update** runs a careful download-verify-install pipeline:
 ### 4.4 Settings
 
 The updater's **Settings** screen shows your **Current version**, the detected
-**Platform** and **Architecture**, and the **Update source** it asks. The source is
-read-only — it is part of the installed engine, not a per-user preference. Below them
-you can set:
+**Platform** and **Architecture**, and the **Active renderer** with its **GPU** (the
+same two lines as in the launcher, [3.5](#35-settings)). Below them you can set:
 
 * **Check for updates on startup** — toggles the automatic check described in
   [4.2](#42-how-a-check-works).
-* **Language** and **Font** — the same 14 languages and font controls as the
+* **Language** and **Font** — the same 15 languages and font controls as the
   launcher ([3.5](#35-settings)), shared with the rest of the engine.
 
 **Save** writes the auto-check flag and closes Settings; **Cancel** closes Settings
@@ -1159,14 +1261,22 @@ the project.
    **Refresh Catalog** — your example appears without a restart. Anything the
    launcher did not like about the entry is explained in the log.
 
+> The install folder belongs to the system (`Program Files`, `/opt/iceboxengine`,
+> `/Applications/IceBoxEngine`), so changing it needs administrator rights — and an
+> engine update replaces it. On Windows the previous version is uninstalled first, which
+> removes everything in the folder, your own additions included; on every platform the
+> update brings its own `Examples.json`. Keep the master copy of your example somewhere
+> else and copy it back after updating.
+
 **Moving to a newer engine build.**
 1. Open the **Updater** — the launcher's amber **Updater** button, or Start Menu →
    *IceBoxEngineUpdater*.
 2. It checks automatically (or press **Check for Updates**).
 3. If it says **New version available**, read the **Release Notes** and press
    **Install Update**.
-4. Let it download, verify and install; the updater exits when done. Re-open the
-   **Launcher** — the sidebar now shows the new version.
+4. Let it download, verify and install. The updater closes while the installer runs
+   and reopens by itself with the green **Update installed successfully** banner; open
+   the **Launcher** again — the sidebar now shows the new version.
 
 > If you opened the updater from the launcher's **Updater** button, close the
 > launcher (and the editor) before pressing **Install Update**. The installer
@@ -1183,7 +1293,7 @@ the project.
 | ---- | ---------------- |
 | `<install>/IceBoxEngineLauncher`, `IceBoxEngineUpdater`, `IceBoxEngine` | The three programs, side by side. |
 | `<install>/Config/Updater.json` | The canonical engine **version** the launcher and editor display. |
-| `<install>/Config/Fonts/`, `Config/Languages/` | Fonts and the 14 language files shared by all three apps. |
+| `<install>/Config/Fonts/`, `Config/Languages/` | Fonts and the 15 language files shared by all three apps. |
 | `<install>/Plugins/`, `Mods/` | Engine-level packages the launcher can attach to projects. |
 | `<install>/Content/Examples/` | Starter content offered by **New Project**, described by `Examples.json` ([3.3](#33-new-project)). |
 | `<install>/Documentation/` | This documentation set, also readable from the editor's Help panel. |
@@ -1199,9 +1309,13 @@ the project.
 | `Config/Updater.json` | The updater's working copy: auto-check preference and the last installed version. |
 | `exported_projects.json` | Written by the bulk **Export List…** button. |
 
-Crash reports land in `Saved/CrashReports/` **inside the install folder** when that
-folder is writable, and in a per-user fallback folder chosen by SDL when it is not —
-which is the usual case for a system-wide install.
+Crash reports of the launcher and the updater land in `Saved/CrashReports/` **inside the
+install folder** when that folder is writable. A system-wide install usually is not, and
+then they go to the per-user folder instead — `%APPDATA%\IceBoxEngine\game\Saved\CrashReports`
+on Windows, `~/Library/Application Support/IceBoxEngine/game/Saved/CrashReports` on macOS
+and `~/.local/share/IceBoxEngine/game/Saved/CrashReports` on Linux. The editor writes its
+own reports into the open project's `Saved/CrashReports/`. Each folder keeps the newest 15
+reports.
 
 **In a project folder**
 
@@ -1209,10 +1323,14 @@ which is the usual case for a system-wide install.
 | ---- | ------------- |
 | `<Name>.iceproject` | The project manifest — name, engine version, scripting mode, description, license, plugin and mod lists. |
 | `Config/Engine.json` | Per-project editor and rendering settings, seeded from your preferences and from the renderer probe at creation. |
+| `Config/Editor.json`, `Config/CollisionGroups.json`, `imgui.ini` | The editor's other per-project state — open panels and asset editors, Build Game settings, collision groups, the dock layout ([Editor 2.3](Editor-EN-DOC.md#23-panel-persistence)). |
 | `Content/`, `Content/Examples/<Example>/` | Project content, including the copied starter example. |
 | `Plugins/`, `Mods/` | Packages copied in by the launcher. |
 | `LICENSE.txt` | Written at creation for every license except *None*. |
 | `project_thumbnail.png`, `project_thumbnail_high.png` | 256 × 256 and 512 × 512 viewport snapshots written by the editor on exit; used as the launcher preview. |
+| `Saved/` | Working data the editor keeps for the project: the asset redirectors in `Saved/Redirectors/` ([Assets 2.3](Assets-EN-DOC.md#23-asset-references--redirectors) — keep them), the shader and cook caches, cooked content and the editor's own crash reports. The caches and cooked content are rebuilt whenever they are missing. |
+| `Tools/Helpers/Profiler/` | Traces recorded with the Advanced Profiler ([Profiling 4.9](Profiling-And-Building-EN-DOC.md#49-where-traces-live--chrome-trace-export)). |
+| `Tools/PythonScripts/` | Your Python tool scripts, with `Startup/`, `Lib/` and `Modules/` — created by **Open Scripts Folder** in the Python Console's **Run Python Script** menu. Editor-only, never shipped with the game ([Python API → Tool script folders](PythonAPI-EN-DOC.md#tool-script-folders)). |
 
 **Temporary**
 
@@ -1291,7 +1409,11 @@ again on a normal connection, and report it if it persists.
 **Does updating wipe my projects or settings?**
 No. Updates replace engine files in the install folder only. Your projects live in
 their own folders, and your language/font/theme and project list live in the user
-data folder.
+data folder. The one thing an update does not keep is what you added to the **install
+folder** yourself — an example in `Content/Examples/`, a package dropped into the
+engine's own `Plugins/` or `Mods/`: on Windows the old installation is removed as a whole
+before the new one goes in. Keep such files outside the install folder and copy them back
+afterwards.
 
 **Can I just run the editor directly?**
 Yes — double-clicking a `.iceproject` opens it in the editor. But going through the

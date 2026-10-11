@@ -11,8 +11,8 @@
 >   (on-screen debug, developer console, the in-game profiler and network-profiler
 >   overlays, Tracy-instrumented builds).
 > * **Building games** — packaging your project into a standalone, shippable
->   application for all **six target platforms** (Windows, Linux, Android, Web, macOS,
->   iOS), including asset **cooking**, content **packing** (IcePak), build
+>   application for all **seven target platforms** (Windows, Linux, Android, Web, macOS,
+>   iOS, Xbox), including asset **cooking**, content **packing** (IcePak), build
 >   **manifests**, **installers**, **crash reporting** and **DLC** packaging.
 >
 > Scripting is out of scope; see [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) and
@@ -70,6 +70,7 @@
    - 7.1 [Common settings](#71-common-settings)
    - 7.2 [Configuration: Debug vs Release](#72-configuration-debug-vs-release)
    - 7.3 [Crash Reporter](#73-crash-reporter)
+   - 7.4 [Verbose start-up diagnostics](#74-verbose-start-up-diagnostics)
 8. [Per-platform settings](#8-per-platform-settings)
    - 8.1 [Windows](#81-windows)
    - 8.2 [Linux](#82-linux)
@@ -88,10 +89,21 @@
 12. [Build scripts reference](#12-build-scripts-reference)
 13. [Build output locations](#13-build-output-locations)
 14. [Toolchain prerequisites](#14-toolchain-prerequisites)
+   - 14.1 [Common tools: CMake, Ninja and vcpkg](#141-common-tools-cmake-ninja-and-vcpkg)
+   - 14.2 [Windows host](#142-windows-host)
+   - 14.3 [Linux host (and WSL2)](#143-linux-host-and-wsl2)
+   - 14.4 [macOS host (macOS and iOS games)](#144-macos-host-macos-and-ios-games)
+   - 14.5 [Android SDK, NDK and JDK](#145-android-sdk-ndk-and-jdk)
+   - 14.6 [Emscripten (Web)](#146-emscripten-web)
 
 **Part III — DLC**
 
 15. [DLC packaging](#15-dlc-packaging)
+    - 15.1 [The DLC list](#151-the-dlc-list)
+    - 15.2 [Output and packaging](#152-output-and-packaging)
+    - 15.3 [DLC content and the base game](#153-dlc-content-and-the-base-game)
+    - 15.4 [At runtime](#154-at-runtime)
+    - 15.5 [Testing in the editor](#155-testing-in-the-editor)
 
 **Reference**
 
@@ -139,7 +151,7 @@ Every frame the profiler can collect:
 | **Frame** | Frame time (ms), FPS, GPU frame time (ms). |
 | **CPU** | Process CPU usage (%, exponentially smoothed, sampled four times a second), physical core count, logical processor count, frequency (GHz). |
 | **Memory** | RAM current / peak / total (MB, current and peak sampled four times a second), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
-| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.4](#28-temperature-sensors)). |
+| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name (see [2.8](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
 | **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners, mixer voices, streams, limiter reduction in dB), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
 | **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
@@ -151,11 +163,10 @@ frame inside a recorded [trace](#41-recording-traces).
 
 ### 2.2 Scopes, threads & render-pass timing
 
-Fine-grained CPU timing comes from **scopes**. Engine (and your) code is instrumented
-with scope macros that time a block and nest by call depth:
-
-* `ICE_PROFILE_SCOPE("Name")` — time a named block.
-* `ICE_PROFILE_FUNCTION()` — time the current function.
+Fine-grained CPU timing comes from **scopes** — named, timed blocks that nest by call
+depth. The engine's own code is instrumented with them throughout (listed below), and your
+Lua scripts add their own with `ProfileBegin` / `ProfileEnd` / `ProfileScope`
+([5.5](#55-driving-the-profiler-from-lua)).
 
 Scopes accumulate per-frame call counts, **inclusive** durations and **self** (exclusive)
 time — inclusive minus the time spent in nested scopes, which is what tells you whether a
@@ -165,10 +176,9 @@ scope is slow *itself* or slow because of what it calls. They also produce a hie
 Scope state is **per thread**: every thread that opens a scope gets its own stack, event
 buffer and accumulators, so jobs running on worker threads are measured correctly and
 never corrupt the main thread's tree. Each recorded event carries the thread it came from,
-and both the live and the offline flame graph draw one **lane per thread**. Name a thread
-with `ProfilerManager::SetCurrentThreadName()` so it shows up with a readable label (the
-main thread is named automatically). Up to 64 threads are tracked individually; anything
-beyond that shares an *Other Threads* lane.
+and both the live and the offline flame graph draw one **lane per thread** — *Main Thread*
+for the main thread, *Thread N* for the others. Up to 64 threads are tracked individually;
+anything beyond that shares an *Other Threads* lane.
 
 Scopes are recorded every frame, not only while a trace is running — that is what makes
 the live flame graph and automatic [hitch capture](#25-hitch-detection) possible. Per
@@ -181,12 +191,9 @@ update/late-update/fixed-update), AI, animation (flipbooks, skeletons, animators
 video, audio, destruction, widgets (update, layout, animations, flipbooks, per-widget
 script), rendering (sprites, tilemaps, flipbooks, skeletons, lighting, fog of war, FX,
 post-process graph, widgets, editor UI, present), input, prewarm and texture streaming.
-Lua scripts can add their own scopes with `ProfileBegin` / `ProfileEnd` / `ProfileScope`
-(see [5.5](#55-driving-the-profiler-from-lua)).
 
-GPU work is timed per **render pass** by the **`RenderPassProfiler`**, which brackets
-passes with `ICE_RENDER_PASS("Name")` and uses triple-buffered GPU timer queries to
-report **CPU and GPU** time per pass (e.g. shadows, lighting, post-process, UI). Passes
+GPU work is timed per **render pass**: every pass is bracketed with triple-buffered GPU
+timer queries that report **CPU and GPU** time per pass (e.g. shadows, lighting, post-process, UI). Passes
 **nest** by call depth (indented in the panel): a parent's time is *inclusive* of its
 children, and the **Total** row sums only top-level passes so nothing is double-counted.
 Up to **64 passes per frame** are recorded, and results are read back **two frames** later
@@ -198,15 +205,17 @@ Pass capture can be switched off entirely from the [Render Passes tab](#47-rende
 Beyond the fixed scene counts, the profiler carries an open-ended **counter registry**.
 A counter has a **group** (`"Physics"`, `"Renderer"`, `"Components"`, `"Lua"`, …), a
 **name**, a **value**, an optional **unit** (count, ms, B/KB/MB, %, /s) and an optional
-**budget**. Any system — engine or gameplay — publishes one with a single call:
+**budget**. The engine's systems publish their own every frame, and your game publishes
+one from Lua with a single call:
 
-```cpp
-ProfilerManager::Get().SetCounter("Physics", "Contacts", contactCount);
-ProfilerManager::Get().SetCounter("Renderer", "Draw Calls", drawCalls,
-                                  ProfilerCounterUnit::Count, 2000.0);
+```lua
+ProfilerSetCounter("Gameplay", "Alive Enemies", #enemies)
+ProfilerSetCounter("Gameplay", "AI Think", thinkMs, "ms", 8.0)   -- unit + budget
 ```
 
-or from Lua with `ProfilerSetCounter(group, name, value[, unit[, budget]])`.
+`ProfilerSetCounter(group, name, value[, unit[, budget]])` takes `"ms"`, `"b"`, `"kb"`,
+`"mb"`, `"%"` or `"/s"` as the unit (omit it for a plain count); see
+[5.5](#55-driving-the-profiler-from-lua).
 
 Counters need no registration, no header change and no UI work: they appear automatically
 in the [Counters tab](#411-counters-tab) grouped by system, are colored against their
@@ -282,8 +291,8 @@ Inspect them in the [Hitches tab](#412-hitches-tab); configure from Lua with
 
 ### 2.6 Frame budget
 
-The profiler knows the project's **target frame rate** (the FPS limit applied by the
-editor or by `SettingsLua::GetFPSLimit()` at runtime) and derives a **frame budget** in
+The profiler knows the project's **target frame rate** (the FPS limit set in the editor's
+Preferences, or by `Settings.SetFPSLimit()` at runtime) and derives a **frame budget** in
 milliseconds from it. Every color threshold in the panel — frame time, GPU time, scopes,
 render passes, script time — is scaled against that budget instead of a hard-coded 60 FPS
 assumption, so a 30 FPS console target or a 144 FPS PC target is judged on its own terms.
@@ -371,7 +380,7 @@ sections.
 
 ### 3.4 Debug visualization
 
-The **Debug** section toggles in-viewport debug drawing (these are visualization aids,
+The **Debug Visualization** section toggles in-viewport debug drawing (these are visualization aids,
 not part of the game). The same flags are readable and writable from Lua by name — see
 [5.5](#55-driving-the-profiler-from-lua):
 
@@ -410,8 +419,7 @@ graph, thread/scope/counter/script/render-pass table and the hitch list — is r
 one snapshot captured at a single frame, so the whole panel is always internally
 consistent.
 
-* **Auto** (on by default) — capture a new snapshot every frame. This is the classic
-  behavior.
+* **Auto** (on by default) — capture a new snapshot every frame.
 * **Every N frames** — with *Auto* off, type how many rendered frames to wait between
   snapshots (1 to 10000). Higher values slow the panel down so the values stop flickering
   and stay readable; the status text next to the controls shows the resulting rate
@@ -541,7 +549,7 @@ profiling-focused view.
 
 ### 4.7 Render Passes tab
 
-Per-render-pass timing from the `RenderPassProfiler`:
+Per-render-pass timing:
 
 * **Enabled** — turns pass capture (and its GPU queries) on or off.
 * **Bar Chart** — toggles the graphical CPU/GPU bars above the table.
@@ -615,7 +623,8 @@ Opening a trace in the timeline gives you:
 Stopped traces are written as JSON to **`Tools/Helpers/Profiler/`** under the engine's
 writable path — that is your project folder when it is writable (the normal editor case),
 otherwise the per-user data directory (`%APPDATA%\IceBoxEngine\game` on Windows,
-`~/.local/share/IceBoxEngine/game` on Linux). One file per trace, named after the trace.
+`~/Library/Application Support/IceBoxEngine/game` on macOS, `~/.local/share/IceBoxEngine/game`
+on Linux). One file per trace, named after the trace.
 
 On startup the profiler **loads the traces back from that folder** — the 20 most recent by
 modification time — so the Trace History survives editor restarts. Deleting a trace in the
@@ -728,7 +737,7 @@ runtime and in the editor:
 * Command **auto-completion** (Tab), input **history** (↑/↓), scrollback, text selection
   and color-coded output (info / warning / error / success / command).
 * Executes registered **commands** and **CVars** for live inspection and tweaking while the
-  game runs; commands and variables can be registered from both C++ and Lua. See
+  game runs; the engine registers its own, and your scripts add theirs from Lua. See
   [Lua API → Console](LuaAPI-EN-DOC.md#60-console--developer-console--command-system).
 
 ### 5.3 The runtime profiler overlay
@@ -789,7 +798,8 @@ and P95 bandwidth, packet rates, the ping and player ranges and the **spike** se
 above twice the trace average, seconds under 1 KB excluded), stores the network settings and
 the peer list of that moment, and writes everything as JSON to
 **`Tools/Helpers/NetworkProfiler/<name>.json`** in the engine's writable folder (the project
-folder in the editor, the per-user data folder in a game build). `SaveReport` writes its
+folder in the editor; in a game build the same place as the frame profiler's traces — see
+[4.9](#49-where-traces-live--chrome-trace-export)). `SaveReport` writes its
 snapshot reports (`network_profile_<date>_<time>.json`) into the same folder. Traces are
 started and stopped from the editor's Network Profiler tab, from Lua
 (`NetworkProfiler.StartTrace` / `StopTrace`, which is how you profile on a phone or a
@@ -875,11 +885,11 @@ text, tooltips, dropdowns and `Draw.Text` fall back to when they have no font.
   end
   ```
 
-  Leave it out and nothing changes — the OS font keeps working as before. A path that
+  Leave it out and the OS font is used. A path that
   cannot be loaded returns `false`, logs a warning and keeps the current font.
-* With **Cook Assets** and Font Mode **Auto-subset**, give that font Additional Ranges for
-  every script your console and logs print — strings made at runtime are invisible to the
-  cooker (see [9](#9-asset-cooking)).
+* With **Cook Assets** and Font Mode **Auto-subset**, tick **Keep Ranges in Auto-subset** for
+  that font in the Font Editor and make sure its ranges cover every script your console and
+  logs print — strings made at runtime are invisible to the cooker (see [9](#9-asset-cooking)).
 
 The full API — `Set`, `Get`, `Clear`, `IsLoaded`, `GetSource`, `GetFile`, `HasOSFont` —
 and the exact order in which the font is chosen are in
@@ -944,38 +954,35 @@ every setting is remembered in the editor config between sessions (passwords exc
 | **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
 | **Include Mods** | *(Packages)* Ship the mods ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. |
 
+When the project has DLC marked **Exclude from the base game build** in the
+[DLC Packager](#15-dlc-packaging), the **Packages** section also shows *DLC content left out
+of this build* with the number of folders: the game ships without those `Content/` folders
+on every platform ([15.3](#153-dlc-content-and-the-base-game)). Hover the line to see them.
+
 The dialog refuses to start with an empty **Game Name** or **Output Path**. While a build
 runs every setting is locked, the **Build** button becomes **Stop**, and cancelling wipes
 the half-written output folder. **Esc** closes the dialog when nothing is running.
 
-> A cross-platform note: on a non-Windows host, selecting **Windows** triggers a MinGW
-> cross-compile; **macOS/iOS** can only be built on a macOS host (the Windows `.bat`
+> A cross-platform note: on a Linux host, selecting **Windows** triggers a MinGW
+> cross-compile, and on a Windows host **Linux** builds inside WSL2; a macOS host builds
+> neither. **macOS/iOS** can only be built on a macOS host (the Windows `.bat`
 > stubs for those platforms tell you to run the `.sh` on a Mac), and **Xbox** is the
 > mirror image — it needs a Windows host with the Microsoft GDK, so `build_xbox.sh`
-> is the stub that sends you back to Windows.
+> is the stub that sends you back to Windows. The full host matrix and the toolchains
+> each target needs are in [Section 14](#14-toolchain-prerequisites).
 
 ### 7.2 Configuration: Debug vs Release
 
-* **Debug** — symbols, unoptimized, **Tracy** profiling compiled in (desktop), plus the
-  [runtime profiler](#53-the-runtime-profiler-overlay) and
-  [network profiler](#54-the-network-profiler) overlays. Best for diagnosing crashes and
-  performance on the target.
-* **Release** — optimized, Tracy and the debug overlays off. Ship this.
+| You choose | What the game gets |
+| ---------- | ------------------ |
+| **Release** | Optimised, no debug tooling — Tracy and the debug overlays are compiled out. Ship this. |
+| **Debug** | Optimised **and** fully instrumented: **Tracy** (desktop — see [2.7](#27-tracy-integration)), the [runtime profiler overlay](#53-the-runtime-profiler-overlay), the [network profiler overlay](#54-the-network-profiler), `IsDebugBuild()` returning `true`, plus full debug symbols and an unstripped binary. Best for diagnosing crashes and performance on the target. |
 
-> **Debug from an installed engine.** The two bullets above describe a **Debug** build made
-> from a full engine source tree. An engine installed from a distribution installer has no
-> engine sources — it links a pre-built engine core instead, and Build Game picks the right
-> one for you:
->
-> | You choose | What the game gets |
-> |---|---|
-> | **Release** | Optimised, no debug tooling. Ship this. |
-> | **Debug** | Optimised **and** fully instrumented: **Tracy**, the [runtime profiler overlay](#53-the-runtime-profiler-overlay), the [network profiler overlay](#54-the-network-profiler), `IsDebugBuild()` returning `true`, plus full debug symbols and an unstripped binary. |
->
-> So a **Debug** build from an installed engine keeps the engine's own code optimised, which
-> is invisible to you: a distribution ships no engine sources to step through, and your game
-> logic lives in Lua/Python either way. You still get every debug facility and full symbols
-> for your own build.
+The engine ships no engine sources, so a game build links a pre-built engine core, and Build
+Game picks the matching one for the configuration you choose. That is why a **Debug** build
+keeps the engine's own code optimised — there is nothing in it for you to step through, and
+your game logic lives in Lua/Python either way — while you still get every debug facility and
+full symbols for your own build.
 
 ### 7.3 Crash Reporter
 
@@ -1014,8 +1021,6 @@ click.
 > the dialog is skipped in one case too — a crash on the Android UI thread itself, where
 > blocking that thread would freeze the dialog — and the same next-launch prompt takes
 > over. Either way the report file is always written first, so nothing is ever lost.
-
----
 
 ### 7.4 Verbose start-up diagnostics
 
@@ -1077,6 +1082,8 @@ runtime (with fallbacks).
   `aarch64-linux-gnu` cross toolchain (`crossbuild-essential-arm64`) automatically, and on
   a native arm64 machine it builds without any cross setup. KTX2 texture cooking is
   unavailable for arm64 (no Basis Universal port) and falls back to WebP automatically.
+  The system packages each architecture needs are listed in
+  [14.3](#143-linux-host-and-wsl2).
 * Supports **Distribution** options, including a **.deb** installer.
 
 ### 8.3 Android
@@ -1124,7 +1131,18 @@ macOS). The engine also ships an Android APK that carries the editor itself; bui
   activity's intent filter and delivered to the `DeepLinks` Lua API. Left empty it falls
   back to the **Package Name**, so every build registers a scheme unique to that app
   instead of a shared placeholder.
-* **Extra Permissions** (custom Android permissions).
+* **Extra Permissions:** the Android permissions your game requests that no service toggle
+  declares, separated by commas or spaces — `RECORD_AUDIO, CAMERA` or `RECORD_AUDIO CAMERA`
+  (CLI: `--permissions "RECORD_AUDIO CAMERA"`). A short name gets the `android.permission.`
+  prefix, a name with a dot (`com.example.permission.X`) is used as is. Each one becomes a
+  `<uses-permission>` in the manifest; a permission that a toggle or the template already
+  declares is written only once. The build log lists everything it declared as
+  `[permission] android.permission.…` lines right after *Injecting conditional permissions into
+  AndroidManifest.xml...*. Declaring is only half of it: a dangerous permission (microphone,
+  camera, location, …) still has to be requested in the game with `Permissions.Request()`. The
+  other half is just as strict — Android denies a permission the manifest does not declare at
+  once, without showing a dialog, and the app's page in the system settings says it needs no
+  permissions.
 * **Signing:** keystore path, keystore password, key alias, key password (for release
   signing; unsigned/debug-signed otherwise). Passwords are **never stored in the editor
   config** — re-enter them each session — and they are handed to the build script through
@@ -1177,7 +1195,7 @@ macOS). The engine also ships an Android APK that carries the editor itself; bui
 * Version Name / Version Code / Publisher.
 * The current level is passed as the **start scene**; content is embedded into the
   Emscripten `.data` (so `Engine.json`/`Plugins.json`/`Mods.json` are preloaded, not
-  copied loose). Mods are not supported on Web.
+  copied loose), and so are the enabled mods.
 * The packaging step also copies the generated companion files next to the `.html`
   (`.js`, `.wasm`, `.data`) plus `favicon.png` and `apple-touch-icon.png` when the build
   produced them.
@@ -1275,11 +1293,10 @@ macOS). The engine also ships an Android APK that carries the editor itself; bui
   are skipped with a warning instead of silently corrupting the plist.
 * The `.app` bundle is fully self-contained: `game.json` (start scene, name, version,
   orientation, crash-report URL), `Content/`, `Config/` (with the render backend pinned to
-  MoltenVK), enabled `Plugins/` and `Mods/` are staged **before** code signing, so the
+  the one chosen for the build — native Metal, or MoltenVK when you picked it), enabled
+  `Plugins/` and `Mods/` are staged **before** code signing, so the
   packaged `.ipa` needs no post-processing — and the editor deliberately skips its own
   sidecar copies on iOS for the same reason.
-
----
 
 ### 8.7 Xbox (Microsoft GDK)
 
@@ -1320,42 +1337,29 @@ on a Windows host.
 > half-way through a compile.
 
 > **Where each family stands today.** **PC** (`Gaming.Desktop.x64`) is complete: it
-> compiles, packages, installs and runs with the public GDK and the engine's existing
-> Direct3D 12 renderer, which is exactly the Win32 + DXGI + D3D12 combination that target
-> uses. The two **console** families are wired end to end through the build system — GDK
-> toolchain, vcpkg triplet, pre-built core slot, `MicrosoftGame.config` with the right
-> `TargetDeviceFamily`, `MakePkg` packaging, `T:\` save storage and the Lua platform API —
-> and the renderer speaks the console's own Direct3D 12.X: the toolchain puts
-> `<edition>/xbox/include` and its `gen8` / `gen9` half on the include and library path, the
-> device comes from `D3D12XboxCreateDevice`, the back buffers are committed resources with
-> `D3D12_HEAP_FLAG_ALLOW_DISPLAY`, pacing runs on `SetFrameIntervalX` /
-> `ScheduleFrameEventX` / `WaitFrameEventX`, frames go out through
-> `ID3D12CommandQueue::PresentX`, and the suspend and resume lifecycle Xbox certification
-> requires is handled with `SuspendX` / `ResumeX` and `SDL_GDKSuspendComplete`. OpenGL is
-> gone from the console build entirely — glad is neither resolved nor linked and the
-> OpenGL backend sources are excluded, because a title may only present through Direct3D 12
-> there. Xbox Services links from the GDKX's own console libraries, and the crash reporter
-> and hardware sensors step aside for the console operating system, which captures crashes
-> itself and delivers them through Partner Center. Video plays through the console's Media
-> Foundation Source Reader instead of FFmpeg: H.264 or HEVC in MP4 with AAC-LC or AC-3 audio,
-> from loose files and from `Content.icepak` alike, with the same Lua `Video.*` API as every
-> other platform (seeking, playback speed and loop ranges included); the build links
-> `mfplat` / `mfreadwrite` (delay-loaded) and `mfuuid` from the GDKX for it.
->
-> What is left needs the GDKX and a devkit. **SDL3:** SDL carries the `Gaming.Xbox.*` code
-> in its public release, but it builds for the console only through its own `VisualC-GDK`
-> solution, so vcpkg cannot produce it — build the SDL3 target for the console platform
-> from `VisualC-GDK/SDL.sln` and pass `-DICE_XBOX_SDL3_ROOT=<folder with include/SDL3/SDL.h
-> and SDL3.lib>`. **Shaders:** a console title has no run-time shader compiler. The renderer
-> now reads a pre-baked cache from a `ShaderCache` folder shipped next to the executable
-> before it tries to compile anything, so the remaining step is to bake that cache with the
-> GDKX compiler — the toolchain already locates it and exposes it as `ICE_XBOX_DXC` and
-> `GDK_DXCTool`. **Bring-up:** nothing here has run on a devkit, so frame pacing, memory
+> compiles, packages, installs and runs with the public GDK on the engine's Direct3D 12
+> renderer. The two **console** families are wired end to end — GDK toolchain, vcpkg
+> triplet, `MicrosoftGame.config` with the right `TargetDeviceFamily`, `MakePkg` packaging,
+> `T:\` save storage, the Lua platform API, and a renderer that presents through the
+> console's own Direct3D 12.X with the suspend/resume lifecycle Xbox certification
+> requires — but they have not been brought up on a devkit yet, so frame pacing, memory
 > budgets, the ENet transport over the console sockets and certification still need real
-> hardware. Configuring a console family prints exactly this as a CMake warning, so it is
-> never a surprise half-way through a build. Everything above the renderer — including the
-> whole `Xbox.*` / `XboxStore.*` / `XboxMultiplayer.*` ecosystem layer — is device-family
-> agnostic and needs no console work of its own.
+> hardware. On a console the crash reporter and the hardware sensors step aside (the
+> console operating system captures crashes itself and delivers them through Partner
+> Center), and video plays through the console's Media Foundation instead of FFmpeg —
+> H.264 or HEVC in MP4 with AAC-LC or AC-3 audio, from loose files and from
+> `Content.icepak` alike, with the same `Video.*` API as every other platform.
+>
+> A console build also needs two things only your GDKX can provide. **SDL3:** vcpkg cannot
+> build SDL for `Gaming.Xbox.*` — build its SDL3 target for the console platform from SDL's
+> own `VisualC-GDK/SDL.sln` and point the `ICE_XBOX_SDL3_ROOT` cache variable (below) at
+> it. **Shaders:** a console title has no run-time shader compiler, so the renderer reads a
+> pre-baked cache from a `ShaderCache` folder shipped next to the executable — bake it with
+> the GDKX shader compiler, which the toolchain already locates (`ICE_XBOX_DXC` /
+> `GDK_DXCTool`). Configuring a console family prints all of this as a CMake warning, so it
+> is never a surprise half-way through a build. Everything above the renderer — including
+> the whole `Xbox.*` / `XboxStore.*` / `XboxMultiplayer.*` ecosystem layer — is
+> device-family agnostic.
 
 **Store identity** — these fields go straight into `MicrosoftGame.config`:
 
@@ -1463,24 +1467,19 @@ toolchain expects, or where a dependency has to come from outside vcpkg:
 | `ICE_XBOX_SDL3_ROOT` | Folder holding an SDL3 built for `Gaming.Xbox.*` out of SDL's own `VisualC-GDK/SDL.sln` — it must contain `include/SDL3/SDL.h` and `SDL3.lib`. vcpkg cannot build SDL3 for the console, so a console configure without this fails with those instructions |
 | `ICE_GDK_XBOX_SERVICES` | On by default. Links the Xbox Services API. On a console it comes from the GDKX's own `Microsoft.Xbox.Services.<toolset>.C.lib` and `libHttpClient.lib` and needs no redistributable DLLs; on `Gaming.Desktop.x64` it comes from the GDK's `ExtensionLibraries` and stages two DLLs next to the executable |
 
-Both the engine's own targets and every vcpkg port it needs go through the same toolchain,
-because the triplet's `VCPKG_CHAINLOAD_TOOLCHAIN_FILE` is honoured on both sides. The
-The same toolchain file is handed to CMake directly (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) when
-a console family is configured, because a vcpkg triplet only governs how the *dependencies*
-are built — without that the engine's own translation units would compile as a plain desktop
-Windows build, with no `_GAMING_XBOX` and no GDK include or library paths. `build_xbox.bat`,
-`prebuild_core_libs_xbox.bat` and the `Xbox-XboxOne-*` / `Xbox-Scarlett-*` CMake presets all
-pass it. The overlay triplet directory is passed to every Xbox configure, so these files win over
-anything a vcpkg checkout might carry under the same name.
+Both the game's own targets and every vcpkg port it needs go through the same toolchain:
+`build_xbox.bat` hands the toolchain file to CMake as well as to vcpkg (a vcpkg triplet alone
+only governs how the *dependencies* are built — without it the game's own translation units
+would compile as a plain desktop Windows build, with no `_GAMING_XBOX` and no GDK include or
+library paths), and it passes the engine's overlay triplet directory to every Xbox configure,
+so these files win over anything a vcpkg checkout might carry under the same name.
 
-**Pre-built cores.** Every device family is a separate target with its own core:
-`lib/IceBoxCore/Xbox/{Desktop,XboxOne,Scarlett}/{Release,RelWithDebInfo}/D3D12/`. Produce
-them with `Tools\BuildSystem\BuildEngine\prebuild_core_libs_xbox.bat --device-family all`,
-or as part of a full run with `build_windows_prebuilts.bat xbox`. The Xbox target is
-**opt-in** in the aggregate script: `build_windows_prebuilts.bat all` leaves it out,
-because the GDK is a separate install and the console families need the GDKX.
-
----
+**Pre-built cores.** Every device family is a separate target and links its own pre-built
+engine core, under `lib/IceBoxCore/Xbox/<Desktop|XboxOne|Scarlett>/`; your installation's
+`lib/IceBoxCore/Xbox/` folder shows which families it carries. The **Xbox One** and **Xbox
+Series** cores are built against the private GDKX, so they are only included in engine
+packages issued to licensed Xbox developers. Without the core for the family you picked,
+the build stops at configure time with a message naming the missing library.
 
 ### 8.8 Building on Android itself
 
@@ -1491,8 +1490,7 @@ toolchains that do not exist on a phone.
 
 **How an on-device build works.** There is no NDK, no CMake and no Gradle on the device, so
 nothing is compiled there. The editor APK ships a **runtime template APK** — the ordinary
-Android game runtime for this ABI, built by `build_android.sh --runtime-template` when the
-editor APK was packaged. Pressing **Build**:
+Android game runtime for this ABI, ready-built. Pressing **Build**:
 
 1. cooks the project's content if **Cook Assets** is on, exactly as on desktop;
 2. stages `Content/`, `Config/` (with the editor and network sections stripped and the render
@@ -1595,11 +1593,10 @@ storage, so any file manager opens it.
 The shared folder needs **All Files Access**, which the app asks for on first start — the
 launcher opens once you have answered — and the launcher keeps an **Allow All Files Access…**
 button on its *My Projects* tab while the permission is missing. Without it everything falls
-back into `Android/data/com.iceboxengine.editor/files/` (`UserData/` included), exactly where
-earlier versions kept it, and the launcher still lists projects left there, so nothing is lost
-either way. Granting the permission later switches over as soon as you come back: the launcher
-reloads itself on the shared folder and moves the project list and preferences over from
-`Android/data/…/UserData/`.
+back into `Android/data/com.iceboxengine.editor/files/` (`UserData/` included), and the launcher
+also lists the projects stored there, so nothing is lost either way. Granting the permission
+later switches over as soon as you come back: the launcher reloads itself on the shared folder
+and moves the project list and preferences over from `Android/data/…/UserData/`.
 
 `Engine/` is re-unpacked whenever the app is updated, so nothing inside it is yours to keep:
 your editor preferences - language, font, theme and the renderer that was picked - live in
@@ -1619,7 +1616,7 @@ cook settings appear in the dialog when enabled.
 | **Texture Format** | **PassThrough** (copy raw PNG/JPG), **WebP** (lossy, ~80% smaller), **KTX2 UASTC** (GPU-compressed, high quality), **KTX2 ETC1S** (GPU-compressed, small), **WebP Lossless**. The lossy formats share a **Quality** 1–100 (default 80). |
 | **Audio Format** | **PassThrough**, **Ogg Vorbis**, or **Opus**, with a **Bitrate** 32–320 kbps for the lossy options (96 good for SFX, 128–192 for music). A sound asset can override both for its own file. |
 | **Video Format** | **PassThrough** or **VP9 (WebM)** at a chosen **CRF** (18 = high quality … 32 = smaller), with optional **max resolution** (Source/1080p/720p/480p), **max FPS** (Source/30/60), **strip audio**, and audio bitrate 64–320 kbps. |
-| **Font Mode** | **PassThrough**, **Subset** (only glyphs declared in font sidecars), or **Auto-subset** (only glyphs actually used in the project). |
+| **Font Mode** | **PassThrough**, **Subset** (only glyphs declared in font sidecars), or **Auto-subset** (only printable ASCII and the glyphs the project's text actually uses — see **Font cooking** below). |
 | **JSON Mode** | **PassThrough** or **Minify** (strip whitespace from `.json` and `.ice_*` sidecars). |
 
 **Lossless guard:** with a lossy texture format selected, the cooker encodes each texture,
@@ -1647,6 +1644,18 @@ Audio cooked by an earlier engine version is re-encoded once, on the next cook.
 format and bitrate for that one file — keep a short UI click as a lossless original, or give the
 music a higher bitrate. The files listed as **Variations** of a sound are cooked with that
 sound's override, and changing an override re-cooks the file on the next build.
+
+**Font cooking.** **Subset** keeps the glyphs of the ranges declared in each font's
+`.ice_font` (Char Range plus Additional Ranges). **Auto-subset** keeps only printable ASCII
+and the characters the project's text uses: the cooker reads every string in localization
+tables, widgets, views, cinemas, classes, levels, behavior trees and `.json` files, the
+string literals of Lua — `.lua` scripts and the scripts stored in classes, widgets and
+levels (comments are skipped, escapes such as `\u{…}` are decoded) — and `.txt` and `.csv`
+files. Text that only exists while the game runs — console output, player names, chat — is
+invisible to that scan: tick **Keep Ranges in Auto-subset** in the Font Editor of the font
+that shows it, and that font keeps its declared ranges on top of the used characters.
+Editing a font sidecar re-cooks that font; with Auto-subset, text that brings new
+characters re-cooks every font on the next build.
 
 **Platform restrictions:** WebP textures are not available on the **iOS** and **Web**
 runtimes, and VP9 video is not available on **iOS** (AVFoundation decodes H.264/HEVC only)
@@ -1680,6 +1689,10 @@ font glyph ranges, etc.) — see [Assets & Content Browser](Assets-EN-DOC.md).
 > cooked content. For **desktop**, cooking runs during the packaging step instead, and the
 > cooked tree is what gets copied (and packed) into the output.
 
+> Folders of DLC marked **Exclude from the base game build** are skipped by the game's cook
+> on every platform; the DLC Packager cooks them itself
+> ([15.2](#152-output-and-packaging)).
+
 ---
 
 ## 10. Distribution: manifest, packing & installers
@@ -1708,13 +1721,12 @@ so loaders are unchanged.
 | **IcePak Compression Level** | **zstd** level **1–22**: 1 = fastest, 3 = default (balanced), 19 = high (~10–15% smaller, slow), 22 = maximum (very slow). |
 
 Before packing, the editor **resolves asset redirectors**: every reference in the staged
-content is rewritten to the final path (following redirect chains) and the `.ice_redirect`
-stub files are deleted, so nothing in the shipped pak depends on them. After the pak is
-written successfully the **loose `Content/` folder is removed** — if packing fails the
-loose files are kept, so a failed pak never produces a contentless build. On macOS the pak
-lands inside `Contents/Resources/`.
+content is rewritten to the final path (following redirect chains), so nothing in the
+shipped pak depends on the redirectors. After the pak is written successfully the **loose
+`Content/` folder is removed** — if packing fails the loose files are kept, so a failed pak
+never produces a contentless build. On macOS the pak lands inside `Contents/Resources/`.
 
-**IcePak format:** a simple indexed archive (magic `ICEPAK02`, version 2) with per-entry
+**IcePak format:** a simple indexed archive (magic `ICEPAK01`, version 1) with per-entry
 path, offset, original & compressed sizes, and a compressed flag (zstd); a file that does
 not compress is stored raw. Paks can be mounted in layers, so patch/DLC paks override base
 content.
@@ -1901,14 +1913,17 @@ re-signed:
 
 ## 11. What happens when you click Build
 
-1. **Validation** — game name and output path must be set; the output `<path>/<name>`
-   folder is cleaned and recreated.
+1. **Validation** — game name and output path must be set; the build's own folder,
+   `<Output Path>/<Base>` ([13](#13-build-output-locations)), is cleaned and recreated.
 2. **Script & artifact names** are chosen for the platform (e.g. `build_windows.bat`,
    runtime `IceBoxEngineRuntime.exe`, game file `<Name>.exe`).
 3. **Argument assembly** — all dialog settings become command-line flags (see
    [Section 12](#12-build-scripts-reference)); keystore passwords go through temp files.
 4. **Pre-cook** (mobile/web, if Cook Assets is on) → cooked content directory; on failure
-   the build aborts.
+   the build aborts. Folders of DLC excluded from the base game
+   ([15.3](#153-dlc-content-and-the-base-game)) are left out; when such folders exist and
+   Cook Assets is off, a filtered copy of the content (`Saved/Staged/<tag>/Content`) is
+   embedded instead of the project's own folder.
 5. **Consolidate redirectors** so references resolve cleanly in the build.
 6. **Run the build script** asynchronously — CMake configures and builds `IceBoxEngineRuntime`
    with your content; the dialog shows a live progress bar and a **Stop** button, and
@@ -1920,7 +1935,7 @@ re-signed:
    `THIRD_PARTY_NOTICES.txt` and `ThirdPartyLicenses/` (also into `Contents/Resources/`
    for macOS).
 9. **Stage content** — copy `Content/` (cooking it here on desktop), skipping the engine's
-   `Examples` folder.
+   `Examples` folder and the folders of DLC excluded from the base game.
 10. **Write `game.json`** — game name, version, start scene, build config, build platform,
     icon file name and the crash-report URL. Skipped on iOS, where CMake writes it inside
     the signed bundle.
@@ -1935,10 +1950,13 @@ re-signed:
     folder of game-platform libraries is not copied; on **Xbox**, the DLLs under
     `Binaries/Xbox/<family>/` of the device family being built replace the Windows DLLs of
     every plugin the build did not compile itself, and an Xbox One / Xbox Series build
-    leaves out Windows DLLs it has no console build for. Skipped entirely when
+    leaves out Windows DLLs it has no console build for. A plugin's editor-only data — its
+    `Documentation/` folder and its `Config/Languages/` translations — is left out on every
+    platform. Skipped entirely when
     **Include Plugins** / **Include Mods** is off, and for any plugin whose `plugin.json`
-    declares `"EditorOnly": true`. Also skipped where plugins are linked in statically
-    (Web, iOS) or bundled by Gradle (Android); mods are not supported on Web.
+    declares `"EditorOnly": true`. Also skipped on the platforms whose build packages them
+    itself: Web (plugins linked statically, plugin data and mods embedded into the `.data`),
+    iOS (staged into the `.app`) and Android (bundled by Gradle).
 13. **Patch `Config/Engine.json`** — set `Rendering.RenderBackend` for the chosen API and
     strip the `Editor` and `Network` sections, which are editor-only.
 14. **Copy runtime dependencies** — Windows `.dll`s / Linux `.so`s from the build output
@@ -2033,7 +2051,7 @@ throttled and a small laptop is not driven into swap. The value is resolved in t
    integer. Useful for CI, where the runner already knows its own budget.
 3. Automatic: `min(logical cores, total RAM in MB / 1536)`, never below `1`.
 
-The RAM term is what protects small machines: compiling the engine is memory-hungry, so a
+The RAM term is what protects small machines: compiling is memory-hungry, so a
 machine with many cores but little memory would otherwise thrash. Detection works on
 Windows, Linux and macOS and honours container CPU/memory limits; if nothing can be
 detected, the scripts fall back to `4` jobs.
@@ -2075,6 +2093,12 @@ The render backend is patched into the build's `Config/Engine.json` as
 
 ## 13. Build output locations
 
+The intermediate build trees live in `out/` under the engine folder — or, when the engine
+folder is read-only (a system-wide install), in the per-user cache
+(`%LOCALAPPDATA%\IceBoxEngine\GameBuilds\` on Windows, `~/.cache/IceBoxEngine/GameBuilds/`
+elsewhere) under the same sub-folders. You never need to open them: the editor collects the
+result into your **Output Path**.
+
 | Platform | Built runtime location (intermediate) |
 | -------- | ------------------------------------- |
 | Windows | `out/gamebuild/Windows-<arch>-<config>/bin/Windows/IceBoxEngineRuntime.exe` |
@@ -2115,25 +2139,278 @@ installing — `<GameName>.exe`, the Linux binary and `<GameName>.app`. Those be
 installed program: their names end up in Start-menu shortcuts, the `.deb` launcher,
 `/Applications` and the window title, so they carry the product name and nothing else.
 
+The [DLC Packager](#15-dlc-packaging) writes into the same build folder by default —
+`<Base>/DLC/` — so a DLC lands next to the game it was made for. Keep in mind that the next
+game build wipes that folder.
+
 If the intermediate isn't found in `out/`, the per-user **GameBuilds** cache is checked.
 Installers are written one level up, next to the build folder — see
 [10.3](#103-installers).
 
 ## 14. Toolchain prerequisites
 
-You build with the native toolchain for each target. Install these on the build host:
+**Build Game** compiles the game on your own machine: the platform's build script links your
+content, scripts and plugins against the prebuilt engine cores with that platform's native
+toolchain. The toolchains do not ship with the engine — install them once on every machine you
+build on, and only for the targets you actually build. The Android editor needs none of this:
+it repacks the runtime template that ships inside its APK
+([8.8](#88-building-on-android-itself)).
+
+Which host builds which target:
+
+| Target | Windows host | Linux host | macOS host |
+| ------ | :----------: | :--------: | :--------: |
+| **Windows** | ✅ MSVC | ✅ MinGW-w64 cross-compile | ❌ |
+| **Linux** | ✅ inside WSL2 | ✅ | ❌ |
+| **Android** | ✅ | ✅ | ✅ |
+| **Web** | ✅ | ✅ | ✅ |
+| **macOS / iOS** | ❌ | ❌ | ✅ |
+| **Xbox** | ✅ | ❌ | ❌ |
+
+What each target needs on top of the common tools of [14.1](#141-common-tools-cmake-ninja-and-vcpkg):
 
 | Platform | Required tools |
 | -------- | -------------- |
-| **Windows** | Visual Studio (C++ workload / MSVC), **vcpkg**, **CMake 4.3+**, **Ninja**. ImageMagick optional (better PNG→ICO). **NSIS** for `.exe` installers and the **WiX Toolset** for `.msi` packages — a missing WiX is downloaded and cached automatically unless `ICE_WIX_NO_DOWNLOAD=1`. **From a Linux host** the same target is a MinGW cross-compile instead: `mingw-w64 g++-mingw-w64` covers x64 and x86, while **arm64 needs [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases)** on your `PATH` — no distribution packages an `aarch64-w64-mingw32` compiler. |
-| **Linux** | GCC/Clang, vcpkg, CMake 4.3+, Ninja. `dpkg-deb` for `.deb` packages; `appimagetool` or `squashfs-tools` for `.AppImage` — whichever is missing is downloaded and cached automatically unless `ICE_APPIMAGE_NO_DOWNLOAD=1`. (From Windows: MinGW cross-compile, optionally via WSL for installers.) The CMake in the Debian/Ubuntu repositories — WSL2 images included — is normally older than 4.3, so check `cmake --version` and install a newer build from [cmake.org](https://cmake.org/download/) if apt gave you an older one. |
-| **Android** | **Android SDK** (`ANDROID_HOME`), **NDK**, **Gradle** (via the bundled wrapper), a **JDK** (Android Studio's JBR is auto-detected; `keytool` comes from it), vcpkg Android triplets. |
-| **Web** | **Emscripten SDK** (`EMSDK`, `emcc` on PATH). |
-| **macOS / iOS** | A **macOS** host with **Xcode** (and command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization) and vcpkg. iOS additionally needs a development team / signing assets for device builds & IPAs. |
-| **Xbox** | A **Windows** host with Visual Studio (C++ workload), the **Windows 11 SDK** (Direct3D 12 + DirectX Shader Compiler), vcpkg, CMake 4.3+, Ninja and the **[Microsoft GDK](https://github.com/microsoft/GDK/releases)** — its installer sets `GameDK`, `GameDKLatest` and `GRDKLatest`, which the build reads. The **Xbox One / Xbox Series** families additionally need the private **GDKX** from Partner Center (which sets `GXDKLatest`) and a devkit to run on. Their vcpkg triplets and GDK toolchain files ship with the engine, so nothing has to be added to vcpkg by hand. |
+| **Windows** | **Visual Studio 2026** (MSVC v145) or newer with the **Desktop development with C++** workload — the engine cores are built with it, and an older linker cannot link them. arm64 games also need the **MSVC v145 - VS 2026 C++ ARM64/ARM64EC build tools** component. ImageMagick optional (better PNG→ICO). **NSIS** for `.exe` installers and the **WiX Toolset** for `.msi` packages — a missing WiX is downloaded and cached automatically unless `ICE_WIX_NO_DOWNLOAD=1`. **From a Linux host** the same target is a MinGW-w64 cross-compile instead ([14.3](#143-linux-host-and-wsl2)). |
+| **Linux** | GCC/Clang plus the system development libraries of [14.3](#143-linux-host-and-wsl2). `dpkg-deb` for `.deb` packages; `appimagetool` or `squashfs-tools` for `.AppImage` — whichever is missing is downloaded and cached automatically unless `ICE_APPIMAGE_NO_DOWNLOAD=1`. **From a Windows host** the build runs inside a **WSL2** distribution, which needs the same setup as a Linux machine. |
+| **Android** | **Android SDK** (platform 37, build-tools, platform-tools), **NDK 29**, **JDK 25** — see [14.5](#145-android-sdk-ndk-and-jdk). Gradle 9.7.0 is downloaded automatically. |
+| **Web** | **Emscripten SDK**; a **wasm64** build also needs **Node.js 24+** — see [14.6](#146-emscripten-web). |
+| **macOS / iOS** | A **macOS** host with **Xcode 15+** (and its command-line tools — `pkgbuild`/`productbuild` for `.pkg`, `notarytool` for notarization). iOS additionally needs a development team / signing assets for device builds & IPAs — see [14.4](#144-macos-host-macos-and-ios-games). |
+| **Xbox** | A **Windows** host with Visual Studio (C++ workload), the **Windows 11 SDK** (Direct3D 12 + DirectX Shader Compiler), vcpkg, CMake 4.3+, Ninja and the **[Microsoft GDK](https://github.com/microsoft/GDK/releases)** — its installer sets `GameDK`, `GameDKLatest` and `GRDKLatest`, which the build reads. The **Xbox One / Xbox Series** families additionally need the private **GDKX** from Partner Center (which sets `GXDKLatest`) and a devkit to run on. Their vcpkg triplets and GDK toolchain files ship with the engine, so nothing has to be added to vcpkg by hand ([8.7](#87-xbox-microsoft-gdk)). |
 
 The first build of a configuration also builds third-party dependencies through vcpkg,
 so expect it to take longer than subsequent incremental builds.
+
+> **Restart after installing.** The build scripts run with the **environment the editor was started with**. After installing
+> a toolchain or changing an environment variable, close the Launcher and the editor and start
+> them again. An editor started from the desktop or the application menu does not read
+> `~/.bashrc` or `~/.zprofile`, so on Linux and macOS prefer the default install locations
+> below — the scripts look there on their own and need no variables at all.
+
+### 14.1 Common tools: CMake, Ninja and vcpkg
+
+Every desktop target needs **CMake 4.3 or newer**, **Ninja** and **vcpkg**.
+
+* **CMake / Ninja.** The scripts take the newest CMake they can find that is at least 4.3 —
+  `PATH`, the standard install folders (`%ProgramFiles%\CMake`, `/opt/cmake-*`,
+  `~/.local/bin`, `/snap/bin`, Homebrew, `CMake.app`) and the copy a vcpkg bootstrap
+  downloads — and stop with install instructions when there is none. Ninja is looked up the
+  same way, including the one bundled with Visual Studio. Install them with
+  `winget install --id Kitware.CMake` and `winget install --id Ninja-build.Ninja` (Windows)
+  or `brew install cmake ninja` (macOS); for Linux see [14.3](#143-linux-host-and-wsl2).
+* **vcpkg.** Clone it **in full** — a `--depth 1` clone cannot resolve the `builtin-baseline`
+  commit pinned in the engine's `vcpkg.json` — and bootstrap it once:
+
+```bash
+# Windows (cmd)
+git clone https://github.com/microsoft/vcpkg C:\dev\vcpkg
+C:\dev\vcpkg\bootstrap-vcpkg.bat
+
+# Linux / macOS
+git clone https://github.com/microsoft/vcpkg ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh
+```
+
+The scripts find vcpkg through `VCPKG_ROOT` or in its default folders — `C:\dev\vcpkg`,
+`C:\vcpkg`, `%USERPROFILE%\vcpkg` and `%LOCALAPPDATA%\vcpkg` on Windows, `/opt/vcpkg`,
+`~/vcpkg`, `/usr/local/vcpkg` and `~/.vcpkg` on Linux and macOS — so keep a single clone,
+ideally in one of those folders. An older
+clone that predates the pinned baseline needs a `git pull` **and** a new run of
+`bootstrap-vcpkg` — pulling alone keeps the old `vcpkg` binary, which then fails with
+`document schema version 2 is not supported`.
+
+### 14.2 Windows host
+
+1. Install **Visual Studio 2026** with the **Desktop development with C++** workload (add the
+   ARM64 build tools component for arm64 games). No Developer Command Prompt is needed: the
+   build finds Visual Studio with `vswhere` and initialises the right compiler for the target
+   architecture itself — the 64-bit hosted x86 cross compiler for x86 games, the ARM64 cross
+   toolset for arm64 games.
+2. Install CMake, Ninja and vcpkg ([14.1](#141-common-tools-cmake-ninja-and-vcpkg)).
+3. For `.exe` installers install [NSIS](https://nsis.sourceforge.io/); it is found on `PATH` or
+   in its default folder. The WiX Toolset for `.msi` packages is fetched automatically.
+4. For **Linux** games install WSL2 with an Ubuntu distribution (`wsl --install -d Ubuntu`) and
+   set it up inside WSL exactly as in [14.3](#143-linux-host-and-wsl2). For Android, Web and Xbox
+   see [14.5](#145-android-sdk-ndk-and-jdk), [14.6](#146-emscripten-web) and
+   [8.7](#87-xbox-microsoft-gdk).
+
+### 14.3 Linux host (and WSL2)
+
+The game links SDL3 against the system audio and display stack (X11, Wayland, EGL,
+PulseAudio, ALSA, xkbcommon, libdecor), which vcpkg does not ship, so those development
+packages come from the distribution. On Debian / Ubuntu (WSL2 included) one command installs
+everything the Linux build, the Windows cross-build and the installers need:
+
+```bash
+sudo apt update && sudo apt install -y \
+    build-essential ninja-build git curl zip unzip tar pkg-config nasm xdg-utils squashfs-tools \
+    autoconf autoconf-archive automake libtool \
+    python3-dev python3-venv \
+    rsync nsis imagemagick \
+    libx11-dev libxft-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+    libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+    libibus-1.0-dev \
+    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+    libasound2-dev libpulse-dev \
+    libdbus-1-dev \
+    libssl-dev zenity libespeak-ng-dev \
+    mingw-w64 g++-mingw-w64 binutils-mingw-w64
+```
+
+The CMake in the Debian / Ubuntu repositories is normally older than 4.3. Unpack the official
+build into `/opt` — the scripts find `/opt/cmake-*` on their own (use the `linux-aarch64`
+archive on an arm64 machine):
+
+```bash
+ICE_CMAKE_VERSION=4.4.2
+curl -fsSLO https://github.com/Kitware/CMake/releases/download/v$ICE_CMAKE_VERSION/cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz
+sudo tar -xzf cmake-$ICE_CMAKE_VERSION-linux-x86_64.tar.gz -C /opt
+```
+
+`pipx install cmake`, `snap install cmake --classic` or the Kitware APT repository work as well.
+Then install vcpkg into `~/vcpkg` ([14.1](#141-common-tools-cmake-ninja-and-vcpkg)).
+
+**32-bit (x86) games** are compiled with `-m32` and need the i386 multiarch, the multilib
+toolchain and i386 copies of the development libraries:
+
+```bash
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install --no-remove \
+    gcc-multilib g++-multilib \
+    libx11-dev:i386 libxft-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxfixes-dev:i386 libxss-dev:i386 libxtst-dev:i386 \
+    libxkbcommon-dev:i386 libwayland-dev:i386 libdecor-0-dev:i386 \
+    libibus-1.0-dev:i386 \
+    libgl1-mesa-dev:i386 libegl1-mesa-dev:i386 libgles2-mesa-dev:i386 \
+    libasound2-dev:i386 libpulse-dev:i386 \
+    libdbus-1-dev:i386 \
+    libssl-dev:i386 libespeak-ng-dev:i386
+```
+
+**arm64 games** need nothing extra on a native AArch64 machine. Cross-building them from an
+x86_64 host needs the AArch64 toolchain and arm64 copies of the same libraries — without them
+the link reaches into `/usr/lib/x86_64-linux-gnu` and fails with `file in wrong format`:
+
+```bash
+sudo dpkg --add-architecture arm64
+sudo apt update
+sudo apt install crossbuild-essential-arm64
+sudo apt install --no-remove \
+    libx11-dev:arm64 libxft-dev:arm64 libxext-dev:arm64 libxrandr-dev:arm64 libxcursor-dev:arm64 libxi-dev:arm64 libxfixes-dev:arm64 libxss-dev:arm64 libxtst-dev:arm64 \
+    libxkbcommon-dev:arm64 libwayland-dev:arm64 libdecor-0-dev:arm64 \
+    libibus-1.0-dev:arm64 \
+    libgl1-mesa-dev:arm64 libegl1-mesa-dev:arm64 libgles2-mesa-dev:arm64 \
+    libasound2-dev:arm64 libpulse-dev:arm64 \
+    libdbus-1-dev:arm64 \
+    libssl-dev:arm64 libespeak-ng-dev:arm64
+```
+
+> `crossbuild-essential-arm64` **removes** `gcc-multilib` / `g++-multilib` — the multilib
+> `/usr/include/asm` symlink is wrong for every cross compiler, so apt refuses to keep both.
+> One host therefore cross-builds either x86 or arm64, not both: swap the packages between
+> runs, or use two machines.
+
+On an **arm64 host**, x64 and x86 games are cross builds that need `clang` and `lld`
+(`sudo apt install clang lld`) plus the `amd64` / `i386` development libraries; the build
+script names the exact packages when they are missing.
+
+**Windows games from Linux** use MinGW-w64: the packages above cover **x64 and x86**. No
+distribution packages an `aarch64-w64-mingw32` compiler, so **arm64** needs
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases) (the `ucrt-ubuntu-*-x86_64`
+build). Unpacked into `~/llvm-mingw`, `/opt/llvm-mingw` or `/usr/local/llvm-mingw` it is found
+on its own; anywhere else point `ICE_LLVM_MINGW_ROOT` at it. Keep it **off** `PATH` — its own
+`x86_64-` and `i686-w64-mingw32` drivers would shadow the GNU ones, and cores built with one
+cannot be linked by a game built with the other.
+
+### 14.4 macOS host (macOS and iOS games)
+
+```bash
+# 1. Xcode (the full IDE from the Mac App Store): accept the license, run the first-launch setup
+sudo xcodebuild -license accept
+sudo xcodebuild -runFirstLaunch
+
+# 2. iOS games only: the iOS platform support. Without it ibtool cannot compile the launch
+#    screen ("iOS <version> Platform Not Installed"). It also installs the iOS Simulator.
+xcodebuild -downloadPlatform iOS
+
+# 3. Command-line tools
+brew install cmake ninja pkg-config autoconf automake libtool autoconf-archive nasm python@3.13 imagemagick
+
+# 4. vcpkg - a full clone, see 14.1
+git clone https://github.com/microsoft/vcpkg ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh
+```
+
+An editor started from Finder does not see your shell profile; the build scripts add the
+Homebrew and `/usr/local` folders to `PATH` themselves, and vcpkg in `~/vcpkg` is found
+without `VCPKG_ROOT`. **MoltenVK** needs no manual step: the first macOS or iOS build
+downloads it from its official release (so that build needs internet access) into
+`Tools/BuildSystem/Vendor/MoltenVK`, or into `~/.cache/IceBoxEngine/Vendor/MoltenVK` when the
+engine folder is read-only. An Apple Developer account is needed only to sign — for device
+builds, IPAs and notarization; compiling and the Simulator need none. Linking the Google
+Mobile Ads SDK raises the Xcode floor ([8.6](#86-ios)).
+
+### 14.5 Android SDK, NDK and JDK
+
+The Android build needs the **Android SDK** (Android SDK Platform 37, Build-Tools,
+Platform-Tools), the **NDK 29** and **JDK 25** — Java 25 is what the Gradle project compiles
+for. The simplest route is **Android Studio**: its SDK Manager installs the SDK and the NDK
+(*SDK Tools → NDK (Side by side)*), and its bundled JBR is picked up automatically. Without
+Android Studio, on Linux:
+
+```bash
+sudo apt install openjdk-25-jdk
+mkdir -p ~/Android/Sdk/cmdline-tools && cd ~/Android/Sdk/cmdline-tools
+curl -fL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+unzip -q tools.zip && mv cmdline-tools latest && rm tools.zip
+export ANDROID_HOME=~/Android/Sdk
+yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865"
+```
+
+On macOS take the JDK from Homebrew with `brew install openjdk@25` — exactly 25: the newer
+`openjdk` formula breaks the Android Gradle Plugin's `jlink` step — and the command-line tools
+with `brew install --cask android-commandlinetools`.
+
+How the scripts find everything:
+
+* **SDK** — `ANDROID_HOME` or `ANDROID_SDK_ROOT`, otherwise the default folders:
+  `%LOCALAPPDATA%\Android\Sdk` (Windows), `~/Android/Sdk` (Linux),
+  `~/Library/Android/sdk` (macOS).
+* **NDK** — `ANDROID_NDK_ROOT`, otherwise the newest `29.*` folder under `<SDK>/ndk`
+  (or the newest NDK there when no 29 is installed).
+* **JDK** — `JAVA_HOME`, otherwise Android Studio's JBR, then the usual JDK folders
+  (`/usr/lib/jvm/java-25-openjdk*`, Homebrew `openjdk`, Eclipse Adoptium / Microsoft /
+  Oracle JDKs on Windows).
+* **Gradle** — a `gradle` on `PATH` is used as is; without one, Gradle 9.7.0 is downloaded
+  into the build folder. An old distribution `gradle` on `PATH` (Debian's package is years
+  behind) breaks the build — remove it, or put Gradle 9.7+ first.
+
+### 14.6 Emscripten (Web)
+
+```bash
+# Linux / macOS (on Windows: C:\dev\emsdk, then emsdk install latest / emsdk activate latest)
+git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+cd ~/emsdk
+./emsdk install latest
+./emsdk activate latest
+```
+
+The scripts use `EMSDK` when it is set and otherwise look in `~/emsdk`, `/opt/emsdk`,
+`/usr/local/emsdk`, `~/.emsdk` and `~/dev/emsdk` (Linux / macOS) or `C:\dev\emsdk`, `C:\emsdk`,
+`%USERPROFILE%\emsdk`, `%LOCALAPPDATA%\emsdk`, `%ProgramFiles%\emsdk` and `<drive>:\emsdk` /
+`<drive>:\dev\emsdk` (Windows), and activate it themselves — nothing has to be added to a
+shell profile. On macOS emsdk needs Python 3.10+, newer than the system one, so run it with
+the Homebrew Python:
+
+```bash
+export EMSDK_PYTHON="$(brew --prefix python@3.13)/bin/python3.13"
+"$EMSDK_PYTHON" emsdk.py install latest
+"$EMSDK_PYTHON" emsdk.py activate latest
+```
+
+**wasm64** builds additionally need **Node.js 24 or newer** anywhere on the machine — see
+[8.4](#84-web).
 
 ---
 
@@ -2142,35 +2419,113 @@ so expect it to take longer than subsequent incremental builds.
 ## 15. DLC packaging
 
 The **DLC Packager** (**`Tools → DLC Packager`**, its own dialog) creates downloadable
-content paks that mount on top of a base game at runtime.
+content that mounts on top of a base game at runtime: for every DLC of the project, a
+manifest plus `.icepak` archives — or loose files. DLC is supported on **Windows, Linux,
+macOS, Android, iOS and Xbox**; a Web build cannot load it.
+
+### 15.1 The DLC list
+
+A project can have any number of DLC. The **DLC** drop-down at the top of the dialog selects
+one, **New DLC** adds an entry and **Remove** takes the selected one off the list — its
+content folder and already packaged files are left alone. The list and every field are saved
+in the editor config together with the Build Game settings.
 
 | Field | Meaning |
 | ----- | ------ |
-| **DLC ID** | Unique identifier (e.g. `expansion01`). Required — it names every produced file. |
+| **DLC ID** | Unique identifier (e.g. `expansion01`): Latin letters, digits, `_` and `-`, up to 64 characters. Required — it names every produced file and is what scripts pass to `DLC.IsInstalled()`. |
 | **DLC Name** | Display name. Required. |
 | **DLC Version** | Version of this DLC. |
-| **Min Game Version** | Minimum base-game version required. |
-| **Content Folder** | The folder of DLC assets to package; its path becomes the content **prefix** inside the pak (shown live under the picker). |
-| **Output Path** | Where to write the DLC (defaults to the build output folder, `<Output Path>/<Game Name>`). |
-| **Pack IcePak** | Package as a compressed `.icepak` (with **Max Pak Size** splitting and the same **zstd** compression level 1–22) — or ship **loose** files. |
+| **Min Game Version** | Oldest base-game version the DLC works with. A game with a lower version does not load the DLC and reports it as incompatible. The line under the field shows the version currently entered in Build Game. |
+| **Content Folder** | The `Content/` subfolder that holds the DLC's assets. The files keep their paths, so the folder becomes the content **prefix** of the DLC; the file count and total size are shown under the picker. Two DLC cannot share a folder or nest one inside the other. |
+| **Exclude from the base game build** | On by default. Build Game leaves this folder out of the game on every platform — see [15.3](#153-dlc-content-and-the-base-game). |
+| **Installed in editor Play mode** | On by default. Whether `DLC.IsInstalled()` reports this DLC while you play in the editor — see [15.5](#155-testing-in-the-editor). |
+| **Pack as .icepak** | On by default: package as compressed `.icepak` archives, with **Max DLC Pak Size** splitting and the same **zstd** compression level 1–22 as the base game. Off: ship **loose** files, which have to be placed inside the game folder (Windows, Linux, macOS). |
 
-The **Package DLC** button stays disabled until the ID, the name and an existing content
-folder are all filled in.
+A message under the fields names the first problem of the selected DLC — an invalid or
+duplicate ID, an empty name, a folder that is missing, is `Content/` itself or overlaps
+another DLC — and **Package DLC** stays disabled until it is fixed.
 
-Packaging writes into a **`DLC/`** subfolder of the output path: a descriptor
-`DLC/<DLC ID>.json` (id, name, version, min game version, content prefix, file count,
-total size, packed flag, file list) plus either `DLC/<DLC ID>.icepak` — split into
-`<DLC ID>_0.icepak`, `<DLC ID>_1.icepak`, … when a size limit is set — or the loose files
-under the content prefix.
+### 15.2 Output and packaging
 
-At runtime the game scans `DLC/` at startup: each descriptor is read, the DLC is marked
-**installed** when its pak (or, for loose DLC, its content folder) is actually present, and
-every `.icepak` in `DLC/` is mounted **after** the base paks, in filename order. Because
+The **Output** section is shared by all DLC of the project.
+
+| Setting | Meaning |
+| ------- | ------- |
+| **Cook Assets** | Runs the DLC's assets through the cooker with the **Cooking** settings and the **Target Platform** chosen in Build Game ([Section 9](#9-asset-cooking)), so the DLC matches a cooked game build. A cooked DLC loads only on that platform; without cooking, one DLC works on every supported platform. With the **Auto-subset** font mode the glyph scan covers the whole project, as in a game build. Each DLC has its own cook cache, `Saved/CookCache/DLC_<DLC ID>_<Platform>.json`. While the target platform is **Web** a cooked DLC cannot be packaged: the dialog says so until another platform is chosen or the option is turned off. |
+| **Output folder** | Defaults to the build folder of Build Game's current settings, `<Output Path>/<Base>` — see [13](#13-build-output-locations) — so the DLC lands next to the game it belongs to. **Browse Output…** picks another folder and **Use Default** returns to the default one. The folder may not overlap the project's `Content/`. With no **Output Path** in Build Game and no folder chosen here, the dialog asks for one and packaging stays disabled. |
+
+**Package DLC** packages the selected DLC, **Package All** every DLC of the list one after
+another — if one of them has a problem, nothing is packaged and that DLC is selected so you
+can fix it. Packaging runs in the background: the dialog shows the current DLC, the stage
+(collecting files, cooking, checksums, writing, verifying) and a progress bar, and **Cancel**
+stops it. Build Game is locked while a DLC is being packaged, and the packager while a game
+build is running.
+
+Asset redirectors are resolved first, the way a game build does it. Then, for every DLC, the
+packager:
+
+1. Cooks the content folder when **Cook Assets** is on.
+2. Calculates the SHA-256 checksum of every file.
+3. Writes the archives (or copies the loose files) into a temporary folder.
+4. **Verifies** the result — every archive is opened again and compared with the list of
+   source files.
+5. Replaces the previous files of this DLC with the new ones.
+
+The DLC in the output folder is replaced only after the new files have passed verification,
+and files of an earlier version that are no longer needed — extra archive parts, removed
+loose files — are deleted, so an old package never mixes with a new one. A run that is
+cancelled, or fails before that point, leaves the previous package untouched. On success
+**Open Output Folder** shows the result.
+
+Packaging writes into a **`DLC/`** subfolder of the output folder:
+
+| File | Contents |
+| ---- | -------- |
+| `DLC/<DLC ID>.json` | The manifest: id, name, version, min game version, content prefix, packed and cooked flags, platform, file count, total size, the archives, and every file with its size and SHA-256. |
+| `DLC/<DLC ID>.icepak` | The content archive. With a size limit it is split into `<DLC ID>.0.icepak`, `<DLC ID>.1.icepak`, … |
+| `<content prefix>/…` | Loose mode only: the files themselves, under the same `Content/…` path they have in the project. |
+
+> Build Game **wipes** `<Output Path>/<Base>` at the start of every build, and a DLC packaged
+> into the default folder goes with it. Package the DLC after building the game, or choose a
+> separate output folder. For a store, upload the base game and each DLC as separate depots —
+> leave `DLC/` out of the base game's depot.
+
+### 15.3 DLC content and the base game
+
+A DLC's folder is part of `Content/`, so an ordinary build would ship it with the game. With
+**Exclude from the base game build** on, Build Game leaves the folder out on **all seven
+platforms**: it is not copied, cooked or packed into `Content.icepak`, and it is not embedded
+into the Android, iOS and Web packages. The **Packages** section of the Build Game dialog
+shows *DLC content left out of this build* with the number of folders — hover the line for
+the list — and every excluded folder is written to the build log.
+
+Turn the option off for content that belongs to the base game as well. A Web build cannot
+load DLC at all, so there the excluded content is simply absent: turn the option off before a
+Web build if the Web version should contain it.
+
+### 15.4 At runtime
+
+At startup the game reads the manifests from its DLC folders: `DLC/` next to the executable
+(next to the `.app` on macOS), the user DLC folder in the game's writable storage — which is
+where DLC goes on Android and iOS — and any folder the game adds from Lua. Each DLC is then
+checked against the game. One that needs a newer game version, or was cooked for another
+platform, is **incompatible** and is not loaded; one whose archives are absent, incomplete or
+of the wrong size is **missing** or **corrupted**. The archives of every other DLC are mounted
+**after** the base paks. Because
 [IceVFS](Assets-EN-DOC.md#24-the-virtual-file-system-icevfs) resolves later mounts first,
-DLC content is added to — or can override — the base game's. **Min Game Version** is
-recorded in the descriptor and exposed to scripts, so your game can refuse to enable DLC on
-an incompatible build. The Lua side of this is
-[`DLC.*`](LuaAPI-EN-DOC.md#42-dlc--downloadable-content).
+DLC content is added to — or can override — the base game's. Only archives listed in a
+manifest are mounted.
+
+Scripts query all of this through
+[`DLC.*`](LuaAPI-EN-DOC.md#42-dlc--downloadable-content), which also covers rescanning while
+the game runs (`DLC.Refresh()`), extra search folders and integrity checks.
+
+### 15.5 Testing in the editor
+
+Nothing has to be packaged to test DLC logic. In Play mode `DLC.*` reports the DLC of the
+packager's list: a DLC is installed when **Installed in editor Play mode** is ticked, and its
+**Min Game Version** is compared with the version entered in Build Game. Untick the option to
+play the game the way someone without the DLC would.
 
 ---
 
@@ -2239,8 +2594,10 @@ The first configuration builds all third-party libraries via vcpkg. Subsequent b
 incremental and much faster.
 
 **Where did my build go?**
-Into `<Output Path>/<Game Name>/`. The intermediate build is under `out/gamebuild/…` (or
-the per-user `GameBuilds` cache if the engine folder is read-only). If you enabled
+Into `<Output Path>/<Base>/`, where `<Base>` is
+`<GameName>-<version>-<Config>-<Platform>-<arch>` ([13](#13-build-output-locations)). The
+intermediate build is under the engine folder's `out/` (or the per-user `GameBuilds` cache if
+the engine folder is read-only). If you enabled
 **Create Installer**, that folder is gone on purpose — the `.exe`, `.msi`, `.deb` or
 `.AppImage` sits one level up.
 
@@ -2270,6 +2627,19 @@ Enable **Cook Assets** (WebP/KTX2 textures, Vorbis/Opus audio, VP9 video, font
 subsetting, JSON minify) and **Pack Content** with a higher zstd level. Author good
 sidecar inputs (texture max size, font glyph ranges).
 
+**The game does not see my DLC.**
+Read the game's log output (start the game from a terminal): every manifest it found is
+listed at startup with its status, and a manifest it skipped is named with the reason. The
+usual causes: the files are not in a folder the game scans ([15.4](#154-at-runtime)); the
+manifest was renamed (it must stay `<DLC ID>.json`); the DLC needs a newer game than the
+**Version** set in Build Game; a cooked DLC was packaged for another platform; an archive
+was not copied completely. Scripts get the same verdict from `DLC.GetStatus()`.
+
+**DLC content ended up inside the base game.**
+A DLC's folder ships with the game unless **Exclude from the base game build** is ticked
+for it in the DLC Packager ([15.3](#153-dlc-content-and-the-base-game)). The **Packages**
+section of Build Game lists what the next build leaves out.
+
 **GPU times show as unavailable.**
 GPU timing needs driver timer-query support. The GPU tab names the backend timer it tried
 to use. CPU scopes, memory and counts still work.
@@ -2277,15 +2647,17 @@ to use. CPU scopes, memory and counts still work.
 **CPU temperature shows "unavailable" on Windows.**
 Windows exposes no unprivileged CPU thermal API. Install LibreHardwareMonitor, run it as
 Administrator, enable *Options → Remote Web Server* (port 8085) and restart the engine —
-see [2.4](#28-temperature-sensors).
+see [2.8](#28-temperature-sensors).
 
 **My traces disappeared / I want to archive them.**
 They are plain JSON files in `Tools/Helpers/Profiler/` under the engine's writable path.
 The panel keeps the 20 most recent; copy older ones out of that folder before they age out,
 and remember that **Delete Trace** deletes the file too.
 
-**There is no Chrome-trace export button in the Profiler panel.**
-Correct — it is a scripting call. Use `SaveChromeTrace()` from Lua; see
+**How do I get a Chrome trace out of the Profiler panel?**
+Use **Snapshot** (the last frame) or **Export Chrome Trace** (the latest recorded trace) in
+the trace controls above the tabs, or the per-trace **Export Chrome Trace** button in the
+Trace History tab. From gameplay code, `SaveChromeTrace()` does the same; see
 [4.9](#49-where-traces-live--chrome-trace-export).
 
 **The developer console, `PrintScreen` text or the profiler overlay is blank on Web or Xbox.**
@@ -2302,15 +2674,32 @@ from Lua and export a Chrome trace, and/or surface metrics via **DebugScreen**.
 Yes — call the `build_<platform>` scripts directly with the flags in
 [Section 12](#12-build-scripts-reference); `--jobs` and `--clean` are useful there.
 
+**Can folder and file names use non-Latin letters (Cyrillic, Chinese, Arabic…)?**
+Yes. The editor, the launcher, the game runtime and the build scripts handle paths as UTF-8
+and accept any letters in project and output folders, in asset file names and in the game
+name. On Windows this needs Windows 10 version 1903 or newer; older versions
+only handle the letters of the system's *Language for non-Unicode programs*. One limit comes
+from the JDK rather than the engine: on Windows, Gradle and the Java tools read their own
+command line in that same legacy code page, so for **Android** builds the folder Gradle runs
+from — the engine folder, or `%LOCALAPPDATA%\IceBoxEngine\GameBuilds` when the engine
+folder is read-only — and the Gradle cache (`%USERPROFILE%\.gradle`) may only use letters
+of that code page (Cyrillic is fine on a Russian-language Windows, Chinese on a Chinese
+one). If your Windows user name does not fit, set the `GRADLE_USER_HOME` environment
+variable to a folder such as `C:\GradleHome` and install the engine into a writable folder
+such as `C:\IceBoxEngine`. The game name, the keystore path and the keystore passwords are
+not affected by this limit.
+
 ---
 
 ## Headless (dedicated server)
 
-Any normal game build doubles as a dedicated server. Start the runtime with `--headless`
-(`-headless` also works):
+Any normal desktop game build doubles as a dedicated server. Start the game's executable —
+the one Build Game produced, named after your game — with `--headless` (`-headless` also
+works):
 
 ```bash
-IceBoxEngineRuntime --headless
+./MyGame --headless          # Linux
+MyGame.exe --headless        # Windows
 ```
 
 No window is created, no graphics context is made, and the audio device is never opened.
@@ -2356,13 +2745,12 @@ same binary as the game — the standalone runtime (or the editor executable) st
 `--rendezvous-server` loads no game, runs only the server and stops on Ctrl+C / SIGTERM.
 
 ```bash
-IceBoxEngineRuntime --rendezvous-server
-IceBoxEngineRuntime --rendezvous-server --rv-public-ip 203.0.113.10 --rv-app-id MyGame-1
-IceBoxEngineRuntime --rendezvous-server --rv-help        # prints every option
+./MyGame --rendezvous-server
+./MyGame --rendezvous-server --rv-public-ip 203.0.113.10 --rv-app-id MyGame-1
+./MyGame --rendezvous-server --rv-help        # prints every option
 ```
 
-On Linux the Build Game output also contains `launch_<GameName>.sh`, which forwards its
-arguments, so `./launch_MyGame.sh --rendezvous-server` works too.
+`MyGame` stands for your game's executable (`MyGame.exe` on Windows).
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -2413,7 +2801,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/mygame
-ExecStart=/opt/mygame/IceBoxEngineRuntime --rendezvous-server --rv-app-id MyGame-1
+ExecStart=/opt/mygame/MyGame --rendezvous-server --rv-app-id MyGame-1
 Restart=always
 RestartSec=3
 User=mygame

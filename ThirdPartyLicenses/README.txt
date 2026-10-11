@@ -81,7 +81,7 @@ ethers-js.txt             ethers.js v6.17.0            MIT                  vend
 miniaudio.txt             miniaudio                    Unlicense OR MIT-0   vendored: Source/Engine/ThirdLibrary/miniaudio.h
 ImGuiColorTextEdit.txt    ImGuiColorTextEdit           MIT                  vendored: Source/Engine/ThirdLibrary/ImGuiColorTextEdit
 MoltenVK.txt              MoltenVK                     Apache-2.0           vendored: fetched by Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh (macOS/iOS)
-NotoFonts-OFL.txt         Noto Sans font family        OFL-1.1              bundled: Config/Fonts/NotoSans*.ttf
+NotoFonts-OFL.txt         Noto Sans + Noto Emoji       OFL-1.1              bundled: Config/Fonts/NotoSans*.ttf, Config/Fonts/NotoEmoji-Regular.ttf (editor only)
 Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bundled: Content/Examples/Platformer/Widgets/F_Tiny5-Regular.ttf
 
 -- Compiler runtimes redistributed inside a built game (not from vcpkg) --

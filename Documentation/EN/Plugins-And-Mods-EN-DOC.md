@@ -9,7 +9,8 @@
 > * **Plugins** — native **C++** modules that extend the **editor** and/or the
 >   **runtime** through a stable C ABI. Use them to add panels, tools, menu items,
 >   custom asset types, toolbar buttons, viewport overlays, settings pages, Visual
->   Script nodes, and integrations with external services.
+>   Script nodes, and integrations with external services — each with its own
+>   documentation and its own editor translations.
 > * **Mods** — **Lua + content** bundles loaded at runtime. Use them to add or change
 >   gameplay and ship new assets (sprites, classes, widgets, …) without
 >   touching the base game or recompiling anything.
@@ -105,16 +106,19 @@ The engine ships one reference example of each:
 * **`Plugins/AIHelper`** — a native editor plugin that adds *Tools → AI Helper*, an
   assistant wired to a local Ollama LLM. It indexes every language folder under
   `Documentation/`, the scripting API catalog from `Config/VisualScriptAPI.json`, the
-  project README files, the asset inventory of the open project and optionally your own
-  Lua/Python sources, then retrieves the most relevant sections for each question.
+  documentation and API catalogs of the plugins, the project README files, the asset
+  inventory of the open project and optionally your own Lua/Python sources, then retrieves
+  the most relevant sections for each question.
   Beyond answering, it can act: in **Agent** and **Autonomous** mode it runs a tool loop
   over the `EditorHostAPI` and the editor Python bridge to create and edit assets, write
   Lua, place entities and save levels, with per-action approval, a project-scoped write
   sandbox, automatic backups and one-click revert. Role, answer style, sampling,
   retrieval, autonomy and permissions are all configurable in the panel and stored in
   `Config/AIHelper.json`; saved conversations live under `Saved/AIHelper/` and backups
-  under `Saved/AIHelper/Backups/`. It is also the reference consumer of the API 5 host
-  functions. See [`Plugins/AIHelper/README.md`](../../Plugins/AIHelper/README.md).
+  under `Saved/AIHelper/Backups/`. It is also the reference consumer of the environment,
+  capability, scripting and localization host functions: every string of its interface
+  comes from its own `Config/Languages/` folder, in all fifteen editor languages. See
+  [`Plugins/AIHelper/README.md`](../../Plugins/AIHelper/README.md).
 * **`Mods/PlatformerCrates`** — a Lua mod that adds collectible crates and a HUD counter
   to the Platformer example, shipping its own classes, widget and sprite. See
   [`Mods/PlatformerCrates/README.md`](../../Mods/PlatformerCrates/README.md).
@@ -170,8 +174,10 @@ Through the editor host API a plugin can, among other things:
   Python module.
 * **React to events** — receive editor/engine events, and run logic every runtime frame
   and on play start/stop.
-* **Ship data** — bundle its own content folders and a `VisualScriptAPI.json` that adds
-  nodes to the Visual Script graph editor (see [3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)).
+* **Ship data** — bundle its own content folders, a `VisualScriptAPI.json` that adds
+  nodes to the Visual Script graph editor, documentation that opens in the editor's
+  **Documentation** panel, and translations of its own interface for every editor
+  language (see [3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)).
 
 ### 3.2 Anatomy of a plugin
 
@@ -187,14 +193,18 @@ Plugins/MyPlugin/
     Icon.png              # optional icon shown in the Plugins panel
     README.md             # optional; indexed by the AI Helper plugin
     VisualScriptAPI.json  # optional; extra Visual Script nodes
+    Documentation/        # optional; EN/, RU/ … Markdown shown in the Documentation panel
+    Config/Languages/     # optional; en.json, ru.json … translations of the plugin's editor text
     Content/  Assets/  Scripts/  Lua/    # optional data folders
     Binaries/             # optional; libraries the Plugin Builder built for game platforms
 ```
 
-When built, the compiled library and a copy of `plugin.json` end up in the engine's
-plugin output directory (`bin/<platform>/Plugins/MyPlugin/`), which is where the engine
-loads it from. On Android the library instead goes to `lib/Android/<ABI>/`; for static
-builds (Web, iOS) it is linked directly into the runtime executable.
+Build it with the [Plugin Builder](#313-building-a-plugin--the-plugin-builder): the
+compiled desktop library (`MyPlugin.dll` / `.so` / `.dylib`) is placed right in the plugin
+folder, next to `plugin.json`, and that is where the editor loads it from. A game build
+compiles or packages the plugin for its own platform — on Android its `.so` goes into the
+APK's native-library folder, on Web and iOS it is linked statically into the game; see
+[7.2](#72-what-the-build-does) for every platform.
 
 `Binaries/` holds ready-made libraries for the game platforms — `Android/<ABI>/`,
 `iOS/<slice>/`, `Web/<variant>/` and `Xbox/<family>/` — which a game build uses for a
@@ -219,7 +229,7 @@ A small JSON file describing the plugin:
 
 | Field | Meaning | Default |
 | ----- | ------- | ------- |
-| `Name` | Unique plugin name (must match what you enable in `Plugins.json`). | folder name |
+| `Name` | Unique plugin name (must match what you enable in `Plugins.json`). Keep it identical to the folder name. | folder name |
 | `Description` | Shown in the Plugins panel. | `""` |
 | `Author` | Shown in the Plugins panel. | `""` |
 | `Version` | Display version string. | `"1.0.0"` |
@@ -234,6 +244,12 @@ A small JSON file describing the plugin:
 > to the `EditorHostAPI`, or has no meaning at runtime — the bundled `AIHelper` does.
 > Plugins whose editor side is optional should leave it at `false`.
 
+> **Name the folder after the plugin.** Game builds, the launcher and the Android packaging
+> match a plugin by its **folder** name, while the Plugin Manager and `Plugins.json` use
+> `Name`. When the two differ, the editor says so in the log —
+> `Plugin folder '<folder>' declares the name '<name>'…` — because such a plugin is enabled
+> under one name and skipped by the build under the other.
+
 > **Icon resolution.** If `Icon` is missing, empty, points at a non-image or a
 > non-existent file, the engine falls back to auto-detection and looks for
 > `icon.png`, `icon.jpg`, `icon.jpeg`, `Icon.png`, `Icon.jpg`, `Icon.jpeg` in the plugin
@@ -245,26 +261,24 @@ A small JSON file describing the plugin:
 ### 3.4 The `IPlugin` interface & lifecycle
 
 Your plugin subclasses `IceBox::IPlugin` and overrides the hooks it needs. Only the
-first three are required. The **Min API** column is the `PluginInfo::APIVersion` your
-plugin must report for the engine to dispatch that hook at all (see
-[3.9](#39-api--abi-versioning)).
+first three are required.
 
-| Hook | Min API | When it's called |
-| ---- | :-----: | ---------------- |
-| `PluginInfo GetPluginInfo() const` | — | Identify the plugin (name, description, author, version, **APIVersion**). **Required.** |
-| `bool OnLoad()` | — | The plugin was loaded. Return `false` to abort loading. **Required.** |
-| `void OnUnload()` | — | The plugin is being unloaded. **Required.** |
-| `void OnUpdate(float dt)` | — | Every **runtime** frame — i.e. while the game or Play mode is running. It does **not** tick while the editor sits idle; use `OnEditorUI` for per-frame editor work. |
-| `void OnRuntimeStart()` / `OnRuntimeStop()` | — | Play mode / the game started or stopped. |
-| `void OnEditorInit(const EditorPluginContext&)` | — | The **editor** host is ready (gives you the ImGui context). |
-| `void OnEditorShutdown()` | — | The editor is shutting the plugin's editor side down (also called just before unload). |
-| `void OnEditorToolsMenu()` | — | Add items to the editor's **Tools** menu (draw `ImGui::MenuItem`s). |
-| `void OnEditorUI(float dt)` | — | Draw your own ImGui every editor frame (panels, windows). |
-| `void OnRegisterLua(void* L)` / `OnUnregisterLua(void* L)` | 3 | A Lua state was created/destroyed — bind/unbind your Lua functions. |
-| `void OnEngineInit(const PluginRuntimeContext&)` | 4 | Right after `OnLoad`, handing you the `RuntimeHostAPI`. Dispatched in **both** the editor and the standalone runtime — it is not a game-process-only hook. |
-| `void OnRegisterPython(void* module)` | 4 | Register bindings into the editor's Python module. |
-| `void OnEditorEvent(const char* name, const char* payload)` | 4 | An editor event was dispatched. |
-| `void OnEngineEvent(const char* name, const char* payload)` | 4 | A runtime/engine event was dispatched. |
+| Hook | When it's called |
+| ---- | ---------------- |
+| `PluginInfo GetPluginInfo() const` | Identify the plugin (name, description, author, version, **APIVersion**). **Required.** |
+| `bool OnLoad()` | The plugin was loaded. Return `false` to abort loading. **Required.** |
+| `void OnUnload()` | The plugin is being unloaded. **Required.** |
+| `void OnUpdate(float dt)` | Every **runtime** frame — i.e. while the game or Play mode is running. It does **not** tick while the editor sits idle; use `OnEditorUI` for per-frame editor work. |
+| `void OnRuntimeStart()` / `OnRuntimeStop()` | Play mode / the game started or stopped. |
+| `void OnEditorInit(const EditorPluginContext&)` | The **editor** host is ready (gives you the ImGui context). |
+| `void OnEditorShutdown()` | The editor is shutting the plugin's editor side down (also called just before unload). |
+| `void OnEditorToolsMenu()` | Add items to the editor's **Tools** menu (draw `ImGui::MenuItem`s). |
+| `void OnEditorUI(float dt)` | Draw your own ImGui every editor frame (panels, windows). |
+| `void OnRegisterLua(void* L)` / `OnUnregisterLua(void* L)` | A Lua state was created/destroyed — bind/unbind your Lua functions. |
+| `void OnEngineInit(const PluginRuntimeContext&)` | Right after `OnLoad`, handing you the `RuntimeHostAPI`. Dispatched in **both** the editor and the standalone runtime — it is not a game-process-only hook. |
+| `void OnRegisterPython(void* module)` | The editor's Python bridge is up — register bindings into the editor's Python module. A plugin loaded later gets it right after `OnLoad`. |
+| `void OnEditorEvent(const char* name, const char* payload)` | An editor event was dispatched. |
+| `void OnEngineEvent(const char* name, const char* payload)` | A runtime/engine event was dispatched. |
 
 A plugin can be **editor-only** (implement only the `OnEditor*` hooks), **runtime-only**
 (implement `OnEngineInit`/`OnUpdate`/`OnRuntime*`), or both.
@@ -279,17 +293,33 @@ keep plain C/C++ data on your side and push it into the state you are calling.
 
 **Which Python module you get.** `OnRegisterPython` receives a `pybind11::module_*`
 pointing at the editor's `__main__` module — the same module that carries the built-in
-`editor`, `scene`, `engine` and `browser` bindings.
+`editor`, `scene`, `engine` and `browser` bindings. The pointer is valid during the call
+only. The hook reaches every loaded plugin as soon as the editor's Python bridge is up,
+and every plugin loaded after that — ticked in the panel or reloaded by **Refresh** —
+right after its `OnLoad`.
+
+It is also the signal that scripting has become available. At editor start the bridge
+comes up *after* `OnEditorInit`, so `HasCapability("python")` still answers `false` there
+and `RunScript` refuses to run; ask again from `OnRegisterPython` instead of remembering
+the first answer.
+
+Whatever you put into the module is yours to take out again: remove your functions,
+classes and sub-modules from `__main__` in `OnEditorShutdown`, which runs before your
+library is unloaded. A script that still holds one of them afterwards calls into code
+that is no longer there.
 
 **Which events you get.** `OnEditorEvent` fires for every event raised through the
-editor's Python `FireEvent(...)`; the payload is currently always `nullptr`.
-`OnEngineEvent` fires with `"runtime_started"` and `"runtime_stopped"` around play
-mode. Note that `RuntimeHostAPI::FireEvent` emits a **Lua** event to script listeners —
-it does not re-enter `OnEngineEvent`.
+editor's Python `FireEvent(...)`, with a `nullptr` payload, and with `"language_changed"`
+whenever the editor language changes — the payload is then the new language code
+(`"en"`, `"ru"`, …). `OnEngineEvent` fires with `"runtime_started"` and
+`"runtime_stopped"` around play mode. Note that `RuntimeHostAPI::FireEvent` emits a
+**Lua** event to script listeners — it does not re-enter `OnEngineEvent`.
 
 > **Exceptions are contained.** Every hook the manager dispatches is wrapped in a
 > `try/catch`; a throwing plugin is logged (`Plugin '<name>' <hook> threw: …`) and the
-> other plugins keep running. It is still your job not to throw across the ABI boundary.
+> other plugins keep running. An exception out of `CreatePlugin`, `GetPluginInfo` or
+> `OnLoad` cancels the load of that plugin (`Plugin '<name>' threw while loading: …`). It
+> is still your job not to throw across the ABI boundary.
 
 ### 3.5 Host APIs — talking back to the engine
 
@@ -316,11 +346,11 @@ with `StructSize` and `AbiVersion` so you can sanity-check what you were given.
   `IsViewportFocused`, `Get/SetCamera`, `FocusEntity`.
 * **Editor control:** `RecordUndo`, `Undo`, `Redo`, `IsPlayMode`, `Play`, `Stop`,
   `Set/IsPanelVisible`.
-* **Environment (API 5):** `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`.
+* **Environment:** `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`.
   The engine root is the installation folder; the project root is the editor's working
   directory, which is the folder of the open project. Keeping them apart is what lets a
   plugin read the engine documentation while writing only inside the project.
-* **Capabilities and scripting (API 5):** `HasCapability(name)` answers `"python"`,
+* **Capabilities and scripting:** `HasCapability(name)` answers `"python"`,
   `"editor"` and `"scene"`; `RunScript(language, code, outBuf, bufSize, outOk)` runs a
   snippet against the editor scripting API and returns its combined stdout and stderr,
   with `outOk` set to `1` only when it completed without errors. `"python"` is the only
@@ -328,12 +358,25 @@ with `StructSize` and `AbiVersion` so you can sanity-check what you were given.
   `engine` / `browser` modules as the **Run Python Script** window, so one call reaches
   the whole editor Python API. Each call is wrapped in a single undo group. Call it from
   the UI thread only — the editor state it touches is not thread safe.
+* **Localization:** `Localize(key)` returns the text of `key` in the current editor
+  language, ready to draw: it carries the same shaping the editor applies to its own
+  strings, so Arabic, Hebrew and Hindi come out right. `LocalizeRaw(key)` returns the same
+  text in logical order, for everything that is data rather than a label — a file you
+  write, a prompt you send, a format string. Both look the key up in your plugin's own
+  `Config/Languages/` files first
+  ([3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)), then in the editor's,
+  and return the key itself when nobody translates it. The pointer you get stays valid
+  until your plugin is unloaded, but after a language change it still holds the old text,
+  so call again instead of storing it. `ShapeText(text, outBuf, bufSize)` applies the
+  display shaping to a string you built yourself, such as a formatted one, and
+  `GetLanguage(outBuf, bufSize)` gives the current language code (`en`, `ru`, …). Call
+  all four from the UI thread only.
 * **Registration:** see [Section 3.6](#36-editor-extension-points).
 
-Functions that return text (`GetEntityName`, `GetScenePath`, `ExportEntityJson`,
+Functions that fill a buffer (`GetEntityName`, `GetScenePath`, `ExportEntityJson`,
 `GetContentBrowserPath`, `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`,
-`RunScript`, …) follow the usual C convention: they write at most
-`bufSize - 1` bytes plus a terminator and return the **required** length, so you can
+`RunScript`, `ShapeText`, `GetLanguage`, …) follow the usual C convention: they write at
+most `bufSize - 1` bytes plus a terminator and return the **required** length, so you can
 call them once with a small buffer to size the allocation.
 
 `Set/IsPanelVisible` take one of the editor's panel names:
@@ -373,6 +416,13 @@ Notes:
   **asset path**. Built-in engine extensions always win, so you cannot re-skin
   `.ice_class` & co.; if two plugins claim the same extension the **last** registration
   wins.
+* **Labels follow the editor language.** Every label you register — a panel `title`, a
+  `menuPath` (the group and the item separately), a toolbar `id` and `tooltip`, a
+  context-menu `label`, a settings `category`, an asset type's `DisplayName` — is looked
+  up on every frame as a key in your plugin's `Config/Languages/` files
+  ([3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)). A label that is not a
+  key is shown as written, so plain text keeps working, and a translated one switches
+  together with the editor language.
 * **Unloading cleans up.** When a plugin is unloaded (or disabled), every panel, asset
   type, menu item, toolbar button, overlay, context item and settings page it registered
   is removed automatically — you do not have to unregister them yourself.
@@ -423,8 +473,8 @@ ICE_PLUGIN_ENTRY(MyPlugin)   // at file scope, after the class definition
   loader picks the library **named after the plugin**: it matches each `.dll` (Windows) or
   `.so`/`.dylib` (Unix) in the folder against the manifest `Name` and the folder name, with
   or without a `lib` prefix. That is what lets a plugin ship its own runtime libraries
-  beside itself — `IceBoxStorefront.dll` is picked over `steam_api64.dll`,
-  `IceBoxStorefront.so` over `libsteam_api.so`. If nothing matches the plugin name the
+  beside itself — `MyPlugin.dll` is picked over a bundled SDK's `vendor_sdk.dll`,
+  `MyPlugin.so` over `libvendor_sdk.so`. If nothing matches the plugin name the
   loader falls back to the alphabetically first library and logs a warning, so **name your
   plugin library after your plugin**.
 * **Static** — on platforms without dynamic loading (**Web**, **iOS**), or when you opt
@@ -451,10 +501,10 @@ the CMake variable `ICE_PLUGIN_BUILD_STATIC`.
 
 #### Early boot — running before the engine exists
 
-Some things have to happen before anything else does. The canonical case is Steam: a build
-must be *relaunched through Steam* if the player started the executable directly, and that
-decision has to be made before a window is created, before the Steam API is initialized,
-before any Lua runs.
+Some things have to happen before anything else does. The canonical case is a platform SDK
+that requires the game to be started through its own launcher: a build must be *relaunched
+through that launcher* if the player started the executable directly, and that decision has
+to be made before a window is created, before the SDK is initialized, before any Lua runs.
 
 For that, a plugin may export a second entry point:
 
@@ -495,28 +545,16 @@ version gate.
 
 ### 3.9 API / ABI versioning
 
-The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **5**). Your
+The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **1**). Your
 plugin reports the version it was built against in `PluginInfo::APIVersion` (set it to
 `ICE_PLUGIN_API_VERSION`).
 
 * If a plugin's `APIVersion` is **greater** than the engine's, the engine **refuses to
   load it** (it was built for a newer ABI) and logs
-  `Plugin '<name>' requires API version N (engine has 5)`.
-* Newer hooks/features are gated by version internally, so older plugins keep working as
-  the ABI grows:
-
-| Version | What it unlocked |
-| :-----: | ---------------- |
-| ≤ 2 | The base lifecycle: `GetPluginInfo`, `OnLoad`, `OnUnload`, `OnUpdate`, `OnRuntimeStart/Stop`, and all `OnEditor*` hooks. |
-| 3 | `OnRegisterLua` / `OnUnregisterLua`. |
-| 4 | `OnEngineInit` (and therefore the `RuntimeHostAPI`), `OnRegisterPython`, `OnEditorEvent`, `OnEngineEvent`. |
-| 5 | `EditorHostAPI::GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`, `HasCapability` and `RunScript`. |
-
-The version 5 entries are appended to the end of `EditorHostAPI`, so a plugin built
-against an older header keeps working unchanged. A plugin that wants them must check
-that it really got them before calling: the host fills `AbiVersion` and `StructSize`, so
-`host->AbiVersion >= 5 || host->StructSize >= sizeof(EditorHostAPI)` is the guard, and
-each pointer should still be tested for null.
+  `Plugin '<name>' requires API version N (engine has 1)`.
+* A loaded plugin gets every hook of the table in [3.4](#34-the-iplugin-interface--lifecycle)
+  and every entry of the host APIs; test each host function pointer for null before
+  calling it.
 
 Always rebuild plugins against the engine version you ship with.
 
@@ -586,11 +624,11 @@ Notes:
   file ships next to the plugin as `Plugins/AIHelper/CMakeLists.txt.example` — a complete,
   working reference you can copy. It carries the `.example` suffix so neither a game build
   nor the Plugin Builder mistakes the bundled binary plugin for one to compile.
-* The engine sets `ICE_PLUGIN_OUTPUT_DIR` to wherever the binary has to land for that
-  build to find it: `Plugins/<Name>/` next to the editor in an **editor** build,
-  `bin/<platform>/Plugins/<Name>/` next to the game executable in a **runtime/game**
-  build, `lib/Android/<ABI>/` on Android, and `static_plugins/<Name>/` for static
-  builds. Respect it if you customize output paths (`Plugins/AIHelper/CMakeLists.txt.example`
+* The build that compiles your plugin sets `ICE_PLUGIN_OUTPUT_DIR` to wherever the binary
+  has to land for that build to find it: the Plugin Builder's staging folder (the library
+  is copied from there into the plugin folder), `bin/<platform>/Plugins/<Name>/` next to the
+  game executable inside a **game** build's build tree, `lib/Android/<ABI>/` on Android, and
+  `static_plugins/<Name>/` for static builds. Respect it if you customize output paths (`Plugins/AIHelper/CMakeLists.txt.example`
   shows the full set of `RUNTIME_/LIBRARY_/PDB_OUTPUT_DIRECTORY*` properties for
   multi-config generators). That is also the directory a game build packages from, so
   a plugin that ignores it will not ship. A static build produces an archive, so there
@@ -680,12 +718,13 @@ embedded too. Load them at runtime relative to `PluginFolderPath`.
 **Visual Script nodes.** If a plugin folder contains a `VisualScriptAPI.json`, the editor
 loads it alongside the engine's own `Config/VisualScriptAPI.json` and turns its entries
 into nodes in the Visual Script graph editor. This is how a plugin that registers Lua
-functions (via `OnRegisterLua`) makes them usable without writing code. The file has the
+functions (via `OnRegisterLua`) makes them usable without writing code. The Lua script
+editors read the same file for their autocomplete, so these functions are also suggested
+as you type, with the signature built from `args` and `ret` / `rets`. The file has the
 same shape as the engine catalog:
 
 ```json
 {
-    "version": 2,
     "functions": [
         {
             "name": "MyPluginPing",
@@ -725,13 +764,13 @@ same shape as the engine catalog:
 | `category` | Palette category. |
 | `pure` | `true` for a value node with no execution pins (use it for functions that only read something). |
 | `ret` / `rets` | Single return type, or — for functions that return several values — a list of named outputs; the node gets one output pin per value. |
-| `args` | Input pins: `name`, `type`, optional `picker`, `values` (enum), `default`, `opt`. An `opt` argument that is left unconnected and unset is not passed, so your function's own default applies. |
+| `args` | Input pins: `name`, `type`, optional `picker`, `values` (enum), `default`, `opt`. `values` gives an `Any` or `String` pin a dropdown of those Lua expressions; when they are all keys of one table (`MyEnum.A`, `MyEnum.B`), the autocomplete shows that table as the argument's type. An `opt` argument that is left unconnected and unset is not passed, so your function's own default applies — on a `pure` (value) node only while the argument's `default` is empty (none, `0`, `false` or `""`): a value node passes any other `default`. |
 | `variadic` | `true` when the function takes extra arguments (`...`); the node gets **Add Pin** / **Remove Pin** for `Any` pins after the regular ones. |
-| `method`, `object`, `colon` | Emit `object.name(...)` / `object:name(...)` instead of a free function. |
-| `legacyPure` | Engine catalog only: the value `pure` had before format version 2, so graphs saved by older editors keep their pin layout. Plugins normally leave it out. |
+| `method`, `object`, `colon` | A method of an object instead of a free function: the node gets a **Target** pin typed `Table<object>` and emits `target.name(...)`, or `target:name(...)` with `colon: true`. |
+| `aliases`, `visual` | For the Lua editor's autocomplete: `aliases` lists other names of the same function, suggested as well (the graph ignores them), and an entry with `"visual": false` is only suggested by the autocomplete and gets no node. |
 
 **Types.** `type` (and `ret`) use the same type names as the graph editor: `Bool`, `Int`,
-`Float`, `String`, `Vec2`, `Vec3`, `Color`, `Entity`, `Table`, `Function` and `Any`, plus
+`Float`, `String`, `Vec2`, `Vec3`, `Vec4`, `Color`, `Entity`, `Table`, `Function` and `Any`, plus
 containers and named types — `Array<Float>`, `Set<String>`, `Map<String,Int>`, `Table<Name>`
 for a table of a known shape, `Enum<Name>`. Prefer the most precise type: typed pins get
 literal editors and type-checked wires, while `Any` accepts anything and its unconnected
@@ -740,6 +779,64 @@ then takes a **Function Reference** to a custom event.
 
 Duplicate names are ignored, and entries that collide with a curated engine node are
 skipped, so you cannot accidentally overwrite the built-in palette.
+
+**Documentation.** Markdown files under `Documentation/<LANG>/` inside a plugin folder —
+`Documentation/EN/`, `Documentation/RU/`, any language folder you like — open in the
+editor's **Documentation** panel (*Help → Documentation*) next to the engine manuals. They
+are listed on the **Documents** tab under a heading with the plugin's name, are covered by
+the panel's search across all documents, and follow its language switch: a file named
+`MyPlugin-EN.md` or `MyPlugin-EN-DOC.md` turns into its `-RU` twin when the reader picks
+RU. A language folder that only a plugin ships is added to the panel's language list. See
+[Editor → Documentation](Editor-EN-DOC.md#132-documentation).
+
+**Editor translations.** A plugin translates its own interface with one JSON file per
+editor language in `Config/Languages/`, named like the editor's own files — `en.json`,
+`ru.json`, `ua.json`, `de.json`, `es.json`, `fr.json`, `it.json`, `pt.json`, `pl.json`,
+`ja.json`, `zh.json`, `kr.json`, `ar.json`, `he.json`, `hi.json`:
+
+```json
+{
+    "myplugin_title": "My Plugin",
+    "myplugin_spawn": "Spawn an entity",
+    "myplugin_spawn_tooltip": "Creates an entity named FromPlugin in the open level."
+}
+```
+
+The editor loads the file of the current language when the plugin's editor side starts and
+again whenever the language changes. A key missing from that file — or a missing file —
+falls back to the plugin's `en.json`, so ship English first and add languages as you go.
+In code, ask the host for the text:
+
+```cpp
+const char* T(const char* key) const {
+    return (m_Ctx.Host && m_Ctx.Host->Localize) ? m_Ctx.Host->Localize(m_Ctx.HostContext, key) : key;
+}
+
+void OnEditorToolsMenu() override {
+    if (ImGui::MenuItem(T("myplugin_title"), nullptr, m_Show)) m_Show = !m_Show;
+}
+```
+
+The same keys work as the labels you hand to the registration functions
+([3.6](#36-editor-extension-points)): `RegisterPanel("myplugin", "myplugin_title", …)`
+gives a panel whose title follows the editor language. A plugin's own keys win over the
+editor's keys of the same name, and a key your files do not define is looked up in the
+editor's table, so the editor's own strings (`btn_save`, `btn_cancel`, …) are yours to
+reuse. Prefix your keys with the plugin's name to keep them apart from everyone else's.
+`LocalizeRaw`, `ShapeText` and `GetLanguage` are described in
+[3.5](#35-host-apis--talking-back-to-the-engine), the `language_changed` event in
+[3.4](#34-the-iplugin-interface--lifecycle). The bundled AIHelper keeps all of its text
+this way.
+
+**Where the editor looks.** The node catalog, the documentation and — for loaded plugins —
+the translations are read from the plugin folders of the open project. The catalog and
+the documentation are also read from the engine's own `Plugins/` folder; a project plugin
+shadows an engine plugin with the same folder name. The Documentation panel follows
+plugin changes on its own, while the node palette and the autocomplete are built once per
+editor session: restart the editor after adding a plugin that ships a catalog.
+
+**Editor data stays out of games.** `Documentation/` and `Config/Languages/` exist for the
+editor only, so no game build packages them ([7.2](#72-what-the-build-does)).
 
 ### 3.13 Building a plugin — the Plugin Builder
 
@@ -908,9 +1005,9 @@ a HUD widget and a sprite/texture.
 
 Icon resolution is identical to plugins — see [3.3](#33-the-pluginjson-manifest).
 
-> **`APIVersion` is checked against the engine's plugin ABI version** (currently **5**).
+> **`APIVersion` is checked against the engine's plugin ABI version** (currently **1**).
 > A mod that declares a higher number is refused with
-> `Mod '<name>' requires API version N (engine has 5)`. Leave it at `1` unless you have
+> `Mod '<name>' requires API version N (engine has 1)`. Leave it at `1` unless you have
 > a reason to raise it.
 
 ### 4.4 The mod environment & injected globals
@@ -968,6 +1065,11 @@ A typical pattern: set up state and timers in `OnLevelStart`, tear them down in
 Errors are per-mod and non-fatal: a hook that raises is logged as
 `[Mod:<name>] <hook> error: …` and the other mods still receive the same event. The
 per-frame hooks are suppressed while the Lua debugger has execution paused.
+
+Mod scripts can be debugged like any other gameplay Lua: during Play in the editor the
+entry script and the files it pulls in with `ModRequire` appear in the script list of the
+[Lua Script Debugger](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual) under their
+file paths, and runtime errors name them the same way (`Mods/MyMod/main.lua:12: …`).
 
 ### 4.6 Shipping content with a mod
 
@@ -1060,8 +1162,8 @@ corresponding config file. The panel's own visibility is remembered in
 
 | Action | Effect |
 | ------ | ------ |
-| Plugin checkbox on | Loads the plugin **right away** if its library is present, dispatches `OnEngineInit`, then `OnEditorInit`, and saves `Config/Plugins.json`. Its Tools items, panels and asset types appear immediately. |
-| Plugin checkbox off | Unloads the plugin, removes everything it registered, and saves the config. |
+| Plugin checkbox on | Loads the plugin **right away** if its library is present, dispatches `OnEngineInit`, then `OnEditorInit`, and saves `Config/Plugins.json`. Its Tools items, panels and asset types appear immediately. Enabled plugins that were waiting for it as a dependency are loaded along with it. |
+| Plugin checkbox off | Unloads the plugin, removes everything it registered, and saves the config. Loaded plugins that depend on it are unloaded first; they stay ticked and come back when the plugin is enabled again. |
 | Plugin **Refresh** | Unloads every plugin, re-scans `Plugins/`, re-reads the config, re-loads the enabled ones and re-runs `OnEditorInit`. Use it after rebuilding a plugin. |
 | Mod checkbox | Saves `Config/Mods.json`. If a level is currently running the mod is loaded/unloaded immediately; otherwise it takes effect at the next Play. |
 | Mod **Refresh** | Unloads all mods and re-scans `Mods/` + config. |
@@ -1137,30 +1239,28 @@ Mods.SetEnabled("PlatformerCrates", false)
 Mods.Refresh()
 ```
 
-Extra search paths are what let mods live outside the game folder — most usefully **Steam Workshop** items, which
-Steam installs into its own per-item directories. With the IceBoxStorefront plugin enabled, hand those directories
-to the mod system and rescan; nothing is copied:
+Extra search paths are what let mods live outside the game folder. Register the folders that hold them and rescan;
+nothing is copied:
 
 ```lua
 Mods.ClearSearchPaths()
-for _, item in ipairs(Storefront.Workshop.GetSubscribed()) do
-    if item.installed and not item.needsUpdate then
-        Mods.AddSearchPath(item.installFolder)
-    end
+for _, folder in ipairs(extraModFolders) do
+    Mods.AddSearchPath(folder)
 end
 Mods.Refresh()
 ```
 
-Each such folder must contain a `mod.json` at its root, exactly like a folder under `Mods/`. Newly discovered mods
-start disabled — enable them with `Mods.SetEnabled(name, true)`.
+A search path is scanned exactly like `Mods/`: every mod sits in its own subfolder with a `mod.json`. Newly
+discovered mods start disabled — enable them with `Mods.SetEnabled(name, true)`.
 
 The whole module is also available as **Visual Script** nodes under the `Mods` category.
 See [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) for the full reference.
 
 ### 5.4 The launcher's Plugins & Mods tab
 
-The launcher manages packages **per project**, one level above the editor's per-engine
-view. Its **Plugins & Mods** tab (also reachable from a project's context menu via
+The launcher decides which of the engine's packages a project contains; the editor's panel
+([5.1](#51-the-plugins--mods-panel)) then enables or disables what is inside the project. Its
+**Plugins & Mods** tab (also reachable from a project's context menu via
 *Manage Plugins & Mods…*, which pre-selects that project) lists everything found in the
 **engine's** `Plugins/` and `Mods/` folders — name, version, author, description and
 icon read straight from the manifests — and lets you tick the ones a project should use.
@@ -1218,10 +1318,12 @@ runtime. Its flow:
 3. **Load enabled plugins** — resolve dependency order (skipping cycles and broken
    dependencies), then for each plugin: load the library (or use the static
    registration), resolve `CreatePlugin`, instantiate, check the **API version**, call
-   `OnLoad`, replay `OnRegisterLua` for the Lua states that already exist, then
-   `OnEngineInit`, and — in the editor — `OnEditorInit`. Outside the editor, plugins
-   marked `"EditorOnly": true` are skipped before any of this happens (and are ignored
-   when resolving other plugins' dependencies).
+   `OnLoad`, replay `OnRegisterLua` for the Lua states that already exist and
+   `OnRegisterPython` when the editor's Python bridge is already up, then `OnEngineInit`,
+   and — in the editor — load the plugin's `Config/Languages/` translations and call
+   `OnEditorInit`. Outside the editor, plugins marked `"EditorOnly": true` are skipped
+   before any of this happens (and are ignored when resolving other plugins'
+   dependencies).
 4. **Load enabled mods** — this happens at **play/runtime start**, not at editor startup.
    Resolve order from `LoadOrder` + dependencies (skipping cycles), run each mod's entry
    script in its sandboxed environment, and call `OnModLoad`.
@@ -1233,9 +1335,10 @@ Steps 1–3 run once when the editor or the game starts; step 4 runs on every Pl
 
 **Unloading.** Mods are unloaded on play stop, in **reverse** load order, receiving
 `OnLevelEnd` then `OnModUnload`. Plugins are unloaded on shutdown (or when you untick
-them) in discovery order; each one first loses every editor registration it made, then
-gets `OnUnregisterLua`, `OnEditorShutdown` (if its editor side is still live) and
-`OnUnload`, and only then is the library freed.
+them) in **reverse** load order as well, so a plugin always outlives the plugins that
+depend on it; each one first loses every editor registration it made, then gets
+`OnUnregisterLua`, `OnEditorShutdown` (if its editor side is still live) and `OnUnload`,
+and only then are its translations dropped and the library freed.
 
 ## 7. Shipping plugins & mods in a build
 
@@ -1277,6 +1380,10 @@ When you build a game (see
   `CMakeLists.txt` / `CMakeCache.txt` / `.gitignore` / `.gitattributes`. A plugin's
   top-level `Binaries/` folder is left out too: the build takes the one library the
   target platform needs from it itself (see the table below).
+* Leaves a plugin's **editor data** behind on every platform: its `Documentation/` folder
+  and its `Config/Languages/` translations are read by the editor only, so they never
+  reach a player. `VisualScriptAPI.json`, the README and the license files still travel
+  with the plugin on Windows, Linux, macOS, Xbox and Android.
 * Then **overlays the built plugin artifacts** on top: only the compiled library
   (`.dll`/`.so`/`.dylib`), its `.pdb` if present, and `plugin.json`.
 * For **mods**, ships the whole enabled mod folder (its `Content/`, `main.lua`,
@@ -1288,7 +1395,7 @@ Per-platform placement:
 | -------- | ------- | ---- |
 | Windows / Linux | `<Output>/Plugins/<Name>/` | `<Output>/Mods/<Name>/` |
 | macOS | `<Game>.app/Contents/Resources/Plugins/` | `<Game>.app/Contents/Resources/Mods/` |
-| Android | `.so` → the APK's `jniLibs/<ABI>/` — compiled from the engine's plugin sources, or taken from the plugin's `Binaries/Android/<ABI>/`, with a missing `lib` prefix added; the rest of the folder, minus `Binaries/` and desktop libraries → `assets/Plugins/<Name>/` | staged into the APK's `assets/Mods` |
+| Android | `.so` → the APK's `jniLibs/<ABI>/` — compiled from the engine's plugin sources, or taken from the plugin's `Binaries/Android/<ABI>/`, with a missing `lib` prefix added; the rest of the folder, minus `Binaries/`, desktop libraries and the editor data → `assets/Plugins/<Name>/` | staged into the APK's `assets/Mods` |
 | Android *(built on the device)* | assets, scripts and `plugin.json` → `assets/Plugins/<Name>/`; the plugin's `Binaries/Android/<ABI>/*.so` → the APK's `lib/<ABI>/` for the ABIs of the runtime template. A native `.so` cannot be compiled — there is no compiler on a phone — so the build log names every enabled plugin that has native sources but no prebuilt library | staged into the APK's `assets/Mods` |
 | iOS | statically linked — compiled from source, or taken from the plugin's `Binaries/iOS/<slice>/`; `plugin.json` + data folders staged into the signed `.app` | staged into the `.app` bundle |
 | Web | statically linked into the runtime — compiled from source, or taken from the plugin's `Binaries/Web/<variant>/` | embedded into the Emscripten `.data` via `--preload-file` |
@@ -1312,7 +1419,7 @@ the same Plugin Manager flow as the editor.
 | Form | Native C++ library / static | Lua + content folder |
 | Manifest | `plugin.json` | `mod.json` |
 | Entry | `ICE_PLUGIN_ENTRY(Class)` → `IPlugin` | `main.lua` |
-| SDK / API | `IceBoxPluginSDK`, C ABI v`5` | engine Lua API, mod `APIVersion` (≤ `5`) |
+| SDK / API | `IceBoxPluginSDK`, C ABI v`1` | engine Lua API, mod `APIVersion` (≤ `1`) |
 | Folder / config | `Plugins/` · `Config/Plugins.json` | `Mods/` · `Config/Mods.json` |
 | Alive in | Editor + runtime | Play mode / game only |
 | Live toggle | Yes, once built | Yes |
@@ -1329,6 +1436,9 @@ Editor registration: `RegisterPanel` · `RegisterAssetType` · `RegisterMenuItem
 `RegisterToolbarButton` · `RegisterViewportOverlay` · `RegisterContextMenuItem` ·
 `RegisterSettingsPage` (+ `ShowPanel` · `IsPanelOpen`)
 
+Editor localization: `Localize` · `LocalizeRaw` · `ShapeText` · `GetLanguage` · the
+`language_changed` editor event
+
 ### 8.3 Mod hooks & globals
 
 Hooks: `OnModLoad` · `OnLevelStart` · `OnLevelUpdate` · `OnLevelFixedUpdate` ·
@@ -1344,12 +1454,14 @@ Lua module: `Mods.GetAll` · `GetInfo` · `GetCount` · `GetEnabledCount` · `Is
 | ---- | ---------- |
 | `Plugins/<Name>/plugin.json` | Plugin manifest (source folder); `"EditorOnly": true` keeps it out of every game build. |
 | `Plugins/<Name>/VisualScriptAPI.json` | Optional extra Visual Script nodes. |
+| `Plugins/<Name>/Documentation/<LANG>/*.md` | Optional documentation, shown in the editor's Documentation panel. Editor only — never packaged into a game. |
+| `Plugins/<Name>/Config/Languages/<code>.json` | Optional translations of the plugin's editor text, one file per editor language. Editor only — never packaged into a game. |
 | `Plugins/<Name>/Binaries/<Platform>/…` | Game-platform libraries from the Plugin Builder: `Android/<ABI>/*.so`, `iOS/<slice>/*.a`, `Web/<variant>/*.a`, `Xbox/<family>/*.dll`. |
 | `Mods/<Name>/mod.json` | Mod manifest. |
 | `Config/Plugins.json` · `Config/Mods.json` | Which packages are enabled. |
 | `Config/Editor.json` → `PanelVisibility.PluginsPanel` | Whether the panel is open. |
 | `Config/Editor.json` → `BuildSettings.IncludePlugins` / `.IncludeMods` | The Build Game **Packages** switches. |
-| `bin/<platform>/Plugins/<Name>/` | Built plugin library + `plugin.json`. |
+| `Plugins/<Name>/<Name>.dll` (`.so`, `.dylib`) | The desktop library the Plugin Builder built — the one the editor loads and desktop games ship. |
 | `<Project>.iceproject` → `"Plugins"`, `"Mods"` | Per-project package selection (launcher). |
 | `<user data>/Mods/` | Player-installed mods, on every platform; `Mods.GetUserFolder()` returns it. |
 | `<user data>/Plugins/` | Player drop-in plugins (macOS/iOS builds). |
@@ -1378,12 +1490,33 @@ You must adopt the host's ImGui context and allocator in `OnEditorInit` (Section
 `OnUpdate` is a **runtime** tick — it only fires while the game or Play mode is running.
 For per-frame editor work use `OnEditorUI`.
 
+**My plugin shows `myplugin_title` instead of the text.**
+The key was not found. Check that the file is `Plugins/<Name>/Config/Languages/<code>.json`
+with the editor's language code as its name, that it is valid JSON (a broken file is
+reported in the log as `Failed to parse plugin language file …`), and that an `en.json`
+exists for the languages you have not translated yet
+([3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)).
+
+**My plugin's documentation is not in the Documentation panel.**
+The files have to be Markdown under `Plugins/<Name>/Documentation/<LANG>/`, and the panel
+shows one language at a time — pick the language whose folder holds them. Press the
+panel's **Refresh** after adding files by hand.
+
+**`HasCapability("python")` says no in `OnEditorInit`.**
+At editor start the Python bridge comes up after the plugins. Ask again from
+`OnRegisterPython`, which is called once it is ready
+([3.4](#34-the-iplugin-interface--lifecycle)).
+
 **Where does the engine look for plugins/mods?**
-`Plugins/` and `Mods/` relative to the working directory (configurable via
-`SearchDirectory` in the config files). Compiled plugins are loaded from the runtime's
-`Plugins/<Name>/` output directory. At build-configure time CMake also searches the
-project root, and shipped games additionally scan the player's mods folder (every platform)
-and, on macOS/iOS, the player's `Plugins/` folder.
+In `Plugins/` and `Mods/` relative to the working directory (configurable via
+`SearchDirectory` in the config files). For the editor that is the **open project's** folder —
+the launcher copies packages there from the engine's own `Plugins/` and `Mods/`
+([5.4](#54-the-launchers-plugins--mods-tab)) — and a plugin's library is loaded from its own
+folder, `Plugins/<Name>/`. A shipped game looks next to its executable (inside the `.app` on
+macOS, in the APK on Android — see [7.2](#72-what-the-build-does)) and additionally scans the
+player's mods folder (every platform) and, on macOS/iOS, the player's `Plugins/` folder. When a
+game is built, CMake looks for plugin sources in the project root first and then in the engine
+root ([3.10](#310-the-plugins-cmakeliststxt)).
 
 **Can mods run native code?**
 No — mods are Lua + content, sandboxed. For native code, write a plugin.

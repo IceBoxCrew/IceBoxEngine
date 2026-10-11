@@ -40,6 +40,7 @@
    - 2.5 [The job system](#25-the-job-system)
    - 2.6 [Time, pause & suspend](#26-time-pause--suspend)
    - 2.7 [Determinism & random streams](#27-determinism--random-streams)
+   - 2.8 [Coordinate conventions](#28-coordinate-conventions)
 3. [Physics — beyond the basics](#3-physics--beyond-the-basics)
    - 3.1 [What this section adds](#31-what-this-section-adds)
    - 3.2 [Collision modes, per shape](#32-collision-modes-per-shape)
@@ -187,6 +188,12 @@ One iteration of the main loop, in order:
    screen ↔ world conversions and the cinema audio listener use. Finally camera shake is
    decayed for the primary and every split-screen camera.
 
+   While the editor camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), the free
+   camera is the frame as it is: no cinema is blended over it and no shake is added. The
+   audio listener, occlusion and audio zones are then updated in this step from the centre of
+   that frame instead of in **`Update.Audio`**, so they keep following the free camera while
+   the game is paused.
+
 The scene simulation itself runs these stages, each of which appears by name in the
 [Profiler](Profiling-And-Building-EN-DOC.md#43-cpu-tab):
 
@@ -284,6 +291,12 @@ rendering and playing audio whenever the window loses focus, is minimized or is
 backgrounded, on all seven platforms. The loop then blocks on an event wait instead of
 spinning. A dedicated server never suspends, which is what lets it run unattended.
 
+A **debugger stop** is different again: when the
+[Lua Script Debugger](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual) pauses a
+script in the editor, the frame is frozen in the middle of that script call — nothing
+else in the frame runs until you continue — and the time spent stopped is left out of the
+frame delta, so the game does not jump ahead afterwards.
+
 ### 2.7 Determinism & random streams
 
 Determinism matters for [rollback netcode](#58-rollback-netcode), replays and reproducible
@@ -301,6 +314,24 @@ procedural generation, so randomness is a service rather than a global:
 Physics contributes the other half of determinism: it advances in **fixed steps** with a
 sanitized timestep and sub-step count ([Graphics → 13.1](Graphics-EN-DOC.md#131-the-simulation-loop)),
 so the same inputs produce the same result at any framerate.
+
+### 2.8 Coordinate conventions
+
+One set of rules holds on every renderer and platform, in the editor and in every API:
+
+* **X+** is right and **Y+** is up — in the world, on screen and in normalized spaces.
+* **Rotation** is in degrees and **clockwise is positive**.
+* **Pivots** and other normalized points run from `(0, 0)` at the bottom-left to `(1, 1)` at
+  the top-right.
+* **Flip X / Flip Y** off means *as authored*; on, they mirror horizontally / vertically — the
+  same for sprites, flipbooks, skeletons, tilemaps, widget elements, FX and decals.
+* **Screen pixels** (input, `Draw` screen space, screen↔world conversion) have their origin
+  at the bottom-left of the game viewport.
+
+The deliberate exceptions are rectangles and UVs *inside an image* (raster layout, origin
+top-left), widget layout positions (they grow downward, like any UI layout) and the raw grid
+coordinates of isometric and hexagonal tilemaps. The full table, with the API functions
+each rule covers, is in the [Lua API](LuaAPI-EN-DOC.md#coordinate-conventions).
 
 ---
 
@@ -363,7 +394,7 @@ entities:
   creates no part bodies at all.
 * Part bodies carry the **same user data as the owner entity**, so a contact on a wheel is
   reported as a contact on the entity that owns it.
-* Every frame after the solve, `SyncPhysicsPartsToInstances` writes each part body's world
+* Every frame after the solve, the engine writes each part body's world
   transform **back into the collider instance's local transform**, so the shapes you see in
   the editor overlays and in the shadow system follow the simulation.
 * A **sprite or flipbook instance** can name a part in its **Attach To Collider** field. On
@@ -429,7 +460,7 @@ Box2D reports events per **shape**; the engine turns them into per-**entity** ca
 | ----- | ------------ |
 | **Begin touch** | Collision-enter on both entities, with the other's tag, id and the local collider name. |
 | **End touch** | Collision-exit. The pair is remembered while touching, so the exit still carries the right tags and collider names even if a shape was destroyed in between. |
-| **Hit** | A collision whose approach speed exceeds the world's **Hit-Event Threshold**, with the speed converted back to world units. This is also what feeds impact-triggered [destruction](Graphics-EN-DOC.md#137-joints-queries--destruction). |
+| **Hit** | A collision whose approach speed exceeds the world's **Hit Event Threshold**, with the speed converted back to world units. This is also what feeds impact-triggered [destruction](Graphics-EN-DOC.md#137-joints-queries--destruction). |
 | **Sensor begin/end** | Sensor-enter/exit, dispatched to the sensor and to the visitor. |
 | **Stay** | Recomputed each step by walking the set of currently-touching pairs — **only for entities whose script actually implements a stay callback**. If nobody wants them, the whole pass is skipped. |
 | **Pre-solve** | Used internally to cancel contacts for [one-way platforms](Graphics-EN-DOC.md#136-one-way-platforms). |
@@ -444,10 +475,12 @@ The script-side signatures are in the [Lua API](LuaAPI-EN-DOC.md#14-collision--c
 
 A **Joint** instance names its second body in one of three ways, resolved in this order:
 
-1. **Target Part Name** — a named **Separate Body** collider on the *same* entity
+1. **Target Part** — a named **Separate Body** collider on the *same* entity
    ([3.3](#33-separate-bodies--multi-body-entities)). If the part does not exist or has no
    body, the joint is skipped with an explicit warning naming the part.
-2. **Target Entity UUID** — an exact entity, stable across renames.
+2. **Target entity UUID** — an exact entity, stable across renames. It is not a field in the
+   Properties panel: the engine stores it once a tag has resolved (below), and an editor
+   Python script can set it directly.
 3. **Target Entity Tag** — the first entity with that tag. If several match, the engine
    warns with the count and uses the first, so ambiguity is visible rather than silent.
 
@@ -563,7 +596,10 @@ mask, so it stays inert.
 **Flipping.** Flipping an entity horizontally mirrors its collision: the collider set is
 rebuilt on the mirrored side, part bodies are recreated, and joint anchors and axes are
 mirrored to match. The engine tracks the last flip sign it built for, so this happens
-exactly once per flip rather than every frame.
+exactly once per flip rather than every frame. Hand-placed collider primitives and joints
+follow this horizontal *facing* only; a vertical flip (Flip Y) mirrors the visuals and the
+collision generated from them — sprite and flipbook polygons, tilemap tiles and skeleton
+bone colliders — but not the collider primitives.
 
 ### 3.10 Physics quick reference
 
@@ -572,7 +608,7 @@ exactly once per flip rather than every frame.
 | Collision mode | Per collider / per sprite polygon / per tile | NoCollision, QueryOnly, PhysicsOnly, QueryAndPhysics ([3.2](#32-collision-modes-per-shape)) |
 | Separate Body | Per collider instance | Own dynamic body; needs an active Rigidbody ([3.3](#33-separate-bodies--multi-body-entities)) |
 | Attach To Collider | Per sprite/flipbook instance | Glues the visual to a named part body |
-| Joint target | Per joint instance | Part name → UUID → tag, in that order ([3.6](#36-joints-at-runtime-targets--breaking)) |
+| Joint target | Per joint instance | Target Part → entity UUID → Target Entity Tag, in that order ([3.6](#36-joints-at-runtime-targets--breaking)) |
 | Break Force / Break Torque | Per joint instance | `0` disables that test; raises a break event |
 | Bone Colliders Enabled | Skeleton component | Kinematic hit bodies driven by animation |
 | Ragdoll Enabled + blend | Skeleton component | Dynamic bodies; blend scales joint motor torque |
@@ -677,7 +713,10 @@ mixed for all of them, so a sound near player 2 is audible even when player 1 is
 Outside split-screen the engine falls back to a single listener at the primary camera.
 While a cinema controls the camera, the primary listener moves with the cinema's frame
 (blended by the cinema's camera weight) unless the cinema's **Audio Listener** is set to
-**Gameplay Camera**, so 3D sounds are heard from what the shot shows.
+**Gameplay Camera**, so 3D sounds are heard from what the shot shows. In the editor, while
+the camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), all of this is replaced by a
+single listener at the centre of the free camera's frame — 3D sounds, occlusion and audio
+zones are heard from where you are looking — and **Inject** puts the listeners back.
 
 ### 4.4 What runs where
 
@@ -920,8 +959,8 @@ component is off by default, so a singleplayer project is completely unaffected.
 | ------- | ------ |
 | **Replicate** | Master switch. |
 | **Owner** | **Server** (the host simulates it) or **Player** + an **Owner Player ID** (that client owns it — the setup for a predicted character). |
-| **Transform / Velocity / Visuals / Full State** | Which groups are synchronized. Transform, velocity and visuals go every tick; full state is checked periodically. |
-| **Full State Rate** | How often, in Hz, full state is re-checked (`0` = use the global rate, 8 Hz by default). |
+| **Transform / Velocity / Visuals / Full State** | Which groups are synchronized. Transform, velocity and visuals go every tick. Full state covers every other component setting — lights, tilemap, AI, the body's runtime physics settings, collider settings, and components removed on the host — and is compared periodically, so only what actually changed is sent. |
+| **Full State Rate** | How often, in Hz, full state is re-checked (`0` = use the global rate, 8 Hz by default; the field is shown while **Full State** is ticked). |
 | **Scripts On Replicas** | **Auto** (follow the global gating setting), **Always Run** or **Never Run** — whether Lua callbacks execute on clients for an entity somebody else owns. |
 | **Relevancy** | **Area Of Interest** (sent only to nearby players) or **Always Relevant** (sent to everyone — bosses, objectives). Feeds directly into [5.5](#55-delta-compression--area-of-interest). |
 | **Kinematic On Clients** | Make the replicated body kinematic on clients so local physics never fights the incoming position. |
@@ -931,17 +970,36 @@ unflagged ones are dropped; owner changes are pushed through; each entity is ann
 a **spawn** message (including its prefab path and its UUID so clients can bind to an
 entity that already exists in the level) and then pushed every tick; entities that vanished
 are **despawned**; and, if it changed, the level's **world-settings override** is broadcast
-so everyone simulates with the same gravity and physics settings. When a new player joins,
-every entity is **re-announced** so the newcomer receives the whole world.
+so everyone simulates with the same gravity and physics settings. A client asks for the
+world itself: when it joins, and again every time it finishes loading a level, it sends the
+server a **state request**. The server answers **that player alone** with the current world
+settings and every replicated entity with its full current state, followed by an
+acknowledgement, so nobody else is re-sent anything. The client repeats the request until
+that acknowledgement arrives, which makes the hand-over independent of timing: whichever
+side finishes loading a level first, the client ends up with the complete world. Requests
+are rate-limited per player. Animator **triggers** fired on the host travel as separate
+reliable messages, so a trigger that lives for a single frame is never lost between two
+snapshots.
 
-**On clients**, each tick: pending spawns, despawns, full states and level changes are
-drained (a spawn whose prefab is not ready yet is retried for up to 30 seconds instead of
-being dropped), then every replicated entity is either **reconciled** (if prediction is on
-and this client owns it) or made kinematic and **driven** from the replicated state.
+**On clients**, each tick: pending spawns, despawns, state updates, animator triggers and
+level changes are drained in exactly the order the server sent them (a spawn that binds to
+a level entity which is not loaded yet is retried for up to 30 seconds instead of being
+dropped, and everything addressed to that entity waits behind it), then every replicated
+entity is either **reconciled** (if prediction is on and this client owns it) or **driven**
+from the replicated state — its body made kinematic first, unless **Kinematic On Clients**
+is off. State updates are applied in place, field by field, so a change to one component
+never restarts a sound, particle system or widget that belongs to another. A spawn message
+for an entity the client already tracks — the answer to a state request, for instance — only
+refreshes that state: the replica is never re-created, and what a predicting owner simulates
+locally is left alone. When the session
+ends, replicas spawned from a prefab are removed and level entities are released back to
+local simulation with their original body type.
 
 Level changes are part of the protocol: the server can broadcast a **level change** and
 clients load the named level through a callback, so the session stays together across
-level transitions.
+level transitions. Replication state is per level on both sides — the host re-announces its
+entities when its new level starts, and each client re-requests the world when its own load
+finishes — so the two sides may pass through loading screens of different length.
 
 ### 5.8 Rollback netcode
 
@@ -976,6 +1034,15 @@ detected** when they disagree. The other events are synchronizing, synchronized,
 (this peer runs ahead and briefly stalls), **connection interrupted** (a player dropped out
 of the network session), **resumed** (it came back; the inputs it missed are resent) and
 **disconnected** (it stayed away for 10 seconds, or the initial handshake timed out).
+
+**Time sync** keeps the peers on the same frame number. From the frame counters and
+acknowledgements already present in the input packets, each peer works out how far it runs
+ahead of every other peer *and* how far that peer runs ahead of it; half the difference is
+the real frame offset, in which network latency cancels out. Only the peer that is really
+ahead waits: when the offset averaged over about a second reaches two frames, it skips up
+to nine frames, one at a time with a few frames between them, and re-evaluates no sooner
+than 240 frames later. A session may be stopped or restarted from inside any of its
+callbacks; the tick in progress ends at once.
 
 Two session types exist: **P2P** for real play, and **SyncTest**, which runs locally and
 deliberately rolls back every frame by a chosen distance and compares checksums — the
@@ -1165,9 +1232,13 @@ because they need UDP.
 | Router port mapping | on for online rooms, off for `StartServer` | UPnP IGD / NAT-PMP |
 | Rendezvous server ports | UDP 7790–7792, TCP 7793 | Relays on UDP 7800–7899 |
 
-Defaults live in `Config/Engine.json` and are edited in
-[Preferences → Network](Editor-EN-DOC.md#109-network); the live test harness is
-[Network Manager](Editor-EN-DOC.md#11-network-manager-enet).
+The defaults above are the engine's built-in values — what a shipped game starts with.
+[Preferences → Network](Editor-EN-DOC.md#109-network) keeps its own values in the project's
+`Config/Engine.json` and applies them to the editor session (the
+[Network Manager](Editor-EN-DOC.md#11-network-manager-enet) test harness and Play mode). A
+game build drops that section, so a game that needs other values sets them from script —
+`Network.StartServer(port, maxPlayers, …)`, `Network.SetTickRate`, `Network.SetSnapshotRate`
+and the rest of [Lua API → Network](LuaAPI-EN-DOC.md#32-network--multiplayer-network).
 
 ---
 
@@ -1367,7 +1438,7 @@ underneath.
 | **Destruction** | Fractures sprites, flipbooks, skeletons and tiles into real physics debris — rectangles, triangles, shards or splinters — on impact, on damage or from script, and lets debris break into smaller debris for several generations; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces the debris cap. |
 | **Navigation** | Nav grids are built from **view volumes** ([Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view)): each volume owns its own grid with its own cell size, agent radius, diagonal flag and mode (top-view or side-view, the latter with jump/fall limits). Several grids can coexist; a path query picks the grid that contains the endpoints, runs A\* and can smooth the result. |
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
-| **Command system & CVars** | Named commands and console variables registered from C++ or Lua, executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
+| **Command system & CVars** | Named commands and console variables — the engine's own plus those your scripts register from Lua — executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
 | **Crash reporter** | Installed by every IceBoxEngine application; it records the active renderer, GPU and driver at startup so a crash report always names them. Reporting options are set per build in [Profiling & Building → Crash Reporter](Profiling-And-Building-EN-DOC.md#73-crash-reporter). |
 | **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web, Media Foundation on the Xbox consoles) that decodes video into a texture the game can draw and streams the audio track alongside it, with play/pause/resume/stop, a **skippable** flag, volume, looping of the whole video or of a chosen part, frame-accurate seeking, playback speed from 0.25× to 4× with or without pitch correction, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
 | **Localization** | The editor UI and game text are separate: the editor reads `Config/Languages/*.json` ([Editor → 2.5](Editor-EN-DOC.md#25-language-fonts--rtl-layout)), while your game reads a `.ice_localization` asset ([Assets → 4.18](Assets-EN-DOC.md#418-localization-ice_localization)), which hot-reloads when it changes on disk. |
@@ -1437,8 +1508,8 @@ either a higher limit or a server-side move; alternatively switch the **Trust Mo
 
 **Players join but see an empty world.**
 Entities only replicate when their **Replication** component has **Replicate** ticked. The
-server re-announces everything when a player joins, so a genuinely empty world means nothing
-is flagged.
+server sends the whole replicated world to every player who joins, so a genuinely empty world
+means nothing is flagged.
 
 **Bandwidth is fine locally but the server melts with many players.**
 Turn on **Area Of Interest** and mark only genuinely global entities as **Always Relevant**.

@@ -305,7 +305,7 @@ The editor is a real code editor, not just a text box. Its toolbar (above the ed
 | **+T** | — | Insert a code template (control flow, functions, classes, editor loops, events…). |
 | **Auto** | — | Auto-compile: while ticked, the script is syntax-checked ~0.6 s after you stop typing and the offending line is flagged. |
 
-**Autocomplete** pops up automatically once you have typed two or more characters. It draws from the built-in API, live runtime bindings, and the functions you have defined in the current script. Use `↑` / `↓` to choose, `Tab` or `Enter` to accept, `Esc` to dismiss.
+**Autocomplete** pops up under the cursor once you have typed two or more characters. It draws from the built-in API, live runtime bindings, and the functions you have defined in the current script, and shows the selected entry's signature below the list. Use `↑` / `↓` to choose, `Tab` or `Enter` to accept, `Esc` to dismiss. It stays closed inside comments and strings.
 
 Press **Run Script** to execute the whole editor, or **Clear** to reset it to an empty buffer.
 
@@ -2007,8 +2007,6 @@ widget = editor.get_component(uuid, 'Widget')
 #     'screen_space': True,
 #     'scale': 1.0,
 #     'render_order': 0,
-#     'flip_x': False,
-#     'flip_y': False,
 #     'interactable': True,
 #     'player_index': -1    # -1 = all players, 0..3 = specific player
 # }
@@ -3207,8 +3205,6 @@ widget_data = editor.get_instance(uuid, 'Widget', 0)
 #     'screen_space': True,
 #     'scale': 1.0,
 #     'render_order': 0,
-#     'flip_x': False,
-#     'flip_y': False,
 #     'interactable': True,
 #     'player_index': -1,
 #     'position': (0.0, 0.0, 0.0)
@@ -3843,7 +3839,8 @@ lang = editor.get_locale()  # 'ru'
 
 #### `editor.set_locale(lang_code)`
 
-Sets UI language.
+Sets UI language. `lang_code` is the name of a language file in `Config/Languages`
+(`'en'`, `'ru'`, `'kr'` …); the editor font is rebuilt for the new language on the next frame.
 
 ```python
 editor.set_locale('en')
@@ -3852,10 +3849,10 @@ editor.set_locale('ru')
 
 #### `editor.get_localized_string(key)` → `str`
 
-Returns localized string by key.
+Returns the editor interface string for `key` in the current language. Keys are the ones stored in `Config/Languages/<lang>.json` (for example `btn_save`); an unknown key is returned unchanged.
 
 ```python
-text = editor.get_localized_string('menu.file.save')
+text = editor.get_localized_string('btn_save')  # 'Save'
 ```
 
 ---
@@ -6056,7 +6053,7 @@ Evaluates a Lua expression and returns its value rendered as a string. Errors co
 
 ```python
 print(lua.eval('_VERSION'))
-print(lua.eval('Time.GetDeltaTime()'))
+print(lua.eval('GetDeltaTime()'))
 ```
 
 #### `lua.call_global(function_name)` → `bool`
@@ -6133,12 +6130,17 @@ if lua.has_level_function('OnLevelStart'):
 | `lua.get_upvalues(level=0)` | `list[dict]` | `name`, `value`, `type` |
 | `lua.get_environment(source_name)` | `list[dict]` | Variables of one script environment |
 | `lua.get_table(expression, max_depth=2)` | `list[dict]` | Expand a Lua table expression |
-| `lua.is_debug_paused()` | `bool` | Is the Lua debugger stopped on a breakpoint? |
-| `lua.is_debug_hook_active()` | `bool` | Is a debug hook installed? |
+| `lua.is_debug_paused()` | `bool` | Is a script paused in the Lua debugger (breakpoint, step, error stop or hang watchdog)? |
+| `lua.is_debug_hook_active()` | `bool` | Is the Lua debugger watching the VM right now (a debug hook is installed)? |
 | `lua.is_runtime_active()` | `bool` | Is the Lua runtime bound to a scene (play mode)? |
 | `lua.memory_kb()` | `float` | VM memory usage in KB |
 | `lua.collect_garbage()` | — | Run a full Lua GC cycle |
 | `lua.info()` | `dict` | VM snapshot: memory, level-script state, debugger state, global count |
+
+> While a script is paused in the Lua debugger, `get_call_stack()`, `get_locals(level)` and
+> `get_upvalues(level)` describe that script — level `0` is the function that stopped — and
+> `lua.eval()` / `lua.get_table()` are evaluated inside it, so its local variables are
+> visible. `lua.exec()` is refused until the script continues.
 
 ```python
 print(f"Lua exposes {len(lua.get_globals())} globals, using {lua.memory_kb():.0f} KB")
@@ -6223,10 +6225,10 @@ print(project.get_config('Engine')['Physics']['GravityY'])
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
-| `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json` |
+| `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json`; the plugin is loaded or unloaded on the next editor frame |
 | `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
 | `project.set_mod_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Mods.json` |
-| `project.reload_plugin_config()` | — | Re-read both registries from disk |
+| `project.reload_plugin_config()` | — | Rescan `Plugins/` and `Mods/`, re-read both registries from disk and reload what is enabled, on the next editor frame |
 
 ```python
 for p in project.get_plugins():
@@ -6234,7 +6236,12 @@ for p in project.get_plugins():
     print(f"[{state}] {p['name']} {p['version']} — {p['description']}")
 ```
 
-> Enabling a plugin writes the config; the plugin itself is loaded on the next editor start.
+> `set_plugin_enabled` writes the config at once, but the plugin itself is loaded or unloaded on the
+> **next editor frame**, never underneath the script that asked for it: `get_plugins()` reports the new
+> `enabled` immediately and the new `loaded` one frame later. Plugins that depend on it follow — they are
+> unloaded before it goes and loaded again once it is back. `reload_plugin_config()` is deferred the same
+> way: on the next frame every plugin and mod is unloaded, both folders are rescanned and the enabled
+> plugins are loaded again — the enabled mods too if the game is running.
 
 ---
 
@@ -6672,7 +6679,7 @@ icebox.log.trace('entering import loop')
 | `Skeleton` | ❌ | Skeletal (2D bone) animation. Skeleton path, current animation/skin, playback, color, ragdoll, dynamics (hair, cloth, dynamic bones). |
 | `Tilemap` | ✅ | Tilemaps. Tilemap path, visibility, flip. |
 | `FX` | ✅ | Particle systems. FX path, playback, loop, speed. |
-| `Widget` | ✅ | UI widgets. Widget path, visibility, screen space, scale, order, flip (x/y), interactable, player index. |
+| `Widget` | ✅ | UI widgets. Widget path, visibility, screen space, scale, order, interactable, player index. |
 | `PointLight` | ✅ | Point light. Color, intensity, radius, falloff, shadows. |
 | `SpotLight` | ✅ | Spotlight. Color, direction, cone angles, shadows. |
 | `PointMarker` | ✅ | Point marker (editor). Color, shape, size. |
@@ -6784,7 +6791,7 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | `dont_block_shadows` | SpriteRenderer, Flipbook, FX | Do not occlude other shadows |
 | `vertex_effects` | SpriteRenderer, Flipbook | Nested dict of vertex-shader effects (see 5.13) |
 | `current_frame` | Flipbook | Current animation frame |
-| `flip_x` / `flip_y` | Widget, FX | Mirror horizontally / vertically |
+| `flip_x` / `flip_y` | FX | Mirror horizontally / vertically |
 | `player_index` | Widget | Owning player: `-1` = all, `0..3` = specific player (clamped) |
 | `rolloff` | Audio | Spatial distance rolloff |
 | `override_loop` / `override_spatial` | Audio | Use the instance's own `loop` / `spatial` instead of the sound asset's |

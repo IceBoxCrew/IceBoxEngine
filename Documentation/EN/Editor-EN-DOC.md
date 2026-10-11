@@ -103,8 +103,8 @@
 
 ## 1. Introduction
 
-The IceBoxEngineEditor is the program you launch to make a game. It is a **single
-window** divided into dockable panels, with a menu bar and a toolbar across the
+The editor (`IceBoxEngine`, normally opened through the launcher) is the program you
+use to make a game. It is a **single window** divided into dockable panels, with a menu bar and a toolbar across the
 top. Everything you do — building a level, editing an entity, tuning physics,
 testing gameplay — happens inside this window.
 
@@ -114,6 +114,10 @@ organize them in the **Level Outliner**, edit them in the **Properties** panel,
 preview the result in the **Viewport**, and press **PLAY** to run the level
 exactly as the shipped game will. Assets the level consumes — sprites, tilemaps,
 materials, classes, widgets — come from the **Content Browser**.
+
+While a project opens, the editor shows a start-up splash with a progress bar and its
+loading stages, and ignores input until the workspace is ready — see
+[Getting Started → Opening a project](Getting-Started-EN-DOC.md#37-opening-a-project-the-hand-off-to-the-editor).
 
 > The editor's own language and theme are configurable (see
 > [Preferences → Editor](#104-editor)); this document uses the default English
@@ -131,7 +135,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame       Release 1.0.0 │
+│                             │ Remote Preview │ MyNewGame       Release 1.0.1 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -173,10 +177,17 @@ The **default layout** is created automatically the first time you run the edito
 
 * **Viewport** fills the centre.
 * **Level Outliner**, **World Settings** and **Properties** are docked on the
-  **right** as tabs (25 % of the width).
+  **right** as tabs (25 % of the width, or 32 % when the window is narrower than about
+  1100 logical pixels).
 * **Content Browser** and **Console** are docked at the **bottom** as tabs
   (30 % of the height).
 * **Statistics** is docked at the **bottom-right**.
+
+A window that is very narrow (under about 700 logical pixels) or taller than it is wide
+gets a **stacked** layout instead: the Viewport on top, Level Outliner / World Settings /
+Properties as tabs below it, and Content Browser / Console / Statistics as tabs at the
+bottom. This is the layout a phone in portrait gets (see
+[The editor on Android](#the-editor-on-android)).
 
 Every asset editor (Sprite Editor, Class Editor, Material Editor, …) opens as a
 free-floating window that you can dock anywhere. Opening the same asset twice does
@@ -191,7 +202,9 @@ reset it; the positions are remembered per editor type and stored in `imgui.ini`
 
 ### 2.3 Panel persistence
 
-Several files remember your workspace and your settings between sessions:
+Several files remember your workspace and your settings between sessions. All of them
+live in the **project folder** (the editor works with the project folder as its working
+folder), so every project keeps its own layout, panels and settings:
 
 | File | Remembers |
 | ---- | --------- |
@@ -211,42 +224,33 @@ assets.
 
 ### 2.4 Live content watching
 
-The editor watches the whole `Content/` folder recursively while it runs. Every
-engine asset type is watched (`.ice_*` and `.icemap`) plus the raw source formats
-— `.png`, `.jpg`, `.jpeg`, `.wav`, `.ogg`, `.mp3`, `.flac`, `.ttf`, `.otf`,
-`.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`, `.lua` and `.txt`.
+While it runs, the editor watches the whole `Content/` folder. Files you add, change or
+delete with other tools show up without a restart: new images, sounds, fonts and videos
+get their sidecar automatically, assets and the class instances in the open level are
+reloaded, the Content Browser shows the change within about a second and a half, and a
+small floating **File Changes** window lists what changed (outside Play mode). Exactly
+what is watched and how it behaves is described in
+[Assets → External changes & auto-refresh](Assets-EN-DOC.md#25-external-changes--auto-refresh).
 
-When something changes on disk:
-
-* A small floating **File Changes** window lists the recent `Created` / `Modified`
-  / `Deleted` entries. Each line lives for 5 seconds; **Clear** empties the list
-  and closing the window dismisses it. It only appears outside Play mode.
-* A **newly created** raw file gets its sidecar asset created automatically —
-  images get `.ice_texture` import settings, audio gets an `.ice_sound`, fonts get
-  an `.ice_font`, videos get an `.ice_video`. See
-  [Assets](Assets-EN-DOC.md) for what sidecars are.
-* A changed `.ice_localization` reloads the project's game localization.
-* All assets are refreshed and every class instance in the open level is reloaded,
-  so external edits show up in the viewport without a restart.
-* The **Content Browser** — both the folder tree and the item grid — shows files and
-  folders created, renamed or deleted outside the editor within about a second and a
-  half. Changes you make from the Content Browser itself appear at once.
-
-Saving from inside the editor suppresses the watcher for a few seconds so your own
-writes don't trigger a redundant reload.
-
-Separately, **class scripts** (`.ice_class`) are hot-reloaded on change when
+Class scripts (`.ice_class`) also hot-reload on change when
 [Auto-Compile on Play](#32-edit) is on — see that entry for the exact behaviour.
 
 ### 2.5 Language, fonts & RTL layout
 
 The editor UI language is chosen in [Preferences → Editor](#104-editor) and covers
-**14 languages**: English, Russian, Ukrainian, Chinese, Arabic, Hindi, Spanish,
-Portuguese, Japanese, French, German, Italian, Polish and Hebrew.
+**15 languages**: English, Russian, Ukrainian, Chinese, Arabic, Hindi, Spanish,
+Portuguese, Japanese, French, German, Italian, Polish, Hebrew and Korean.
 
-* The editor font is loaded from `Config/Fonts` with a merged glyph range that
-  covers Latin, **Cyrillic**, **Chinese (simplified common)**, **Japanese**,
-  **Arabic**, **Hebrew** and **Devanagari**, so no language falls back to boxes.
+* The editor font is built from `Config/Fonts` as one merged font: the font chosen
+  in Preferences first, then the Noto fonts as fallbacks — **Noto Sans** (Latin with
+  the extended letters of Polish and the other European alphabets, Greek,
+  **Cyrillic**), **Hebrew**, **Arabic**, **Devanagari**, **Simplified Chinese**,
+  **Japanese** and **Korean**. When the editor runs in Japanese or Korean, that
+  language's font comes before the other CJK fonts, so shared Han characters take
+  its shapes. Glyphs are rendered the first time they are drawn, so every
+  character these fonts contain shows up — in any UI language, in asset and file
+  names, log lines and the text you type — and text stays sharp at every font
+  size and UI scale on every renderer.
 * For a right-to-left language (Arabic, Hebrew) the editor mirrors its own layout:
   window titles, button and selectable text align right, and the window
   collapse/menu button moves to the right side.
@@ -256,7 +260,7 @@ Portuguese, Japanese, French, German, Italian, Polish and Hebrew.
 * Panels fade in and out over a fraction of a second when they open and close;
   this is purely cosmetic and needs no configuration.
 
-Font file, size and colour, plus the UI scale (1×–4×, or `0.60×`–`2.00×` on Android), are also on the
+Font file, size and colour, plus the UI scale (1×–4×, or `0.40×`–`2.00×` on Android), are also on the
 [Editor](#104-editor) tab. Changing the font or the language rebuilds the font
 atlas.
 
@@ -338,7 +342,7 @@ Separators group the list as: the four main panels, then **World Settings**, the
 | **DLC Packager** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | Builds add-on content packages. |
 | **Remote Preview** | *This document, [Section 12](#12-remote-preview)* | Streams the running game to an Android device over ADB. **Not shown on macOS or on the Android editor** — on the device itself, Play mode already is the preview. |
 | **Profiler (Tracy)** | [Profiling & Building](Profiling-And-Building-EN-DOC.md) | The advanced frame profiler. |
-| **Lua Script Debugger** | [Lua API](LuaAPI-EN-DOC.md) | Breakpoints and stepping for gameplay Lua. Visual Script graphs have their own debugger, driven from the graph editor. |
+| **Lua Script Debugger** | [Lua API](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual) | Breakpoints, stepping, variables, watches and a console for gameplay Lua; it opens by itself when a script stops. Visual Script graphs are debugged right in the graph editor. |
 | **Plugins & Mods** | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) | Manage installed plugins and mods. |
 | *(Plugin tools)* | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) | Plugins can add their own items (optionally grouped into sub-menus) below the built-ins. |
 
@@ -359,10 +363,24 @@ adjusted for a touch screen and for what a phone can actually do:
   input. The divider between two docked panels is thick enough to catch with a finger, so the
   panels can be resized by dragging it, and so are the dividers between the regions inside an
   editor: their grab area spans the whole gap between two regions.
-  **Settings → Editor → UI Scale** rides on top of the size the engine picks for the screen:
+  **Preferences → Editor → UI Scale** rides on top of the size the engine picks for the screen:
   `1.00x` keeps that size, lower values fit more on screen, higher values make everything
-  bigger, and the change applies as you drag. The range on Android is `0.60x`–`2.00x`; on a
-  desktop the same setting is the plain `1.0x`–`4.0x` HiDPI multiplier.
+  bigger, and the change applies as you drag. The range on Android is `0.40x`–`2.00x`; the
+  interface is never drawn smaller than its desktop `1.0x` size in screen pixels, so on a
+  screen with a low resolution or a low pixel density the lowest values stop making a
+  difference. On a desktop the same setting is the plain `1.0x`–`4.0x` HiDPI multiplier.
+* **Text fields and the system keyboard.** Hiding the keyboard — with its own button or with the
+  system *Back* / *hide keyboard* key — leaves the field active, and tapping the field again brings
+  the keyboard back; this holds in every text field, the script and code editors included, and on
+  the launcher. A single-line field gets a **Done** key: it confirms the value, leaves the field and
+  closes the keyboard, while multi-line fields and the code editors keep Enter for a new line.
+  Password fields, such as the keystore passwords in **Build Game**, open the keyboard without
+  suggestions, so it does not learn them. Hold a finger on an active field for **Cut**, **Copy**,
+  **Paste** and **Select All**; dragging across its text or double-tapping a word selects it and
+  shows the same menu, and the keyboard's own clipboard and text-editing panels work as well.
+  Sliding a finger over the keyboard's space bar moves the caret inside the field, and automatic
+  capital letters follow the text before the caret, so a tap into the middle of a sentence does
+  not start a capital by mistake.
 * **Right click without a mouse.** Hold one finger where you want the menu and tap with a second
   finger — the tap has to land and lift within half a second, and neither finger may slide. That
   is a right click at the first finger's position, which puts every context menu within reach:
@@ -381,31 +399,41 @@ adjusted for a touch screen and for what a phone can actually do:
   short tap keeps its usual meaning and selects just the item you tapped.
 * **A layout that follows the screen.** On a narrow screen the launcher turns its side bar into
   a strip of tabs across the top so the project list gets the full width, and the editor moves
-  its toolbar — gizmo modes, audio monitor, grid, Screenshot, Pause, Play, Eject — onto its own
-  row under the menu bar. The default docking is chosen for the shape of the screen: in portrait
-  the Viewport sits on top with Level Outliner / Properties / World Settings and then Content
-  Browser / Console / Statistics stacked below it as tabs, and on a wide screen it is the desktop
-  arrangement with the panels down the side. Rotating the device rebuilds the default layout only
-  when the new shape calls for the other one — a rotation that does not change which layout fits
-  leaves your own arrangement alone.
-* **Moving the viewport camera.** Drag with two fingers to pan and pinch to zoom around the point
-  between them. One finger can pan too: hold it still on empty space for about a third of a
-  second and then drag — the hold is what separates a pan from a rubber-band selection, and the
-  gesture that turned into a pan no longer changes the selection when you lift the finger. A
-  short press keeps its usual meaning: select, drag a gizmo, rubber-band a selection. On a
-  desktop the same camera is on the right mouse button with WASD and the wheel.
+  its toolbar — gizmo modes, the **F** focus button, audio monitor, grid, Screenshot, Pause,
+  Play, Eject — onto its own row under the menu bar. The default docking is chosen for the
+  shape of the screen: in portrait the Viewport sits on top with Level Outliner / Properties /
+  World Settings and then Content Browser / Console / Statistics stacked below it as tabs, and
+  on a wide screen it is the desktop arrangement with the panels down the side. Rotating the
+  device rebuilds the default layout only when the new shape calls for the other one — a
+  rotation that does not change which layout fits leaves your own arrangement alone.
+* **Moving the viewport camera.** Drag with two fingers to pan, pinch to zoom around the point
+  between them, and twist the two fingers around that point to roll the view — the scene on
+  screen turns with your fingers. The roll only engages after a deliberate twist — about 15°,
+  or about 40° once the same gesture has already panned or zoomed — so pinching and panning
+  never tilt the view by accident. Level is magnetic: within 5° of upright the view sits at
+  exactly 0°, and the fingers have to twist further to leave it, so you bring the roll back to
+  zero by twisting back until it clicks in. One finger can pan too: hold it still on empty
+  space for about a third of a second and then drag — the hold is what separates a pan from a
+  rubber-band selection, and the gesture that turned into a pan leaves the selection untouched
+  when you lift the finger. A short press keeps its usual meaning: select, drag a gizmo,
+  rubber-band a selection. On a desktop the same camera is on the right mouse button with
+  WASD, `Q` / `E` / `R` and the wheel.
+* **Focus Selected is the F button.** Right after the **Q**, **E** and **R** gizmo buttons the
+  toolbar carries an **F** button that centres the selected entity in the viewport, exactly as
+  the `F` key does on a desktop. It is greyed out while no entity is selected and, in Play
+  mode, until the camera is ejected.
 * **Graphs and canvases navigate like the viewport.** The Material, Material Function, Behavior
   Tree, Animation State Machine and Visual Scripting graphs, the Class Editor viewport, the
   Widget canvas, the Tilemap grid, the sprite, flipbook, texture, font atlas, spritesheet,
   decal, FX and skeleton previews, the Cinema timeline and the Profiler flame graph all take the
   same gestures: drag with two fingers to pan, pinch to zoom around the point between them, and
   hold one finger still on empty background for about a third of a second and then drag to pan
-  with it. A short press keeps its usual meaning — select a node, drag it, pull a wire out of a
-  pin, rubber-band a selection, paint a tile, move a widget element — and a two-finger tap is
-  still the right click that opens the node palette and the context menus. While a two-finger
-  gesture is running the surface only navigates, so whatever was under your first finger is
-  never dragged along with it, and a one-finger drag on such a surface no longer scrolls the
-  panel behind it.
+  with it. They have no roll: twisting two fingers works in the level viewport only. A short
+  press keeps its usual meaning — select a node, drag it, pull a wire out of a pin, rubber-band
+  a selection, paint a tile, move a widget element — and a two-finger tap is still the right
+  click that opens the node palette and the context menus. While a two-finger gesture is
+  running the surface only navigates, so whatever was under your first finger is never dragged
+  along with it, and a one-finger drag on such a surface does not scroll the panel behind it.
 * **What a mouse draws with the right button held takes two taps.** An Animation State Machine
   transition and a manual slice box in the Spritesheet Slicer are both dragged out with the right
   mouse button on a desktop. On a phone the two-finger tap that stands in for a right click sets
@@ -448,7 +476,7 @@ adjusted for a touch screen and for what a phone can actually do:
   and animated-tile collider editors, the Widget animation timeline and the Visual Scripting
   timeline plot hand a one-finger drag to the points they edit instead of scrolling the panel
   underneath, and dragging a panel splitter resizes it rather than scrolling. Everywhere else a
-  one-finger drag still scrolls the panel exactly as before.
+  one-finger drag scrolls the panel.
 * **Launcher and editor in one process.** The launcher screen opens first; picking a project
   hands it straight to the editor. There is no second executable to start. If the editor cannot
   open a project, the app returns to the launcher with the reason instead of closing.
@@ -480,10 +508,9 @@ PC over USB both open, so a project can also move by copying its folder, and not
 away when the app is uninstalled. The app asks for **All Files Access** on first start to put
 them there and opens the launcher once you have answered; while that permission is missing the
 launcher keeps an **Allow All Files Access…** button on its *My Projects* tab and everything
-falls back into `Android/data/com.iceboxengine.editor/files/`, where earlier versions kept it —
-the launcher still lists projects left there, so nothing is lost either way. Granting the
-permission from that button switches over as soon as you come back: the launcher reloads itself
-on the shared folder.
+falls back into `Android/data/com.iceboxengine.editor/files/` — the launcher also lists the
+projects stored there, so nothing is lost either way. Granting the permission from that button
+switches over as soon as you come back: the launcher reloads itself on the shared folder.
 
 Every field that takes a folder has a browse button that opens the system folder picker: the
 launcher's **Location**, **Move…** and **Duplicate…**, and the editor's **Output Path** and
@@ -492,9 +519,12 @@ level of storage through that picker — pick a subfolder there, or type the pat
 which works for any folder the app can write.
 
 > Besides Tools items and panels, a plugin can also add **toolbar buttons**,
-> **viewport overlays**, **right-click context items**, **Preferences pages** and
-> even **new asset types** with their own editors. All of those surfaces are
-> described in [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
+> **viewport overlays**, **right-click context items**, **settings pages** (shown on the
+> **Settings** tab of the Plugins & Mods panel, not in Preferences) and even **new asset
+> types** with their own editors. A plugin's labels are translated into the editor
+> language from its own files, and its documentation opens in the **Documentation**
+> panel. All of those surfaces are described in
+> [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
 
 ### 3.5 Help
 
@@ -526,6 +556,10 @@ The choice is saved to `Config/Editor.json` immediately and restored between
 sessions. The `Q`/`E`/`R` keys switch modes only while the **viewport is hovered**
 and no text field has keyboard focus, so typing a name in the Outliner never
 changes the gizmo. The Class Editor keeps its own independent gizmo mode.
+
+On Android a fourth button, **F**, follows these three: it focuses the camera on the
+selected entity, like the `F` key (see
+[The editor on Android](#the-editor-on-android)).
 
 ### 4.2 Editor audio monitor
 
@@ -599,7 +633,7 @@ captured.
 | ------ | ----- | ------ |
 | **PLAY** / **STOP** | always enabled | Enters or leaves Play mode (`F3`). |
 | **Pause** / **Continue** | only in Play | Pauses or resumes the running simulation (`F5`). |
-| **Eject** / **Inject** | only in Play | Detaches the camera so you can fly around the running game with `RMB + WASD` without affecting it; **Inject** returns control to the game (`F2`). |
+| **Eject** / **Inject** | only in Play | Detaches the camera so you can fly around the running game with `RMB + WASD` while gameplay input is switched off; **Inject** returns control to the game (`F2`). |
 
 **Entering Play** performs, in order:
 
@@ -613,13 +647,15 @@ captured.
 4. Applies the effective physics settings (the level's
    [World Settings](#8-world-settings) override if enabled, otherwise the global
    Preferences values) and the rendering override.
-5. Pushes the level script into the script engine and hands the placed **cinema**
-   volumes (auto-play / play-once / trigger flags, trigger tag and trigger size) to the
+5. Pushes the level script into the script engine (in a Visual Scripting level it is
+   compiled from the current level graph) and hands the placed **cinema** volumes
+   (auto-play / play-once / trigger flags, trigger tag and trigger size) to the
    cutscene player.
 6. Hands the pointer to the game and applies the **custom cursor** from
    Preferences, or restores the default one.
-7. Hides the OS cursor, switches to relative-mouse mode, and starts the runtime.
-8. Notifies the Lua and Visual Script debuggers that Play has begun.
+7. Hides the OS cursor and switches to relative-mouse mode.
+8. Arms the Lua debugger and starts the runtime, so breakpoints already work in
+   `OnCreate` and `OnLevelStart`.
 
 **Leaving Play** stops the runtime, clears pause and eject, destroys live FX
 emitters, wipes the registry and **restores the pre-play snapshot** — any change
@@ -627,13 +663,19 @@ made during Play is discarded — then restores the cursor. A script that calls
 `QuitGame()` leaves Play mode the same way and the editor stays open; in a built game
 the same call closes the application.
 
+> **Stopped in the Lua debugger.** While a script is paused on a breakpoint the
+> toolbar shows the game as paused: **Continue** (`F5`) resumes the script and
+> **STOP** ends the session at once. Opening another level and refreshing assets wait
+> until the script continues — see the
+> [Lua Script Debugger](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual).
+
 > **Cursor in Play mode.** The editor keeps two separate pointers and only one of
 > them owns the mouse at a time.
 >
 > * **Game cursor** (the default the moment Play starts). The pointer belongs to
 >   the running game: it is **confined to the game viewport** — including after you
 >   drag the viewport panel to another size or position — and the editor UI ignores
->   the mouse completely, so a click can no longer land on a panel behind the game.
+>   the mouse completely, so a click cannot land on a panel behind the game.
 >   Its look and visibility come **only from the game**: the custom cursor from
 >   Preferences and the Lua calls `ShowCursor()`, `HideCursor()`, `SetCursor*()` and
 >   `SetRelativeMouseMode()`. Entering Play hides the OS cursor and switches to
@@ -657,6 +699,17 @@ the same call closes the application.
 > pointer. Plug a mouse into an Android device and the split above applies to that
 > mouse as well; unplug it and the editor takes the pointer back automatically.
 
+> **The ejected camera is the frame.** While ejected, the free camera takes the place
+> of the gameplay camera — or of the cinema that was on screen — for everything that
+> depends on the view: the scene is rendered from it, post-process volumes are
+> evaluated at its centre, and the audio listener sits at its centre, so 3D sounds,
+> occlusion and audio zones are heard from where you are looking, also while the game
+> is paused. Scripts see the same frame: the view functions of the Lua API and
+> `Cinema.GetCameraPosition()` answer for the free camera, and `IsCameraEjected()`
+> reports it (see [Lua API → Camera](LuaAPI-EN-DOC.md#11-camera--camera)). Ejecting
+> during a cinema starts from the shot you were looking at; **Inject** hands the frame
+> and the listener back to the gameplay camera or to the cinema that is playing.
+
 > **Editing while playing.** With the camera **ejected**, you can select and move
 > entities during Play mode; the gizmo writes straight into the live simulation
 > (and syncs the physics body for translate and rotate). Remember that these edits
@@ -674,7 +727,8 @@ state: `Remote Preview` → `Remote (Waiting...)` → `Remote (Connected)`. Hove
 for the `adb reverse` command and, when a device is attached, live stream FPS and
 bandwidth. The detailed settings panel is opened from **Tools → Remote Preview**.
 
-This button is **not present on macOS builds**.
+This button is **not present on macOS builds or in the Android editor** (see the Tools table
+in [3.4](#34-tools)).
 
 ### 4.7 Project name & version
 
@@ -705,20 +759,27 @@ viewport is hovered:
 | **Right-Mouse + W/A/S/D** | Pan the camera (hold RMB, then use WASD). Pan speed = **Editor Camera Speed** × frame time × current zoom, so panning stays consistent as you zoom out. Panning follows the current roll, so W always moves "up the screen". |
 | **Right-Mouse + Q / E** | Roll the view counter-clockwise / clockwise — the scene on screen turns the same way. Roll speed = 90°/s × (**Editor Camera Speed** ÷ its default), so the same `Left Shift+Scroll` that tunes panning tunes rolling with it. Degrees are clockwise-positive, exactly like `SetCameraRotation` at runtime. |
 | **Right-Mouse + R** | Snap the roll back to zero. |
-
-> While the right mouse button is held the viewport is in camera mode, so `Q` / `E` / `R` roll the camera instead of
-> switching the gizmo. Release RMB and they are gizmo shortcuts again.
->
-> The roll is view-only editor state: it is not saved to the level, not written to `editor.json`, and it never touches
-> the `Rotation` of any Camera component in the scene. Picking, rectangle selection, gizmos and asset drag-and-drop all
-> follow the rolled view, so everything stays under the cursor where you expect it.
 | **Mouse Wheel** | Zoom in/out, anchored on the cursor — the world point under the pointer stays put. |
 | **Left Shift + Mouse Wheel** | Adjust the editor camera **pan speed** on the fly (clamped between the engine minimum and twice the configured speed). |
 | **F** | Focus the camera on the selected entity (centres it in the viewport). |
 
+> While the right mouse button is held the viewport is in camera mode, so `Q` / `E` / `R` roll the camera instead of
+> switching the gizmo. Release RMB and they are gizmo shortcuts again.
+>
+> The roll is view-only editor state: it is not saved to the level, not written to `Config/Editor.json`, and it never
+> touches the `Rotation` of any Camera component in the scene. Picking, rectangle selection, gizmos and asset
+> drag-and-drop all follow the rolled view, so everything stays under the cursor where you expect it.
+>
+> On Android the same camera is driven by touch — a two-finger drag, a pinch and a two-finger twist in place of
+> `RMB` + keys — and by the **F** button on the toolbar; see [The editor on Android](#the-editor-on-android).
+
 Zoom limits and the zoom step are configured in
-[Preferences → Editor](#104-editor). In Play mode zooming is disabled unless the
-camera is **ejected**.
+[Preferences → Editor](#104-editor). In Play mode the editor camera takes no input
+while the game's own camera or a cinema is on screen: zooming is disabled, and
+`Left Shift+Scroll` pressed in the running game does not change its speed. Once the
+camera is **ejected** it is navigated with the same inputs and under the same rule:
+the wheel, `Left Shift+Scroll` and `RMB` + keys act only while the cursor is over the
+viewport, so scrolling another panel never moves the camera.
 
 ### 5.2 Selecting entities
 
@@ -955,10 +1016,11 @@ own fields, open by default. The available component types are:
 | **Widget** | An attached UI widget (`.ice_widget`). |
 | **Light** | Point and spot lights (color, intensity, radius, shadows, light cookie). |
 | **Point Marker** | Named local anchors for scripting/attachment. |
-| **AI** | A behavior tree instance (`.ice_ai`) with its blackboard. |
+| **Decal** | Decals placed by hand as part of the level — graffiti, cracks, stains. Each instance picks an `.ice_decal` asset and can override its tint, size, texture variant, flip and draw order (see [Assets → Decal](Assets-EN-DOC.md#421-decal-ice_decal)). |
+| **AI Brain** | A behavior tree instance (`.ice_ai`) with its blackboard. |
 | **Joint** | A physics joint connecting two bodies. |
-| **Stencil** | Stencil mask/clip control for masked rendering. |
-| **Replication** | Network replication settings for the whole entity: whether it replicates, who owns it, which aspects sync (transform, velocity, visuals, full state), whether Lua runs on replicas, and Area-Of-Interest relevancy. Off by default, so singleplayer projects are unaffected. |
+| **Stencil Mask** | Stencil mask/clip control for masked rendering. |
+| **Replication** | Network replication settings for the whole entity: whether it replicates, who owns it, which aspects sync (transform, velocity, visuals, full state — with its own send rate), whether Lua runs on replicas, Area-Of-Interest relevancy, and whether replicas are made kinematic on clients. Off by default, so singleplayer projects are unaffected. |
 | **Class Component** | Embeds other classes as sub-objects (composition). Each instance has a name, a transform and its class path; below the list, a *Provides (resolved at runtime)* summary groups everything the embedded classes contribute (sprites, colliders, lights, …). |
 
 > **Where components come from.** The Properties panel edits the components an
@@ -1067,9 +1129,9 @@ path at the top; with no level open it says *No level loaded. Open or create a
 level first.*
 
 **Physics override** — tick **Override Level Physics** to give this level its own
-physics. The fields mirror [Preferences → Physics](#102-physics): Pixels-Per-Meter,
-Gravity X/Y, solver Sub-steps and Fixed Timestep, and the world flags (Enable
-Sleep, Enable Continuous/CCD, Restitution Threshold, Hit-Event Threshold, Contact
+physics. The fields mirror [Preferences → Physics](#102-physics): Pixels Per Meter (PPM),
+Gravity X/Y, solver Sub-steps and Fixed Timestep, and the world flags (Allow
+Sleep, Continuous Collision (CCD), Restitution Threshold, Hit Event Threshold, Contact
 Hertz, Contact Damping Ratio, Max Contact Push Speed, Maximum Linear Speed).
 **Reset to Global Values** copies the current global values in. When the override is
 off the panel says so and the level uses the global physics.
@@ -1191,7 +1253,8 @@ An unknown command prints a warning pointing at `/help`.
 
 > The Lua and Python languages themselves are documented in the
 > [Lua API](LuaAPI-EN-DOC.md) and [Python API](PythonAPI-EN-DOC.md). The console is
-> just one place to invoke them. Python is only available in editor builds.
+> just one place to invoke them. Python is only available in the desktop editor — the
+> Android editor and shipped games have none, and **Py** input there only reports that.
 
 > The **Console** panel here is the editor's log view. The separate in-game
 > **developer console** (an overlay your shipped game can open at runtime) is part
@@ -1225,9 +1288,10 @@ Below the tabs, three window-wide buttons act on **every** tab at once:
 **Save All**, **Apply All** and **Reset All to Defaults** (which resets, saves and
 applies in one step).
 
-Some settings note that they need a **restart** to take effect — anti-aliasing when
-MSAA is involved, the shader-limit values on the Optimization tab, and the physics
-worker-thread count.
+Some settings note that they need a **restart** to take effect — the shader-limit values
+on the Optimization tab and the physics worker-thread count. Switching anti-aliasing to or
+from MSAA shows the same note, but the new mode is in fact applied as soon as you press
+**Apply**.
 
 ### 10.1 Engine
 
@@ -1244,7 +1308,8 @@ Window and top-level performance:
   surface. See [Graphics → HDR10 output](Graphics-EN-DOC.md#103-hdr10-output).
 * **Window Mode** — Windowed / Fullscreen / Borderless.
 * **Anti-Aliasing** — Off, FXAA (Post), MSAA 2×/4×/8×, SSAA 2×/4×. Switching to or
-  from MSAA shows a restart warning; MSAA also exposes **Alpha-to-Coverage**.
+  from MSAA shows a restart note, yet the new mode takes effect as soon as it is applied;
+  MSAA also exposes **MSAA Alpha-To-Coverage**.
 * **Upscaling** — **FSR** (AMD FidelityFX Super Resolution 1.0) or **NIS**
   (NVIDIA Image Scaling), with a quality preset (Ultra Performance 33 % / Performance
   50 % / Balanced 59 % / Quality 67 % / Ultra Quality 77 % / Native 100 %), a
@@ -1267,9 +1332,9 @@ Window and top-level performance:
 ### 10.2 Physics
 
 Global Box2D defaults (a level can override these in [World Settings](#8-world-settings)):
-**Pixels-Per-Meter**, **Gravity X/Y**, solver **Sub-steps** (1–16) and
-**Fixed Timestep**, and the world flags: **Enable Sleep**, **Enable Continuous**
-(CCD), **Restitution Threshold**, **Hit-Event Threshold**, **Contact Hertz**,
+**Pixels Per Meter (PPM)**, **Gravity X/Y**, solver **Sub-steps** (1–16) and
+**Fixed Timestep**, and the world flags: **Allow Sleep**, **Continuous Collision**
+(CCD), **Restitution Threshold**, **Hit Event Threshold**, **Contact Hertz**,
 **Contact Damping Ratio**, **Max Contact Push Speed**, **Maximum Linear Speed**.
 These feed directly into the physics world; see
 [Graphics → Physics](Graphics-EN-DOC.md#13-physics).
@@ -1306,13 +1371,13 @@ Look-and-feel of the editor itself:
   bar), **Frames** (frame background and its hovered/active states, scrollbar,
   checkmark, slider grab), **Buttons**, **Headers** (header states and separator),
   **Tabs** and **Title** (title bar, active, collapsed).
-* **Language** — the editor UI language, from the 14 supported languages.
+* **Language** — the editor UI language, from the 15 supported languages.
 * **Font** — file (scanned from `Config/Fonts`), size (8–72 px) and colour, with a
   **Refresh** button that rescans the folder. In Play mode it is also the fallback for
   widget text and `Draw.Text` that have no font of their own, until the game assigns a
   font asset with `SystemFont.Set` (see
   [Lua API → SystemFont](LuaAPI-EN-DOC.md#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)).
-* **UI Scale** (1×–4×; on Android `0.60×`–`2.00×`, applied on top of the scale the
+* **UI Scale** (1×–4×; on Android `0.40×`–`2.00×`, applied on top of the scale the
   engine picks for the screen — see [The editor on Android](#the-editor-on-android)).
 * **Grid** — size (1–1000), line thickness (0.01–1), colour, **Snap to Grid**,
   **Show Grid**.
@@ -1337,14 +1402,14 @@ Global rendering defaults (a level can override these in
   still opens on its own renderer when it goes back to the PC. Switching the phone from
   Vulkan back to OpenGL ES 3.2 clears the recorded renderer, so the next desktop start
   picks the best one again by itself. If Vulkan cannot start on the device, the editor
-  falls back to OpenGL ES 3.2 on its own.
+  falls back to OpenGL ES 3.2 on its own, and to OpenGL ES 3.0 on a GPU without ES 3.2.
 * **Active renderer** — read-only: the backend the editor is rendering with *right now*,
   and the **GPU** behind it. A project that has never recorded a renderer gets one the
   first time it is opened on a desktop, by probing the platform chain from the top
   (Windows: Direct3D 12 → Vulkan → OpenGL 4.6 → OpenGL 3.3; Linux: Vulkan → OpenGL 4.6 →
   OpenGL 3.3; macOS: Metal → Metal (MoltenVK) → Metal (ANGLE)) — new projects already
   carry the probe result from the moment the Launcher creates them, on Android too, where
-  the Launcher probes Vulkan → OpenGL ES 3.2. When the combo above
+  the Launcher probes Vulkan → OpenGL ES 3.2 → OpenGL ES 3.0. When the combo above
   names something other than the active renderer, a reminder to restart the editor
   appears under this line. The details are in
   [Graphics → Backends & platforms](Graphics-EN-DOC.md#22-backends--platforms).
@@ -1423,7 +1488,7 @@ snapshots, voice limit — returns to these values. The live mix can be watched 
 
 ### 10.8 Accessibility
 
-A broad accessibility suite (master **Accessibility Enabled** toggle, then):
+A broad accessibility suite (master **Enable Accessibility Features** toggle, then):
 Gamma, Contrast, Brightness, Saturation; **Field of View (Lens)** with its angle
 slider; **Colorblind** mode (Protanopia /
 Deuteranopia / Tritanopia / Achromatopsia) with strength; a
@@ -1466,7 +1531,12 @@ the values persist beyond the current editor session.
 
 ### 10.9 Network
 
-Default values for the multiplayer subsystem, grouped into:
+Default values for the multiplayer subsystem while you work in the editor — they apply to
+the [Network Manager](#11-network-manager-enet) and to Play mode. They are not shipped: a game
+build drops this section from `Config/Engine.json`, so a game starts from the engine's
+built-in defaults and configures networking from script
+([Engine → Network quick reference](Engine-EN-DOC.md#513-network-quick-reference)). Grouped
+into:
 
 * **Server Settings** — max players, port.
 * **Connection Settings** — server IP, timeout.
@@ -1602,7 +1672,7 @@ whoever started it. Its graphs are sampled a few times a second:
 **Tools → Remote Preview** (and the toolbar button) streams the running game to an
 **Android device over USB**, with touch and motion input sent back — ideal for
 testing mobile controls without a full build. The feature is **not available on
-macOS**.
+macOS or in the Android editor** (on the device itself Play mode already is the preview).
 
 **How it works.** The editor runs a small TCP server that binds to **localhost
 only**, and a companion Android app connects to it through `adb reverse`. While Play
@@ -1658,18 +1728,22 @@ same server and reflects the connection state.
 
 ### 13.1 Hot-Keys
 
-**Help → Hot-Keys** opens a tabbed shortcut reference. Five tabs:
+**Help → Hot-Keys** opens a tabbed shortcut reference. Six tabs:
 
 * **Editor** — file (`Ctrl+S`, `Alt+F4`), edit (`Ctrl+Z/Y/R`, `Del`), selection
   (`F`, `Ctrl+Click`, LMB-drag marquee).
 * **Play Mode** — `F5` pause/resume, `F3` toggle Play, `F2` toggle free camera
   (Eject), `Shift+F1` toggle the editor cursor (pointer to the editor or back to
-  the game).
+  the game), and the Lua Script Debugger keys: `F9` toggle a breakpoint, `F5`
+  continue, `F10` / `F11` / `Shift+F11` step over / into / out.
 * **Viewport** — gizmos (`Q/E/R`), camera (`RMB+WASD`, scroll, `Shift+Scroll`),
   mouse (LMB select, RMB context menu).
 * **Tilemap Editor** — paint/erase/fill/pick, region/stamp, tile rotation
   (`Q`/`E`, `Ctrl+Q`/`Ctrl+E`), tile span (`Shift+W/A/S/D`, `Shift+Wheel`) and
   `Ctrl+S` (see the Tilemap Editor in [Assets](Assets-EN-DOC.md)).
+* **Documentation** — the documentation reader: search (`Ctrl+F`, `Ctrl+Shift+F`,
+  `Enter`/`F3`), history (`Alt+←`/`Alt+→`), scrolling, selecting and copying text,
+  and text size (`Ctrl+Scroll`, `Ctrl+0`) — see [13.2](#132-documentation).
 * **Runtime (Debug)** — not shortcuts but the **runtime debug API surface**: the
   `PrintScreen` / `PrintScreenEx` / `RemoveScreenMessage` / `ClearScreenMessages` /
   `DrawWorldText` overlay calls, the `GetDebug…` / `ToggleDebug…` flag helpers,
@@ -1684,25 +1758,99 @@ The full shortcut list is reproduced in [Section 15](#15-keyboard--mouse-referen
 ### 13.2 Documentation
 
 **Help → Documentation** opens an in-editor Markdown reader for this very
-documentation set. It provides:
+documentation set, so the manuals can be read without leaving the editor. Pages look
+the way GitHub shows them.
 
-* A top bar with a **Language:** selector, a **Refresh** button (rescans the folder
-  tree) and a **Search:** box. The reader treats **every sub-folder of
-  `Documentation/`** as a language, so adding a folder adds a language, and it
-  pre-selects the one matching the current editor language.
-* Search highlights every hit, shows a `current / total` counter, and gives up/down
-  arrows to jump between matches plus an `x` to clear. If nothing matches it says
-  so.
-* A **sidebar** with two tabs: **Documents** (the file list, with its own filter
-  box) and **Contents** (a clickable, indented table of contents built from the
-  open document's headings — clicking an entry scrolls to it).
-* Rendered Markdown — headings, paragraphs, **bold/italic**, `inline code`, code
-  blocks, quotes, ordered and unordered lists, tables, horizontal rules and
-  clickable links — using the same font stack as the rest of the editor.
+**Top bar**
+
+* **◀ / ▶** — back / forward through the pages and sections you have visited
+  (`Alt+←` / `Alt+→` or the side mouse buttons).
+* **Language:** — the reader treats **every sub-folder of `Documentation/`** — the
+  engine's and every plugin's — as a language, so adding a folder adds a language, and it
+  pre-selects the one matching the current editor language. Switching the language keeps
+  the same document (`Editor-EN-DOC.md` → `Editor-RU-DOC.md`) and, when both versions
+  have the same headings, the same section.
+* **Refresh** — rescans the folder tree and re-reads the open document. Changes saved
+  to the open file are also picked up automatically, keeping the reading position, and
+  the document list refreshes on its own when the plugins are rescanned.
+* **Search:** — case-insensitive search in the open document (`Ctrl+F`). Every hit is
+  highlighted, a `current / total` counter shows where you are, the up/down arrows,
+  `Enter` / `Shift+Enter` and `F3` / `Shift+F3` jump between matches, and `x` or `Esc`
+  clears the search. If nothing matches it says so.
+* **− / 100% / +** — text size from 60% to 250% (`Ctrl+Scroll`, `Ctrl+Plus` /
+  `Ctrl+Minus`); click the percentage or press `Ctrl+0` to reset it.
+
+**Sidebar** — three tabs:
+
+* **Documents** — the files of the selected language, with a filter box: the engine
+  manuals first, then the documentation of each plugin under a heading with its name.
+* **Contents** — the open document's headings as a collapsible tree that follows the
+  reading position (the current section is highlighted). Click a heading to jump to
+  it; the filter box narrows the list, and `+` / `−` expand or collapse every branch.
+* **Search** — searches every document of the selected language at once
+  (`Ctrl+Shift+F`). Results are grouped by document and show their section and the
+  matching line with the hit highlighted; click one to open it at that spot. The first
+  600 results are listed.
+
+**What is rendered**
+
+* GitHub-flavoured Markdown: headings, paragraphs, **bold**, *italic*,
+  ~~strikethrough~~, `inline code`, links and bare URLs, ordered, unordered and nested
+  lists, task lists with check boxes, tables (column alignment is kept), block quotes,
+  horizontal rules, HTML entities and the common inline HTML tags (`<kbd>`, `<br>`,
+  `<sub>`, `<sup>`, `<mark>`, `<a id="…">`).
+* GitHub alerts — `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]` and
+  `> [!CAUTION]` — as coloured boxes with a translated title.
+* Code blocks with syntax highlighting for Lua, Python, C, C++, C#, GLSL, HLSL and other
+  C-like languages, JSON, shell / PowerShell, batch, CMake and INI / TOML. Hovering a
+  block shows a **Copy** button.
+* Wide code blocks and tables scroll sideways on their own (`Shift+Scroll` or their
+  scroll bar), so the page itself never needs a horizontal scroll bar.
+* Images appear as an image icon with their caption; clicking one opens the image file.
+* Emoji are drawn with the Noto Emoji font that ships in `Config/Fonts`
+  (`NotoEmoji-Regular.ttf`), so they look the same on every platform (without that file
+  the operating system's emoji font is used). Special symbols use the operating
+  system's symbol fonts and code its monospace font; a `NotoSansSymbols2-Regular.ttf`,
+  `NotoSansSymbols-Regular.ttf` or `NotoSansMono-Regular.ttf` placed in `Config/Fonts`
+  is used instead when present.
+
+**Links**
+
+* A section link (`#…`) jumps to its heading and briefly highlights it. A link to
+  another `.md` file opens it in the reader, also from another language folder. Web
+  and `mailto:` links open in the browser or the mail client, and links to other local
+  files open them in their default application. If the target does not exist, a short
+  notice says so.
+* Hovering a link shows its address in the lower-left corner of the page.
+* Hovering a heading shows a **#** to its left: click it to copy a link to that section
+  (`Document.md#section`).
+
+**Selecting and copying**
+
+* Drag to select text (in the Android editor dragging scrolls the page instead); a
+  double click selects a word, a triple click a whole paragraph, and `Shift+Click`
+  extends the selection. `Ctrl+C` copies, `Ctrl+A` selects the whole document.
+* Right-click opens a menu with **Copy** and **Select All**, plus **Open Link** /
+  **Copy Link Address** over a link, **Copy Code** over a code block and **Copy Link to
+  Section** over a heading.
+
+**Moving around** — `↑` / `↓`, `PgUp` / `PgDn`, `Space` / `Shift+Space` and `Home` /
+`End` scroll the page; once you have scrolled down, a round **↑** button in the
+lower-right corner returns to the top.
+
+The reader remembers the language, the open document, the reading position, the text
+size and the sidebar tab between sessions (in `imgui.ini`).
 
 > Any `.md` file you place in `Documentation/EN` (such as this one) appears here
-> automatically. If the `Documentation` folder cannot be found at all, the panel
-> says so and offers a **Refresh**.
+> automatically. If no documentation can be found at all — neither the `Documentation`
+> folder nor a plugin's — the panel says so and offers a **Refresh**.
+
+> **Plugin documentation.** A plugin ships its own documentation in
+> `Plugins/<Name>/Documentation/<LANG>/` — the same language folders, the same Markdown.
+> The panel reads it from the plugins of the open project and from the engine's own
+> `Plugins/` folder, so a plugin's reference sits next to the engine manuals: it can be
+> searched, its links can be followed, and it switches together with the language. See
+> [Plugins & Mods](Plugins-And-Mods-EN-DOC.md#312-shipping-data--visual-script-nodes-with-a-plugin).
 
 ### 13.3 About
 
@@ -1818,6 +1966,16 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `F2` | Toggle free camera (Eject / Inject) |
 | `Shift+F1` | Toggle the editor cursor (pointer to the editor or back to the game) |
 
+**Lua Script Debugger**
+
+| Shortcut | Action |
+| -------- | ------ |
+| `F9` | Toggle a breakpoint on the current line of a script editor |
+| `F5` | Continue (while a script is paused) |
+| `F10` | Step Over |
+| `F11` | Step Into |
+| `Shift+F11` | Step Out |
+
 **Console**
 
 | Shortcut | Action |
@@ -1850,12 +2008,33 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `Shift+Wheel` | Grow / shrink the tile under the cursor on both axes |
 | `Ctrl+S` | Save tilemap |
 
+**Documentation reader** (see [13.2](#132-documentation))
+
+| Shortcut | Action |
+| -------- | ------ |
+| `Ctrl+F` | Search in the open document |
+| `Ctrl+Shift+F` | Search in all documents of the language |
+| `Enter` / `F3` | Next match |
+| `Shift+Enter` / `Shift+F3` | Previous match |
+| `Esc` | Clear the search field or the text selection |
+| `Alt+←` / `Alt+→` | Back / forward (also the side mouse buttons) |
+| `↑` / `↓`, `PgUp` / `PgDn`, `Space` / `Shift+Space` | Scroll |
+| `Home` / `End` | Beginning / end of the document |
+| `Ctrl+C` / `Ctrl+A` | Copy the selection / select the whole document |
+| Double / triple click | Select a word / a paragraph |
+| `Shift+Click` | Extend the selection |
+| `RMB` | Context menu (copy, link, code, link to section) |
+| `Ctrl+Scroll`, `Ctrl+Plus` / `Ctrl+Minus` | Text size |
+| `Ctrl+0` | Reset the text size |
+| `Shift+Scroll` | Scroll a wide code block or table sideways |
+
 ---
 
 ## 16. FAQ & troubleshooting
 
 **My panel layout is broken — how do I reset it?**
-Delete `imgui.ini` next to the editor and restart; the default layout is rebuilt, and the
+Close the editor, delete `imgui.ini` in the project folder and open the project again; the
+default layout is rebuilt, and the
 dividers inside the editors go back to their default positions too. A single divider can be
 reset without that by double-clicking it. Individual panels can be re-opened from the
 [Window](#33-window) menu.
@@ -1893,9 +2072,9 @@ or you want a forced pass, use **File → Update All Assets** (`Ctrl+R`). See
 
 **A setting in Preferences had no effect.**
 Press **Apply** (or **Apply All**) — most settings only change the running editor
-when applied — and note that a few require a **restart**: MSAA changes, the
-Optimization tab's shader-limit values, and the physics worker-thread count. Use
-**Save** / **Save All** to make settings persist.
+when applied — and note that a few require a **restart**: the Optimization tab's
+shader-limit values and the physics worker-thread count. Use **Save** / **Save All** to
+make settings persist.
 
 **This level needs different gravity/lighting than the rest of the game.**
 Use [World Settings](#8-world-settings) to override physics and/or rendering for
@@ -1905,7 +2084,7 @@ that level only. You can even tune them while Play mode runs.
 It binds to localhost only, so the device must reach it through `adb reverse` —
 use **Deploy to Device**, which sets that up, installs the companion app and
 launches it. Also remember that frames are only sent **in Play mode**, and that the
-feature is unavailable on macOS. See [Section 12](#12-remote-preview).
+feature is unavailable on macOS and in the Android editor. See [Section 12](#12-remote-preview).
 
 **Where are the Build, Profiler, Content Browser and scripting docs?**
 Build/Profiler/DLC/Statistics → [Profiling & Building](Profiling-And-Building-EN-DOC.md);

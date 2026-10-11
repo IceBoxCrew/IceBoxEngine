@@ -8,7 +8,7 @@
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
 > OpenGL 4.6, OpenGL 3.3, OpenGL ES 3.2, WebGL 2.0, Vulkan, Direct3D 12, Metal,
 > Metal (ANGLE), Metal (MoltenVK), WebGPU, plus a **Null** renderer for headless servers —
-> across **six**
+> across **seven**
 > platforms; a **render graph** schedules the frame in validated passes; a
 > heavily-optimized **2D batch renderer** draws the scene; a **screen-space
 > post-processing** stack finishes the image; a **2D lighting** system with
@@ -43,7 +43,7 @@
    - 3.3 [The scene-drawing chain](#33-the-scene-drawing-chain)
 4. [The 2D batch renderer](#4-the-2d-batch-renderer)
    - 4.1 [Batching & draw submission](#41-batching--draw-submission)
-   - 4.2 [Instancing, GPU culling & sorting](#42-instancing-gpu-culling--sorting)
+   - 4.2 [Instancing & sorting](#42-instancing--sorting)
    - 4.3 [Blend & shading modes](#43-blend--shading-modes)
    - 4.4 [Buffer streaming](#44-buffer-streaming)
    - 4.5 [Meshes, blur & special draws](#45-meshes-blur--special-draws)
@@ -105,7 +105,7 @@ IceBoxEngine is a **2D** engine, but its renderer is built like a modern 3D one:
 | --------- | ------------- |
 | **Backend-agnostic** | All rendering goes through an **RHI** so the same engine runs on OpenGL, OpenGL ES, WebGL, Vulkan, Direct3D 12, WebGPU and native Metal without per-feature branching in game code. |
 | **Pass-based** | A **render graph** declares passes and the resources they read/write; it validates, (re)orders and profiles them every frame. |
-| **Batched & GPU-driven** | The 2D renderer batches thousands of sprites per draw and can push culling, sorting and draw generation onto the GPU. |
+| **Batched & instanced** | The 2D renderer culls off-screen sprites on the CPU and batches thousands of the rest per draw through GPU instancing. |
 | **Forward-lit, G-buffer-assisted** | Lights and 2D shadows are evaluated **in the sprite shaders** (forward), while a thin **G-buffer** (normal/roughness/metallic + AO/emissive + depth) is written alongside so screen-space effects — SSR, GI, godrays, volumetric fog — have the data they need. The G-buffer attachments are only bound when an active effect actually needs them. |
 | **Data-driven look** | The visual result is authored as **assets** — materials (node-graph shaders), view/post-process volumes, lights and FX — not hard-coded. |
 | **Deterministic physics** | Box2D v3 runs on a **fixed timestep** with render interpolation, so simulation is stable regardless of framerate. |
@@ -252,9 +252,10 @@ renderer is chosen per platform in **Build Game…** (see
   selectable.
 * **WebGPU** — if the device is not ready, the engine logs a warning and drops to
   WebGL 2.0.
-* **Editor viewport** — selecting a GLES/WebGL backend inside the editor on a non-Apple
-  desktop substitutes **OpenGL 3.3**, which is the closest GLES-compatible preview a
-  desktop driver can give you. The build itself still uses the backend you picked.
+* **Desktop editor** — when a project's `Config/Engine.json` names a GLES/WebGL backend (a
+  project made on Android, for example), the Windows and Linux editor runs it on
+  **OpenGL 3.3**, the closest GLES-compatible preview a desktop driver can give you. The
+  build itself still uses the backend you picked in Build Game.
 
 **The Null backend (headless).** Launching the runtime with `--headless` (or
 `-headless`) switches the active backend to `Null` and skips window, graphics context
@@ -266,11 +267,11 @@ scripts and networking keep ticking at full fidelity. This is what a **dedicated
 network server** runs: the same executable and the same game code, without a renderer.
 
 > **Capability gating.** Higher-end features (compute-shader shadows/GI/particles,
-> hardware ray tracing, bindless textures, multi-draw-indirect, GPU sorting, persistent
-> mapping, float render targets, linear filtering of float textures) are detected at
-> runtime. Where a backend or device lacks them, the engine falls back to a portable
-> path automatically — e.g. CPU ray-cast shadows when compute is unavailable, `RGBA8`
-> render targets when `EXT_color_buffer_float` is missing on GLES.
+> hardware ray tracing, bindless textures, persistent mapping, float render targets,
+> linear filtering of float textures) are detected at runtime. Where a backend or
+> device lacks them, the engine falls back to a portable path automatically — e.g.
+> CPU ray-cast shadows when compute is unavailable, `RGBA8` render targets when
+> `EXT_color_buffer_float` is missing on GLES.
 
 Backend differences the renderer compensates for automatically:
 
@@ -325,7 +326,7 @@ The RHI exposes a modern feature set so the renderer can be GPU-driven:
 | **Texture formats** | `R8`/`RG8`/`RGB8`/`RGBA8`, sRGB variants (`SRGB8`, `SRGB8_Alpha8`), float formats (`R16F`, `RGBA16F`, `R32F`, `RG32F`, `RGBA32F`), `RGB10_A2` (HDR10 output), `Depth24` / `Depth32F` / `Depth24Stencil8`, and **GPU-compressed** formats — ETC2 (RGB8/RGBA8 + sRGB), ASTC 4×4/5×5/6×6/8×8 (+ sRGB), and BC1/BC3/BC4/BC5/BC7 (+ sRGB). |
 | **Texture types** | 2D and 2D-array, with per-channel swizzles, all filter modes (including every mipmap combination), wrap modes (repeat / clamp-to-edge / mirrored / clamp-to-border), border color, **anisotropy**, **LOD bias**, mipmap generation, `ClearTexImage`, and **texture views** onto a mip/layer range of an existing texture. |
 | **Buffers** | Vertex, index, uniform (UBO), shader-storage (SSBO), draw-indirect and dispatch-indirect buffers, with static/dynamic/stream usage, immutable storage, ranged mapping and **persistent + coherent** mapping. |
-| **Compute** | Compute dispatch (direct and indirect), memory barriers (SSBO / texture-fetch / image / command) and image load/store — used by shadows, GI, particle simulation, GPU culling and sorting. |
+| **Compute** | Compute dispatch (direct and indirect), memory barriers (SSBO / texture-fetch / image / command) and image load/store — used by shadows, GI and particle simulation. |
 | **Draw** | Indexed, instanced, indirect and **multi-draw-indirect** draws (`RHIDrawElementsIndirectCommand`), across triangle/line/line-loop/line-strip primitives. |
 | **State** | Blend (including separate RGB/alpha factors), depth test + mask + range, full stencil func/op/mask, scissor, multisample and alpha-to-coverage, color mask. |
 | **Queries & sync** | Timestamp and time-elapsed queries (GPU timing) and fence sync objects (buffer streaming and the low-latency mode). |
@@ -353,8 +354,8 @@ cache, CPU descriptor heaps for RTV/DSV/SRV plus a per-frame shader-visible desc
 ring and a content-hashed sampler heap, a deferred deletion queue that retires every
 resource only after the frame that used it has finished on the GPU, and a recycling
 upload-buffer pool. Storage buffers that a shader writes are promoted to a device-local
-resource on first UAV use, so compute output, GPU culling, GPU sorting and
-`ExecuteIndirect` draws all behave exactly as they do on Vulkan. It is also the backend
+resource on first UAV use, so compute output and
+`ExecuteIndirect` draws behave exactly as they do on Vulkan. It is also the backend
 every **Xbox** build runs on: the Microsoft GDK target compiles this one and nothing
 else, so the feature set an Xbox title gets is the Windows Direct3D 12 feature set.
 
@@ -375,8 +376,8 @@ upload-buffer pool, a triple-buffered staging ring for texture uploads, and a pe
 uniform ring buffer. MSAA is resolved by Metal itself through the render pass's
 `resolveTexture`, so multisampled targets never round-trip through memory, and buffers
 use shared storage on unified-memory devices and managed storage (with explicit
-`didModifyRange` flushes) on discrete Macs. Compute output, GPU culling, GPU sorting and
-indirect draws all behave exactly as they do on Vulkan and Direct3D 12.
+`didModifyRange` flushes) on discrete Macs. Compute output and indirect draws behave
+exactly as they do on Vulkan and Direct3D 12.
 
 ### 2.4 The shader pipeline & caches
 
@@ -417,21 +418,27 @@ startup:
   all of them; vertex streams live in a reserved slot range above the resource slots.
 * **WebGPU** cross-compiles the same GLSL to **WGSL**.
 
-Three caches keep the cost off the startup path:
+On-disk caches keep that cost off the startup path. They live under `Saved/` in the
+engine's writable folder — your project folder in the editor; in a shipped desktop game the
+game folder, or the per-user data folder (`%APPDATA%\IceBoxEngine\game\`,
+`~/Library/Application Support/IceBoxEngine/game/`, `~/.local/share/IceBoxEngine/game/`) when
+the game folder is read-only; the app's private data folder on mobile. Deleting them is
+always safe — close the editor or game first and they are rebuilt on the next start, at the
+price of one slower start.
 
 | Cache | What it stores | Where |
 | ----- | -------------- | ----- |
-| **ShaderCache** | Linked **program binaries**, keyed by a 128-bit FNV-1a hash of the shader source and tagged with a driver fingerprint so a GPU-driver update invalidates the whole cache automatically. Hit/miss counts are tracked. | `Saved/Cache/Shaders` |
-| **SPIR-V cache** | Compiled SPIR-V modules keyed by source + stage, so the `shaderc` compile only happens once per shader per machine. | Alongside the shader cache |
-| **Vulkan pipeline cache** | Driver-side pipeline objects, so pipeline creation for a known state combination is near-free. | In-process, per Vulkan device |
-| **Direct3D 12 bytecode cache** | Compiled DXIL/DXBC blobs keyed by the generated HLSL, entry point and target profile, so the SPIR-V → HLSL → DXC/FXC chain runs once per shader per machine. Pipeline-state objects are then cached in-process by their full state key. | Alongside the shader cache |
-| **Metal MSL cache** | Generated Metal Shading Language, keyed by the whole program (both stages plus the resolved argument-index assignment and the MSL version), so the SPIR-V → MSL translation runs once per shader per machine. Render, compute and depth-stencil states are then cached in-process by their full state key. | Alongside the shader cache |
+| **ShaderCache** (OpenGL family) | Linked **program binaries**, keyed by a 128-bit FNV-1a hash of the shader source and tagged with a driver fingerprint so a GPU-driver update invalidates the whole cache automatically. Hit/miss counts are tracked. | `Saved/Cache/Shaders` |
+| **OpenGL SPIR-V cache** | On OpenGL 4.6 drivers that accept SPIR-V (`GL_ARB_gl_spirv`), the SPIR-V modules `shaderc` compiled from the GLSL, so that compile happens once per shader per machine. Cleared automatically when the compiler settings change. | `Saved/Cache/SPIRV` |
+| **Backend shader caches** | **Vulkan / MoltenVK:** the compiled SPIR-V (`.spv`). **Direct3D 12:** the SPIR-V (`.dxs`) plus the DXIL/DXBC blobs (`.dxo`) keyed by the generated HLSL, entry point and target profile, so the SPIR-V → HLSL → DXC/FXC chain runs once per shader per machine. **Metal:** the SPIR-V (`.mts`) plus the generated Metal Shading Language (`.msl`), keyed by the whole program (both stages plus the resolved argument-index assignment and the MSL version), so the SPIR-V → MSL translation runs once per shader per machine. Direct3D 12 pipeline-state objects and Metal render, compute and depth-stencil states are then cached in-process by their full state key. | `Saved/ShaderCache/` |
+| **Vulkan pipeline cache** | Driver-side pipeline objects (Vulkan and MoltenVK), so creating a pipeline for a known state combination is near-free. Saved after every 32 new pipelines and on shutdown, and discarded automatically when it was written for a different GPU or driver. | `Saved/ShaderCache/vulkan_pipeline.cache` |
 
-**Project Prewarm** ([Preferences → Engine](Editor-EN-DOC.md#101-engine)) walks the
-project up-front and warms sprites, flipbooks, skeletons, materials, material
-instances, textures, FX, tilemaps, tilesets, widgets, fonts, animations, sounds and
-views on a time budget per frame, so the first frame of gameplay does not pay for a
-shader compile or a texture upload.
+**Project Pre-Warm on Startup** ([Preferences → Engine](Editor-EN-DOC.md#101-engine), off by
+default) walks the project's `Content/` up-front and warms sprites, flipbooks, skeletons,
+materials, material instances, decals, textures, FX, tilemaps, tilesets, widgets, fonts,
+animations, sounds and views on a time budget per frame, so the first frame of gameplay does
+not pay for a shader compile or a texture upload. Leave it off if your game has loading
+screens that warm what they need through the `Prewarm.*` Lua API instead.
 
 ---
 
@@ -640,36 +647,26 @@ them in as few GPU draws as possible:
 * **Stats** — draw calls, quad count and texture binds are tracked each frame and
   surface in the [Statistics](Profiling-And-Building-EN-DOC.md#33-renderer) panel.
 
-### 4.2 Instancing, GPU culling & sorting
+**Freeze culling** (a [debug flag](#12-debug-visualization)) locks the frustum bounds
+at their current values so you can fly the camera out and inspect exactly what the
+culler was keeping.
 
-For large scenes the renderer can move work onto the GPU:
+### 4.2 Instancing & sorting
+
+For large scenes the renderer keeps per-sprite CPU work and state changes low:
 
 * **Instanced rendering** — instead of four vertices per sprite, a single unit quad
   is drawn *N* times from a per-instance buffer. Each instance is seven `vec4`s:
   position + rotation, size + pivot, UV offset + scale, colour, texture index, and two
   **effect-parameter** vectors ([4.6](#46-vertex-effects)) — drastically cutting CPU
   work and vertex bandwidth.
-* **GPU frustum culling** — a compute shader tests every instance against the camera
-  frustum (using the cull bounds + **Cull Padding**) and writes a compacted draw list
-  into an **indirect draw** buffer, so off-screen sprites cost nothing on the CPU.
-  Culling mode (AABB vs per-pixel) is set in
-  [Preferences → Optimization](Editor-EN-DOC.md#106-optimization) and is passed through
-  to the cull shader.
-* **GPU sorting** — a bitonic-sort compute pass orders instances by draw category
-  (4 blend modes × 2 shading modes = 8 categories) so state changes are minimized.
-* **Multi-draw-indirect (MDI)** — a second compute pass bins the sorted instances into
-  per-category regions and fills a command buffer, so all categories are issued as a
-  single multi-draw call where supported.
+* **Draw-category sorting** — before a flush, instances are sorted on the CPU by draw
+  category (4 blend modes × 2 shading modes = 8 categories; additive and translucent
+  instances also by depth), and each run of one category is issued as a single
+  instanced draw, so state changes are minimized.
 * **Deferred translucency** — Translucent draws are held back in a separate instance
   list, order-sorted back-to-front on the CPU, and flushed last so overlapping
   transparency composites correctly.
-
-Each of these is optional and gated on capability; the renderer falls back to plain
-batched draws when a path is unavailable.
-
-**Freeze culling** (a [debug flag](#12-debug-visualization)) locks the frustum bounds
-at their current values so you can fly the camera out and inspect exactly what the
-culler was keeping.
 
 ### 4.3 Blend & shading modes
 
@@ -904,9 +901,11 @@ How a light is evaluated:
 * **Light cookies** — point and spot lights can project a **texture mask** (a
   "cookie" / gobo) with its own **intensity** and **rotation**, packed into a shared
   cookie atlas: a 2D texture array of up to **32 layers of 256×256**, keyed by texture
-  path so two lights using the same cookie share one layer. For a spot light the cookie
-  is oriented along the cone direction; for a point light it is projected radially over
-  the light's radius. Use them for window light, foliage dapple, projected logos,
+  path so two lights using the same cookie share one layer. A cookie is projected **as
+  authored**: for a point light the image is laid over the light's radius upright, top of
+  the image up; for a spot light it is upright while the beam points down (the default
+  direction) and turns together with the beam. **Cookie Rotation** is in degrees,
+  clockwise positive. Use them for window light, foliage dapple, projected logos,
   flickering patterns, and so on.
 
 ### 6.4 The light budget & the light UBO
@@ -927,8 +926,6 @@ flag, spot direction + cone cosines, and cookie layer + intensity + rotation, pl
 global ambient, shadow parameters and the directional-light and directional-shadow
 blocks. It is bound at uniform binding point 0 and re-uploaded only when it changes.
 
----
-
 ### 6.5 Where lighting and shadow settings come from
 
 Everything in `Config/Engine.json` → `Rendering` is the **project default** for the whole
@@ -944,7 +941,7 @@ Three layers stack on top of each other, highest wins:
 | # | Layer | Source | Scope |
 | - | ----- | ------ | ----- |
 | 1 | **Project defaults** | `Config/Engine.json` → `Rendering` | Every level, every platform |
-| 2 | **Level override** | [World Settings](Editor-EN-DOC.md#8-world-settings) with **Override Enabled** on | The level it is saved in |
+| 2 | **Level override** | [World Settings](Editor-EN-DOC.md#8-world-settings) with **Override Level Rendering** ticked | The level it is saved in |
 | 3 | **Runtime override** | A [Lua](LuaAPI-EN-DOC.md#133-lighting-and-shadows--global-settings) / Visual Script call such as `SetShadowsEnabled(false)`, `SetCollidersBlockShadows(true)` or `Settings.SetLightingEnabled(false)` | The rest of the session |
 
 A runtime override is tracked **per parameter**: calling `SetShadowsEnabled(false)` pins
@@ -1056,13 +1053,14 @@ Shadow appearance is controlled in
 
 | Setting | Effect |
 | ------- | ------ |
-| **Ray Quality** | Shadow-map resolution: **Low** (180), **Medium** (360), **High** (720), **Ultra** (1080) angular samples per light. Higher = crisper shadows, more cost. Turning shadows off is a fifth state (`Off`) that stops the system entirely. |
-| **Softness** | 0–1. Above ~0.01 it switches shadow sampling from a single hard tap to a **Gaussian-weighted PCF kernel** with a per-pixel dither, blending a penumbra so shadow edges are soft rather than hard. |
-| **Intensity** | How dark the shadow is (0 = invisible, 1 = full); the final result is a lerp between "fully lit" and the sampled shadow. |
-| **Bias** | A **2D** offset (±1000): **X** is a *distance* bias along the ray, **Y** is a *perpendicular* bias that shifts the sample sideways. Together they prevent self-shadowing artifacts ("shadow acne") on both flat and glancing contacts. |
+| **Enable Shadows** | The master switch. Off stops the shadow system entirely; the settings below are shown only while it is on. |
+| **Shadow Ray Quality** | Shadow-map resolution: **Low** (180), **Medium** (360), **High** (720), **Ultra** (1080) angular samples (rays) per light. Higher = crisper shadows, more cost. |
+| **Shadow Softness** | 0–1. Above ~0.01 it switches shadow sampling from a single hard tap to a **Gaussian-weighted PCF kernel** with a per-pixel dither, blending a penumbra so shadow edges are soft rather than hard. |
+| **Shadow Intensity** | How dark the shadow is (0 = invisible, 1 = full); the final result is a lerp between "fully lit" and the sampled shadow. |
+| **Shadow Bias** | A **2D** offset (±1000): **X** is a *distance* bias along the ray, **Y** is a *perpendicular* bias that shifts the sample sideways. Together they prevent self-shadowing artifacts ("shadow acne") on both flat and glancing contacts. |
 | **PCF Samples** | Percentage-closer-filtering taps (1–7). The shader uses half that count on each side of centre, capped at 4. |
-| **Directional Length** | Maximum length of directional shadows in world units; beyond it the shadow fades out instead of stretching to the horizon. `0` = unlimited. |
-| **Directional Depth Fade** | Fades a directional shadow out as the height gap between occluder and receiver grows, so tall objects do not paint hard shadows onto distant ground. |
+| **Directional Shadow Length** | Maximum length of directional shadows in world units; beyond it the shadow fades out instead of stretching to the horizon. `0` = unlimited. |
+| **Directional Shadow Depth Fade** | Fades a directional shadow out as the height gap between occluder and receiver grows, so tall objects do not paint hard shadows onto distant ground. |
 | **Colliders Block Shadows** | Makes collider geometry block other objects' shadows globally (see [7.2](#72-shadow-casters)). |
 
 ### 7.4 Directional shadows
@@ -1075,7 +1073,7 @@ its coordinate **along** the light direction — the same four-layer, height-awa
 structure as point lights.
 
 It has its own enable/cast-shadows flags, shares the softness/intensity/bias settings,
-adds **Directional Length** and **Directional Depth Fade**, and is rendered into its
+adds **Directional Shadow Length** and **Directional Shadow Depth Fade**, and is rendered into its
 own slot of the shadow-map array at a **boosted resolution** (up to 2048) because a
 single map has to cover the whole visible region. Its extent is fitted to the view each
 frame and clamped by the configured shadow length so resolution is not wasted on
@@ -1157,7 +1155,7 @@ How it works:
   instead of sampling the 2D shadow maps, so nothing in the frame is shadowed by
   a different method than anything else. Shadows lose the shadow map's angular
   quantisation and gain a real penumbra that widens with distance from the
-  occluder (**Shadow Softness** is the light's physical size, **Quality** the
+  occluder (**Shadow Softness** is the light's physical size, **RT Quality** the
   sample count). The Z-ordering rules of the rasterised path are preserved
   exactly — a caster still only shadows receivers behind it, and a collider with
   *Cast Shadow* off still casts nothing. If the acceleration structure or the
@@ -1181,20 +1179,21 @@ Quality settings trade cost for fidelity:
 
 | Setting | Effect |
 | ------- | ------ |
-| **Quality** | Rays per texel, GI resolution scale and denoiser passes: Low (4 rays / 0.40× / 1 pass), Medium (8 / 0.55× / 2), High (14 / 0.75× / 2), Ultra (24 / 1.0× / 3). |
-| **Intensity** | Overall strength of the bounced light. |
-| **Bounce** | Albedo carried between bounces — how much of the light reaching a surface is re-emitted into the next bounce. |
-| **Max Bounces** | Number of light bounces (1–8). |
-| **Reflection** | Blends the bounce direction from diffuse toward the mirror direction (0 = diffuse GI, 1 = mirror-like light streaks). |
-| **Max Distance** | How far rays travel before giving up. Bounced light keeps full strength for nearby surfaces and fades out over the far end of that range. |
+| **Enable Ray Tracing** | Turns the system on; the settings below are shown only while it is on. |
+| **RT Quality** | Rays per texel, GI resolution scale and denoiser passes: Low (4 rays / 0.40× / 1 pass), Medium (8 / 0.55× / 2), High (14 / 0.75× / 2), Ultra (24 / 1.0× / 3). |
+| **GI Intensity** | Overall strength of the bounced light (0–4). |
+| **Bounce Strength** | Albedo carried between bounces (0–2) — how much of the light reaching a surface is re-emitted into the next bounce. |
+| **Light Bounces** | Number of light bounces (1–8). |
+| **Reflections** | Blends the bounce direction from diffuse toward the mirror direction (0 = diffuse GI, 1 = mirror-like light streaks). |
+| **Max Ray Distance** | How far rays travel before giving up (16–8192 world units). Bounced light keeps full strength for nearby surfaces and fades out over the far end of that range. |
 | **Ray-Traced AO** | Strength of the contact-darkening term, derived from how much of the surroundings is blocked within the AO radius (0 = off). |
 | **AO Radius** | World-space reach of the ambient occlusion. |
 | **Albedo Response** | 0 adds GI on top of the image, 1 multiplies it by the surface colour so bounced light behaves like real light. AO is always applied multiplicatively. |
-| **Sky Light** | Multiplier on the scene's ambient light for rays that escape. At **1** (the default) open areas keep exactly the ambient the raster pass already applies and only the occlusion term darkens enclosed spots; above 1, open sky adds extra light. It scales *ambient colour × ambient intensity*, so it has no effect while Ambient Intensity is 0. |
+| **Sky Light** | Multiplier (0–8) on the scene's ambient light for rays that escape. At **1** (the default) open areas keep exactly the ambient the raster pass already applies and only the occlusion term darkens enclosed spots; above 1, open sky adds extra light. It scales *ambient colour × ambient intensity*, so it has no effect while Ambient Intensity is 0. |
 | **Detail Sharpness** | Denoiser aggressiveness — higher keeps crisper contact shadows, lower is smoother and more stable. |
 | **Screen Colour Bleeding** | Take bounce colour from the rendered scene (needs post-processing on and MSAA off); otherwise analytic lighting is used everywhere. |
 | **Denoise** | Toggle the temporal + spatial denoiser. |
-| **Shadow rays** | Replaces the analytic 2D shadow maps with **ray-traced direct shadows**: every shadow-casting point/spot light and the directional light is occluded per pixel by the real geometry, with a penumbra that softens with distance from the occluder. **Shadow Softness** becomes the light's physical size and **Quality** picks the shadow sample count (1 / 2 / 4 / 6 / 8; a softness of 0 always uses one perfectly sharp sample). Off keeps the analytic shadow maps and only traces occlusion inside the GI. |
+| **Shadow rays** | Replaces the analytic 2D shadow maps with **ray-traced direct shadows**: every shadow-casting point/spot light and the directional light is occluded per pixel by the real geometry, with a penumbra that softens with distance from the occluder. **Shadow Softness** becomes the light's physical size and **RT Quality** picks the shadow sample count (2 / 4 / 6 / 8 from Low to Ultra; a Shadow Softness of 0 always uses one perfectly sharp sample). Off keeps the analytic shadow maps and only traces occlusion inside the GI. |
 
 > GI is a higher-end feature. It requires a Vulkan device with hardware ray
 > tracing (`VK_KHR_ray_query` + acceleration structures), a Direct3D 12 adapter with
@@ -1329,7 +1328,7 @@ Set in [Preferences → Engine](Editor-EN-DOC.md#101-engine).
 | ---- | ------------ |
 | **Off** | No anti-aliasing. |
 | **FXAA** | A cheap screen-space post pass, applied last in the [effect chain](#93-effect-order). It activates the post-process path on its own, so it works in a level with no volume. |
-| **MSAA 2× / 4× / 8×** | Hardware multisampling, applied live — no restart needed on any backend. Vulkan, D3D12, Metal and WebGPU multisample the swapchain and resolve on present; desktop OpenGL uses multisampled renderbuffers resolved once; OpenGL ES and ANGLE use **tile-memory MSAA** (`GL_EXT_multisampled_render_to_texture`) which resolves for free and costs no extra memory; WebGL2 uses the antialiased canvas, which is fixed at startup. Exposes **Alpha-to-Coverage** for crisp masked (cutout) edges, and disables the ray tracer's screen-colour bleeding. The renderbuffer path forces the full G-buffer; the tile-memory path renders a single attachment instead and is skipped for frames whose effects read scene depth or the G-buffer (fog, DoF, SSAO, SSR, godrays, GI, volumetric fog). |
+| **MSAA 2× / 4× / 8×** | Hardware multisampling, applied live — no restart needed (WebGL 2.0 excepted, see below). Vulkan, D3D12, Metal and WebGPU multisample the swapchain and resolve on present; desktop OpenGL uses multisampled renderbuffers resolved once; OpenGL ES and ANGLE use **tile-memory MSAA** (`GL_EXT_multisampled_render_to_texture`) which resolves for free and costs no extra memory; WebGL2 uses the antialiased canvas, which is fixed at startup. Exposes **Alpha-to-Coverage** for crisp masked (cutout) edges, and disables the ray tracer's screen-colour bleeding. The renderbuffer path forces the full G-buffer; the tile-memory path renders a single attachment instead and is skipped for frames whose effects read scene depth or the G-buffer (fog, DoF, SSAO, SSR, godrays, GI, volumetric fog). |
 | **SSAA 2× / 4×** | Supersampling, implemented as an internal render-scale multiplier of **1.414×** and **2×** respectively — render bigger, downscale on output. Highest quality, highest cost. |
 
 **Render Scale** is an internal-resolution multiplier exposed as 1–200 % and clamped to
@@ -1473,8 +1472,9 @@ The engine draws debug geometry with three dedicated renderers:
   highlights and shadow-caster contours are visualized.
 * **Physics debug draw** — Box2D's own debug output, wired through the DebugRenderer.
 
-Toggles live in the [Statistics](Profiling-And-Building-EN-DOC.md#34-debug-visualization)
-panel and are readable/writable from script by name:
+Toggles live in the **Debug Visualization** section of the
+[Statistics](Profiling-And-Building-EN-DOC.md#34-debug-visualization) panel (as **Show …**
+checkboxes) and are readable/writable from script by name:
 
 | Overlay | Shows |
 | ------- | ----- |
@@ -1523,7 +1523,7 @@ Physics runs on a **fixed timestep** decoupled from the render framerate:
 1. Real frame time is added to an **accumulator** (clamped to at most 8 steps so a
    hitch can't trigger a "spiral of death").
 2. While the accumulator holds a full step, the world is advanced by exactly
-   **Fixed Timestep** seconds with **Sub-step Count** solver iterations
+   **Fixed Timestep** seconds with **Sub-steps** solver iterations
    (`b2World_Step`), contact/sensor/hit events are processed, the `OnFixedUpdate`
    script callback fires, and a step is subtracted.
 3. The leftover fraction becomes an **interpolation alpha**. Each body's previous and
@@ -1548,7 +1548,7 @@ level, and Web builds always run single-threaded. It pays off in scenes with man
 bodies and contacts. The count actually in use, plus the step/collide/solve breakdown,
 is reported in the [Statistics panel](Profiling-And-Building-EN-DOC.md#33-renderer).
 
-**Pixels-Per-Meter (PPM)** converts between world (pixel) units and Box2D meters; it,
+**Pixels Per Meter (PPM)** converts between world (pixel) units and Box2D meters; it,
 the timestep, sub-steps and gravity are configured in
 [Preferences → Physics](Editor-EN-DOC.md#102-physics) and overridable per level in
 [World Settings](Editor-EN-DOC.md#8-world-settings).
@@ -1611,7 +1611,7 @@ Each physics step produces events the gameplay layer can react to:
 | ----- | ---------- |
 | **Contact begin / end** | Two solid shapes start / stop touching. |
 | **Sensor begin / end** | A shape enters / leaves a sensor. |
-| **Hit** | A contact exceeds the **Hit-Event Threshold** impact speed (for impact sounds, damage). |
+| **Hit** | A contact exceeds the **Hit Event Threshold** impact speed (for impact sounds, damage). |
 | **Pre-solve** | Just before a contact is resolved — used to *cancel* contacts (the mechanism behind one-way platforms). |
 
 Each shape individually enables the event kinds it cares about (contact / sensor /
@@ -1682,15 +1682,15 @@ The physics world is created from these settings (global in
 
 | Setting | Role |
 | ------- | ---- |
-| **Pixels-Per-Meter** | World-unit ↔ meter conversion (default 64). |
-| **Gravity X / Y** | Global acceleration. |
-| **Sub-step Count** | Solver iterations per step, 1–64 (accuracy vs cost). |
-| **Fixed Timestep** | Seconds per physics step, 0.001–0.1. |
-| **Enable Sleep** | Let idle bodies stop simulating. |
-| **Enable Continuous** | Continuous collision detection (anti-tunneling). |
+| **Pixels Per Meter (PPM)** | World-unit ↔ meter conversion (default 64; 1–256 in the editor). |
+| **Gravity X / Y** | Global acceleration (default 0 / −9.8). |
+| **Sub-steps** | Solver iterations per step (default 4) — accuracy vs cost. The editor slider offers 1–16; `SetSubStepCount()` from script accepts up to 64. |
+| **Fixed Timestep** | Seconds per physics step, 0.001–0.1 (default 1/60). |
+| **Allow Sleep** | Let idle bodies stop simulating. |
+| **Continuous Collision** | Continuous collision detection (anti-tunneling). |
 | **Restitution Threshold** | Minimum speed for a bounce to apply. |
-| **Hit-Event Threshold** | Minimum impact speed to raise a hit event. |
-| **Contact Hertz / Damping Ratio** | Contact solver stiffness/damping. |
+| **Hit Event Threshold** | Minimum impact speed to raise a hit event. |
+| **Contact Hertz / Contact Damping Ratio** | Contact solver stiffness/damping. |
 | **Max Contact Push Speed** | Cap on separation push-out speed. |
 | **Maximum Linear Speed** | Global speed clamp for bodies. |
 
@@ -1701,8 +1701,8 @@ and takes effect on restart ([13.1](#131-the-simulation-loop)).
 The values in Preferences are stored in `Config/Engine.json` → `Physics` and are the
 **project defaults** in the same sense as the rendering ones ([6.5](#65-where-lighting-and-shadow-settings-come-from)):
 the shipped runtime reads them at startup on every platform, and they are re-seeded every
-time a level starts. A level that enables **Override Enabled** replaces them for itself
-only — leaving that level no longer leaks its physics into the next one, in the editor or
+time a level starts. A level that ticks **Override Level Physics** replaces them for itself
+only — leaving that level never carries its physics over into the next one, in the editor or
 in the build. `Config/Engine.json` → `Audio` is read the same way at startup for the audio
 globals (gain, Doppler, speed of sound, spatial audio, default attenuation distances, voice
 limit, game-pause behavior, occlusion, bus effects, ducking and snapshots) and for the starting
@@ -1719,14 +1719,14 @@ volumes, which the player's `GameSettings.json` then overrides.
 | OpenGL 4.6 | GL | Windows, Linux |
 | OpenGL 3.3 | GL | Windows, Linux (older GPUs); also the editor's GLES-preview substitute |
 | OpenGL ES 3.2 | GL | Android |
-| WebGL 2.0 | GL | Web |
+| WebGL 2.0 | GL | Web; on Android the same backend is the OpenGL ES 3.0 fallback (and is reported as "OpenGL ES 3.0") |
 | Metal (ANGLE) | GL→Metal | macOS |
 | Vulkan | VK | Windows, Linux, Android |
-| Direct3D 12 | D3D12 | Windows |
+| Direct3D 12 | D3D12 | Windows, Xbox |
 | Metal | Metal (native) | macOS, iOS |
 | Metal (MoltenVK) | VK→Metal | macOS, iOS |
 | WebGPU | WGPU | Web |
-| Null (headless) | Null | Dedicated servers on every platform |
+| Null (headless) | Null | Dedicated servers — a desktop game build started with `--headless` |
 
 ### 14.2 Platforms & selectable renderers
 
@@ -1738,8 +1738,10 @@ volumes, which the player's `GameSettings.json` then overrides.
 | Web | WebGPU, WebGL 2.0 | WebGPU → WebGL 2.0 |
 | macOS | Metal, Metal (ANGLE), Metal (MoltenVK) | Metal → Metal (MoltenVK) → Metal (ANGLE) |
 | iOS | Metal, Metal (MoltenVK) | Metal → Metal (MoltenVK) |
+| Xbox | Direct3D 12 | Direct3D 12 (no fallback) |
 
-Any of the six can additionally run **headless** on the Null renderer via `--headless`.
+A desktop game build (Windows, Linux, macOS) can additionally run **headless** on the Null
+renderer via `--headless` — see [2.2](#22-backends--platforms).
 
 ### 14.3 Render passes
 
@@ -1763,7 +1765,7 @@ Any of the six can additionally run **headless** on the Null renderer via `--hea
 
 The directional light gets its own slot at a boosted resolution (up to 2048).
 
-| GI Quality | Rays / texel | Resolution scale | Denoiser passes |
+| RT Quality (GI) | Rays / texel | Resolution scale | Denoiser passes |
 | ---------- | ------------ | ---------------- | --------------- |
 | Low | 4 | 0.40× | 1 |
 | Medium | 8 | 0.55× | 2 |
@@ -1818,8 +1820,9 @@ Lighting only applies in **Lit** mode, and only to sprites whose shading mode is
 materials are Lit.
 
 **My lights work but there are no shadows.**
-Enable **2D Shadows** in Rendering settings, set the light's **Cast Shadows** flag, and
-tick **Cast Shadow** on the occluders. In the default **Colliders** cast mode the
+Tick **Enable Shadows** in the **2D Shadows** section of
+[Preferences → Rendering](Editor-EN-DOC.md#105-rendering), set the light's **Cast Shadows**
+flag, and tick **Cast Shadow** on the occluders. In the default **Colliders** cast mode the
 silhouette comes from collider geometry, so an occluder with no collider casts nothing —
 either give it a collider or switch its **Cast Shadow Mode** to **Contour**.
 
@@ -1847,7 +1850,7 @@ lighting + 2D shadows. The separate **Global Illumination** effect in a post-pro
 (radiance cascades) has no such requirement — see [Section 8](#8-ray-traced-global-illumination).
 
 **Performance drops with many sprites.**
-Raise the batch sizes and enable GPU culling in
+Raise the batch sizes and keep **Cull Padding** no larger than you need in
 [Preferences → Optimization](Editor-EN-DOC.md#106-optimization), reduce **Render
 Scale**, and prefer **Masked/Opaque** over **Translucent** where overlap sorting
 isn't needed. Use the [Statistics](Profiling-And-Building-EN-DOC.md) panel and the
@@ -1860,8 +1863,8 @@ Adjust **Render Scale** and **Anti-aliasing** in
 avoid mipmaps.
 
 **Fast objects pass through walls.**
-Enable **Bullet** (CCD) on the moving body and **Enable Continuous** on the world,
-and consider a higher **Sub-step Count**.
+Enable **Bullet** (CCD) on the moving body and **Continuous Collision** on the world,
+and consider a higher **Sub-steps** value.
 
 **Physics feels jittery.**
 The renderer interpolates bodies between fixed steps, so jitter usually means a body
@@ -1879,9 +1882,9 @@ window/context/audio creation, and runs physics, scripts, FX and networking norm
 See [2.2](#22-backends--platforms).
 
 **My post-process volume settings do nothing.**
-The volume must have both **Post-Process Volume Enabled** and the post-process
-**Enabled** flag set, and the camera *centre* must be inside its bounds (or the view
-must be marked infinite/unbounded). If two volumes overlap, the higher **Priority**
+The view must have both **Post Process Volume** and **Enable Post Process** ticked, and
+the camera *centre* must be inside its bounds (or the view must be marked **Infinite
+Unbound**). If two volumes overlap, the higher **Priority**
 wins and the **Blend Radius** controls the crossfade.
 
 **HDR10 is on but the picture looks the same (or washed out).**
