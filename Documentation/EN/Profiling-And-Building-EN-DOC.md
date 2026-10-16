@@ -71,6 +71,7 @@
    - 7.2 [Configuration: Debug vs Release](#72-configuration-debug-vs-release)
    - 7.3 [Crash Reporter](#73-crash-reporter)
    - 7.4 [Verbose start-up diagnostics](#74-verbose-start-up-diagnostics)
+   - 7.5 [Where a shipped game keeps its player data](#75-where-a-shipped-game-keeps-its-player-data)
 8. [Per-platform settings](#8-per-platform-settings)
    - 8.1 [Windows](#81-windows)
    - 8.2 [Linux](#82-linux)
@@ -276,6 +277,22 @@ raised a Lua error is counted, so a spammy error is visible as cost *and* as a f
 top of that it samples the **Lua heap** every frame (size, peak and a smoothed allocation
 rate in KB/s), which is how you catch script memory churn before it turns into GC spikes.
 
+**Lua counters.** The `Lua` group of the [Counters tab](#411-counters-tab):
+
+| Counter | Meaning |
+| ------- | ------- |
+| **Script Time** | Lua time spent in engine-invoked callbacks during the frame (budget: 30 % of the frame). |
+| **Calls** | Measured Lua callback invocations during the frame. |
+| **Memory** / **Peak Memory** | Heap of the game Lua VM (entity, level and mod scripts) and its highest value. |
+| **UI Memory** | Heap of the UI Lua VM (widget scripts). |
+| **Alloc Rate** | Smoothed allocation rate of the game VM in KB/s (budget 50 KB/s). |
+| **GC Step** | Time the engine spent in the Lua garbage collector in the frame (budget 1 ms): full collections on level load, `Settings.CollectLuaGarbage()` or **Collect Now**, plus idle-frame GC slices. Idle-frame GC runs after the frame's script work and is shown in the next frame. The small incremental steps that Lua makes on its own while scripts allocate are part of **Script Time**. |
+| **Errors** | Lua errors raised by callbacks since start or the last profiler reset. |
+| **Tracked Scripts** | Scripts the script profiler currently knows. |
+
+The collector itself is configured in **Edit → Preferences → Optimization → Lua Garbage
+Collector** ([Editor → 10.6](Editor-EN-DOC.md#106-optimization)).
+
 The whole thing is a toggle: turn it off in the [Scripts tab](#410-scripts-tab--per-script-lua-profiling)
 or with `SetScriptProfilerEnabled(false)` and the measurement cost disappears entirely.
 
@@ -355,10 +372,17 @@ sections.
 
 ### 3.2 Texture Atlas
 
-* Atlas **pages**, page **size**, **max sprite** size, and **packed** texture count.
+* Atlas **pages**, page **size**, the effective **max sprite** size (never more than a page can
+  hold), and **packed** texture count.
+* **Pending decodes** — images still being decoded for the atlas on worker threads.
+* **Atlas VRAM** used by all pages, and **dead space**: the share of page area still held by
+  images removed after an asset refresh (`Atlas.Rebuild()` reclaims it).
 * **Standalone textures** (not atlased).
 * Per-page **occupancy** bars (color-coded: green < 50 %, yellow < 85 %, orange above)
-  with the **region count** packed into each page, so you can spot atlas pressure.
+  with the page's **filtering** and the **region count** packed into each page, so you can
+  spot atlas pressure.
+* **View Pages** draws every page as a thumbnail with the outline of each packed image;
+  hover an image to see its path, size and position on the page.
 
 ### 3.3 Renderer
 
@@ -624,7 +648,9 @@ Stopped traces are written as JSON to **`Tools/Helpers/Profiler/`** under the en
 writable path — that is your project folder when it is writable (the normal editor case),
 otherwise the per-user data directory (`%APPDATA%\IceBoxEngine\game` on Windows,
 `~/Library/Application Support/IceBoxEngine/game` on macOS, `~/.local/share/IceBoxEngine/game`
-on Linux). One file per trace, named after the trace.
+on Linux). A shipped game uses its own writable folder instead
+([7.5](#75-where-a-shipped-game-keeps-its-player-data)). One file per trace, named after the
+trace.
 
 On startup the profiler **loads the traces back from that folder** — the 20 most recent by
 modification time — so the Trace History survives editor restarts. Deleting a trace in the
@@ -826,7 +852,7 @@ profile on a phone or in a shipped build:
 | `StartProfilerTrace([name])` → `bool` | Start recording a trace. Returns `false` if one is already running. |
 | `StopProfilerTrace()` | Stop and summarize the current trace (and write it to disk). |
 | `IsProfilerTracing()` → `bool` | Whether a trace is recording. |
-| `SaveChromeTrace([filename])` → `bool` | Export the latest finished trace — or the live one, or a single-frame snapshot if there is none — as Chrome Trace Event JSON. |
+| `SaveChromeTrace([filename])` → `bool` | Export the latest finished trace — or the live one, or a single-frame snapshot if there is none — as Chrome Trace Event JSON. A `filename` must stay inside the project folder or the game's data folders. |
 | `ProfileBegin(name)` / `ProfileEnd(name)` | Open and close a custom CPU scope by name. |
 | `ProfileScope(name, fn)` → `any` | Run `fn` inside a scope and return its result, even if it errors. |
 | `ProfilerSetCounter(group, name, value[, unit[, budget]])` | Publish a custom counter. `unit` is one of `"ms"`, `"b"`, `"kb"`, `"mb"`, `"%"`, `"/s"`; omit it for a plain count. |
@@ -946,11 +972,11 @@ every setting is remembered in the editor config between sessions (passwords exc
 | ------- | ------- |
 | **Target Platform** | Windows, Linux, Android, Web, macOS, iOS, Xbox. The rest of the dialog changes to match. |
 | **Configuration** | **Debug** or **Release** (see [7.2](#72-configuration-debug-vs-release)). |
-| **Game Name** | The product name; used for the executable/bundle name and installer metadata. |
+| **Game Name** | The product name; used for the executable/bundle name, installer metadata and the name of the player's data folder ([7.5](#75-where-a-shipped-game-keeps-its-player-data)). |
 | **Icon Path** | App icon (`.png`/`.ico`/`.jpg`/`.jpeg`/`.bmp`); PNG is converted to platform icon formats automatically. |
 | **Output Path** | Folder to place the finished build — a per-build subfolder is created and **wiped** at the start of each build. It is named after the build itself, `<GameName>-<version>-<Config>-<Platform>-<arch>`, on **all seven platforms**, so builds that differ in version, configuration, architecture or memory model sit side by side instead of overwriting each other. A **…** button opens a native folder picker. |
 | **Version Name / Version Code** | Human version string (e.g. `1.2.0`) and integer build number (minimum 1). |
-| **Publisher** | Studio/publisher name, used in installers and metadata. |
+| **Publisher** | Studio/publisher name, used in installers and metadata, and as the parent folder of the player's data folder ([7.5](#75-where-a-shipped-game-keeps-its-player-data)). |
 | **Include Plugins** | *(Packages)* Ship the plugins ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. Plugins marked `"EditorOnly": true` are never shipped, whatever this is set to. |
 | **Include Mods** | *(Packages)* Ship the mods ticked in `Tools → Plugins & Mods`. On by default; applies to all seven platforms. |
 
@@ -959,9 +985,17 @@ When the project has DLC marked **Exclude from the base game build** in the
 of this build* with the number of folders: the game ships without those `Content/` folders
 on every platform ([15.3](#153-dlc-content-and-the-base-game)). Hover the line to see them.
 
-The dialog refuses to start with an empty **Game Name** or **Output Path**. While a build
-runs every setting is locked, the **Build** button becomes **Stop**, and cancelling wipes
-the half-written output folder. **Esc** closes the dialog when nothing is running.
+**Start level.** The built game starts on the project's start level, set in
+[Editor → Preferences → Engine](Editor-EN-DOC.md#101-engine). By default it is the level you
+have open when you press **Build**; with **Use Current Level** off it is the level picked
+there, whatever level you are editing. It is resolved once, when the build starts, and ends
+up as `StartScene` in the game's `game.json` (on Web, Android and iOS through the build
+script's `--start-scene`); the log names it as *Start level: …*.
+
+The dialog refuses to start with an empty **Game Name** or **Output Path**, or when a picked
+start level is not chosen or its file is missing. While a build runs every setting is
+locked, the **Build** button becomes **Stop**, and cancelling wipes the half-written output
+folder. **Esc** closes the dialog when nothing is running.
 
 > A cross-platform note: on a Linux host, selecting **Windows** triggers a MinGW
 > cross-compile, and on a Windows host **Linux** builds inside WSL2; a macOS host builds
@@ -1042,6 +1076,61 @@ editor's Console panel — as well:
 Names are case-insensitive and may contain `_` or `-`. The variable is read once at start-up
 and works on every platform: export it in a terminal, set it in the Xcode scheme for
 macOS/iOS, or pass it through the launch environment on Android.
+
+### 7.5 Where a shipped game keeps its player data
+
+Everything a game writes while it runs — saves (`Saves/`, screenshots and replays
+included), the player's settings and key bindings (`Config/`), installed mods (`Mods/`),
+player plugins (`Plugins/`), downloaded DLC (`DLC/`), shader caches and crash reports
+(`Saved/`) — goes to the game's **writable folder**. Which folder that is depends on where
+the game runs:
+
+| Where the game runs | Writable folder |
+| --- | --- |
+| Editor (Play) | The project folder |
+| Windows, Linux: a folder the player can write to (a plain build folder, or a folder the player chose in the installer instead of the default one) | The game folder itself, next to the executable |
+| Windows: a folder the player cannot write to (`%ProgramFiles%`, where the `.exe` and the `.msi` install by default) | `%APPDATA%\<Publisher>\<Game Name>\` |
+| Linux: `.deb` (`/opt`) and `.AppImage` (mounted read-only) | `~/.local/share/<Publisher>/<Game Name>/`, or `$XDG_DATA_HOME/<Publisher>/<Game Name>/` when that variable is set |
+| macOS | `~/Library/Application Support/<Publisher>/<Game Name>/`, never inside the signed `.app` (a sandboxed Mac App Store build gets the same path inside its container) |
+| Xbox on PC (`Gaming.Desktop.x64`) | `%APPDATA%\<Publisher>\<Game Name>\`; the game never writes into its install folder |
+| Xbox consoles | The title's persistent local storage (`T:\`) |
+| Android, iOS | The app's private storage, separate for every app |
+| Web | `/persistent/<Publisher>/<Game Name>/` in the browser's IndexedDB storage of the site; a site that hosts several games (itch.io, GitHub Pages) keeps them in one database, each in its own folder |
+
+The uninstallers of both Windows installers remove only the files they installed, so player
+data survives an uninstall wherever it lives: in `%APPDATA%`, or next to the executable when
+the player picked a folder they can write to ([10.3](#103-installers)).
+
+`<Publisher>` and `<Game Name>` are the **Publisher** and **Game Name** of the Build Game
+dialog ([7.1](#71-common-settings)); the build writes them into `game.json`
+(`GamePublisher`, `GameName`). Every game therefore has a folder of its own, and two games,
+even from the same studio, never read each other's saves, settings, mods or DLC. With an
+empty **Publisher** the folder is `<Game Name>` straight in the base folder
+(`%APPDATA%\<Game Name>\` and so on).
+
+The names are made safe for every file system: `\ / : * ? " < > |` and control characters
+become `_`, leading and trailing spaces and dots are dropped, Windows device names such as
+`CON` or `COM1` get a leading `_`, and each name is cut to 64 bytes of UTF-8 (never in the
+middle of a letter), so the paths stay well inside the Windows limit of 260 characters.
+
+> **Keep Game Name and Publisher once the game is out.** They name the folder, so a build
+> with a new name starts with an empty folder, and the players' saves stay behind under the
+> old name.
+
+**Games built with an older engine version.** Earlier versions gave every game without a
+writable game folder the same folder: `%APPDATA%\IceBoxEngine\game\`,
+`~/Library/Application Support/IceBoxEngine/game/` or `~/.local/share/IceBoxEngine/game/`,
+and `/persistent/` on the web. Games installed side by side could therefore see and
+overwrite each other's saves, settings, mods and DLC. A game built with this version that
+starts with its own folder still empty copies `Saves/`, `Config/`, `Mods/`, `Plugins/` and
+`DLC/` from that shared folder into its own folder, keeping the file dates, so the update
+loses nothing. Because the old folder was shared, the copy can also bring files that other
+games left there, exactly as the game saw them before. Caches and crash reports are not
+copied: they rebuild themselves. The shared
+folder itself stays as it is, so games that still use it keep working and copy their data
+when they are updated. The copy happens once: a game whose folder already holds data never
+copies again. The engine's own tools (the launcher and the updater) keep writing their
+crash reports to `IceBoxEngine/game/`.
 
 ---
 
@@ -1193,9 +1282,9 @@ macOS). The engine also ships an Android APK that carries the editor itself; bui
 * **Web options:** **Web3** support, **main-loop** mode, **pthreads** (multithreading,
   needs cross-origin isolation).
 * Version Name / Version Code / Publisher.
-* The current level is passed as the **start scene**; content is embedded into the
-  Emscripten `.data` (so `Engine.json`/`Plugins.json`/`Mods.json` are preloaded, not
-  copied loose), and so are the enabled mods.
+* The project's start level ([7.1](#71-common-settings)) is passed as the **start scene**;
+  content is embedded into the Emscripten `.data` (so `Engine.json`/`Plugins.json`/`Mods.json`
+  are preloaded, not copied loose), and so are the enabled mods.
 * The packaging step also copies the generated companion files next to the `.html`
   (`.js`, `.wasm`, `.data`) plus `favicon.png` and `apple-touch-icon.png` when the build
   produced them.
@@ -1403,8 +1492,9 @@ xbapp install "<output>\<Base>.xvc"
 * **Saved data.** On a console the writable root is the title's persistent local storage
   (`T:\`), so `Saves/`, `Config/` and the crash reports live there. On the PC family the
   game never writes into its own install folder — even a loose layout you registered
-  yourself — and uses the per-user application-data path instead, so saves survive a
-  package update.
+  yourself — and uses its per-user application-data folder instead
+  (`%APPDATA%\<Publisher>\<Game Name>\`, see [7.5](#75-where-a-shipped-game-keeps-its-player-data)),
+  so saves survive a package update.
 * **Lua.** `Settings.GetPlatform()` returns `"Xbox"` for every GDK build, and
   `Settings.GetXboxDeviceFamily()` tells the three apart (`"Desktop"`, `"XboxOne"`,
   `"Scarlett"`). `Settings.IsXbox()` is true for all of them, `Settings.IsConsole()` only
@@ -1754,9 +1844,17 @@ the script as `--format exe|msi|both`.
 
 * **`.exe`** (needs NSIS, with CPack's NSIS generator as a fallback) — the classic setup
   wizard: welcome, license, destination folder, a component list (core files, desktop
-  shortcut, Start-menu shortcuts), progress, and a *Launch* checkbox at the end. It installs
-  into `C:\Games\<Game Name>`, writes `HKLM\Software\<Game Name>` plus an Add/Remove
-  Programs entry, and its uninstaller deletes the whole install folder.
+  shortcut, Start-menu shortcuts), progress, and a *Launch* checkbox at the end that starts
+  the game without administrator rights. It elevates itself through UAC, installs
+  **per-machine** into `%ProgramFiles%\<Game Name>` (`%ProgramFiles(x86)%` for an x86
+  build), puts the shortcuts on the desktop and in the Start menu of every user, and writes
+  `HKLM\Software\<Game Name>` plus an Add/Remove Programs entry. Its uninstaller removes
+  exactly the files it installed: the build script lists the game folder when it packs the
+  installer, so files a player created next to the game survive, and the folder itself goes
+  only once it is empty. Installers from earlier engine versions put the game into
+  `C:\Games\<Game Name>`, a folder the player can write to, so the game kept its saves next
+  to itself; a new installer of that game offers the same folder again, and an update keeps
+  those saves in place.
 * **`.msi`** (needs the **WiX Toolset**) — a real Windows Installer package, the format
   managed deployment expects: `msiexec /i <package> /qn` installs it unattended,
   Group Policy and Intune can push it, `winget` and Chocolatey can wrap it, and Windows
@@ -1782,7 +1880,7 @@ the script as `--format exe|msi|both`.
   for an upgrade to be recognised.
 * **Empty folders** in the build output are recreated by the installer, and uninstall
   removes exactly what was installed — files a player created next to the game (saves,
-  screenshots) survive, whereas the NSIS uninstaller deletes the entire folder.
+  screenshots) survive, the same as with the `.exe`.
 * Its component GUIDs are **deterministic**, derived from the same UpgradeCode, so two
   builds of the same game produce packages Windows Installer can reason about instead of
   a fresh set of unrelated components every time.
@@ -1824,15 +1922,18 @@ the script as `--format deb|appimage|both`.
   entry in `/usr/share/applications`, a 256×256 icon in the hicolor theme and the license
   as `/usr/share/doc/<package-name>/copyright`. The package name is the game name reduced
   to a Debian-legal form (lowercase, `a-z0-9+.-`), and the control version is the build
-  version with any leading `v` stripped. Removing the package also clears `/opt/<Game Name>`,
-  so save files written next to the game do not survive an uninstall.
+  version with any leading `v` stripped. Removing the package also clears `/opt/<Game Name>`.
+  The player cannot write there, so the game keeps saves, config and mods in
+  `~/.local/share/<Publisher>/<Game Name>/` ([7.5](#75-where-a-shipped-game-keeps-its-player-data)),
+  and they survive an uninstall.
 * **`.AppImage`** — one portable, self-contained file that runs on any reasonably modern
   distribution without being installed: the player only has to make it executable. Inside
   it is an AppDir whose `AppRun` `cd`s into the payload and starts the game exactly the way
   the `.deb` launcher does, next to a `.desktop` entry and a 256×256 icon so desktop
   integrators (AppImageLauncher, `appimaged`) can add a menu entry. An AppImage is mounted
-  **read-only**, so the runtime falls back to `~/.local/share/IceBoxEngine/game/` for saves,
-  config and the player's `Mods/` folder — the same place a `.deb` installed under `/opt` uses.
+  **read-only**, so the runtime falls back to `~/.local/share/<Publisher>/<Game Name>/` for
+  saves, config and the player's `Mods/` folder — the same place a `.deb` installed under
+  `/opt` uses ([7.5](#75-where-a-shipped-game-keeps-its-player-data)).
   An icon is mandatory for an AppImage, so a build without one gets the engine's default
   logo instead of failing.
 
@@ -1913,8 +2014,10 @@ re-signed:
 
 ## 11. What happens when you click Build
 
-1. **Validation** — game name and output path must be set; the build's own folder,
-   `<Output Path>/<Base>` ([13](#13-build-output-locations)), is cleaned and recreated.
+1. **Validation** — game name and output path must be set, and the start level is resolved
+   ([7.1](#71-common-settings)): a fixed start level that is not chosen or whose file is
+   missing stops the build here. The build's own folder, `<Output Path>/<Base>`
+   ([13](#13-build-output-locations)), is cleaned and recreated.
 2. **Script & artifact names** are chosen for the platform (e.g. `build_windows.bat`,
    runtime `IceBoxEngineRuntime.exe`, game file `<Name>.exe`).
 3. **Argument assembly** — all dialog settings become command-line flags (see
@@ -1934,11 +2037,11 @@ re-signed:
 8. **Copy legal files** — the project's `LICENSE.txt`, plus the engine's
    `THIRD_PARTY_NOTICES.txt` and `ThirdPartyLicenses/` (also into `Contents/Resources/`
    for macOS).
-9. **Stage content** — copy `Content/` (cooking it here on desktop), skipping the engine's
-   `Examples` folder and the folders of DLC excluded from the base game.
-10. **Write `game.json`** — game name, version, start scene, build config, build platform,
-    icon file name and the crash-report URL. Skipped on iOS, where CMake writes it inside
-    the signed bundle.
+9. **Stage content** — copy `Content/` (cooking it here on desktop), skipping the folders
+   of DLC excluded from the base game.
+10. **Write `game.json`** — game name, publisher, version, start scene, build config, build
+    platform, icon file name and the crash-report URL. Skipped on iOS, where CMake writes it
+    inside the signed bundle.
 11. **Copy sidecar config** — `Config/Engine.json` plus `Plugins.json` / `Mods.json` /
     `CollisionGroups.json` (skipped where they are embedded instead: Web, Android, iOS;
     `Plugins.json` / `Mods.json` are also skipped when the matching **Include** option is

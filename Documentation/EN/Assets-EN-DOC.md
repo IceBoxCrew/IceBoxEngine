@@ -77,6 +77,7 @@
    - 4.13 [Widget / UI (`.ice_widget`)](#413-widget--ui-ice_widget)
      - 4.13.1 [Shared element properties](#4131-shared-element-properties)
      - 4.13.2 [Element type reference](#4132-element-type-reference)
+     - 4.13.3 [Animations](#4133-animations)
    - 4.14 [View / Post-Process Volume (`.ice_view`)](#414-view--post-process-volume-ice_view)
    - 4.15 [Cinema (`.ice_cinema`)](#415-cinema-ice_cinema)
    - 4.16 [AI / Behavior Tree (`.ice_ai`)](#416-ai--behavior-tree-ice_ai)
@@ -819,7 +820,7 @@ selections:
 
 | Kind | What you can bulk-edit |
 | ---- | ---------------------- |
-| **Textures** | The full `.ice_texture` sidecar: min/mag filter, anisotropy, wrapping and border color, mipmaps and LOD bias, sRGB, premultiplied alpha, max size, pixel format, compression, atlas. |
+| **Textures** | The full `.ice_texture` sidecar: min/mag filter, anisotropy, wrapping and border color, mipmaps and LOD bias, sRGB, premultiplied alpha, max size, pixel format, compression, atlas (turning it on also sets the wrap to Clamp to Edge, as in Texture Settings). |
 | **Sprites** | Pivot (X/Y and the nine presets), material mode and the built-in shading/blend/alpha clip. Collision physics — density, friction, restitution, sensor, one-way and its direction, contact/sensor/hit/pre-solve events, collision group and mode — is applied only to sprites that have a collision polygon (the panel shows how many). |
 | **Sounds** | The whole `.ice_sound` definition: group, volume, pitch, pan and their random variation; loop, fades, trim and loop region; variation mode; voices (priority, max instances, steal mode, retrigger cooldown); game pause / time scale; 3D (attenuation, distances, rolloff, doppler, panning, occlusion, cone); the complete effect chain with every parameter (low/high/band pass, low shelf, peak, high shelf, distortion, bitcrusher, compressor, modulation, tremolo, delay, reverb, stereo width); loading & cooking. |
 | **Flipbooks** | Default FPS, **Set from FPS** (sets every frame duration from each flipbook's own FPS), loop, material mode and the shading/blend/alpha-clip overrides. |
@@ -980,7 +981,7 @@ The texture sidecar stores GPU import settings:
 | **Border Color** | Color for `ClampToBorder`. |
 | **Pixel Format** | `Auto`, `RGBA`, `RGB`, `RG`, `R`, `Grayscale`. |
 | **Compression** | `Auto (verified)`, `Lossless (pixel-perfect)`, `Always Compressed`. Used by cooking. |
-| **Use Atlas** | Allow this texture to be packed into a shared atlas page. |
+| **Use Atlas** | Pack this image into a shared atlas page (see *Texture atlas* below). |
 
 For pixel-art, set **Min/Mag = Nearest** and disable mipmaps; for smooth UI/photographic
 textures use **Linear** with mipmaps.
@@ -1008,6 +1009,35 @@ lossy attempt entirely; `Always Compressed` keeps the build's format without ver
   image without going back to the browser. It is named `SP_<name>` (the texture name without
   its `T_`) and replaces a sprite of that name if one already exists — unlike the browser's
   *Create Sprite (.ice_sprite)*, which picks a free name.
+
+**Texture atlas.** Images with **Pack into Atlas** on share large atlas pages, so sprites that use them batch into fewer
+draw calls:
+
+* **What gets packed.** Only images whose `.ice_texture` has **Pack into Atlas** on and atlas-compatible settings:
+  Wrap S/T set to Clamp to Edge, no mipmaps, Min/Mag filter Nearest or Bilinear, sRGB off, Max Texture Size set to
+  Full and Pixel Format Auto or RGBA. Premultiply Alpha is applied to the packed copy. An image without an
+  `.ice_texture` is never packed, and an image larger than **Max Sprite Size** (**Edit → Preferences → Optimization →
+  Texture Atlas**) stays a standalone texture.
+* **In the panel.** Turning **Pack into Atlas** on also sets Wrap S/T to Clamp to Edge. When other settings keep the
+  image out, the section lists them and **Make Compatible** fixes them in one undoable step; otherwise it shows the page
+  and position once the image is packed, or that it will be packed on first use.
+* **Pages.** Atlas pages are RGBA, **Atlas Size** pixels square (capped to the GPU texture limit), and images with
+  different filtering go to separate pages. Every image gets a 1-pixel border copied from its edge pixels, so filtering
+  never picks up a neighbour. Images are packed the first time a sprite, flipbook, skeleton, widget, particle effect or
+  `Draw.Flipbook` uses them, or ahead of time by Prewarm and asynchronous level loading, which decode them on worker
+  threads.
+* **Lifetime.** Pages stay for the whole session. New pixels or settings are applied in place when the image keeps its
+  size and filtering; otherwise the image is removed and packed again, and its old area becomes dead space.
+  `Atlas.Rebuild()` repacks everything that is still in use or being preloaded by Prewarm or asynchronous level loading.
+* **Automatic standalone copy.** Whatever would sample outside the image's own rectangle draws from a standalone copy
+  of the same file instead: sprites and flipbooks with a custom material, UV scroll or scale, or parallax; skeleton
+  parts with a custom material or parallax; animated tiles and particles with a custom material; ribbons in **Tile**
+  mode; and `Draw.Flipbook` / `Draw.Skeleton` with a material. The copy is loaded once and shared, so leave
+  **Pack into Atlas** off for images that are mostly drawn this way.
+* **The original image still counts.** 2D shadows trace its own alpha, destruction breaks the original image apart,
+  and Lua region functions (`SetSpriteRegion`, `GetSpriteFrameRegion`, …) use its own pixel coordinates.
+* **Inspecting.** The **Texture Atlas** section of **Window → Stats** shows the pages, their memory and dead space, and a
+  page viewer; scripts use `Atlas.*` (see the Lua API guide).
 
 #### 4.1.2 Audio and the `.ice_sound` sidecar
 
@@ -1125,9 +1155,26 @@ several pages is simply drawn in several batches. Characters outside the declare
 ranges still render as long as the face has them; the ranges are what the cooker
 subsets to and what the Font Editor preview bakes eagerly, so keep them honest.
 
+**Text outline.** Everywhere text has a style — widget Text, Input Field and Dropdown
+elements and their tooltips, the built-in Cinema dialogue box, `Draw.Text` and the Font
+Editor preview — it can get an outline around its glyphs: an **Outline Width** (`0`–`16`,
+in the units of the text size; `0` = no outline) and an **Outline Color**, whose alpha is
+the outline's exact opacity. The first time a glyph appears at a width, the engine grows
+the rasterized glyph evenly in every direction with round corners — counters such as the
+hole of an `o` close up once the outline is thicker than half of them — and keeps the result
+in the same atlas pages as the glyphs, so outlined text costs one more quad per glyph and no
+extra draw call. The outline follows exactly what the font draws: synthetic **Bold** and
+**Italic**, embedded bitmaps and **Antialiased** off (a crisp, pixel-exact outline for pixel
+fonts) included. Widths are rounded to a quarter of a glyph pixel, so an animated width
+rasterizes only a handful of shapes per glyph. The outline is drawn under the whole string;
+where the outlines of two neighbouring glyphs overlap, a translucent outline is denser, so
+give thick outlines an opaque color.
+
 **The Font Editor** shows a live preview of the baked font next to the settings:
 
-* **Preview** — type any sample text, scale it, change its color, or tick **Show Atlas** to
+* **Preview** — type any sample text, scale it, change its color, give it an **Outline
+  Width** and **Outline Color** (in pixels of the font's default size, so the outline scales
+  with the preview) to see how outlined text looks in this font, or tick **Show Atlas** to
   look at the generated glyph atlas texture itself (the fastest way to tell whether your
   ranges overflow the atlas size).
 * **Presets** — one-click character ranges: `ASCII`, `Extended`, `Cyrillic`, `Chinese`,
@@ -2244,13 +2291,13 @@ document-level canvas settings. They are documented field by field in
   and drag any of the eight **resize handles** (four corners, four edges). A **Grid** toggle
   snaps movement and resizing; **middle-drag** pans and **scroll** zooms. The anchor widget
   in the inspector shows the 9 presets plus the stretch variants.
-* **Animation panel** — toggled from the toolbar and docked under the canvas.
-  **+ Add Track** targets an element (or the widget root) and a property — position X/Y,
-  size width/height, rotation, scale X/Y, opacity, color R/G/B/A — then **+ Add Keyframe** at
-  the playhead with an **easing** (`Linear`, `EaseIn`, `EaseOut`, `EaseInOut`, `Bounce`,
-  `Elastic`). Animations have a duration, **loop** and **autoplay** flags and can carry
-  timed **events** that call a script function with a parameter. **Play / Stop** and a
-  reset button preview the animation right on the canvas.
+* **Animation panel** — toggled from the toolbar and docked under the canvas. Any element at
+  any depth of the hierarchy can be animated, and every property it draws or uses —
+  transform, color and opacity, sprite, text and its color, size and outline, values, fills, toggle and
+  checkbox state, scroll offset, layout spacing and padding, and more — through tracks,
+  keyframes with easing, a timeline you can drag keyframes on, a **Record** (auto-key) mode and
+  timed **events**. **Play / Stop** and a reset button preview the animation right on the
+  canvas. Everything is described in [4.13.3](#4133-animations).
 * **Script tab** — either a **Lua** text editor or a **Visual Script** node graph, chosen
   per widget, with a **Compile** button that validates the graph and reports the error
   inline.
@@ -2268,7 +2315,7 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | Property | Meaning |
 | -------- | ------- |
 | **Name** | Element name — also how scripts look the element up. Unique within the widget. |
-| **Position** | Offset from the anchor, in canvas pixels: X grows to the right and Y downward, as in every UI layout (a vertical box stacks from the top). |
+| **Position** | Offset from the anchor, in canvas pixels. In the inspector (and in animation keyframes) X grows to the right and Y upward. Scripts read and write the raw layout value, in which Y grows downward as in every UI layout (a vertical box stacks from the top). |
 | **Size** | Width and height. Read-only (and driven by the content) while **Desired Size** is on. |
 | **Desired Size** | Off by default. While on, the element sizes itself to its content instead of a fixed value — measured text, sprite/flipbook pixel size, sub-widget canvas, throbber diameter, children bounds, or the horizontal/vertical box flow (spacing + padding) — and the **Size** field shows the live computed value. |
 | **Scale** | X/Y multiplier applied around the pivot. |
@@ -2302,6 +2349,7 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | **Tooltip Mode** | `Dynamic` (default) — the tooltip follows the cursor. `Static` — it stays where it appeared until the pointer leaves the element. |
 | **Tooltip Corner** | Corner of the cursor the tooltip opens from: `Bottom Right` (default), `Bottom Left`, `Top Right` or `Top Left`. Near a screen edge it flips to the opposite side, so it always stays on screen. |
 | **Font** / **Font Size** / **Text Color** | The tooltip's own text style — independent of the element's text, so a Text or Input Field element can have a tooltip styled differently from its content. Default: the system font, `24` px, white. |
+| **Outline Width** / **Outline Color** | An outline around the tooltip text, in pixels (`0`–`16`, default `0` — no outline) and its color (default opaque black; alpha is the outline's opacity). The color field appears once the width is above `0`. Drawn the same way as the [text outline](#413-fonts-and-the-ice_font-sidecar) everywhere else. |
 | **Background** | A `.ice_sprite` (static image) or `.ice_flipbook` (animated) drawn behind the tooltip text. `None` keeps the default dark box with a thin border and a drop shadow. |
 | **Background Color** | Tint multiplied with the background sprite or flipbook. Shown while a background is set. |
 | **Use 9-Slice** / **Border (L,T,R,B)** | Sprite backgrounds only — stretch the sprite with fixed corners, so a framed background keeps its border at any tooltip size. |
@@ -2350,21 +2398,21 @@ rotation of the elements and of their parents into account.
 | **Parent Widget** | Inherit another widget's canvas settings and elements. **Reparent** changes it with cycle detection; inherited elements are marked in the hierarchy and can be overridden per field. |
 | **Is Element** | Marks the document as a reusable building block meant to be embedded through `SubWidget` rather than shown on its own. Only widgets with this flag can be picked by a SubWidget element. |
 | **Script** | A Lua text script or a Visual Script graph, chosen per widget. |
-| **Animations** | See the **Animation panel** above. |
+| **Animations** | See [4.13.3](#4133-animations). |
 
 #### 4.13.2 Element type reference
 
 | Element | Category | What it is | Own properties |
 | ------- | -------- | ---------- | -------------- |
 | **Panel** | Common | A rectangle used as a background or container. | **Backdrop Blur** — frosted-glass blur of whatever is behind the panel (lower the panel color's alpha to reveal it; the real blur appears in Play mode, the editor canvas shows an approximation) and **Blur Strength**. |
-| **Text** | Common | A text label. | **Text** (multi-line) or **Localization Key**; **Font**, **Font Size**, **Text Color**; **Horizontal / Vertical Alignment**; **Text Wrap**. |
+| **Text** | Common | A text label. | **Text** (multi-line) or **Localization Key**; **Font**, **Font Size**, **Text Color**; **Outline Width** (canvas pixels, `0`–`16`, `0` = none) and **Outline Color** — an outline around the glyphs that scales with the element like the font size; **Horizontal / Vertical Alignment**; **Text Wrap**. |
 | **Button** | Common | A clickable element with hover/press states. | Uses the shared sprite, state colors and state sounds; its label is normally a child Text element. |
 | **Image** | Common | A sprite or flipbook. | Uses the shared sprite and 9-slice groups. |
-| **Input Field** | Input | An editable text box with a caret and selection on every platform. A tap or click focuses it, puts the caret where it landed and opens the on-screen keyboard on phones; dragging selects text, a double tap / click selects a word, a triple one everything, and arrows, Home / End, word jumps, undo / redo and Ctrl (Cmd on Apple) +C / X / V / A work on a hardware keyboard. Enter, the keyboard's *Done* key or Esc removes the focus (firing **OnFocusLost**) and hides the keyboard. Tapping a focused field brings back a keyboard the player hid, a long press selects a word and opens **Cut / Copy / Paste / Select all**, and text longer than the field scrolls inside it — see [Screen keyboard](LuaAPI-EN-DOC.md#screen-keyboard-mobile-ime). | The Text group (text, font, size, color, alignment, wrap) plus **Max Length** (`0` = unlimited). |
+| **Input Field** | Input | An editable text box with a caret and selection on every platform. A tap or click focuses it, puts the caret where it landed and opens the on-screen keyboard on phones; dragging selects text, a double tap / click selects a word, a triple one everything, and arrows, Home / End, word jumps, undo / redo and Ctrl (Cmd on Apple) +C / X / V / A work on a hardware keyboard. Enter, the keyboard's *Done* key or Esc removes the focus (firing **OnFocusLost**) and hides the keyboard. Tapping a focused field brings back a keyboard the player hid, a long press selects a word and opens **Cut / Copy / Paste / Select all**, and text longer than the field scrolls inside it — see [Screen keyboard](LuaAPI-EN-DOC.md#screen-keyboard-mobile-ime). | The Text group (text, font, size, color, outline, alignment, wrap) plus **Max Length** (`0` = unlimited). |
 | **Slider** | Input | A draggable value control. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**; **Fill Sprite/Flipbook**; **Thumb Sprite/Flipbook**. |
 | **Checkbox** | Input | An on/off box. | **Is Checked**; **Check Color**; **Check Sprite**. |
 | **Toggle** | Input | A sliding on/off switch. | **Toggled**; **Toggled Color**; **Untoggled Color**; **Handle Ratio** (`0.2`–`0.8`) sizes the handle relative to the track; **Handle Sprite**. |
-| **Dropdown** | Input | A selection list. | **Options** list (add / edit / remove); **Selected Index**; **Max Height** before the list scrolls; **Font**, **Font Size**, **Text Color**. |
+| **Dropdown** | Input | A selection list. | **Options** list (add / edit / remove); **Selected Index**; **Max Height** before the list scrolls; **Font**, **Font Size**, **Text Color**, **Outline Width**, **Outline Color** — for the selected option and the open list alike. |
 | **Progress Bar** | Display | A fill bar. | **Min**, **Max**, **Value**; **Fill Color**; **Bar Sprite/Flipbook**; **Fill Sprite/Flipbook**. |
 | **Throbber** | Display | A loading spinner. | **Speed**; **Radius**; **Dots**; **Clockwise**; **Paused**. |
 | **HorizontalBox** | Layout | Lays children out left to right. | **Spacing** between children; **Padding (L,T,R,B)**. |
@@ -2415,6 +2463,117 @@ rotation of the elements and of their parents into account.
 > fast drag keeps the list gliding. A wheel over a `ScrollView` that cannot scroll
 > vertically scrolls it horizontally instead, and a `ScrollView` whose content already fits
 > passes the wheel on to a scrollable parent `ScrollView`.
+
+#### 4.13.3 Animations
+
+A widget holds any number of **animations**. Each one is a named timeline with a **Duration**
+(seconds), a **Loop** flag and an **Auto Play** flag, made of **tracks** — a track drives one
+property of one element through its **keyframes** — plus timed **events** that call a function
+of the widget script.
+
+**Any element, anywhere in the hierarchy.** A track can target any element of the widget, at
+any depth. Children follow their parent: moving, scaling, rotating, flipping or fading a
+parent moves, scales, rotates, flips and fades everything inside it, so one track on a panel
+animates the whole dialog, and its children can carry their own tracks in the same animation.
+
+**Animatable properties.** The property menu of a track lists what the target element type
+actually draws or uses:
+
+| Group | Properties | Elements |
+| ----- | ---------- | -------- |
+| Transform | Position X/Y, Size Width/Height, Rotation, Scale X/Y, Pivot X/Y, Anchor Min X/Y, Anchor Max X/Y, Flip X, Flip Y, Z Order, Visible | all |
+| Appearance | Opacity | all |
+| | Color R/G/B/A | all except SubWidget |
+| | Sprite — a `.ice_sprite` or `.ice_flipbook` per keyframe (*Bar Sprite/Flipbook* on ProgressBar and Slider) | Image, Button, Throbber, InputField, Checkbox, Toggle, Dropdown, ProgressBar, Slider |
+| Text | Text Color R/G/B/A, Font Size, Outline Color R/G/B/A, Outline Width | Text, InputField, Dropdown |
+| | Text | Text, InputField |
+| Value | Value, Min, Max, Fill Color R/G/B/A | ProgressBar, Slider |
+| Checkbox | Is Checked, Check Color R/G/B/A | Checkbox |
+| Toggle | Toggled, Toggled Color R/G/B/A, Untoggled Color R/G/B/A, Handle Ratio | Toggle |
+| Dropdown | Selected Index | Dropdown |
+| WidgetSwitcher | Active Child | WidgetSwitcher |
+| Panel | Backdrop Blur, Blur Strength | Panel |
+| ScrollView | Scroll Offset X/Y | ScrollView |
+| Layout | Spacing, Padding Left/Top/Right/Bottom | HorizontalBox, VerticalBox |
+| SizeBox | Override Size Width/Height | SizeBox |
+| Throbber | Speed, Radius, Dots | Throbber |
+| Interaction | Interactable | all |
+| | Hovered Color R/G/B/A, Pressed Color R/G/B/A (used with **Use Custom State Colors**) | all except SubWidget |
+
+**Between keyframes.** Numbers — positions, sizes, colors, opacity, values, spacing and the
+rest — are interpolated with the **easing** of the keyframe the segment starts from: `Linear`,
+`EaseIn`, `EaseOut`, `EaseInOut`, `Bounce` or `Elastic`. Font Size and Dots are interpolated
+and rounded to whole numbers. On/off properties (Flip X/Y, Visible, Interactable, Is Checked,
+Toggled, Backdrop Blur), indices (Z Order, Selected Index, Active Child), Sprite and Text switch
+exactly at a keyframe and hold until the next one, so they have no easing. Before its first
+keyframe a track holds the first value, after its last keyframe the last one. Keyframe values
+use the units the inspector shows, Position Y included (up is positive).
+
+**The Animation panel** (toolbar → **Animation**, docked under the canvas):
+
+* The **animation list** with **+** and **−**, **Play** / **Stop**, **|<** (back to 0 s),
+  **Record**, the current time, **Duration**, **Loop**, **Auto Play** and the name.
+* **+ Add Track** — select the element on the canvas or in the hierarchy first; the menu lists
+  its animatable properties by group. The new track starts with one keyframe at the playhead
+  that holds the element's current value. An element can have only one track per property in
+  an animation, so properties that already have one are greyed out.
+* The **timeline** shows one row per track. Click a keyframe to select it and move the playhead
+  onto it, drag it to change its time; click or drag anywhere else to scrub. Event markers sit
+  on the bottom row, and clicking one moves the playhead to it.
+* The **track details** — **Target Element** (picked from the hierarchy tree) and **Property**,
+  **+ Add Keyframe**, which writes the value the track has at the playhead (the element's own
+  value for an empty track) and updates a keyframe that already sits at that time, and the
+  keyframe list: **>** jumps to the keyframe, then its time, its value — a number field,
+  checkbox, asset picker or text field, depending on the property — and its easing.
+* **Record** (auto-key). While it is on, changing the selected element on the canvas or in the
+  inspector writes a keyframe at the playhead instead of changing the element: the inspector
+  shows the animated values, a missing track is created (with the original value keyed at 0 s
+  when the playhead is further on), and vector and color properties are keyed as a whole —
+  both axes, all four channels. With Record off, the inspector edits the element's own values,
+  and on the canvas a property the animation drives keeps showing the animated value.
+* **Events** — a time, the name of a function of the widget script and an optional parameter.
+
+The canvas always shows the selected animation at the playhead exactly as the game draws it.
+
+**Playback in the game**
+
+* **Play** shows the first frame at once, so a fade-in never flashes the element fully visible
+  first. A non-looping animation stops on its last frame and keeps it; a negative speed plays it
+  backwards from the end.
+* **Stop** with reset returns the animated properties — and only them — to the values they had
+  when the animation started; anything else a script changed meanwhile is kept. Stop without
+  reset leaves the elements as they are.
+* **Pause** freezes the animation, which keeps holding its properties. Setting the time of a
+  stopped or finished animation shows that moment and pauses there; **Resume** continues from it.
+* While an animation plays or is paused it wins over the layout containers: children of a
+  `HorizontalBox`, `VerticalBox`, `SizeBox` or `Overlay` follow their animated Position (and
+  Size), and animated Spacing or Padding re-flows the box in the same frame. Once the animation
+  ends or stops, the container lays its children out again. An element with **Desired Size** on
+  keeps sizing itself to its content, so a Size track has no effect on it.
+* A Sprite keyframe that switches to a flipbook restarts it from the first frame. A Text keyframe
+  is visible only while the element has no **Localization Key**.
+* While the scale or the font size of a text is animating, its glyphs keep the resolution of the
+  value the animation started from, so a pop or zoom doesn't rebuild the font every frame.
+* **Events** fire in time order — in reverse order while playing backwards — and again on every
+  loop. The function receives the event's parameter, or the animation name when the parameter
+  is empty.
+* Widget animations advance with the game time (including the accessibility game speed) and
+  keep playing while the game is paused, so pause menus can animate.
+
+**Who plays an animation.** One widget asset can be shown by many entities at once. An
+animation started from the widget's own script (`PlayAnimation`) or by **Auto Play** runs on
+every instance of the widget, and its events and completion callback run once. The entity
+functions (`PlayWidgetAnimation(name, speed, index)` and the rest) act on that one widget
+instance only, so one enemy's health bar can flash without the others: the first entity call
+that plays, stops, pauses, resumes or seeks an animation gives the instance its own playback of
+it (picking up from where the shared one was). `PlayAnimation` or `StopAnimation` from the
+widget script brings every instance back to the shared playback. The Lua functions are listed in
+[LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md#widget-animations).
+
+**Child widgets** inherit the animations of their parent widget. Editing an inherited animation
+saves it in the child as an override — an animation of the child with the same name replaces
+the parent's. Inherited animations are shown in blue in the list and can't be renamed or removed
+in the child.
 
 ### 4.14 View / Post-Process Volume (`.ice_view`)
 
@@ -2569,7 +2728,7 @@ The **Settings** tab of the Cinema Editor holds the options of the whole cinema:
 | Dialogue | **Dialogue UI** | **Built-in Box**, **Custom Widget** or **None (Lua only)** — with None, show lines yourself from `OnCinemaDialogue`. |
 | | **Widget** | The `.ice_widget` used with Custom Widget. Elements named `Speaker`, `SpeakerPanel`, `Text`, `Portrait` and `Continue` are filled in automatically (`SpeakerPanel` hides when there is no speaker, `Portrait` when the line has no portrait, and `Continue` shows while a line waits for input). |
 | | **Advance Buttons** | Buttons that reveal the whole line at once or continue after a line that waits for input. |
-| | **Box Color**, **Text Color**, **Speaker Color**, **Font**, **Font Size**, **Box Width**, **Max Lines** | Look of the built-in box. Font size is in pixels at 1080p and scales with the screen height; width is a fraction of the screen width; longer text scrolls up as it is typed. |
+| | **Box Color**, **Text Color**, **Speaker Color**, **Font**, **Font Size**, **Outline Width**, **Outline Color**, **Box Width**, **Max Lines** | Look of the built-in box. Font size and outline width are in pixels at 1080p and scale with the screen height; the outline (`0`–`16`, default `0` — none) goes around the speaker name and the line, which keeps subtitles readable with a transparent box; width is a fraction of the screen width; longer text scrolls up as it is typed. |
 | | **Continue Indicator** | A blinking marker when a line waits for input. |
 
 #### Screen overlay
@@ -3090,7 +3249,10 @@ editor's own UI language). Structure:
 
 At runtime the game loads this asset, picks a language, and looks up keys (with
 `{}`-style format arguments and automatic RTL handling for Arabic/Hebrew). Widgets can
-bind text and tooltips directly to a localization key.
+bind text and tooltips directly to a localization key. The game starts in the first
+language of `Languages` unless a script picks another: `SetGameLanguage` for a chosen one,
+`UseSystemLanguage` for the player's own system language when the table has it (Lua API,
+Localization).
 
 **The Localization Creator** manages the language list and the key/translation grid:
 

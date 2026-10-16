@@ -420,9 +420,10 @@ startup:
 
 On-disk caches keep that cost off the startup path. They live under `Saved/` in the
 engine's writable folder — your project folder in the editor; in a shipped desktop game the
-game folder, or the per-user data folder (`%APPDATA%\IceBoxEngine\game\`,
-`~/Library/Application Support/IceBoxEngine/game/`, `~/.local/share/IceBoxEngine/game/`) when
-the game folder is read-only; the app's private data folder on mobile. Deleting them is
+game folder, or the game's own per-user data folder (`%APPDATA%\<Publisher>\<Game Name>\`,
+`~/Library/Application Support/<Publisher>/<Game Name>/`, `~/.local/share/<Publisher>/<Game Name>/`,
+see [Profiling & Building 7.5](Profiling-And-Building-EN-DOC.md#75-where-a-shipped-game-keeps-its-player-data))
+when the game folder is read-only; the app's private data folder on mobile. Deleting them is
 always safe — close the editor or game first and they are rebuilt on the next start, at the
 price of one slower start.
 
@@ -634,6 +635,10 @@ them in as few GPU draws as possible:
   sprites with different textures still share a draw. The slot count is configured
   separately for the GL and GLES backends (14 and 12 by default, hard cap 32) and is
   further clamped to what the device actually reports.
+* **Text batching** — consecutive `Draw.Text` strings that share the draw state go out
+  in one vertex upload and one draw per glyph atlas; the colour is a vertex attribute,
+  so strings of different colours still share a draw. A text outline is a grown copy of
+  the glyph kept in the same atlas, so outlined strings batch the same way.
 * **Bindless textures** — where supported, textures are referenced by 64-bit handle
   through an SSBO (up to 1024 resident handles), removing the slot limit entirely and
   shrinking draw counts further. The handle map is invalidated whenever textures are

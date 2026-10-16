@@ -40,6 +40,7 @@
    - [Modules and require](#modules-and-require)
    - [Iterators and generic for](#iterators-and-generic-for)
    - [Garbage collector](#garbage-collector)
+   - [Performance guide (Lua 5.5, no JIT)](#performance-guide-lua-55-no-jit)
    - [Standard libraries](#standard-libraries)
 3. [Script lifecycle](#3-script-lifecycle)
 4. [Transform — Position, Scale, Rotation](#4-transform--position-scale-rotation)
@@ -68,6 +69,7 @@
 22. [PostProcess — Post-Processing](#22-postprocess--post-processing)
 23. [Cinema — Cinematics](#23-cinema--cinematics)
 24. [Settings — Game Settings](#24-settings--game-settings)
+   - [Lua garbage collector](#lua-garbage-collector)
 25. [Math — Math and Noise](#25-math--math-and-noise)
    - [RNG — Deterministic Random Streams (seeded)](#rng--deterministic-random-streams-seeded)
 26. [Events — Event System](#26-events--event-system)
@@ -378,6 +380,10 @@ re-runs after you edit a value — and in the game.
 * **Array Sort** sorts numbers or strings — ascending, or descending with *Descending*.
 * **Contains**, **Find**, **Add Unique** and **Remove Item** compare `Vec2`, `Vec3`, `Vec4` and
   `Color` elements by value.
+* **Map Keys**, **Map Values**, **Set To Array** and **For Each** over a map or a set visit the
+  entries in no particular order, and for string keys the order can change from one run of the
+  game to the next. When the order matters (saves, network messages, seeded randomness), loop
+  over the output of the **Map.SortedKeys** node instead: numbers ascending, then strings.
 
 #### Spawn Class node
 
@@ -1300,9 +1306,16 @@ local player = { name = "Hero", hp = 100, level = 5 }
 for key, value in pairs(player) do
     Print(key .. " = " .. tostring(value))
 end
--- name = Hero
+-- Prints all three fields in some order. The order of string keys
+-- can change from one run of the game to the next.
+
+-- Map.SortedKeys — for dictionaries in a fixed order
+for _, key in ipairs(Map.SortedKeys(player)) do
+    Print(key .. " = " .. tostring(player[key]))
+end
 -- hp = 100
 -- level = 5
+-- name = Hero
 ```
 
 #### while
@@ -2731,6 +2744,14 @@ local hp = Math.Clamp(150, 0, 100)  -- 100
 > The editor drops the cached project modules of both states every time you press
 > **Play**, so edits made in the Lua Script Editor take effect on the next run without
 > restarting the editor.
+>
+> `loadfile`, `dofile` and the `package.path` templates read through the same virtual file
+> system, so they work in packed builds too. Relative paths are resolved from the project root as
+> before; an absolute path must lie inside the project folder, the game's data folder or the folder
+> of a discovered mod (`MOD_DIR`), and `..` is not allowed in these paths. A folder registered with
+> `Mods.AddSearchPath` counts only through the mods found in it. Scripts load Lua source only:
+> bytecode and native modules need the project option described under
+> [Standard libraries](#standard-libraries).
 
 ---
 
@@ -2757,14 +2778,89 @@ end
 
 ### Garbage collector
 
-Lua uses automatic garbage collection (GC). You usually don't need manual control, but it is available:
+Lua frees memory automatically with a garbage collector (GC). IceBoxEngine runs it in Lua 5.5
+**generational** mode by default — the fastest mode for typical game code, which creates many
+short-lived tables — and lets you tune it per project in **Edit → Preferences → Optimization → Lua
+Garbage Collector** or from scripts (see [Lua garbage collector](#lua-garbage-collector) in section 24).
+You usually don't need manual control, but the standard functions are available:
 
 ```lua
-collectgarbage("collect")   -- Force a GC pass
-local kb = collectgarbage("count")  -- Memory usage (KB)
-collectgarbage("stop")      -- Stop GC
-collectgarbage("restart")   -- Resume GC
+collectgarbage("collect")              -- Force a full GC cycle
+local kb = collectgarbage("count")     -- Memory used by this Lua VM (KB)
+collectgarbage("step")                 -- Do one collector step
+collectgarbage("stop")                 -- Stop the collector (memory then only grows!)
+collectgarbage("restart")              -- Resume it
+local running = collectgarbage("isrunning")
 ```
+
+> On loading screens prefer `Settings.CollectLuaGarbage()` to `collectgarbage("collect")`: it
+> collects **both** script VMs (game and UI) and returns unused allocator memory to the system.
+> `collectgarbage("incremental")`, `collectgarbage("generational")` and `collectgarbage("param", …)`
+> still work, but they change only the VM they run in, and the engine applies the configured mode and
+> parameters again when GC settings change, when play mode stops and on `Settings.ResetDefaults()`.
+
+---
+
+### Performance guide (Lua 5.5, no JIT)
+
+IceBoxEngine embeds the standard Lua 5.5 interpreter. There is no JIT compiler, on purpose: the same
+scripts run identically on all 7 platforms, including iOS, consoles and the Web, where a JIT is not
+allowed or not available. The heavy work — physics, rendering, animation, particles, audio,
+pathfinding, collision queries — runs in the engine's C++ code; scripts decide *what* happens. Follow
+the rules below and Lua stays a small part of the frame even in a large game.
+
+**1. Measure first.** Open the editor **Profiler** (the **Scripts** tab and the `Lua` group of the
+**Counters** tab) or call `GetScriptProfilerRows()` in a build ([section 29](#29-debug--debugging)).
+`Script Time` is the Lua time of the frame, `Alloc Rate` shows how much garbage scripts produce and
+`GC Step` how long the collector took. Disable breakpoints while you measure — an active debugger
+makes Lua several times slower.
+
+**2. Do less per frame.**
+
+- Leave out `OnUpdate` / `OnLateUpdate` / `OnFixedUpdate` when an entity does not need them: an entity
+  without them costs only a quick table lookup per frame.
+- Look things up once: call `FindEntityByTag`, read configuration and build lookup tables in `OnCreate`,
+  not in `OnUpdate`.
+- React to events instead of polling: collisions and sensors, timers ([section 16](#16-time--time-and-timers)),
+  coroutines ([section 18](#18-coroutine--coroutines)) and events ([section 26](#26-events--event-system)).
+- Run work that does not need every frame less often: AI decisions 5–10 times per second, UI text only
+  when the value changes.
+
+**3. Allocate less.** Every `{}`, closure and new string is garbage that the collector has to free later.
+
+- Reuse tables in hot code instead of creating new ones every frame.
+- Build strings with `table.concat` instead of `..` in loops, and avoid `string.format` every frame
+  for text that did not change.
+- Don't create closures (`function() … end`) inside `OnUpdate`.
+
+**4. Write fast Lua.**
+
+- Use `local` variables: locals live in VM registers, while globals and API functions are table
+  lookups. Cache hot functions in locals: `local sqrt = math.sqrt`.
+- Iterate arrays with a numeric `for i = 1, #list do`; in hot loops write `list[#list + 1] = value`
+  instead of `table.insert(list, value)`.
+- Lua 5.5 has real integers: use `//` for integer division and keep counters and indices integer.
+- `pairs` is the fastest way to walk a dictionary, but the order of string keys can change from one
+  run to the next. Where the order matters (saves, network messages, seeded randomness) loop over
+  `Map.SortedKeys(t)`; it sorts on every call, so keep it out of per-frame code that does not need
+  the order.
+
+**5. Tune the garbage collector only when the profiler shows a reason.**
+
+| Symptom | What to do |
+| ------- | ---------- |
+| Occasional `GC Step` spikes during gameplay | Set an **idle-frame GC budget** of 1–2 ms together with an FPS limit — the collector then works in the spare time of the frame. |
+| A spike right after a level change | Keep **Full Collection on Level Load** on (the default). |
+| Memory too high (mobile, Web) | Use the **Low memory** preset (incremental): about a third less peak memory for more CPU time. |
+| Too much CPU time in the collector, memory to spare | Use the **Throughput** preset. |
+
+The pooled allocator (on by default) makes allocation-heavy script code 20–30% faster; switch it off
+only to compare.
+
+**6. Move hot loops into the engine.** Use the engine's batch features — traces and area queries,
+navigation, particles, tweens, behavior trees — instead of iterating thousands of objects in Lua every
+frame. For a really CPU-heavy custom system (a large simulation, procedural generation of a big world)
+write a C++ plugin ([Plugins & Mods](Plugins-And-Mods-EN-DOC.md)) and call it from Lua.
 
 ---
 
@@ -2775,16 +2871,29 @@ scripts and widget scripts):
 
 | Library | Available | Notes |
 | ------- | --------- | ----- |
-| `base` | ✅ | `print` is redirected to the engine log, like `Print`. Unlike `Print` it takes any number of values of any type and joins them with tabs, as in standard Lua. |
+| `base` | ✅ | `print` is redirected to the engine log, like `Print`. Unlike `Print` it takes any number of values of any type and joins them with tabs, as in standard Lua. `load`, `loadfile` and `dofile` accept Lua source only; `loadfile` and `dofile` read inside the game folders ([Modules and require](#modules-and-require)). |
 | `string` | ✅ | Lua patterns, `string.format`, … |
 | `table` | ✅ | `table.insert`, `table.sort`, … |
 | `math` | ✅ | See also the engine math functions (`Clamp`, `Lerp`, `Remap`, … — [section 25](#25-math--math-and-noise)). |
 | `coroutine` | ✅ | See also `StartCoroutine` / `WaitSeconds` below. |
 | `utf8` | ✅ | `utf8.len`, `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.offset`, `utf8.charpattern`. |
-| `package` | ✅ | `require` — see [Modules and require](#modules-and-require). |
+| `package` | ✅ | `require` — see [Modules and require](#modules-and-require). Native modules (`package.loadlib`, C modules found through `package.cpath`) are off by default — see below. |
 | `os` | ❌ | It also exposes `os.execute` / `os.remove` / `os.exit`. Use the engine date/time API instead: `GetUnixTime`, `GetDateTable`, `FormatDate`. |
 | `io` | ❌ | Use the sandboxed `WriteFile` / `ReadFile` / `PersistentTable` / `SaveGameState` instead — they write only inside the save folder. |
 | `debug` | ❌ | The engine installs its own error handler, so **every runtime error already carries a full stack traceback**; `debug.sethook` would collide with the built-in Lua debugger. |
+
+> **Native modules and bytecode are off by default.** A script cannot load a native library
+> (`package.loadlib`, or a `.dll`/`.so` module that `require` finds through `package.cpath`) or a
+> precompiled bytecode chunk (`load(chunk, name, "b")`, a `.luac` file): `package.loadlib` returns
+> `nil` and a message, `require` reports "native Lua modules are off", and bytecode fails with Lua's
+> "attempt to load a binary chunk" error. Native code runs with all of the player's permissions,
+> malformed bytecode can crash the game or escape Lua, and players' mods run the same Lua — so the
+> protection only holds when it covers every script. If your game needs either, enable
+> **Edit → Preferences → Engine → Allow Lua Native Modules and Bytecode** (`Engine.AllowLuaNativeCode`
+> in `Config/Engine.json`). `package.loadlib`, the C-module search of `require` and `package.searchpath`
+> then work as in standard Lua, and `load`, `loadfile`, `dofile` and `require` accept bytecode — for
+> **every** script, players' mods included. Scripts cannot change this option. For native code of your
+> own, a C++ plugin ([Plugins & Mods](Plugins-And-Mods-EN-DOC.md)) is the safer choice.
 
 ```lua
 -- coroutine: basic example
@@ -4727,7 +4836,7 @@ Webcam.Close()
 | `Webcam.IsOpen()` | A camera is currently open |
 | `Webcam.GetFormat()` | `{width, height}` of the negotiated stream |
 | `Webcam.HasNewFrame()` | A fresh frame is available this poll |
-| `Webcam.SaveFrameToPNG(path)` | Acquires the latest frame and writes it as PNG. Returns `true` on success |
+| `Webcam.SaveFrameToPNG(path)` | Acquires the latest frame and writes it as PNG. Returns `true` on success. A relative path is resolved from the game folder; an absolute one must lie inside the project folder or the game's data folders, and `..` is not allowed |
 
 > **Web note:** browsers gate camera access behind a permission prompt; until the user accepts it, `IsOpen()` may be true but `HasNewFrame()` returns false for several frames.
 
@@ -5032,6 +5141,13 @@ local data = ExportInputBindings()
 -- }
 ImportInputBindings(data)                     -- replaces current bindings
 ```
+
+> **Paths.** A relative path passed to `SaveInputBindings` / `LoadInputBindings` is resolved from the
+> game folder, as before. An absolute path must lie inside the project folder or the game's data folder
+> (saves and config — `GetInputBindingsPath()` is fine), and `..` is not allowed; `LoadInputBindings`
+> may also read from a mod's folder.
+> Scripts can never overwrite the engine's own `Config/Engine.json` or the asset redirects in
+> `Saved/Redirectors`. A refused path makes the call return `false` and logs a warning.
 
 **Typical settings menu flow**
 
@@ -5919,7 +6035,7 @@ SetSpriteTexture("Content/Textures/hero_damaged.png")
 local path = GetSpriteTexturePath()
 
 -- Region (for sprite sheets / atlases)
-SetSpriteRegion(0, 0, 32, 32)     -- x, y, w, h in texture
+SetSpriteRegion(0, 0, 32, 32)     -- x, y, w, h in pixels of the sprite's image (w or h <= 0 = whole image)
 local reg = GetSpriteRegion()       -- → {x, y, w, h}
 
 -- Size of current texture/region
@@ -5927,6 +6043,8 @@ local size = GetSpriteSize()        -- → {width, height}
 ```
 
 A region set via `SetSpriteRegion` is safe to apply as early as `OnCreate`: it persists across deferred texture loading and is not reset back to the sprite asset's default rect. `SetSpriteTexture` clears the custom region and returns the sprite to asset-driven region resolution.
+
+Region coordinates always refer to the sprite's own image file, also when that image is packed into the texture atlas: the engine maps them onto the atlas page for you.
 
 ### Local transform (sprite offset relative to entity)
 
@@ -6382,6 +6500,8 @@ local s = GetSpriteFrameRegion()        -- same shape, same fields
 
 `Draw` uses the same pivot convention, so pass `f.pivotX, f.pivotY` straight to `Draw.SetPivot` (or as the `px, py` fields
 of `Draw.Quad`). `f.x, f.y` are pixels inside the image, measured from its **top-left** corner like every source rectangle.
+When the image is packed into the texture atlas, `texture`, the rectangle and `width, height` still describe the original
+image file, never the atlas page.
 To draw a flipbook asset with no entity behind it, use `Draw.Flipbook` (see the Draw chapter).
 
 This closes the loop for animated billboards in a raycaster: a flipbook is just a sprite animation, so an animated enemy
@@ -10102,6 +10222,9 @@ local has = HasSaveTable("inventory")
 RemoveSaveTable("inventory")
 ```
 
+> Numbers in the table keep their type: integers stay integers (all 64 bits) and fractional numbers keep their
+> fraction.
+
 ### Save to disk
 
 ```lua
@@ -10157,6 +10280,11 @@ end
 > player's disk. To read or write files the player chooses — a map to import, a level to export —
 > use [FileDialog](#67-filedialog--open-save-import-and-export-player-files); it can also copy them
 > into this folder and out of it.
+>
+> The save folder is `Saves/` in the game's writable folder: the project folder in the editor, and
+> in a shipped game either the game folder or a per-user folder of that game alone, named after
+> its publisher and game name — see
+> [Profiling & Building → Where a shipped game keeps its player data](Profiling-And-Building-EN-DOC.md#75-where-a-shipped-game-keeps-its-player-data).
 
 ### World and FX
 
@@ -10292,6 +10420,11 @@ CancelAsyncLoad()
 | `GetAsyncLoadError()` | string | Error message (if failed) |
 | `ApplyAsyncLevel()` | — | Apply the preloaded level |
 | `CancelAsyncLoad()` | — | Cancel in-progress load |
+
+While the level preloads, its images are decoded on worker threads: the ones its sprites pack into the texture atlas go
+straight into the atlas, the others become standalone textures with the import settings from their `.ice_texture`.
+If `Atlas.Rebuild()` runs while the level is loading or waiting to be applied, its atlas images are packed again and
+the level is applied once they are ready.
 
 ---
 
@@ -10512,11 +10645,15 @@ local isGlobal = GetWidgetElementGlobalZ("Background")  -- → bool
 SetWidgetElementIsPostProcessed("BackgroundSky", true)
 local isPP = GetWidgetElementIsPostProcessed("BackgroundSky")  -- → bool
 
--- Font and text color
+-- Font, text color and text outline (the outline: Text, InputField and Dropdown)
 SetWidgetElementFontSize("Title", 32)
 local size = GetWidgetElementFontSize("Title")
 SetWidgetElementTextColor("Title", 1, 1, 1, 1)
 local color = GetWidgetElementTextColor("Title")  -- → {r, g, b, a}
+SetWidgetElementTextOutlineWidth("Title", 2)      -- canvas pixels, 0–16; 0 = no outline (default)
+local ow = GetWidgetElementTextOutlineWidth("Title")
+SetWidgetElementTextOutlineColor("Title", 0, 0, 0, 1)
+local oc = GetWidgetElementTextOutlineColor("Title")  -- → {r, g, b, a}, default {0, 0, 0, 1}
 
 -- Tooltip
 SetWidgetElementTooltip("Button", "Click to continue")
@@ -10535,6 +10672,10 @@ SetWidgetElementTooltipFontSize("Button", 18)
 local tfs = GetWidgetElementTooltipFontSize("Button")
 SetWidgetElementTooltipTextColor("Button", 1, 0.9, 0.6, 1)
 local ttc = GetWidgetElementTooltipTextColor("Button")           -- → {r, g, b, a}
+SetWidgetElementTooltipTextOutlineWidth("Button", 1)             -- px, 0–16; 0 = no outline (default)
+local tow = GetWidgetElementTooltipTextOutlineWidth("Button")
+SetWidgetElementTooltipTextOutlineColor("Button", 0, 0, 0, 0.8)
+local toc = GetWidgetElementTooltipTextOutlineColor("Button")    -- → {r, g, b, a}
 SetWidgetElementTooltipBackground("Button", "Content/UI/tooltip.ice_sprite")  -- .ice_sprite or .ice_flipbook; "" = default dark box
 local tbg = GetWidgetElementTooltipBackground("Button")
 SetWidgetElementTooltipBackgroundColor("Button", 1, 1, 1, 0.9)   -- tint of the background sprite/flipbook
@@ -10574,21 +10715,62 @@ SetWidgetElementCheckedSprite("Toggle", "Content/Textures/checked.png")
 
 ### Widget animations
 
-```lua
-PlayWidgetAnimation("Intro")
-PauseWidgetAnimation("Intro")
-ResumeWidgetAnimation("Intro")
-StopWidgetAnimation("Intro", true)
+Animations are authored in the Widget Editor ([Assets → 4.13.3](Assets-EN-DOC.md#4133-animations)).
+Every function takes the widget instance index as its last, optional argument (default `0`) and
+acts on **that instance only** — other entities that show the same widget are not affected. The
+first of these calls that plays, stops, pauses, resumes or seeks an animation gives the instance
+its own playback of it; until then the queries report the playback shared by all instances
+(started by the widget's own script or by **Auto Play**).
 
-local playing = IsWidgetAnimationPlaying("Intro")
+```lua
+PlayWidgetAnimation("Intro")                 -- from the start; the first frame shows at once
+PlayWidgetAnimation("Intro", 2.0)            -- twice as fast
+PlayWidgetAnimation("Intro", -1.0, 1)        -- backwards from the end, second widget instance
+PauseWidgetAnimation("Intro")                -- freeze; the animation keeps holding its properties
+ResumeWidgetAnimation("Intro")
+StopWidgetAnimation("Intro", true)           -- reset (default): the animated properties return to
+                                             -- their values from before Play, nothing else changes
+StopWidgetAnimation("Intro", false)          -- stop and keep the current look
+
+local playing  = IsWidgetAnimationPlaying("Intro")   -- → bool, false while paused
+local paused   = IsWidgetAnimationPaused("Intro")    -- → bool
+local finished = IsWidgetAnimationFinished("Intro")  -- → bool, reached its end (non-looping)
+local exists   = HasWidgetAnimation("Intro")         -- → bool
+local length   = GetWidgetAnimationDuration("Intro") -- → seconds
+
+-- Seek. On a playing animation it continues from there; on a stopped or finished one it shows
+-- that moment and pauses there (ResumeWidgetAnimation continues). Time is clamped to 0..duration.
 SetWidgetAnimationTime("Intro", 0.5)
 local t = GetWidgetAnimationTime("Intro")
 
+-- Name of a function in the widget's own script, called when the animation finishes
 SetAnimationCompleteCallback("Intro", "OnIntroFinished")
 
--- Animation events — fire a callback at a specific time in the animation
+-- Animation events — call a widget script function at a specific time in the animation.
+-- The function receives the parameter, or the animation name when there is none.
 AddAnimationEvent("Intro", 0.5, "OnHalfway")               -- animName, time, callback
 AddAnimationEvent("Intro", 1.0, "OnFinish", "myParam")     -- with optional parameter
+```
+
+Waiting for an animation in an entity script — no timer constants needed:
+
+```lua
+function OpenShop()
+    PlayWidgetAnimation("ShopAnim")
+end
+
+function CloseShop()
+    PlayWidgetAnimation("ShopAnim", -1.0)       -- play the opening backwards
+    closing = true
+end
+
+function OnUpdate(dt)
+    if closing and IsWidgetAnimationFinished("ShopAnim") then
+        closing = false
+        StopWidgetAnimation("ShopAnim", true)
+        SetWidgetVisible(false)
+    end
+end
 ```
 
 ### Local transforms and instances
@@ -11004,6 +11186,10 @@ SetSubWidgetElementFontSize("HealthBar", "Label", 18)
 local fs  = GetSubWidgetElementFontSize("HealthBar", "Label")-- → number
 SetSubWidgetElementTextColor("HealthBar", "Label", 1, 1, 1, 1)
 local tc  = GetSubWidgetElementTextColor("HealthBar", "Label") -- → {r, g, b, a}
+SetSubWidgetElementTextOutlineWidth("HealthBar", "Label", 2)
+local ow  = GetSubWidgetElementTextOutlineWidth("HealthBar", "Label") -- → number
+SetSubWidgetElementTextOutlineColor("HealthBar", "Label", 0, 0, 0, 1)
+local oc  = GetSubWidgetElementTextOutlineColor("HealthBar", "Label") -- → {r, g, b, a}
 
 -- ── Image / Flipbook ──────────────────────────────────────
 SetSubWidgetElementFlipbook("HealthBar", "Fx", "Content/FX/spin.ice_flipbook")
@@ -11050,11 +11236,12 @@ SetSubWidgetSwitcherActiveChild("Tabs", "Pages", 1)
 GetSubWidgetSwitcherActiveChild("Tabs", "Pages")             -- → int
 
 -- ── Animations (on the nested widget) ─────────────────────
-PlaySubWidgetAnimation("HealthBar", "Pulse")                 -- start by name
-StopSubWidgetAnimation("HealthBar", "Pulse")
+-- A nested widget is shared by every SubWidget element that embeds it, so these act on all of them.
+PlaySubWidgetAnimation("HealthBar", "Pulse")                 -- start by name; the first frame shows at once
+StopSubWidgetAnimation("HealthBar", "Pulse")                 -- stop and reset the animated properties
 PauseSubWidgetAnimation("HealthBar", "Pulse")
 ResumeSubWidgetAnimation("HealthBar", "Pulse")
-IsSubWidgetAnimationPlaying("HealthBar", "Pulse")            -- → bool
+IsSubWidgetAnimationPlaying("HealthBar", "Pulse")            -- → bool, false while paused
 
 -- Optional instance index (for entities with multiple WidgetInstances):
 SetSubWidgetElementText("HealthBar", "Label", "0/100", 1)
@@ -11132,6 +11319,8 @@ SetSubWidgetElementTooltipCorner("Menu", "Btn", "TopLeft");         GetSubWidget
 SetSubWidgetElementTooltipFont("Menu", "Btn", "Content/Fonts/Hint.ice_font"); GetSubWidgetElementTooltipFont("Menu", "Btn")
 SetSubWidgetElementTooltipFontSize("Menu", "Btn", 18);              GetSubWidgetElementTooltipFontSize("Menu", "Btn")
 SetSubWidgetElementTooltipTextColor("Menu", "Btn", 1, 0.9, 0.6, 1); GetSubWidgetElementTooltipTextColor("Menu", "Btn")
+SetSubWidgetElementTooltipTextOutlineWidth("Menu", "Btn", 1);       GetSubWidgetElementTooltipTextOutlineWidth("Menu", "Btn")
+SetSubWidgetElementTooltipTextOutlineColor("Menu", "Btn", 0, 0, 0, 0.8); GetSubWidgetElementTooltipTextOutlineColor("Menu", "Btn")
 SetSubWidgetElementTooltipBackground("Menu", "Btn", "Content/UI/tooltip.ice_sprite"); GetSubWidgetElementTooltipBackground("Menu", "Btn")
 SetSubWidgetElementTooltipBackgroundColor("Menu", "Btn", 1, 1, 1, 0.9); GetSubWidgetElementTooltipBackgroundColor("Menu", "Btn")
 SetSubWidgetElementTooltipNineSlice("Menu", "Btn", true, 12, 12, 12, 12); GetSubWidgetElementTooltipNineSlice("Menu", "Btn")
@@ -11394,7 +11583,7 @@ function OnUpdate(dt)
 end
 
 function OnLanguageChanged(newLang, oldLang)
-    -- After SetGameLanguage changed the game language.
+    -- After SetGameLanguage or UseSystemLanguage changed the game language.
 end
 
 function OnDestroy()
@@ -11569,9 +11758,13 @@ local img = GetElementImage("Icon")
 SetElementFlipbook("Anim", "Content/Flipbooks/fire.ice_flipbook")
 local fb = GetElementFlipbook("Anim")
 
--- Text color
+-- Text color and text outline (the outline: Text, InputField and Dropdown)
 SetElementTextColor("Title", 1, 1, 1, 1)
 local tc = GetElementTextColor("Title")          -- → {r, g, b, a}
+SetElementTextOutlineWidth("Title", 2)           -- canvas pixels, 0–16; 0 = no outline (default)
+local ow = GetElementTextOutlineWidth("Title")
+SetElementTextOutlineColor("Title", 0, 0, 0, 1)
+local oc = GetElementTextOutlineColor("Title")   -- → {r, g, b, a}, default {0, 0, 0, 1}
 
 -- Z-order and global Z
 SetElementZOrder("Panel", 5)
@@ -11610,6 +11803,10 @@ SetElementTooltipFontSize("Button", 18)
 local tfs = GetElementTooltipFontSize("Button")
 SetElementTooltipTextColor("Button", 1, 0.9, 0.6, 1)
 local ttc = GetElementTooltipTextColor("Button")        -- → {r, g, b, a}
+SetElementTooltipTextOutlineWidth("Button", 1)          -- px, 0–16; 0 = no outline (default)
+local tow = GetElementTooltipTextOutlineWidth("Button")
+SetElementTooltipTextOutlineColor("Button", 0, 0, 0, 0.8)
+local toc = GetElementTooltipTextOutlineColor("Button") -- → {r, g, b, a}
 SetElementTooltipBackground("Button", "Content/UI/tooltip.ice_sprite")  -- .ice_sprite or .ice_flipbook; "" = default dark box
 local tbg = GetElementTooltipBackground("Button")
 SetElementTooltipBackgroundColor("Button", 1, 1, 1, 0.9)  -- tint of the background sprite/flipbook
@@ -11793,14 +11990,24 @@ RemoveElement("DynamicLabel")
 local info = GetElement("Title")                 -- → {name, visible, text, value, scale_x, scale_y,
                                                  --    rotation, flip_x, flip_y, opacity}
 
--- Animations
-PlayAnimation("FadeIn")
-PlayAnimation("FadeIn", 2.0)                     -- with speed
-StopAnimation("FadeIn")
-StopAnimation("FadeIn", true)                    -- reset to start
+-- Animations. These run on every instance of the widget at once (and on the widget wherever it
+-- is embedded as a SubWidget); PlayAnimation and StopAnimation also bring back to this shared
+-- playback the instances an entity script took over with PlayWidgetAnimation & co.
+PlayAnimation("FadeIn")                          -- the first frame shows at once
+PlayAnimation("FadeIn", 2.0)                     -- with speed; a negative speed plays backwards
+StopAnimation("FadeIn")                          -- reset (default): animated properties return to
+                                                 -- their values from before Play
+StopAnimation("FadeIn", false)                   -- stop and keep the current look
 PauseAnimation("FadeIn")
 ResumeAnimation("FadeIn")
-local playing = IsAnimationPlaying("FadeIn")
+local playing  = IsAnimationPlaying("FadeIn")    -- false while paused
+local paused   = IsAnimationPaused("FadeIn")
+local finished = IsAnimationFinished("FadeIn")   -- reached its end (non-looping)
+local exists   = HasAnimation("FadeIn")
+local length   = GetAnimationDuration("FadeIn")  -- seconds
+SetAnimationTime("FadeIn", 0.25)                 -- seek; a stopped animation shows that moment, paused
+local t = GetAnimationTime("FadeIn")
+SetAnimationCompleteCallback("FadeIn", "OnFadeInDone")   -- OnFadeInDone("FadeIn") at the end
 AddAnimationEvent("FadeIn", 0.5, "OnHalfway")   -- callback at time 0.5
 AddAnimationEvent("FadeIn", 1.0, "OnDone", "param")
 ```
@@ -11902,6 +12109,8 @@ GetSubElementColor("HealthBar", "Icon")          -- → {r, g, b, a}
 -- Appearance
 SetSubElementFontSize("HealthBar", "Label", 18); GetSubElementFontSize("HealthBar", "Label")
 SetSubElementTextColor("HealthBar", "Label", 1,1,1,1); GetSubElementTextColor("HealthBar", "Label")
+SetSubElementTextOutlineWidth("HealthBar", "Label", 2); GetSubElementTextOutlineWidth("HealthBar", "Label")
+SetSubElementTextOutlineColor("HealthBar", "Label", 0,0,0,1); GetSubElementTextOutlineColor("HealthBar", "Label")
 SetSubElementFlipbook("HealthBar", "Fx", "Content/FX/spin.ice_flipbook"); GetSubElementFlipbook("HealthBar", "Fx")
 GetSubElementImage("HealthBar", "Icon")
 SetSubElementZOrder("HealthBar", "Icon", 5);     GetSubElementZOrder("HealthBar", "Icon")
@@ -11914,6 +12123,8 @@ SetSubElementTooltipCorner("HealthBar", "Icon", "TopLeft"); GetSubElementTooltip
 SetSubElementTooltipFont("HealthBar", "Icon", "Content/Fonts/Hint.ice_font"); GetSubElementTooltipFont("HealthBar", "Icon")
 SetSubElementTooltipFontSize("HealthBar", "Icon", 18); GetSubElementTooltipFontSize("HealthBar", "Icon")
 SetSubElementTooltipTextColor("HealthBar", "Icon", 1,0.9,0.6,1); GetSubElementTooltipTextColor("HealthBar", "Icon")
+SetSubElementTooltipTextOutlineWidth("HealthBar", "Icon", 1); GetSubElementTooltipTextOutlineWidth("HealthBar", "Icon")
+SetSubElementTooltipTextOutlineColor("HealthBar", "Icon", 0,0,0,0.8); GetSubElementTooltipTextOutlineColor("HealthBar", "Icon")
 SetSubElementTooltipBackground("HealthBar", "Icon", "Content/UI/tooltip.ice_sprite"); GetSubElementTooltipBackground("HealthBar", "Icon")
 SetSubElementTooltipBackgroundColor("HealthBar", "Icon", 1,1,1,0.9); GetSubElementTooltipBackgroundColor("HealthBar", "Icon")
 SetSubElementTooltipNineSlice("HealthBar", "Icon", true, 12,12,12,12); GetSubElementTooltipNineSlice("HealthBar", "Icon")
@@ -12005,12 +12216,13 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `SetElementImage` | `SetWidgetElementImage` |
 | `SetElementFlipbook` | `SetWidgetElementFlipbook` |
 | `SetElementTextColor` | `SetWidgetElementTextColor` |
+| `SetElementTextOutlineColor` / `SetElementTextOutlineWidth` | `SetWidgetElementTextOutlineColor` / `SetWidgetElementTextOutlineWidth` |
 | `SetElementZOrder` | `SetWidgetElementZOrder` |
 | `SetElementGlobalZ` | `SetWidgetElementGlobalZ` |
 | `SetElementIsPostProcessed` | `SetWidgetElementIsPostProcessed` |
 | `SetElementAnchor` | `SetWidgetElementAnchor` |
 | `SetElementTooltip` | `SetWidgetElementTooltip` |
-| `SetElementTooltip<Property>` (`LocalizationKey`, `Mode`, `Corner`, `Font`, `FontSize`, `TextColor`, `Background`, `BackgroundColor`, `NineSlice`, `Size`, `Padding`) | `SetWidgetElementTooltip<Property>` |
+| `SetElementTooltip<Property>` (`LocalizationKey`, `Mode`, `Corner`, `Font`, `FontSize`, `TextColor`, `TextOutlineColor`, `TextOutlineWidth`, `Background`, `BackgroundColor`, `NineSlice`, `Size`, `Padding`) | `SetWidgetElementTooltip<Property>` |
 | `SetStateColors` | `SetWidgetStateColors` |
 | `SetStateSounds` | `SetWidgetStateSounds` |
 | `SetFillColor` | `SetFillColor` |
@@ -12033,6 +12245,11 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `GetRootElements` | `GetWidgetRootElements` |
 | `MoveElement` | `MoveWidgetElement` |
 | `PlayAnimation` | `PlayWidgetAnimation` |
+| `StopAnimation` / `PauseAnimation` / `ResumeAnimation` | `StopWidgetAnimation` / `PauseWidgetAnimation` / `ResumeWidgetAnimation` |
+| `IsAnimationPlaying` / `IsAnimationPaused` / `IsAnimationFinished` | `IsWidgetAnimationPlaying` / `IsWidgetAnimationPaused` / `IsWidgetAnimationFinished` |
+| `SetAnimationTime` / `GetAnimationTime` | `SetWidgetAnimationTime` / `GetWidgetAnimationTime` |
+| `GetAnimationDuration` / `HasAnimation` | `GetWidgetAnimationDuration` / `HasWidgetAnimation` |
+| `SetAnimationCompleteCallback` / `AddAnimationEvent` | same names on entity side |
 | `CreateElement` | `AddWidgetElement` |
 | `FocusElement` | `FocusWidgetElement` |
 | `SetGamepadEnabled` *(and all `SetGamepad*` helpers)* | same name on entity side |
@@ -13033,6 +13250,7 @@ Settings.SetRenderer("OpenGL 4.6")          -- explicit OpenGL on desktop
 >
 > - **Applied immediately:** `CullPadding`, `CullingMode`, `IsSuspended`.
 > - **Requires restart** (GPU buffers/shaders, texture atlases, and the cached device texture limit are built once at startup from these values): `MaxPointLights`, `MaxTextureSlotsGL`, `MaxTextureSlotsGLES`, `MaxQuadsPerBatch`, `MaxParticlesPerBatch`, `MaxInstancesPerBatch`, `DebugVertexBufferSize`, `AtlasSize`, `MaxSpriteSize`, `MaxTextureSize`.
+> - `AtlasSize` and `MaxSpriteSize` also take effect on `Atlas.Rebuild()`, which repacks the texture atlas without a restart.
 
 ```lua
 -- Culling
@@ -13065,8 +13283,8 @@ local slES = Settings.GetMaxTextureSlotsGLES()
 Settings.SetMaxPointLights(32)            -- range: 1 .. 128
 local mpl = Settings.GetMaxPointLights()
 
--- Texture atlas / textures (require restart)
-Settings.SetAtlasSize(4096)               -- atlas page size in px (range: 256 .. 16384)
+-- Texture atlas / textures (require restart; Atlas.Rebuild() applies the two atlas sizes right away)
+Settings.SetAtlasSize(4096)               -- atlas page size in px (range: 256 .. 16384, capped to the GPU texture limit)
 local atl = Settings.GetAtlasSize()
 Settings.SetMaxSpriteSize(2048)           -- largest sprite packed into the shared atlas (range: 64 .. 16384)
 local mss = Settings.GetMaxSpriteSize()
@@ -13077,6 +13295,83 @@ local mts = Settings.GetMaxTextureSize()
 Settings.SetDebugVertexBufferSize(128)    -- range: 16 .. 4096
 local dvb = Settings.GetDebugVertexBufferSize()
 ```
+
+### Lua garbage collector
+
+> Tunes the Lua 5.5 garbage collector of **both** script VMs: the game VM (entity, level and mod
+> scripts) and the UI VM (widget scripts). The project values come from the editor's **Optimization**
+> tab (`Config/Engine.json` → `Optimization` → `LuaGC`). Changing a value with these functions creates a
+> game override that applies immediately and is saved to `GameSettings.json` by `Settings.Save()`;
+> `Settings.ResetDefaults()` drops the override and restores the project values. In the editor an
+> override lasts until play mode stops.
+
+```lua
+-- Presets: "default"    generational mode with the Lua 5.5 defaults (best for most games)
+--          "low_memory" incremental mode with a short pause: about 1/3 less peak memory, more CPU time
+--          "throughput" generational mode with fewer collections: less GC time, more memory
+--          "custom"     keeps the current values and lets you change them one by one
+Settings.SetLuaGCPreset(Settings.LUA_GC_PRESET_LOW_MEMORY)  -- → true (false + warning for an unknown name)
+local preset = Settings.GetLuaGCPreset()                     -- "low_memory"
+
+-- Mode: "generational" or "incremental". A different mode switches the preset to "custom".
+Settings.SetLuaGCMode(Settings.LUA_GC_INCREMENTAL)           -- → true / false
+local mode = Settings.GetLuaGCMode()
+
+-- Parameters, named as in collectgarbage("param"). Values are clamped to the ranges below;
+-- a changed value switches the preset to "custom".
+Settings.SetLuaGCParam("minormul", 20)       -- generational: 5 .. 300 (%)
+Settings.SetLuaGCParam("minormajor", 70)     -- generational: 10 .. 500 (%)
+Settings.SetLuaGCParam("majorminor", 50)     -- generational: 0 .. 100 (%)
+Settings.SetLuaGCParam("pause", 250)         -- incremental and major collections: 100 .. 1000 (%)
+Settings.SetLuaGCParam("stepmul", 200)       -- incremental and major collections: 100 .. 1000 (%)
+Settings.SetLuaGCParam("stepsize", 0)        -- bytes between steps: 0 = Lua default, otherwise 1024 .. 262144
+local pause = Settings.GetLuaGCParam("pause") -- nil for an unknown name
+
+-- Full collection of both VMs right after each level load (after OnLevelStart). Default: true
+Settings.SetLuaGCCollectOnLevelLoad(true)
+local onLoad = Settings.IsLuaGCCollectOnLevelLoad()
+
+-- Idle-frame GC: up to this many ms of collector work in the spare time of a frame, before the
+-- FPS limiter sleeps (1 ms is always left free). 0 = off (default), maximum LUA_GC_IDLE_BUDGET_MAX (8).
+-- Needs an FPS limit; it has no effect on the Web, where the browser paces frames.
+Settings.SetLuaGCIdleBudget(1.5)
+local budget = Settings.GetLuaGCIdleBudget()
+
+-- Pooled allocator for small Lua objects (up to 256 bytes: tables, strings, closures). Default: true.
+-- It can be switched at any time; memory that is already allocated stays valid.
+Settings.SetLuaPooledAllocator(true)
+local pooled = Settings.IsLuaPooledAllocator()
+
+-- Full collection of both VMs right now (e.g. behind a loading screen); returns the freed KB
+local freedKB = Settings.CollectLuaGarbage()
+
+-- Live statistics
+local s = Settings.GetLuaGCStats()
+-- s.preset, s.mode, s.collectOnLevelLoad, s.idleBudgetMs, s.pooledAllocator
+-- s.runtimeOverride  -- true while a game override is active
+-- s.memoryKB         -- both VMs together
+-- s.lastCollectMs    -- duration of the last full collection
+-- s.lastIdleMs       -- duration of the last idle-frame GC slice
+-- s.game, s.ui       -- per VM (s.ui is nil while the UI VM is not running):
+--   .memoryKB, .mode, .running (false after collectgarbage("stop")),
+--   .pooling, .poolReservedKB, .poolUsedKB
+```
+
+| Parameter | Used by | Lua default | Meaning |
+| --------- | ------- | ----------- | ------- |
+| `minormul` | generational | 20 % | A minor collection starts when memory grows by this percentage of the memory in use after the last major collection. |
+| `minormajor` | generational | 70 % | A major (full) collection runs once old objects have grown by this percentage since the last major collection. |
+| `majorminor` | generational | 50 % | After a major collection the collector returns to minor collections only if it freed more than this percentage of the memory allocated since the previous major collection. |
+| `pause` | incremental, major collections | 250 % | A new cycle starts when memory reaches this percentage of the memory in use after the previous collection. |
+| `stepmul` | incremental, major collections | 200 % | How much work each step does relative to the memory allocated. |
+| `stepsize` | incremental, major collections | 0 (≈ 9.4 KB) | Bytes allocated between two collector steps. |
+
+Constants: `Settings.LUA_GC_PRESET_DEFAULT`, `LUA_GC_PRESET_LOW_MEMORY`, `LUA_GC_PRESET_THROUGHPUT`,
+`LUA_GC_PRESET_CUSTOM`, `LUA_GC_GENERATIONAL`, `LUA_GC_INCREMENTAL`, `LUA_GC_PARAM_MINOR_MULTIPLIER`,
+`LUA_GC_PARAM_MAJOR_MINOR`, `LUA_GC_PARAM_MINOR_MAJOR`, `LUA_GC_PARAM_PAUSE`,
+`LUA_GC_PARAM_STEP_MULTIPLIER`, `LUA_GC_PARAM_STEP_SIZE` and `LUA_GC_IDLE_BUDGET_MAX`.
+`Settings.OnSettingChanged` listeners receive the keys `"LuaGCPreset"`, `"LuaGCMode"`, `"LuaGCParam"`,
+`"LuaGCCollectOnLevelLoad"`, `"LuaGCIdleBudget"` and `"LuaPooledAllocator"`.
 
 ### Sound (via Settings)
 
@@ -13743,7 +14038,7 @@ Prewarm.Font("Content/Fonts/Roboto.ttf")
 Prewarm.Animation("Content/Anims/AC_Player.ice_animation")
 Prewarm.View("Content/Views/V_Underwater.ice_view")
 Prewarm.Sound("Content/Audio/sfx_explosion.wav")
-Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- raw image (atlas if it fits, else standalone)
+Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- raw image (atlas if its .ice_texture allows it, else standalone)
 
 -- Queue an entire folder (recursive). Recognised extensions:
 --   .ice_sprite, .ice_flipbook, .ice_skeleton, .ice_material, .ice_matinst, .ice_decal,
@@ -13806,15 +14101,80 @@ end
   - a view warms its post-process sky / LUT / bloom-dirt textures (under the
     exact runtime keys) and compiles its custom post-process materials.
 - `Prewarm.Texture` (and any raw image picked up by `Prewarm.Folder`) warms the
-  image the same way a sprite would: into the shared atlas if it fits (honoring
-  `.ice_texture` settings), otherwise as a standalone texture keyed by full
-  path. It is idempotent and shares the cache entry with the matching
+  image the same way a sprite would: into the shared atlas when its
+  `.ice_texture` has **Pack into Atlas** on with atlas-compatible settings and
+  the image fits **Max Sprite Size**, otherwise as a standalone texture keyed
+  by full path. An image without an `.ice_texture` is never packed. It is
+  idempotent and shares the cache entry with the matching
   sprite/material/tileset, so no duplicate copy is created.
+- Atlas images (from `Prewarm.Texture`, `Prewarm.Folder` and the textures of
+  queued sprites) are decoded on worker threads and packed on the main thread
+  within a small per-frame budget; `GetProgress` and `IsComplete` wait for them.
+- The atlas images Prewarm has packed stay packed across `Atlas.Rebuild()` until
+  `Prewarm.Clear()`: after a rebuild they are packed again in the background,
+  and `GetProgress` and `IsComplete` wait for that too.
 - `Prewarm.Material` compiles the shader and loads the material's textures;
   `Prewarm.MaterialInstance` (or any `.ice_matinst` path) also resolves the
   parent material and applies texture overrides.
 - The queue survives scene transitions — `Prewarm.Clear()` is the only way
   to abandon queued (but not-yet-processed) items.
+
+### Atlas.* — texture atlas
+
+Images whose `.ice_texture` has **Pack into Atlas** on (with atlas-compatible import settings, see *Textures and the
+`.ice_texture` sidecar* in the Assets guide) share large atlas pages, so sprites that use them batch into fewer draw
+calls. `Atlas.*` lets a script inspect the pages and repack them.
+
+```lua
+local stats = Atlas.GetStats()
+-- stats.pages          -- atlas pages in use
+-- stats.images         -- images packed into them
+-- stats.pending        -- images still decoding on worker threads
+-- stats.pageSize       -- page width and height in pixels (capped to the GPU texture limit)
+-- stats.maxSpriteSize  -- largest image that gets packed; bigger images stay standalone
+-- stats.vramMB         -- memory used by all pages
+-- stats.deadPixels     -- page area still held by images removed after an asset refresh
+-- stats.occupancy      -- average page fill, 0..1 (dead space included)
+
+if Atlas.IsPacked("Content/Sprites/Hero/T_Hero.png") then
+    local r = Atlas.GetRegion("Content/Sprites/Hero/T_Hero.png")
+    -- r.page                     -- page index, starting at 0 as in the Stats panel
+    -- r.x, r.y, r.w, r.h         -- where the image sits on the page, in pixels from the top-left
+    -- r.pageWidth, r.pageHeight  -- page size in pixels
+end
+
+for _, page in ipairs(Atlas.GetPages()) do
+    print(page.index, page.width, page.height, page.minFilter, page.magFilter,
+          page.images, page.occupancy, page.usedPixels, page.deadPixels)
+end
+
+Atlas.Rebuild()   -- repack every page at the start of the next frame
+```
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `Atlas.GetStats()` | table | Totals for all pages (fields above). |
+| `Atlas.IsPacked(path)` | bool | `true` if the image file is in the atlas right now. |
+| `Atlas.GetRegion(path)` | table or nil | Page and pixel rectangle of a packed image; `nil` if it is not packed. |
+| `Atlas.GetPages()` | table | One entry per page: `index`, `width`, `height`, `minFilter` and `magFilter` (`"nearest"` or `"linear"`), `images`, `occupancy` (0..1), `usedPixels`, `deadPixels`. |
+| `Atlas.Rebuild()` | — | Repacks every page at the start of the next frame. |
+
+**Notes**
+- `path` is the image file (`.png`, `.jpg`), not the `.ice_sprite`; for a sprite on an entity,
+  `GetSpriteFrameRegion().texture` returns it. Paths are normalized like every content path.
+- An image is packed the first time a sprite, flipbook, skeleton, widget, particle effect or `Draw` call loads it, or
+  ahead of time by `Prewarm` and `LoadLevelAsync`, so `IsPacked` returns `false` before that.
+- Pages are kept for the whole session, so a packed image never moves on its own. When an asset refresh removes an
+  image or changes its size, its old area becomes dead space. `Atlas.Rebuild()` packs the images that are still in use
+  onto fresh pages, frees the old ones and applies a new `Settings.SetAtlasSize` / `Settings.SetMaxSpriteSize`.
+  Sprites, effects and widgets keep their materials, regions and other runtime state; an image that no longer fits a
+  page is drawn from a standalone copy. Images that `Prewarm` or `LoadLevelAsync` are still decoding or have already
+  packed are packed again after the rebuild even if nothing uses them yet, so a running preload still ends with them in
+  the atlas: `Prewarm` keeps its images until `Prewarm.Clear()`, `LoadLevelAsync` until the level is applied or the
+  load is cancelled. The images in use are read from disk again during the rebuild frame, so rebuild at a quiet moment
+  such as a loading screen.
+- Region functions such as `SetSpriteRegion`, `GetSpriteFrameRegion` and `GetFlipbookFrameRegion` always use the
+  coordinates of the original image, never those of the atlas page.
 
 ### Settings change events
 
@@ -14025,6 +14385,8 @@ SetRandomSeed(42)
 > generator. Call `SetRandomSeed(n)` (or `RNG.SetSeed`) once and **every** `Random*` call, loot
 > roll, array shuffle and AI random selector becomes fully reproducible — the foundation for
 > seeded roguelike runs and replays. `SetRandomSeed` also reseeds the noise tables by default.
+> A seed repeats the sequence of numbers, so the draws must also happen in the same order: when
+> you draw once per entry of a dictionary, loop over `Map.SortedKeys(t)` rather than `pairs`.
 > For named sub-streams, string seeds and exact save/load, see
 > [RNG — Deterministic Random Streams](#rng--deterministic-random-streams-seeded).
 
@@ -14282,6 +14644,10 @@ runs, daily challenges and replays.
 > `RandomWeighted`, `RandomPointInCircle`, … as well as `Array.Shuffle`, loot-table rolls and
 > Behavior-Tree random selectors) route through this same generator, so a single
 > `RNG.SetSeed(...)` makes **all** of them reproducible.
+
+> **Same seed, same order.** A seed repeats the sequence of numbers, so the draws must also happen
+> in the same order. `pairs` visits string keys in an order that can change between runs: when you
+> draw once per entry of a dictionary, loop over `Map.SortedKeys(t)` instead.
 
 #### Seeding
 
@@ -14774,6 +15140,10 @@ local allDone = AreAllTexturesLoaded({
 | `IsTextureLoaded(name)` | bool | True if the texture is ready |
 | `AreAllTexturesLoaded(paths)` | bool | True if all listed textures are ready |
 
+`SoftRef(...).Load()` and `PreloadTextures` decode images on worker threads and apply the import settings from the
+image's `.ice_texture` (filtering, wrapping, mipmaps, premultiplied alpha, maximum size) the same way as a texture loaded
+on demand.
+
 ### PersistentTable — Auto-Persisting Data Store
 
 A key-value store that can be saved/loaded to disk. Ideal for stats, settings, achievements.
@@ -14837,6 +15207,11 @@ stats.Clear()                                  -- clear all data
 > contains `..` or a drive letter (`C:`), or starts with `/`, is refused: `Save`, `Load`, `Exists` and `Delete`
 > return `false`, and `Update` skips the auto-save.
 
+> Numbers keep their Lua type through `Save` and `Load`: an integer such as `10` comes back as an integer with
+> all its 64 bits, and a number with a fraction such as `0.8` comes back exactly as it was saved. `Increment`
+> keeps an integer an integer while both the value and the amount are integers, and `GetMax` / `GetMin` compare
+> integers exactly, however large they are.
+
 ---
 
 ## 28. Localization — Localization
@@ -14863,11 +15238,37 @@ local langs = GetAvailableLanguages()  -- → {"en", "ru", "zh"}
 
 -- Check key
 local has = HasLocalizationKey("menu_play")
+
+-- Languages of the player's system, most preferred first
+local sys = GetSystemLanguage()        -- → "ru"
+local locales = GetSystemLocales()     -- → {"ru-RU", "en-US"}
+
+-- Start in the player's own language when the table has it
+local picked = UseSystemLanguage()     -- → "ru", or nil (the language stays as it was)
 ```
+
+> `LocalizeFmt` writes numbers the way `ToString` does: an integer without a decimal point (`50`), a fractional
+> number with its fraction (`2.5`).
 
 > When the language changes, `OnLanguageChanged(newLang, oldLang)` is called in all entity scripts.
 > Widget text and tooltips bound to a localization key (`SetWidgetLocalizationKey`,
 > `SetWidgetElementTooltipLocalizationKey`) switch to the new language automatically.
+
+> The engine never picks a language on its own: after `LoadLocalization` the game is in the first language of the
+> table's `Languages`, as before. `UseSystemLanguage` is the opt-in — call it after `LoadLocalization`, usually once,
+> while the player has no saved choice yet. It walks the system's languages in the player's order and, for each
+> one, tries the exact locale (`pt-BR`), then the bare language (`pt`), then another region of the same language in
+> the order of `Languages` (`pt-PT`) before it moves on to the next — so a player on `en-GB` and `fr-FR` gets
+> `en-US` rather than French. Chinese keeps its script: `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant` are Traditional,
+> every other `zh` is Simplified, and one stands in for the other only when none of the player's languages is in
+> the table otherwise. It changes the language exactly like `SetGameLanguage`, so `OnLanguageChanged` fires, and
+> returns the code it chose — or `nil`, leaving the language as it was, when no system language is in the table.
+
+> `GetSystemLanguage` returns the language of the player's first system locale in lowercase (`"ru"`, `"en"`), and
+> `GetSystemLocales` every preferred locale in order, as `language-COUNTRY` (`"en-US"`) or just the language when
+> the system names no country. On a platform that reports nothing they return `""` and an empty table. Each call
+> asks the operating system, so call them once rather than every frame. Windows, macOS, Linux, Android, iOS and
+> the web build report the player's languages.
 
 ---
 
@@ -15250,7 +15651,7 @@ SaveChromeTrace("boss_fight.json")       -- explicit file name / path
 | `StartProfilerTrace` | `StartProfilerTrace([name])` → `bool` | Begins a new trace. `name` is optional — leave it out and the profiler assigns one. Returns `true` if recording actually started. |
 | `StopProfilerTrace` | `StopProfilerTrace()` | Stops the active trace and stores it in the trace history (visible in the editor Profiler panel). No-op if nothing is being recorded. |
 | `IsProfilerTracing` | `IsProfilerTracing()` → `bool` | Returns `true` while a trace is being recorded. |
-| `SaveChromeTrace` | `SaveChromeTrace([filename])` → `bool` | Writes the latest finished trace (or the live one, or a single-frame snapshot if no trace exists) as Chrome Trace Event JSON. On Emscripten (Web) additionally triggers a browser download. Returns `true` on success. |
+| `SaveChromeTrace` | `SaveChromeTrace([filename])` → `bool` | Writes the latest finished trace (or the live one, or a single-frame snapshot if no trace exists) as Chrome Trace Event JSON. On Emscripten (Web) additionally triggers a browser download. Returns `true` on success. A relative `filename` is taken from the game folder; an absolute one must lie inside the project folder or the game's data folders, and `..` is not allowed — a refused path returns `false` and logs a warning. |
 
 > **Bind your own keys.** Wire the trace API up to whatever input fits your project — for
 > example `IsKeyJustPressed("f7")` for start/stop and `IsKeyJustPressed("f8")` for export,
@@ -15355,7 +15756,7 @@ end
 | `ResetScriptProfiler` | `ResetScriptProfiler()` | Clears accumulated per-script statistics without restarting the game. |
 | `GetScriptProfilerTimeMs` | `GetScriptProfilerTimeMs()` → `number` | Total Lua time spent in engine-invoked callbacks during the last frame. |
 | `GetScriptProfilerCalls` | `GetScriptProfilerCalls()` → `number` | Number of measured Lua callback invocations during the last frame. |
-| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Current Lua heap size in KB. |
+| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Current heap size of the game Lua VM in KB (both VMs: `Settings.GetLuaGCStats()`). |
 | `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Smoothed Lua allocation rate in KB/s — a growing value means script memory churn. |
 | `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Array of per-script rows, sorted by last-frame cost. Each entry has `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
 
@@ -16716,7 +17117,7 @@ Two interchangeable **backends** find the host by its code:
 
 | Backend | What it needs | What you get |
 |---|---|---|
-| `"p2p"` — serverless | Nothing. The room is published in the public BitTorrent **Mainline DHT** (millions of nodes, free, no account) | Room codes over the internet, NAT hole punching with port prediction, automatic UPnP / NAT-PMP, discovery on the same Wi-Fi/LAN, a room list for the local network |
+| `"p2p"` — serverless | Nothing. The room is published in the public BitTorrent **Mainline DHT** (millions of nodes, free, no account) | Room codes over the internet, NAT hole punching with port prediction, automatic UPnP / NAT-PMP, discovery on the same Wi-Fi/LAN, room lists for the local network and for the internet |
 | `"rendezvous"` | Your own **rendezvous server** — the same engine binary started with `--rendezvous-server` (see [Profiling & Building → Rendezvous server](Profiling-And-Building-EN-DOC.md#rendezvous-server)) | Everything above **plus** a relay when no direct path is possible, browser (Web build) players through its WebSocket gateway and a public room list over the internet |
 
 `"auto"` (the default) picks the rendezvous server when one is configured with
@@ -16760,9 +17161,23 @@ local ok = Network.HostOnline({
 fires for everybody who joins) and opens the room on top of it. The P2P backend creates a random
 **8-character** code (letters and digits without the look-alikes `I`, `O`, `0`, `1`) and fires
 `OnRoomReady` at once — the room is joinable on the local network immediately and from the
-internet a few seconds later, when the state turns `hosting`. The rendezvous backend fires
+internet a few seconds later, when the state turns `hosting`. With `internet = false` the room
+never touches the DHT: the state turns `hosting` at once and the code works only for players on
+the same network (`lan` must stay on). The rendezvous backend fires
 `OnRoomReady` after the server registered the room (its codes are 6 characters). `Network.StopServer()`
 closes the room.
+
+Three more fields describe a serverless room in room lists:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `info` | `""` | A short text of your own (up to 64 bytes) shown in room lists, for example the game mode |
+| `global` | `false` | Also list a public room in the internet room list |
+| `internet` | `true` | `false` keeps the room on the local network: no DHT at all |
+
+```lua
+Network.HostOnline({ name = "Bill's table", public = true, global = true, info = "holdem|8000" })
+```
 
 #### Joining a room
 
@@ -16819,6 +17234,8 @@ Network.UpdateRoom({ name = "Final table", public = false, locked = true })  -- 
 -- Pass every field you care about: omitted fields fall back to their defaults.
 ```
 
+`Network.UpdateRoom` takes `global` and `info` (p2p) the same way.
+
 `OnOnlineStatus` states:
 
 | State | Side | Meaning |
@@ -16859,7 +17276,7 @@ Error codes (`OnConnectionFailed(reason)`, the second value of `GetOnlineState()
 #### Room list
 
 ```lua
-Network.ListRooms(function(rooms, err)
+Network.ListRooms(function(rooms, err, done)
     if err ~= "" then Print("List failed: " .. err) return end
     for _, r in ipairs(rooms) do
         -- r.code, r.name, r.players, r.maxPlayers, r.hasPassword, r.locked,
@@ -16870,8 +17287,61 @@ Network.ListRooms(callback, "p2p")        -- public rooms on the local network (
 Network.ListRooms(callback, "rendezvous") -- public rooms of this game id on the rendezvous server
 ```
 
-Only rooms hosted with `public = true` are listed. The serverless backend has no global
-directory, so its list covers the local network; a room on the internet is joined by its code.
+The serverless internet room list takes a third argument:
+
+```lua
+Network.ListRooms(callback, "p2p", { scope = "internet", duration = 8, progress = true })
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `scope` | `"lan"` | `"internet"` searches the serverless internet room list |
+| `duration` | `8` | Internet: seconds until the final list, 2 to 60 |
+| `progress` | `false` | Internet: also call back with the rooms found so far (`done = false`) |
+
+The internet search keeps running between calls. A new internet `ListRooms` of the same app id
+continues the running search (same UDP port, same DHT state): with `progress = true` the rooms it
+already knows arrive at once, and every room is asked again for fresh player counts. After the
+final list the search stays alive in the background for 90 seconds, keeping the rooms fresh, so a
+list that is opened again is filled immediately; it then stops by itself. A room that stops
+answering leaves the list after about 15 seconds. Calling `ListRooms` again right after the final
+list (for example every second while the list screen is open) costs almost nothing.
+
+```lua
+Network.StopRoomList()      -- end the search now and drop a pending ListRooms callback
+Network.PrewarmOnline()     -- → true while a background search runs
+```
+
+`Network.PrewarmOnline()` starts that background search without a callback — call it when the
+player opens the online menu, and hosting, joining by code and the room list then start with a
+warm DHT. It returns `false` when a session is already running or the backend is not `"p2p"`.
+The DHT nodes the engine has talked to are kept in `Saved/Cache/Network/dht_nodes.bin` (writable
+folder), so the next launch does not start from the bootstrap servers. `HostOnline` and
+`JoinOnline` stop the search; joining a room the search has just heard from contacts that host
+directly, from the same UDP port the search used, so such a join usually needs only one round
+trip.
+
+Rooms of the serverless backend also carry `r.global` (listed in the internet room list) and
+`r.info` (the host's `info` text).
+
+Only rooms hosted with `public = true` are listed; the internet list of the serverless backend
+shows the rooms hosted with `public = true` and `global = true`. `done` is `true` for the final
+list — the callback is called once, unless `progress = true` asked for updates along the way.
+An internet list that could not reach the DHT and found nothing ends with `dht_unreachable`.
+
+**The internet room list without a server.** A host of a listed room announces itself in the DHT
+under the room-list key of its app id, and a browsing player announces itself under a second key.
+Each side looks the other up and both send a few small packets — the same hole punching a join
+uses — so the host can tell the browser its room: code, name, players, flags and `info`. Rooms
+answer one by one within the first seconds (with `progress = true` they show up as they answer);
+global rooms on the same network are found through the local broadcast as well. Both sides keep
+sending while the search runs, so a room is found even when its first packets were lost. Players
+behind a NAT that gives every destination a new port are reached with port prediction: such a
+host publishes the port its NAT will use next under a key derived from its address, and the other
+side probes a small window of ports around it. A query is padded to the size of the answer and
+every host limits its answers, so the list cannot be used to flood a third party. When both sides
+are behind such NATs, or the NAT picks random ports, no direct path exists — see *When a direct
+path is impossible*.
 
 #### How serverless P2P works
 
@@ -16880,9 +17350,11 @@ announces its public address under one key in the DHT through the game's own UDP
 the joiner announces itself under another. Each side looks the other up and both send "punch"
 packets at the same time, which opens the path through both routers. When the router supports
 UPnP or NAT-PMP the port is also opened and announced. NATs that give every destination a new
-port are handled with port prediction when their ports are allocated sequentially. On the same
-Wi-Fi the room is also found through a local broadcast on **UDP 7794**, because many routers cannot
-send traffic back to their own public address. A join usually takes 3–15 seconds.
+port are handled with port prediction when their ports are allocated sequentially; a host behind
+such a NAT also publishes the port it will use next. On the same Wi-Fi the room is also found
+through a local broadcast on **UDP 7794**, because many routers cannot send traffic back to their
+own public address. The bootstrap servers are resolved in parallel and the DHT nodes of earlier
+sessions are reused, so a join usually takes 2–6 seconds, and about one second from the room list.
 
 #### When a direct path is impossible
 
@@ -17760,6 +18232,121 @@ Network.SetMaxVoiceRelayPlayers(16)              -- max players for voice relay
 local maxRelay = Network.GetMaxVoiceRelayPlayers() -- current limit
 ```
 
+Every player who should **hear** the others enables voice chat — a player with voice chat off
+receives nothing. The microphone is read completely on every update (at any frame and tick rate,
+the delay never grows) and every 20 ms frame passes the voice processor before it is encoded: a
+high-pass filter removes rumble, a spectral noise suppressor removes steady background noise (fans,
+traffic, hum, hiss), automatic gain brings quiet and loud microphones to the same speech level,
+voice detection decides when the player talks (a short pre-roll keeps the first syllable, a hold
+keeps word endings) and a limiter prevents clipping. Only frames while the player talks are sent —
+Opus at 40 kbit/s with forward error correction by default — and they leave at once instead of
+waiting for the next network tick. Nothing said while muted is sent after unmuting. On Android the
+microphone opens with the voice-communication input, so the device's own echo canceller and noise
+processing work as in a phone call.
+
+On the listening side every speaker has an adaptive jitter buffer (40–300 ms, following the
+measured jitter); a lost packet is rebuilt from the error correction carried by the next one or
+concealed, and all speakers are mixed into one voice output. ENet's packet throttle, which drops
+unreliable packets whenever the round-trip time varies, is off by default so no voice frame is
+thrown away before it is sent (`Network.SetPacketThrottle(true)` turns it back on). The output
+follows the project's *Voice chat group* (Audio settings): set it to Voice and
+`Audio.SetGroupVolume(Audio.GROUP_VOICE, v)` becomes a voice chat volume control. Android needs
+`RECORD_AUDIO` granted before the microphone opens (`Permissions.Request`); with
+`SetVoiceReleaseMicWhenMuted(true)` a player who never talks never needs it.
+
+**Toggle to talk.** `Network.SetVoiceReleaseMicWhenMuted(true)` keeps the microphone closed while
+the player is muted (the default `false` keeps it open while voice chat is on). Everybody can then
+listen without a microphone permission, and the microphone opens only while the player talks:
+
+```lua
+Network.SetVoiceReleaseMicWhenMuted(true)
+Network.SetVoiceMuted(true)
+Network.EnableVoiceChat(true)
+
+local function setTalking(on)
+    Network.SetVoiceMuted(not on)
+end
+```
+
+`Network.GetVoiceReleaseMicWhenMuted()` returns the current setting. Your own microphone:
+
+| Function | Returns |
+|---|---|
+| `Network.IsVoiceCapturing()` | `true` while the microphone is open |
+| `Network.IsVoiceTransmitting()` | `true` while your voice is being sent (the player talks) |
+| `Network.GetVoiceInputLevel()` | the smoothed microphone level before processing, `0..1` (`0` while muted) |
+
+#### Voice quality settings
+
+`Network.SetVoiceSettings(table)` changes only the keys present in the table and returns `true`
+(`false` for an unknown `activation` or `inputPreset` name); `Network.GetVoiceSettings()` returns
+all keys. Settings apply at once, also while voice chat runs, and stay until changed. Out-of-range
+numbers are clamped. The defaults below suit speech on phones and desktops:
+
+```lua
+Network.SetVoiceSettings({
+    noiseSuppression = true,         -- spectral noise suppression
+    noiseSuppressionDb = 24,         -- how much steady noise is removed, 0..40 dB
+    autoGain = true,                 -- level the microphone automatically
+    autoGainTarget = -18,            -- speech level to reach, -40..-6 dBFS
+    autoGainMax = 30,                -- largest boost, 0..40 dB
+    inputGain = 1.0,                 -- fixed microphone gain before processing, 0..8
+    activation = "auto",             -- "auto" (voice detection), "threshold" (level gate), "always"
+    threshold = -50,                 -- "threshold": level that opens the gate, -90..0 dBFS
+    hold = 300,                      -- keep sending after the voice stops, 0..2000 ms
+    highPass = true,                 -- rumble filter
+    highPassHz = 90,                 -- its cutoff, 40..300 Hz
+    limiter = true,                  -- peak limiter
+    bitrate = 40000,                 -- Opus bitrate, 6000..128000 bit/s
+    fec = true,                      -- forward error correction: send it and use it
+    expectedLoss = 10,               -- packet loss the encoder prepares for, 0..50 %
+    jitterMin = 40,                  -- smallest playout delay, ms
+    jitterMax = 300,                 -- largest playout delay, ms
+    outputGain = 1.0,                -- voice output gain on top of the voice group volume, 0..4
+    inputPreset = "voice",           -- Android microphone path, see below
+    duckGroup = -1,                  -- sound group lowered while somebody is heard (-1 or false: off)
+    duckDb = -10,                    -- how much that group is lowered, -40..0 dB
+})
+local current = Network.GetVoiceSettings()
+```
+
+`duckGroup` takes an `Audio.GROUP_*` value: `duckGroup = Audio.GROUP_MUSIC` lowers the music while
+another player is heard and brings it back shortly after. Lower bitrates (16000–24000) save data on
+slow mobile links; 64000 and more give studio quality. A larger `jitterMin` trades delay for
+fewer gaps on unstable networks.
+
+| `inputPreset` | Android microphone path |
+|---|---|
+| `"voice"` | voice communication — the device's echo canceller, noise suppression and gain (default) |
+| `"generic"` | the plain microphone |
+| `"camcorder"` | the camcorder microphone |
+| `"recognition"` | tuned for speech recognition, no processing by the device |
+| `"unprocessed"` | the raw microphone signal |
+| `"performance"` | low latency |
+| `"system"` | the platform default |
+
+Other platforms open the system's default microphone and ignore `inputPreset`. If a device cannot
+open the requested path, voice chat falls back to the default microphone.
+
+```lua
+local s = Network.GetVoiceStats()
+-- s.enabled, s.capturing, s.muted, s.transmitting, s.speech, s.speechProbability (0..1)
+-- s.inputLevel, s.inputPeak     microphone before processing, 0..1
+-- s.outputLevel                 after processing, 0..1
+-- s.gainDb                      current automatic gain
+-- s.noiseFloorDb                estimated background noise
+-- s.playbackLevel               level of all voices being heard, 0..1
+local p = Network.GetPlayerVoiceStats(playerId)   -- nil until that player has been heard
+-- p.playing, p.level, p.delayMs, p.bufferedMs, p.jitterMs, p.loss (%)
+-- p.received, p.played, p.recovered (rebuilt from error correction), p.concealed, p.late, p.dropped
+local level = Network.GetVoicePlaybackLevel()     -- cheap per-frame level of all voices, 0..1
+```
+
+| Function | Effect |
+|---|---|
+| `Network.SetPacketThrottle(enabled)` | `true` turns ENet's packet throttle back on for every connection (default `false`) |
+| `Network.IsPacketThrottleEnabled()` | the current setting |
+
 ### Administration
 
 ```lua
@@ -17803,6 +18390,11 @@ Network.AddProfanityWord("badword")
 Network.ClearProfanityWords()
 local filtered = Network.FilterProfanity("some badword text")
 ```
+
+> **Paths.** `SaveBanList`, `LoadBanList`, `SaveWhitelist` and `LoadWhitelist` resolve a relative
+> path from the game folder. An absolute path must lie inside the project folder or the game's data
+> folders (the two `Load…` functions may also read from a mod's folder), and `..` is not allowed. A
+> refused path makes the call return `false` and logs a warning.
 
 ### Settings and stats
 
@@ -18106,7 +18698,7 @@ end
 
 #### Saving a report
 
-`SaveReport(path?)` writes a JSON file with the totals, the wire counters, per-type and per-channel stats (with the largest message of each type), the full history, the connected peers (RTT, packet loss, bytes) and the network settings, and returns the full path of the written file (or an empty string in Release / on failure). Without a path the report goes to `Tools/Helpers/NetworkProfiler/` in the engine's writable folder (your project folder in the editor, the per-user data folder in a game build); a relative path is taken from the working directory, and missing folders are created.
+`SaveReport(path?)` writes a JSON file with the totals, the wire counters, per-type and per-channel stats (with the largest message of each type), the full history, the connected peers (RTT, packet loss, bytes) and the network settings, and returns the full path of the written file (or an empty string in Release / on failure). Without a path the report goes to `Tools/Helpers/NetworkProfiler/` in the engine's writable folder (your project folder in the editor, the per-user data folder in a game build); a relative path is taken from the working directory, an absolute one must lie inside the project folder or the game's data folders (`..` is not allowed), and missing folders are created.
 
 ```lua
 -- Default location (Tools/Helpers/NetworkProfiler/network_profile_<date>_<time>.json)
@@ -18181,7 +18773,7 @@ Rollback only works if your gameplay is **deterministic**: the same starting sta
 **Determinism rules** (follow all of them):
 - Inside `OnAdvanceFrame`, drive the simulation **only** from `inputs` — never read live input (`IsKeyPressed`, `GetMousePosition`, …) or per-frame globals.
 - For randomness use `RNG.*` or the global `Random*()` helpers — both draw from the engine `RandomService`. Its state is saved and restored **automatically** every frame (toggle with the session config), so dice rolls replay identically through a rollback. When a P2P session synchronizes, the engine seeds it with a seed chosen by player 0, so every peer starts from the same random state; to use a seed of your own, set it in the `"synchronized"` event (the same value on every peer). `math.random` and `math.randomseed` are routed to the same service, so they are covered too.
-- Do **not** use wall-clock time (`GetTime()`, `GetDeltaTime()`, `os.time()`), un-ordered iteration (`pairs` over a hash whose order you depend on), or any value that differs run-to-run.
+- Do **not** use wall-clock time (`GetTime()`, `GetDeltaTime()`, `os.time()`), un-ordered iteration (`pairs` over a hash whose order you depend on — loop over `Map.SortedKeys(t)` instead), or any value that differs run-to-run.
 - Box2D physics is deterministic for the **same binary on the same platform** — both peers must run the same build. Cross-platform float determinism is not guaranteed; ship identical executables for ranked play.
 
 ### The frame loop
@@ -18294,7 +18886,7 @@ function OnFixedUpdate()
 end
 ```
 
-> **Tip:** Before going online, run `Rollback.StartSyncTest(1, 7)` and play locally. If you ever see a `desync` event, some state is escaping your `OnSaveState` (or you used non-deterministic data) — fix it before shipping.
+> **Tip:** Before going online, run `Rollback.StartSyncTest(1, 7)` and play locally. If you ever see a `desync` event, some state is escaping your `OnSaveState` (or you used non-deterministic data) — fix it before shipping. A sync test runs in a single process, so it may miss a state string built with `pairs`: on two machines the same table can be walked in a different order, the checksums differ and the peers report a `desync`. Build state strings in a fixed order — loop over `Map.SortedKeys(t)`, or use `Network.JsonEncode`, which writes object keys sorted.
 
 ---
 
@@ -19468,11 +20060,12 @@ Map.Remove(data, "mana")
 Map.Clear(data)
 
 -- Info
-local keys = Map.Keys(data)              -- {"name", "hp", "level"}
-local values = Map.Values(data)          -- {"Hero", 100, 5}
+local keys = Map.Keys(data)              -- {"name", "hp", "level"} in any order
+local sorted = Map.SortedKeys(data)      -- {"hp", "level", "name"} always in this order
+local values = Map.Values(data)          -- {"Hero", 100, 5} in any order
 local has = Map.HasKey(data, "hp")       -- true
 local count = Map.Count(data)            -- 3
-local entries = Map.Entries(data)        -- {{key="name", value="Hero"}, ...}
+local entries = Map.Entries(data)        -- {{key="name", value="Hero"}, ...} in any order
 
 -- Copy
 local copy = Map.Copy(data)             -- Shallow copy
@@ -19489,6 +20082,24 @@ Map.ForEach(data, function(k, v) Print(k .. "=" .. tostring(v)) end)
 local any = Map.Any(data, function(k, v) return v > 50 end)
 local all = Map.All(data, function(k, v) return v ~= nil end)
 ```
+
+> **Order.** `pairs` and the `Map` functions that walk a whole map (`Keys`, `Values`, `Entries`,
+> `ForEach`, `Filter`, …) visit its entries in no particular order, and for string keys the order
+> can change from one run of the game to the next. When the order matters — building a save or a
+> network message, drawing a random number per entry, rollback netcode, replays — loop over
+> `Map.SortedKeys(t)`:
+>
+> ```lua
+> for _, key in ipairs(Map.SortedKeys(data)) do
+>     local value = data[key]
+>     -- same order on every run and on every machine
+> end
+> ```
+>
+> `Map.SortedKeys` returns the keys as an array: numbers ascending, then strings in byte order
+> (`"B"` before `"a"`), then `false` and `true`. Keys that are tables, functions or userdata have
+> no natural order; they come last, unsorted. Sorting takes extra time, so use it where the order
+> matters rather than in every loop.
 
 ### Set
 
@@ -20855,11 +21466,27 @@ Mods/
 
 ### 41.3 Sandbox
 
-Each mod runs in an **isolated environment**. This means:
+Each mod runs in its **own environment**. This means:
 
 - The mod **can see** the entire engine Lua API (all functions from this documentation).
-- The mod **cannot** overwrite global functions or variables of another mod.
+- The globals a mod defines are its own: another mod **cannot** see or overwrite them.
 - Variables `MOD_NAME`, `MOD_VERSION`, `MOD_DIR` are unique per mod.
+- The engine module tables (`Audio`, `Map`, …), the standard library tables (`string`, `math`, …)
+  and `_G` are **shared**: a mod can wrap their functions to hook into the game, and the change
+  applies to the game and to every other mod. See
+  [Plugins & Mods → 4.4](Plugins-And-Mods-EN-DOC.md#44-the-mod-environment--injected-globals) for
+  the rules and an example.
+- A mod cannot load native libraries or bytecode unless the project enables **Allow Lua Native
+  Modules and Bytecode** ([Standard libraries](#standard-libraries)).
+- File paths stay inside the game folders: `loadfile`, `dofile`, `require` and the functions that
+  read a file by path (`LoadInputBindings`, `Network.LoadBanList`, `Network.LoadWhitelist`) read
+  only from the project, the game's data folder and the folders of the discovered mods. The
+  functions that take a file path to write (`SaveInputBindings`, `Voice.StartRecording`,
+  `Webcam.SaveFrameToPNG`, `Network.SaveBanList`, `Network.SaveWhitelist`, `SaveChromeTrace`,
+  `NetworkProfiler.SaveReport`) write only inside the project and the game's data folders — a mod
+  folder elsewhere stays read-only — and never overwrite the project's `Config/Engine.json` or the
+  asset redirects in `Saved/Redirectors`. A folder registered with `Mods.AddSearchPath` opens
+  nothing by itself.
 
 ### 41.4 Available mod variables
 
@@ -21133,7 +21760,9 @@ print("Mods refreshed. Found: " .. Mods.GetCount())
 
 Registers an **extra directory to scan for mods**, in addition to `Mods/`. The directory is scanned exactly like
 `Mods/`: every immediate subfolder that contains a `mod.json` becomes a mod, with `MOD_DIR` and `ModRequire()`
-resolving against wherever it actually lives. Returns `false` if the path is empty or is not an existing directory.
+resolving against wherever it actually lives. A directory that holds a `mod.json` itself is that one mod instead —
+the shape of a Steam Workshop item folder, so each subscribed item can be registered on its own. Returns `false`
+if the path is empty or is not an existing directory.
 
 Search paths are **per session** — they are not written to `Config/Mods.json` and must be re-registered every
 launch, before the scan. Adding one does not rescan by itself; call `Mods.Refresh()` afterwards.
@@ -21143,6 +21772,10 @@ logged, so a mod under `Mods/` always wins over an external copy of itself.
 
 This is what lets mods live outside the game folder without being copied: register the folders that hold them and
 rescan.
+
+A registered folder gives scripts no file access of its own: `loadfile`, `dofile` and `require` can read the
+folders of the mods found in it, and file writes stay inside the project and the game's data folders
+([41.3](#413-sandbox)).
 
 ```lua
 -- Level script or startup manager: scan extra mod folders, then load the enabled mods.
@@ -26330,7 +26963,7 @@ Writes a 16-bit PCM `.wav` using the current capture rate/channels. The file's R
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| Voice.StartRecording(filePath) | bool | Begin writing the live mic to a WAV file. Creates parent dirs |
+| Voice.StartRecording(filePath) | bool | Begin writing the live mic to a WAV file. Creates parent dirs. A relative path is resolved from the game folder; an absolute one must lie inside the project folder or the game's data folders, and `..` is not allowed |
 | Voice.StopRecording() | bool | Finalize and close the WAV file |
 | Voice.IsRecording() | bool | Is recording active? |
 | Voice.GetRecordedDuration() | float | Duration recorded so far, in seconds |
@@ -27030,6 +27663,10 @@ local speed = Console.GetCVarFloat("player_speed")
 Console.SetCVarFloat("player_speed", speed * 1.5)
 ```
 
+> The CVar type comes from `defaultValue`: `true` / `false` → bool, an integer such as `10` → int, a number
+> with a decimal point such as `200.0` or `0.5` → float, anything else → string. `Console.SetCVar` converts the
+> value it gets to the CVar's type, so `Console.SetCVar("spawn_count", 12.0)` still stores the integer `12`.
+
 ### 60.4 Console — Execution and Logging
 
 | Function | Returns | Description |
@@ -27434,6 +28071,7 @@ Draw.Text("HP", x, y, 18, {
     rtl = false,                                 -- force right-to-left layout
     lit = false,                                 -- take scene lighting
     receiveShadows = false,                      -- lit text also darkens inside 2D shadows
+    outline = { r = 0, g = 0, b = 0, a = 0.6, width = 1 },  -- halo under the glyphs
 })
 
 -- Measure before you place. Returns the width of the widest line, the height, the font's
@@ -27461,6 +28099,18 @@ Draw.GetMaxTexts()
   it (about a millisecond); glyphs are rasterized the first time a string uses them, so new sizes and new characters
   mid-game do not stall the frame. Every distinct size is its own atlas, so snap animated sizes to a few steps rather
   than a new integer every frame.
+- `outline` draws an outline around the glyphs: each glyph's own shape grown by `width` (in the units of the text
+  size, 0–16, default 1; `r`, `g`, `b` default to 0 and `a` to 1), drawn in the outline colour under the whole
+  string and in the same batch. It keeps a label readable over a busy or changing background, from a thin halo to a
+  thick border. The engine grows the glyph's shape evenly in every direction the first time a glyph appears with a
+  given width (widths are rounded to a quarter of a glyph pixel) and keeps the result in the font's glyph atlas, so an
+  outline costs one more quad per glyph and no extra draw call. `a` is the outline's exact opacity; where the outlines
+  of two neighbouring glyphs overlap, a translucent outline is denser, so give thick outlines an opaque colour.
+- Consecutive `Draw.Text` calls that share the draw state are batched: their glyphs go out in one vertex upload and
+  one draw call per glyph atlas, even when every string has its own colour, because the colour travels with the
+  vertices. A string in another font or pixel size switches the atlas and costs one more call, and so does a change of
+  `lit`, or of `receiveShadows` on lit text. Any other drawing in between, or a change of blend, space, layer, clip or
+  render target, closes the batch. Group text by font and size to keep the number of calls down.
 
 ```lua
 -- A text-grid renderer: one call per row, whole screen in 50 calls.

@@ -209,10 +209,10 @@ folder), so every project keeps its own layout, panels and settings:
 | File | Remembers |
 | ---- | --------- |
 | `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float — plus the positions of the dividers inside the editors. Delete it to reset to the default layout. |
-| `Config/Editor.json` | Which panels are open, the last opened level, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute and the editor's audio output device, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
-| `Config/Engine.json` | Everything on the [Preferences](#10-preferences) tabs except collision groups — window, rendering, optimization, audio, accessibility and network defaults. Shipped games read the same file. |
+| `Config/Editor.json` | Which panels are open, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute and the editor's audio output device, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
+| `Config/Engine.json` | Everything on the [Preferences](#10-preferences) tabs except collision groups and the start level — window, rendering, optimization, audio, accessibility and network defaults. Shipped games read the same file. |
 | `Config/CollisionGroups.json` | The collision group names and the collision matrix ([Preferences → Collision](#103-collision)). |
-| `<Project>.iceproject` | The project manifest. The editor keeps `StartScene` pointing at the level you have open, and refreshes `EngineVersion` when you open the project. |
+| `<Project>.iceproject` | The project manifest. `StartScene` is the project's start level — the level game builds start on and the editor opens with the project. By default the editor keeps it on the level you have open; with `UseCurrentLevelAsStartScene` off it holds the level picked in [Preferences → Engine → Start Level](#101-engine). The editor also refreshes `EngineVersion` when you open the project. |
 
 `Config/Editor.json` is written **automatically every 5 seconds** and again on
 exit, so panel state and build settings survive even an unclean shutdown. Toggling
@@ -1280,7 +1280,8 @@ in order.
 **nine tabs**, and each tab ends with three buttons:
 
 * **Save** — write that tab's settings to disk (`Config/Engine.json`, or
-  `Config/CollisionGroups.json` for the Collision tab) so they persist.
+  `Config/CollisionGroups.json` for the Collision tab; the Engine tab's start level goes to
+  the project's `.iceproject`) so they persist.
 * **Apply** — apply that tab's settings to the running editor immediately.
 * **Reset** — restore that tab's defaults.
 
@@ -1294,6 +1295,22 @@ from MSAA shows the same note, but the new mode is in fact applied as soon as yo
 **Apply**.
 
 ### 10.1 Engine
+
+**Start Level** — the level the project starts on: game builds start the game on it, and
+the editor opens it when you open the project from the launcher.
+
+* **Use Current Level** — on by default. The start level is the level you have open, so
+  opening another level makes that one the start level. A project made from a launcher
+  example starts with it off and the example's start level picked
+  ([Getting Started → New Project](Getting-Started-EN-DOC.md#33-new-project)).
+* Turn it off and a **Level** picker appears: the `.icemap` you choose stays the start level
+  whatever level you are editing. Renaming or moving it in the Content Browser updates the
+  setting. While no level is chosen, or its file is gone, the tab shows a warning and a
+  build stops at once with an error instead of shipping a game that starts without a
+  level.
+* **Apply** makes builds in this editor session use the setting; **Save** (or **Save All**)
+  also writes it to the project's `.iceproject` as `StartScene` and
+  `UseCurrentLevelAsStartScene`, the one place the start level is kept.
 
 Window and top-level performance:
 
@@ -1328,6 +1345,12 @@ Window and top-level performance:
   Very High (96000 Hz).
 * **Custom Cursor** — a `.ice_sprite` or `.ice_flipbook`, its hotspot X/Y, and a
   scale (0.5–10). It is applied when Play mode starts and in the shipped game.
+* **Scripting → Allow Lua Native Modules and Bytecode** — off by default. When on, every
+  Lua script, players' mods included, can load native libraries (`package.loadlib`, C modules
+  through `require`) and precompiled bytecode, so a mod can run any program on the player's
+  computer. Turn it on only if your game needs it; native code of your own is safer in a C++
+  plugin. Saved as `Engine.AllowLuaNativeCode` in `Config/Engine.json`; scripts cannot change
+  it. See [Lua API → Standard libraries](LuaAPI-EN-DOC.md#standard-libraries).
 
 ### 10.2 Physics
 
@@ -1383,6 +1406,15 @@ Look-and-feel of the editor itself:
   **Show Grid**.
 * **Camera** — editor camera speed, min zoom, max zoom (the two clamp each other)
   and zoom step.
+* **Project Thumbnails** — **Thumbnails AutoSave**, on by default. When the editor
+  closes, it saves a snapshot of the viewport into the project folder as
+  `project_thumbnail.png` (256 × 256) and `project_thumbnail_high.png` (512 × 512) —
+  the pictures the launcher shows for the project (see
+  [Getting Started → My Projects](Getting-Started-EN-DOC.md#32-my-projects)). Turn it
+  off to keep pictures of your own, or a capture you like: the editor then leaves both
+  files untouched. Because the snapshot is taken on exit, the switch counts for the
+  current session as soon as you press either **Apply** or **Save**; **Save** also
+  keeps it for the next sessions.
 
 ### 10.5 Rendering
 
@@ -1432,11 +1464,38 @@ Tuning knobs for the renderer and memory:
 * **Texture Slots** — max texture units for the GL and GLES backends.
 * **Lighting Limits** — max active point lights.
 * **Debug** — the debug vertex buffer size.
-* **Texture Atlas** — atlas page size, max sprite size, max texture size.
+* **Texture Atlas** — atlas page size, max sprite size, max texture size. Below the two
+  atlas sizes the tab shows how much VRAM one page uses, warns when the page size is
+  above the GPU texture limit, and notes when Max Sprite Size is larger than a page can
+  hold.
 * **Suspend** — **Is Suspended**: when on (the default behaviour), the app pauses
   update, render and audio while the window is unfocused, minimized or
   backgrounded, on all seven platforms; when off, the game keeps running and playing
   audio without focus. Also scriptable via `Settings.SetIsSuspended`.
+* **Lua Garbage Collector** — the collector of both script VMs (game and UI):
+  * **GC Preset** — **Default (generational)** for most games, **Low memory
+    (incremental)** for about a third less peak memory at a higher CPU cost (mobile,
+    Web), **Throughput (generational)** for less collector time at a higher memory
+    cost, or **Custom**.
+  * With **Custom**: the **GC Mode** (Generational / Incremental) and the six Lua 5.5
+    parameters — **Minor Multiplier**, **Minor-to-Major Threshold** and
+    **Major-to-Minor Threshold** for generational mode; **Pause**, **Step Multiplier**
+    and **Step Size** for incremental mode and major collections. Every field has a
+    tooltip with its meaning and the Lua default.
+  * **Full Collection on Level Load** — collects both VMs right after a level loads
+    (on by default), so the previous level's garbage is not collected during play.
+  * **Idle-Frame GC Budget** — up to this many milliseconds of collector work in the
+    spare time of each frame, before the frame limiter sleeps (0 = off). Needs an FPS
+    limit; no effect on the Web.
+  * **Pooled Allocator** — serves small Lua allocations from per-VM pools (on by
+    default, 20–30% faster allocation-heavy scripts); can be switched at any time.
+  * **Live statistics** of each VM (memory, mode, pool usage), the duration of the last
+    full collection and of the last idle-frame GC slice, and a **Collect Now** button.
+    A warning appears while a game override (Lua API or `GameSettings.json`) is active.
+
+  The values are stored in `Config/Engine.json` → `Optimization` → `LuaGC` and apply
+  immediately with **Apply**, without a restart. Games can change them at runtime with
+  `Settings.SetLuaGCPreset` and related functions ([Lua API → 24](LuaAPI-EN-DOC.md#lua-garbage-collector)).
 * A read-out of the compile-time **Hard Caps** the engine enforces (max point
   lights, max texture slots).
 
@@ -1867,9 +1926,11 @@ button.
 **Levels.** A level is a `.icemap` file (see [Assets](Assets-EN-DOC.md#419-level-icemap)).
 The Viewport title shows the open level and a `*` when it has unsaved changes.
 Saving writes the entities, the Outliner's folders and world volumes, the World
-Settings and the level script into that one file. The editor separately keeps the
-project's `.iceproject` **StartScene** pointing at the level you have open, so
-launching the game runs it.
+Settings and the level script into that one file. The project's start level is kept in
+its `.iceproject` as **StartScene**: by default the editor keeps it on the level you have
+open, so a build starts the game on that level and reopening the project brings you back
+to it. To start on one particular level instead, pick it in
+[Preferences → Engine → Start Level](#101-engine).
 
 Creating or opening a level clears the scene and file undo stacks, resets the
 Outliner folders and world assets and the World Settings, and fires the

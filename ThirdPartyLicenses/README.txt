@@ -82,7 +82,7 @@ miniaudio.txt             miniaudio                    Unlicense OR MIT-0   vend
 ImGuiColorTextEdit.txt    ImGuiColorTextEdit           MIT                  vendored: Source/Engine/ThirdLibrary/ImGuiColorTextEdit
 MoltenVK.txt              MoltenVK                     Apache-2.0           vendored: fetched by Tools/BuildSystem/BuildEngine/fetch_moltenvk.sh (macOS/iOS)
 NotoFonts-OFL.txt         Noto Sans + Noto Emoji       OFL-1.1              bundled: Config/Fonts/NotoSans*.ttf, Config/Fonts/NotoEmoji-Regular.ttf (editor only)
-Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bundled: Content/Examples/Platformer/Widgets/F_Tiny5-Regular.ttf
+Tiny5-OFL.txt             Tiny5 (pixel font)           OFL-1.1              bundled: Content/Examples/Platformer/UI/Fonts/F_Frost_Tiny5.ttf, Content/Examples/TopDown/UI/Fonts/F_Crypt_Tiny5.ttf, Mods/PlatformerTimeAttack/Content/Fonts/F_TimeAttack_Tiny5.ttf
 
 -- Compiler runtimes redistributed inside a built game (not from vcpkg) --
 

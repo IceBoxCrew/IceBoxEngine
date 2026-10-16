@@ -1069,18 +1069,27 @@ Server-side moderation is described in [5.11](#511-security-validation--moderati
 **Voice chat** is off by default. Enabling it builds a full capture→encode→send→jitter→
 decode→play chain:
 
-1. **Capture** — an SDL audio capture device records mono frames.
-2. **Noise gate** — frames below a configurable threshold (with attack and release times)
-   are dropped, so silence costs nothing.
-3. **Encode** — **Opus** at 48 kHz mono when the engine was compiled with Opus support;
-   otherwise raw PCM is sent and a warning is logged at startup.
-4. **Send** — each frame is stamped with a sequence number and sent unreliably on the voice
-   channel.
+1. **Capture** — the microphone records 48 kHz mono frames; on Android it opens through the
+   voice-communication input, so the device's echo canceller and noise processing apply.
+2. **Voice processing** — a high-pass filter, a spectral noise suppressor, automatic gain,
+   voice detection (with pre-roll and hold) and a limiter clean and level every 20 ms frame;
+   only frames while the player talks are sent, so silence costs nothing.
+3. **Encode** — **Opus** at 48 kHz mono (40 kbit/s with in-band forward error correction by
+   default) when the engine was compiled with Opus support; otherwise raw PCM is sent and a
+   warning is logged at startup.
+4. **Send** — each frame is stamped with a capture sequence number, sent unreliably on the
+   voice channel and flushed at once instead of waiting for the next tick; ENet's packet
+   throttle is off by default so no frame is dropped before it is sent.
 5. **Relay** — the server forwards it to the other players, prefixing the original sender's
    id so clients know who is talking.
-6. **Jitter buffer** — each speaker gets their own reordering buffer that drops duplicates
-   and late packets and keeps a bounded backlog.
-7. **Decode & play** — frames are decoded and mixed per player, with a per-player volume.
+6. **Jitter buffer** — each speaker gets an adaptive playout buffer (40–300 ms, following the
+   measured jitter) that reorders packets, rebuilds a lost frame from the next frame's error
+   correction or conceals it, and drops what arrives too late.
+7. **Decode & play** — frames are decoded and mixed per player, with a per-player volume, into
+   one voice output that can lower a chosen sound group (music) while somebody is heard.
+
+Every stage is tunable from Lua (`Network.SetVoiceSettings`), and `Network.GetVoiceStats` /
+`Network.GetPlayerVoiceStats` report levels, gain, noise floor, delay, jitter and loss.
 
 Three controls shape the relay:
 
@@ -1124,7 +1133,7 @@ Two interchangeable **backends** find the host:
 
 | Backend | How the host is found | Adds |
 | ------- | --------------------- | ---- |
-| **P2P (serverless)** | The room code is hashed into keys of the public BitTorrent **Mainline DHT** — the code itself is never published. The host announces its public address under one key, the joiner under another, and each side looks the other up. The lookup only follows nodes whose id matches their address (BEP 42), so forged nodes cannot steer it, and the engine joins the DHT read-only (BEP 43) | Discovery on the local network with a broadcast on **UDP 7794**; a room list for the local network |
+| **P2P (serverless)** | The room code is hashed into keys of the public BitTorrent **Mainline DHT** — the code itself is never published. The host announces its public address under one key, the joiner under another, and each side looks the other up. The lookup only follows nodes whose id matches their address (BEP 42), so forged nodes cannot steer it, and the engine joins the DHT read-only (BEP 43) | Discovery on the local network with a broadcast on **UDP 7794**; a room list for the local network and the internet |
 | **Rendezvous server** | A server you run — the same engine binary started with `--rendezvous-server` — registers rooms and introduces every joiner to the host | A **relay** when no direct path exists; **browser players** through its WebSocket gateway ([5.12](#512-dedicated-servers--web-clients)); a public room list over the internet |
 
 The **Auto** setting (the default) uses the rendezvous server when one is configured and

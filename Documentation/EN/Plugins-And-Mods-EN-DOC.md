@@ -94,7 +94,7 @@ are very different tools:
   implements the `IPlugin` interface, and is loaded as a shared library
   (`.dll` / `.so` / `.dylib`) — or linked statically on platforms without dynamic
   loading. Plugins can reach deep into the editor and runtime through host APIs.
-* A **mod** is a folder of Lua and content. Its entry script runs inside a sandboxed
+* A **mod** is a folder of Lua and content. Its entry script runs inside its own
   Lua environment with engine globals available; it can spawn the classes, widgets and
   assets it ships and hook into the level lifecycle. No compiler required.
 
@@ -111,17 +111,22 @@ The engine ships one reference example of each:
   the most relevant sections for each question.
   Beyond answering, it can act: in **Agent** and **Autonomous** mode it runs a tool loop
   over the `EditorHostAPI` and the editor Python bridge to create and edit assets, write
-  Lua, place entities and save levels, with per-action approval, a project-scoped write
+  Lua, place entities and save levels, then verify its work — compile-checking Lua,
+  validating asset references, play-testing the level, reading the console and, with a
+  vision model, looking at screenshots — with per-action approval, a project-scoped write
   sandbox, automatic backups and one-click revert. Role, answer style, sampling,
   retrieval, autonomy and permissions are all configurable in the panel and stored in
   `Config/AIHelper.json`; saved conversations live under `Saved/AIHelper/` and backups
   under `Saved/AIHelper/Backups/`. It is also the reference consumer of the environment,
   capability, scripting and localization host functions: every string of its interface
-  comes from its own `Config/Languages/` folder, in all fifteen editor languages. See
-  [`Plugins/AIHelper/README.md`](../../Plugins/AIHelper/README.md).
-* **`Mods/PlatformerCrates`** — a Lua mod that adds collectible crates and a HUD counter
-  to the Platformer example, shipping its own classes, widget and sprite. See
-  [`Mods/PlatformerCrates/README.md`](../../Mods/PlatformerCrates/README.md).
+  comes from its own `Config/Languages/` folder, in all fifteen editor languages, and its
+  manual ships in its own `Documentation/` folder. See
+  [`Plugins/AIHelper/Documentation/EN/AIHelper-EN-DOC.md`](../../Plugins/AIHelper/Documentation/EN/AIHelper-EN-DOC.md).
+* **`Mods/PlatformerTimeAttack`** — a Lua mod that turns the Frost Peaks level of the
+  Platformer example into a time attack: a run timer, checkpoint splits against your best
+  run and a saved record. It ships its own class, widget, sprites, font and sounds and
+  hooks into the game only through its events and shared game values. See
+  [`Mods/PlatformerTimeAttack/README.md`](../../Mods/PlatformerTimeAttack/README.md).
 
 ---
 
@@ -138,7 +143,7 @@ The engine ships one reference example of each:
 | **Config** | `Config/Plugins.json` | `Config/Mods.json` |
 | **Runs in the editor?** | Yes — that is the point of an editor plugin | No — mods run only in Play mode / the game |
 | **Toggle without restarting?** | Yes, once the library is built (see [5.1](#51-the-plugins--mods-panel)) | Yes — enabled/disabled and refreshed live |
-| **Sandboxed?** | No (native code, full power) | Yes (own Lua environment) |
+| **Sandboxed?** | No (native code, full power) | Own Lua environment: private globals, shared engine API that mods can hook ([4.4](#44-the-mod-environment--injected-globals)); no native code unless the project allows it |
 | **Versioning** | C ABI version (`ICE_PLUGIN_API_VERSION`) | mod `APIVersion` |
 | **Typical use** | New panels/tools, custom asset types, menu/toolbar items, viewport overlays, Visual Script nodes, external integrations | New levels/mechanics/content, total conversions, gameplay tweaks |
 
@@ -389,9 +394,13 @@ open them with `OpenAsset`.
 
 **`RuntimeHostAPI`** (runtime) exposes: `Log`, `GetEngineRoot`, `IsPlaying`, `GetTime`,
 `HasScene`, `EnumEntities`, `GetEntityName`, `GetConfigString` / `SetConfigString`,
-`FireEvent`, and `GetLuaState`. `GetConfigString`/`SetConfigString` are a simple
+`FireEvent`, `GetLuaState` and `CheckScriptPath`. `GetConfigString`/`SetConfigString` are a simple
 in-memory key/value store shared by all runtime plugins; `FireEvent` emits a Lua event
-that `On("name", handler)` listeners receive.
+that `On("name", handler)` listeners receive. `CheckScriptPath(h, path, write, errorBuf, errorBufSize)`
+applies the engine's rules for file paths that scripts pass in (inside the game folders, no `..`; see
+[LuaAPI 41.3](LuaAPI-EN-DOC.md#413-sandbox)) — call it before your plugin reads, writes or uploads a path a
+script gave it. It returns `false` and writes the reason into `errorBuf` for a refused path. It is the last
+field of the struct, so a plugin that may run on an older engine checks `StructSize` before calling it.
 
 ### 3.6 Editor extension points
 
@@ -931,7 +940,7 @@ device family — and keep `--min-sdk` / `--deployment-target` at or below the g
 
 A mod is a folder under `Mods/` containing a `mod.json` manifest, an entry Lua script,
 and any content it ships. The engine discovers it, and when enabled runs its entry script
-inside a **sandboxed Lua environment**, then dispatches lifecycle hooks to it. Mods never
+inside its **own Lua environment**, then dispatches lifecycle hooks to it. Mods never
 compile and can be toggled live.
 
 > **Mods are a runtime feature.** They are loaded when Play mode (or the shipped game)
@@ -961,7 +970,7 @@ compile and can be toggled live.
 ```
 Mods/MyMod/
     mod.json                      # manifest (name, version, entry script, load order …)
-    main.lua                      # entry script (runs in a sandboxed env)
+    main.lua                      # entry script (runs in the mod's own env)
     Icon.png                      # optional icon shown in the Mods tab
     README.md                     # optional; indexed by the AI Helper plugin
     modules/                      # optional extra Lua loaded with ModRequire
@@ -972,8 +981,8 @@ Mods/MyMod/
         Assets/    *.png, *.ice_sprite, ...
 ```
 
-This mirrors the bundled `Mods/PlatformerCrates`, which ships a crate class, a HUD class,
-a HUD widget and a sprite/texture.
+This mirrors the bundled `Mods/PlatformerTimeAttack`, which ships a HUD class, a HUD
+widget with its own script, a sprite atlas, a font and two sounds.
 
 ### 4.3 The `mod.json` manifest
 
@@ -1012,7 +1021,7 @@ Icon resolution is identical to plugins — see [3.3](#33-the-pluginjson-manifes
 
 ### 4.4 The mod environment & injected globals
 
-Each mod's entry script runs in its **own sandboxed Lua environment**, so a mod's
+Each mod's entry script runs in its **own Lua environment**, so a mod's
 top-level locals/globals don't collide with other mods or the level script. The
 environment inherits the engine's global Lua API and, when a scene is active, the level
 API is bound into it as well. The engine injects these globals:
@@ -1031,7 +1040,7 @@ local PICKUP = MOD_DIR .. "/Content/Classes/CL_Pickup.ice_class"
 ```
 
 **`ModRequire`** is the mod-local equivalent of `require`. It replaces `.` with `/`,
-appends `.lua`, resolves the path against `MOD_DIR`, runs the file **in the same sandbox**
+appends `.lua`, resolves the path against `MOD_DIR`, runs the file **in the same environment**
 as the mod (so `MOD_NAME`/`MOD_DIR` are visible there too) and returns whatever the file
 returns:
 
@@ -1043,6 +1052,38 @@ if helpers then helpers.SayHello() end
 It soft-fails: a missing file, a syntax error or a runtime error is logged with the mod
 name and `ModRequire` returns `nil`, leaving the rest of the mod loading. There is no
 result cache — each call re-runs the file.
+
+#### What is private and what is shared
+
+The isolation covers the names a mod defines itself. Everything the mod reaches through
+the engine's global table is shared with the game and with every other mod:
+
+* **Private:** the mod's top-level variables and functions (its lifecycle hooks included),
+  `MOD_NAME`, `MOD_VERSION`, `MOD_DIR` and `ModRequire`. Another mod cannot see or
+  overwrite them.
+* **Shared:** the engine module tables (`Audio`, `Map`, `Network`, …), the standard library
+  tables (`string`, `table`, `math`, …) and the global table `_G` itself.
+
+A mod can therefore **hook** the game by wrapping a shared function. This is intended: it
+lets a mod change behavior that the game does not expose through an event. The change
+applies to the game and to every other mod, so keep the original and call it rather than
+replacing the function outright:
+
+```lua
+local originalPlaySound = Audio.PlaySound
+Audio.PlaySound = function(name, options)
+    Print("[" .. MOD_NAME .. "] sound: " .. tostring(name))
+    return originalPlaySound(name, options)
+end
+```
+
+* A plain assignment such as `Print = MyPrint` only shadows the name inside your mod. Assign
+  through `_G` (`_G.Name = value`) to publish a value or function to every script that does
+  not define its own `Name` — the way to offer an API to other mods.
+* Functions the engine binds into each script's own environment — the entity functions
+  such as `SetPosition` and the level functions such as `SpawnEntity` — are separate per
+  script, so replacing one changes it only for your mod.
+* Widget (UI) scripts run in a separate Lua state; a mod's changes do not reach them.
 
 ### 4.5 Lifecycle hooks
 
@@ -1074,11 +1115,11 @@ file paths, and runtime errors name them the same way (`Mods/MyMod/main.lua:12: 
 ### 4.6 Shipping content with a mod
 
 Assets placed inside the mod folder travel with the mod. Reference them by path built from
-`MOD_DIR`. Shipped `.ice_class` game objects can carry their **own** embedded scripts and
-components — for example, the bundled crate class uses an `OnSensorEnter` script to
-detect the player, bump a shared counter, and destroy itself, while the HUD widget reads
-that counter every frame. This means a mod can deliver complete, self-contained mechanics
-purely as content + a thin entry script.
+`MOD_DIR`. Shipped `.ice_class` game objects and `.ice_widget` UIs can carry their **own**
+embedded scripts and components — for example, the bundled time-attack mod spawns a class
+that only carries its HUD widget, and that widget's script reads the run time from the game
+state and listens to the mod's own events (`On("TimeAttack.Split", …)`). This means a mod
+can deliver complete, self-contained mechanics purely as content + a thin entry script.
 
 The Content Browser indexes the project's `Content/` tree, not `Mods/`, so mod assets are
 not browsable in the editor — that is by design: a mod resolves its own files through
@@ -1194,7 +1235,7 @@ Two small files under `Config/` record which extensions are enabled:
 {
     "SearchDirectory": "Mods",
     "Enabled": {
-        "PlatformerCrates": false
+        "PlatformerTimeAttack": false
     }
 }
 ```
@@ -1235,7 +1276,7 @@ Mods can also be inspected and managed at runtime from script through the engine
 | `Mods.GetLastError()` | Why the last install or uninstall call failed. |
 
 ```lua
-Mods.SetEnabled("PlatformerCrates", false)
+Mods.SetEnabled("PlatformerTimeAttack", false)
 Mods.Refresh()
 ```
 
@@ -1250,8 +1291,12 @@ end
 Mods.Refresh()
 ```
 
-A search path is scanned exactly like `Mods/`: every mod sits in its own subfolder with a `mod.json`. Newly
+A search path is scanned exactly like `Mods/`: every mod sits in its own subfolder with a `mod.json`. A search
+path that holds a `mod.json` itself is that one mod — the layout of a Steam Workshop item folder. Newly
 discovered mods start disabled — enable them with `Mods.SetEnabled(name, true)`.
+
+Registering a folder does not open it to scripts: `loadfile`, `dofile` and `require` can read only the folders of
+the mods found in it, and file writes stay inside the project folder and the game's data folders.
 
 The whole module is also available as **Visual Script** nodes under the `Mods` category.
 See [LuaAPI-EN-DOC.md](LuaAPI-EN-DOC.md) for the full reference.
@@ -1264,6 +1309,11 @@ The launcher decides which of the engine's packages a project contains; the edit
 *Manage Plugins & Mods…*, which pre-selects that project) lists everything found in the
 **engine's** `Plugins/` and `Mods/` folders — name, version, author, description and
 icon read straight from the manifests — and lets you tick the ones a project should use.
+
+The one exception to "the launcher attaches, the editor enables" is a project created from
+an example on the **New Project** tab: the plugins and mods that example declares start
+switched on in the new project's `Config/Plugins.json` / `Config/Mods.json`
+([Getting Started → New Project](Getting-Started-EN-DOC.md#33-new-project)).
 
 Pressing **Apply** records the selection in the project's `.iceproject` manifest as the
 string arrays `"Plugins"` and `"Mods"` (folder names), then makes the project folder match
@@ -1293,11 +1343,14 @@ A shipped game also loads mods the player installs, on **every platform**:
 
 The player's mods folder is `Mods/` in the game's writable data location, and
 `Mods.GetUserFolder()` returns it. On Windows and Linux that is the game's own `Mods/` when the
-game folder is writable, otherwise `Mods/` in the per-user data folder; on macOS it lies
-outside the signed `.app`, and on iOS it is `Documents/Mods`, which players can also reach in
-the Files app. It is scanned after the game's own packages. A mod with the same name as a
-package that ships with the game is skipped with a log line, so a player's mod never replaces
-the game's content. Mods put by hand into a separate player folder start **enabled**.
+game folder is writable, otherwise `Mods/` in the game's per-user data folder; on macOS it lies
+outside the signed `.app`, in that same per-user data folder, and on iOS it is
+`Documents/Mods`, which players can also reach in the Files app. Every game has a data folder
+of its own, named after its publisher and game name
+([Profiling & Building 7.5](Profiling-And-Building-EN-DOC.md#75-where-a-shipped-game-keeps-its-player-data)),
+so one game never loads another game's mods. It is scanned after the game's own packages. A
+mod with the same name as a package that ships with the game is skipped with a log line, so a
+player's mod never replaces the game's content. Mods put by hand into a separate player folder start **enabled**.
 
 On **macOS and iOS** the first run also creates a user content root — the app's writable
 data directory, or `Documents` on iOS — with `Saves/`, `Config/`, `Mods/`, `Plugins/` and a
@@ -1326,7 +1379,7 @@ runtime. Its flow:
    dependencies).
 4. **Load enabled mods** — this happens at **play/runtime start**, not at editor startup.
    Resolve order from `LoadOrder` + dependencies (skipping cycles), run each mod's entry
-   script in its sandboxed environment, and call `OnModLoad`.
+   script in its own environment, and call `OnModLoad`.
 5. **Dispatch** — forward `OnUpdate` (runtime frames), runtime start/stop, level
    start/end/update, Lua/Python registration and events to the loaded plugins/mods, gated
    by API version where relevant. Every dispatch is exception-guarded.
@@ -1519,7 +1572,10 @@ game is built, CMake looks for plugin sources in the project root first and then
 root ([3.10](#310-the-plugins-cmakeliststxt)).
 
 **Can mods run native code?**
-No — mods are Lua + content, sandboxed. For native code, write a plugin.
+Not by default. Lua scripts, mods included, cannot load native libraries (`package.loadlib`,
+C modules through `require`) or precompiled bytecode unless the project enables
+**Edit → Preferences → Engine → Allow Lua Native Modules and Bytecode** — and with that option on,
+any mod can run native code on the player's machine. For native code of your own, write a plugin.
 
 **My mod's content can't be found.**
 Build paths from `MOD_DIR` (e.g. `MOD_DIR .. "/Content/Classes/Foo.ice_class"`); don't

@@ -40,6 +40,7 @@
    - [Модули и require](#модули-и-require)
    - [Итераторы и обобщённый for](#итераторы-и-обобщённый-for)
    - [Сборщик мусора](#сборщик-мусора)
+   - [Гайд по производительности (Lua 5.5 без JIT)](#гайд-по-производительности-lua-55-без-jit)
    - [Стандартные библиотеки](#стандартные-библиотеки)
 3. [Жизненный цикл скриптов](#3-жизненный-цикл-скриптов)
 4. [Transform — Позиция, масштаб, поворот](#4-transform--позиция-масштаб-поворот)
@@ -68,6 +69,7 @@
 22. [PostProcess — Пост-обработка](#22-postprocess--пост-обработка)
 23. [Cinema — Кинематики](#23-cinema--кинематики)
 24. [Settings — Настройки игры](#24-settings--настройки-игры)
+   - [Сборщик мусора Lua](#сборщик-мусора-lua)
 25. [Math — Математика и шум](#25-math--математика-и-шум)
    - [RNG — Детерминированные потоки случайных чисел](#rng--детерминированные-потоки-случайных-чисел)
 26. [Events — Система событий](#26-events--система-событий)
@@ -379,6 +381,10 @@ Vec3, Vec4, Color, Enum) есть редактор элементов значе
   убыванию.
 * **Contains**, **Find**, **Add Unique** и **Remove Item** сравнивают элементы `Vec2`, `Vec3`,
   `Vec4` и `Color` по значению.
+* **Map Keys**, **Map Values**, **Set To Array** и **For Each** по словарю или множеству обходят
+  элементы в произвольном порядке, а для строковых ключей порядок может меняться от одного запуска
+  игры к другому. Когда порядок важен (сохранения, сетевые сообщения, случайность с сидом),
+  обходите результат ноды **Map.SortedKeys**: сначала числа по возрастанию, затем строки.
 
 #### Нода Spawn Class
 
@@ -1307,9 +1313,16 @@ local player = { name = "Герой", hp = 100, level = 5 }
 for key, value in pairs(player) do
     Print(key .. " = " .. tostring(value))
 end
--- name = Герой
+-- Выведет все три поля в каком-то порядке. Порядок строковых ключей
+-- может меняться от одного запуска игры к другому.
+
+-- Map.SortedKeys — для словарей в фиксированном порядке
+for _, key in ipairs(Map.SortedKeys(player)) do
+    Print(key .. " = " .. tostring(player[key]))
+end
 -- hp = 100
 -- level = 5
+-- name = Герой
 ```
 
 #### while
@@ -2738,6 +2751,14 @@ local hp = Math.Clamp(150, 0, 100)  -- 100
 > Редактор сбрасывает кэш проектных модулей обоих состояний при каждом нажатии **Play**,
 > так что правки, сделанные в Редакторе Lua-скриптов, применяются со следующего запуска
 > без перезапуска редактора.
+>
+> `loadfile`, `dofile` и шаблоны `package.path` читают файлы через ту же виртуальную файловую
+> систему, поэтому работают и в упакованной сборке. Относительные пути, как и раньше,
+> отсчитываются от корня проекта; абсолютный путь должен лежать внутри папки проекта, папки данных
+> игры или папки найденного мода (`MOD_DIR`), а `..` в таких путях запрещено. Папка, добавленная
+> через `Mods.AddSearchPath`, учитывается только через найденные в ней моды. Скрипты загружают только
+> исходный код Lua: для байткода и нативных модулей нужна опция проекта, описанная в разделе
+> [Стандартные библиотеки](#стандартные-библиотеки).
 
 ---
 
@@ -2764,14 +2785,92 @@ end
 
 ### Сборщик мусора
 
-Lua использует автоматический сборщик мусора (GC). Обычно не требуется ручное управление, но оно возможно:
+Lua освобождает память автоматически с помощью сборщика мусора (GC). IceBoxEngine по умолчанию
+запускает его в **поколенческом** режиме Lua 5.5 — самом быстром для типичного игрового кода, который
+создаёт много короткоживущих таблиц, — и позволяет настроить его для проекта в **Правка → Настройки
+→ Оптимизация → Сборщик мусора Lua** или из скриптов (см. [Сборщик мусора Lua](#сборщик-мусора-lua) в
+разделе 24). Обычно ручное управление не нужно, но стандартные функции доступны:
 
 ```lua
-collectgarbage("collect")   -- принудительный проход GC
-local kb = collectgarbage("count")  -- объём памяти (КБ)
-collectgarbage("stop")      -- остановить GC
-collectgarbage("restart")   -- включить GC обратно
+collectgarbage("collect")              -- принудительный полный цикл GC
+local kb = collectgarbage("count")     -- память, занятая этой Lua VM (КБ)
+collectgarbage("step")                 -- один шаг сборщика
+collectgarbage("stop")                 -- остановить сборщик (память будет только расти!)
+collectgarbage("restart")              -- включить его обратно
+local running = collectgarbage("isrunning")
 ```
+
+> На экранах загрузки используйте `Settings.CollectLuaGarbage()` вместо `collectgarbage("collect")`:
+> она собирает **обе** скриптовые VM (игровую и UI) и возвращает системе неиспользуемую память
+> аллокатора. `collectgarbage("incremental")`, `collectgarbage("generational")` и
+> `collectgarbage("param", …)` работают, но меняют только ту VM, в которой вызваны, а движок снова
+> применяет заданные режим и параметры при изменении настроек GC, остановке режима игры и
+> `Settings.ResetDefaults()`.
+
+---
+
+### Гайд по производительности (Lua 5.5 без JIT)
+
+IceBoxEngine встраивает стандартный интерпретатор Lua 5.5. JIT-компилятора нет намеренно: одни и те же
+скрипты одинаково работают на всех 7 платформах, включая iOS, консоли и веб, где JIT запрещён или
+недоступен. Тяжёлая работа — физика, рендер, анимация, частицы, звук, поиск пути, запросы коллизий —
+выполняется в C++-коде движка, а скрипты решают, *что* должно происходить. Соблюдайте правила ниже, и
+Lua останется небольшой частью кадра даже в большой игре.
+
+**1. Сначала измеряйте.** Откройте **Profiler** редактора (вкладка **Scripts** и группа `Lua` на вкладке
+**Counters**) или вызовите `GetScriptProfilerRows()` в сборке ([раздел 29](#29-debug--отладка)).
+`Script Time` — время Lua за кадр, `Alloc Rate` показывает, сколько мусора создают скрипты, `GC Step` —
+сколько времени занял сборщик. Отключайте точки останова на время замеров: активный отладчик замедляет
+Lua в несколько раз.
+
+**2. Делайте меньше за кадр.**
+
+- Не объявляйте `OnUpdate` / `OnLateUpdate` / `OnFixedUpdate`, если сущности они не нужны: сущность без
+  них стоит лишь быстрый поиск в таблице за кадр.
+- Ищите один раз: вызывайте `FindEntityByTag`, читайте настройки и стройте таблицы поиска в `OnCreate`,
+  а не в `OnUpdate`.
+- Реагируйте на события вместо опроса: коллизии и сенсоры, таймеры ([раздел 16](#16-time--время-и-таймеры)),
+  корутины ([раздел 18](#18-coroutine--корутины)) и события ([раздел 26](#26-events--система-событий)).
+- Выполняйте реже то, что не нужно каждый кадр: решения ИИ 5–10 раз в секунду, текст UI — только когда
+  значение изменилось.
+
+**3. Выделяйте меньше памяти.** Каждая `{}`, замыкание и новая строка — мусор, который сборщик потом
+должен освободить.
+
+- Переиспользуйте таблицы в горячем коде вместо создания новых каждый кадр.
+- Собирайте строки через `table.concat`, а не `..` в циклах, и не вызывайте `string.format` каждый кадр
+  для текста, который не изменился.
+- Не создавайте замыкания (`function() … end`) внутри `OnUpdate`.
+
+**4. Пишите быстрый Lua.**
+
+- Используйте `local`: локальные переменные лежат в регистрах VM, а глобальные переменные и функции API
+  ищутся в таблицах. Кэшируйте горячие функции в локальных переменных: `local sqrt = math.sqrt`.
+- Обходите массивы числовым `for i = 1, #list do`; в горячих циклах пишите `list[#list + 1] = value`
+  вместо `table.insert(list, value)`.
+- В Lua 5.5 есть настоящие целые числа: используйте `//` для целочисленного деления и держите счётчики и
+  индексы целыми.
+- `pairs` — самый быстрый способ обойти словарь, но порядок строковых ключей может меняться от запуска к
+  запуску. Где порядок важен (сохранения, сетевые сообщения, случайность с сидом), обходите
+  `Map.SortedKeys(t)`; он сортирует при каждом вызове, поэтому не ставьте его в покадровый код, которому
+  порядок не нужен.
+
+**5. Настраивайте сборщик мусора, только когда профайлер показывает причину.**
+
+| Симптом | Что делать |
+| ------- | ---------- |
+| Редкие всплески `GC Step` во время игры | Задайте **бюджет GC в простое кадра** 1–2 мс вместе с ограничением FPS — сборщик будет работать в свободное время кадра. |
+| Всплеск сразу после смены уровня | Оставьте включённой **Полную сборку при загрузке уровня** (по умолчанию). |
+| Слишком много памяти (мобильные, веб) | Пресет **Экономия памяти** (инкрементальный): примерно на треть меньше пиковой памяти ценой большего времени CPU. |
+| Сборщик тратит слишком много CPU, памяти хватает | Пресет **Производительность**. |
+
+Пуловый аллокатор (включён по умолчанию) ускоряет код, активно создающий объекты, на 20–30%; выключайте
+его только для сравнения.
+
+**6. Выносите горячие циклы в движок.** Используйте пакетные возможности движка — трассировки и запросы
+по области, навигацию, частицы, твины, деревья поведения — вместо перебора тысяч объектов в Lua каждый
+кадр. Для действительно тяжёлой собственной системы (большая симуляция, процедурная генерация большого
+мира) напишите C++-плагин ([Плагины и моды](Plugins-And-Mods-RU-DOC.md)) и вызывайте его из Lua.
 
 ---
 
@@ -2782,16 +2881,30 @@ IceBoxEngine открывает ровно этот набор стандарт�
 
 | Библиотека | Доступна | Примечание |
 | ---------- | -------- | ---------- |
-| `base` | ✅ | `print` перенаправлен в лог движка, как и `Print`. В отличие от `Print`, принимает любое число значений любого типа и соединяет их табуляцией, как в стандартном Lua. |
+| `base` | ✅ | `print` перенаправлен в лог движка, как и `Print`. В отличие от `Print`, принимает любое число значений любого типа и соединяет их табуляцией, как в стандартном Lua. `load`, `loadfile` и `dofile` принимают только исходный код Lua; `loadfile` и `dofile` читают только внутри папок игры ([Модули и require](#модули-и-require)). |
 | `string` | ✅ | Lua-паттерны, `string.format`, … |
 | `table` | ✅ | `table.insert`, `table.sort`, … |
 | `math` | ✅ | См. также математические функции движка (`Clamp`, `Lerp`, `Remap`, … — [раздел 25](#25-math--математика-и-шум)). |
 | `coroutine` | ✅ | См. также `StartCoroutine` / `WaitSeconds` ниже. |
 | `utf8` | ✅ | `utf8.len`, `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.offset`, `utf8.charpattern`. |
-| `package` | ✅ | `require` — см. [Модули и require](#модули-и-require). |
+| `package` | ✅ | `require` — см. [Модули и require](#модули-и-require). Нативные модули (`package.loadlib`, C-модули через `package.cpath`) по умолчанию выключены — см. ниже. |
 | `os` | ❌ | Вместе с ней шли бы `os.execute` / `os.remove` / `os.exit`. Используйте API движка: `GetUnixTime`, `GetDateTable`, `FormatDate`. |
 | `io` | ❌ | Используйте `WriteFile` / `ReadFile` / `PersistentTable` / `SaveGameState` — они пишут только внутрь папки сейвов. |
 | `debug` | ❌ | Движок ставит собственный обработчик ошибок, поэтому **каждая ошибка рантайма и так приходит с полным стектрейсом**; а `debug.sethook` конфликтовал бы со встроенным отладчиком Lua. |
+
+> **Нативные модули и байткод по умолчанию выключены.** Скрипт не может загрузить нативную
+> библиотеку (`package.loadlib` или модуль `.dll`/`.so`, который `require` находит через
+> `package.cpath`) и предкомпилированный байткод (`load(chunk, name, "b")`, файл `.luac`):
+> `package.loadlib` возвращает `nil` и сообщение, `require` пишет «native Lua modules are off», а
+> байткод отклоняется стандартной ошибкой Lua «attempt to load a binary chunk». Нативный код работает
+> со всеми правами игрока, испорченный байткод может уронить игру или вырваться за пределы Lua, а моды
+> игроков исполняют тот же Lua — поэтому защита работает, только если распространяется на все скрипты.
+> Если игре это нужно, включите **Правка → Настройки → Движок → Разрешить нативные модули Lua и
+> байткод** (`Engine.AllowLuaNativeCode` в `Config/Engine.json`). Тогда `package.loadlib`, поиск
+> C-модулей в `require` и `package.searchpath` работают как в стандартном Lua, а `load`, `loadfile`,
+> `dofile` и `require` принимают байткод — для **всех** скриптов, включая моды игроков. Скрипты не
+> могут изменить эту опцию. Для собственного нативного кода надёжнее C++-плагин
+> ([Плагины и моды](Plugins-And-Mods-RU-DOC.md)).
 
 ```lua
 -- coroutine: базовый пример
@@ -4736,7 +4849,7 @@ Webcam.Close()
 | `Webcam.IsOpen()` | Камера сейчас открыта |
 | `Webcam.GetFormat()` | `{width, height}` согласованного потока |
 | `Webcam.HasNewFrame()` | На этот опрос пришёл свежий кадр |
-| `Webcam.SaveFrameToPNG(path)` | Берёт последний кадр и пишет его в PNG. `true` при успехе |
+| `Webcam.SaveFrameToPNG(path)` | Берёт последний кадр и пишет его в PNG. `true` при успехе. Относительный путь отсчитывается от папки игры; абсолютный должен лежать внутри папки проекта или папок данных игры, `..` запрещено |
 
 > **Web:** браузеры закрывают камеру за prompt'ом разрешения; пока пользователь не подтвердил, `IsOpen()` может быть `true`, но `HasNewFrame()` несколько кадров будет возвращать `false`.
 
@@ -5042,6 +5155,13 @@ local data = ExportInputBindings()
 -- }
 ImportInputBindings(data)                     -- заменяет текущие привязки
 ```
+
+> **Пути.** Относительный путь, переданный в `SaveInputBindings` / `LoadInputBindings`, как и раньше
+> отсчитывается от папки игры. Абсолютный путь должен лежать внутри папки проекта или папки данных
+> игры (сейвы и конфиг — `GetInputBindingsPath()` подходит), а `..` запрещено; `LoadInputBindings`
+> может читать и из папки мода. Собственный
+> `Config/Engine.json` движка и редиректоры ассетов в `Saved/Redirectors` скрипты перезаписать не
+> могут. Для отклонённого пути вызов возвращает `false` и пишет предупреждение в лог.
 
 **Типичный сценарий меню настроек**
 
@@ -5929,7 +6049,7 @@ SetSpriteTexture("Content/Textures/hero_damaged.png")
 local path = GetSpriteTexturePath()
 
 -- Регион (для спрайт-листов / атласов)
-SetSpriteRegion(0, 0, 32, 32)     -- x, y, w, h в текстуре
+SetSpriteRegion(0, 0, 32, 32)     -- x, y, w, h в пикселях картинки спрайта (w или h <= 0 = вся картинка)
 local reg = GetSpriteRegion()       -- → {x, y, w, h}
 
 -- Размер текущей текстуры/региона
@@ -5937,6 +6057,8 @@ local size = GetSpriteSize()        -- → {width, height}
 ```
 
 Регион, заданный через `SetSpriteRegion`, можно безопасно применять уже в `OnCreate`: он сохраняется при отложенной загрузке текстуры и не сбрасывается обратно к дефолтному ректу спрайт-ассета. `SetSpriteTexture` очищает кастомный регион и возвращает спрайт к региону из ассета.
+
+Координаты региона всегда относятся к собственному файлу картинки спрайта, даже когда она упакована в текстурный атлас: движок сам переносит их на страницу атласа.
 
 ### Локальная трансформация (сдвиг спрайта относительно сущности)
 
@@ -6394,7 +6516,9 @@ local s = GetSpriteFrameRegion()        -- та же форма, те же по�
 
 `Draw` использует то же соглашение о пивоте, поэтому передавайте `f.pivotX, f.pivotY` прямо в `Draw.SetPivot` (или в поля
 `px, py` у `Draw.Quad`). `f.x, f.y` — пиксели внутри картинки, отсчитанные от её **левого верхнего** угла, как у любого
-исходного прямоугольника. Чтобы нарисовать ассет флипбука вообще без сущности, используйте `Draw.Flipbook` (см. главу Draw).
+исходного прямоугольника. Если картинка упакована в текстурный атлас, `texture`, прямоугольник и `width, height` всё равно
+описывают исходный файл картинки, а не страницу атласа.
+Чтобы нарисовать ассет флипбука вообще без сущности, используйте `Draw.Flipbook` (см. главу Draw).
 
 Это замыкает круг для анимированных билбордов в рейкастере: флипбук — это и есть спрайтовая анимация, поэтому
 анимированный враг рисуется точно так же, как статичный, — вы лишь меняете исходный прямоугольник каждый кадр.
@@ -10124,6 +10248,8 @@ local has = HasSaveTable("inventory")
 RemoveSaveTable("inventory")
 ```
 
+> Числа в таблице сохраняют тип: целые остаются целыми (все 64 бита), дробные — дробными.
+
 ### Сохранение на диск
 
 ```lua
@@ -10180,6 +10306,11 @@ end
 > импорта, уровень для экспорта, — используйте
 > [FileDialog](#67-filedialog--открытие-сохранение-импорт-и-экспорт-файлов-игрока); он же умеет
 > копировать их в эту папку и из неё.
+>
+> Папка сохранений — это `Saves/` в записываемой папке игры: в редакторе это папка проекта, а в
+> готовой игре — папка игры или папка данных пользователя только этой игры, названная по её
+> издателю и названию, — см.
+> [Профайлинг и сборка → Где готовая игра хранит данные игрока](Profiling-And-Building-RU-DOC.md#75-где-готовая-игра-хранит-данные-игрока).
 
 ### Мир и FX
 
@@ -10315,6 +10446,11 @@ CancelAsyncLoad()
 | `GetAsyncLoadError()` | string | Текст ошибки (при неудаче) |
 | `ApplyAsyncLevel()` | — | Применить предзагруженный уровень |
 | `CancelAsyncLoad()` | — | Отменить загрузку |
+
+Пока уровень предзагружается, его картинки декодируются в рабочих потоках: те, что его спрайты упаковывают в текстурный
+атлас, сразу попадают в атлас, остальные становятся отдельными текстурами с настройками импорта из их `.ice_texture`.
+Если `Atlas.Rebuild()` вызван, пока уровень грузится или ждёт применения, его атласные картинки упаковываются заново, и
+уровень применяется, когда они готовы.
 
 ---
 
@@ -10536,11 +10672,15 @@ local isGlobal = GetWidgetElementGlobalZ("Background")  -- → bool
 SetWidgetElementIsPostProcessed("BackgroundSky", true)
 local isPP = GetWidgetElementIsPostProcessed("BackgroundSky")  -- → bool
 
--- Шрифт и цвет текста
+-- Шрифт, цвет текста и обводка текста (обводка: Text, InputField и Dropdown)
 SetWidgetElementFontSize("Title", 32)
 local size = GetWidgetElementFontSize("Title")
 SetWidgetElementTextColor("Title", 1, 1, 1, 1)
 local color = GetWidgetElementTextColor("Title")  -- → {r, g, b, a}
+SetWidgetElementTextOutlineWidth("Title", 2)      -- пиксели холста, 0–16; 0 = без обводки (по умолчанию)
+local ow = GetWidgetElementTextOutlineWidth("Title")
+SetWidgetElementTextOutlineColor("Title", 0, 0, 0, 1)
+local oc = GetWidgetElementTextOutlineColor("Title")  -- → {r, g, b, a}, по умолчанию {0, 0, 0, 1}
 
 -- Тултип
 SetWidgetElementTooltip("Button", "Нажмите для продолжения")
@@ -10559,6 +10699,10 @@ SetWidgetElementTooltipFontSize("Button", 18)
 local tfs = GetWidgetElementTooltipFontSize("Button")
 SetWidgetElementTooltipTextColor("Button", 1, 0.9, 0.6, 1)
 local ttc = GetWidgetElementTooltipTextColor("Button")           -- → {r, g, b, a}
+SetWidgetElementTooltipTextOutlineWidth("Button", 1)             -- px, 0–16; 0 = без обводки (по умолчанию)
+local tow = GetWidgetElementTooltipTextOutlineWidth("Button")
+SetWidgetElementTooltipTextOutlineColor("Button", 0, 0, 0, 0.8)
+local toc = GetWidgetElementTooltipTextOutlineColor("Button")    -- → {r, g, b, a}
 SetWidgetElementTooltipBackground("Button", "Content/UI/tooltip.ice_sprite")  -- .ice_sprite или .ice_flipbook; "" = стандартная тёмная плашка
 local tbg = GetWidgetElementTooltipBackground("Button")
 SetWidgetElementTooltipBackgroundColor("Button", 1, 1, 1, 0.9)   -- оттенок спрайта/флипбука фона
@@ -10600,21 +10744,62 @@ SetWidgetElementCheckedSprite("Toggle", "Content/Textures/checked.png")
 
 ### Анимации виджетов
 
-```lua
-PlayWidgetAnimation("Intro")
-PauseWidgetAnimation("Intro")
-ResumeWidgetAnimation("Intro")
-StopWidgetAnimation("Intro", true)
+Анимации создаются в редакторе виджетов ([Ассеты → 4.13.3](Assets-RU-DOC.md#4133-анимации)).
+Каждая функция принимает индекс экземпляра виджета последним необязательным аргументом (по умолчанию `0`)
+и действует **только на этот экземпляр** — другие сущности, показывающие тот же виджет, не затрагиваются.
+Первый из этих вызовов, который запускает, останавливает, ставит на паузу, возобновляет или перематывает
+анимацию, даёт экземпляру собственное воспроизведение этой анимации; до этого запросы возвращают состояние
+воспроизведения, общего для всех экземпляров (запущенного скриптом самого виджета или через **Auto Play**).
 
-local playing = IsWidgetAnimationPlaying("Intro")
+```lua
+PlayWidgetAnimation("Intro")                 -- с начала; первый кадр виден сразу
+PlayWidgetAnimation("Intro", 2.0)            -- в два раза быстрее
+PlayWidgetAnimation("Intro", -1.0, 1)        -- задом наперёд с конца, второй экземпляр виджета
+PauseWidgetAnimation("Intro")                -- заморозить; анимация продолжает удерживать свои свойства
+ResumeWidgetAnimation("Intro")
+StopWidgetAnimation("Intro", true)           -- сброс (по умолчанию): анимируемые свойства возвращаются
+                                             -- к значениям до Play, остальное не меняется
+StopWidgetAnimation("Intro", false)          -- остановить и оставить текущий вид
+
+local playing  = IsWidgetAnimationPlaying("Intro")   -- → bool, false на паузе
+local paused   = IsWidgetAnimationPaused("Intro")    -- → bool
+local finished = IsWidgetAnimationFinished("Intro")  -- → bool, дошла до конца (без зацикливания)
+local exists   = HasWidgetAnimation("Intro")         -- → bool
+local length   = GetWidgetAnimationDuration("Intro") -- → секунды
+
+-- Перемотка. Играющая анимация продолжает с этого места; остановленная или завершённая показывает
+-- этот момент и встаёт на паузу (ResumeWidgetAnimation продолжит). Время ограничено 0..длительность.
 SetWidgetAnimationTime("Intro", 0.5)
 local t = GetWidgetAnimationTime("Intro")
 
+-- Имя функции в собственном скрипте виджета, которая вызывается по завершении анимации
 SetAnimationCompleteCallback("Intro", "OnIntroFinished")
 
--- Событие анимации — вызвать callback в определённый момент времени
+-- Событие анимации — вызвать функцию скрипта виджета в определённый момент анимации.
+-- Функция получает параметр, а если его нет — имя анимации.
 AddAnimationEvent("Intro", 0.5, "OnHalfway")               -- animName, time, callback
 AddAnimationEvent("Intro", 1.0, "OnFinish", "myParam")     -- с необязательным параметром
+```
+
+Ожидание анимации в скрипте сущности — без констант-таймеров:
+
+```lua
+function OpenShop()
+    PlayWidgetAnimation("ShopAnim")
+end
+
+function CloseShop()
+    PlayWidgetAnimation("ShopAnim", -1.0)       -- проиграть открытие задом наперёд
+    closing = true
+end
+
+function OnUpdate(dt)
+    if closing and IsWidgetAnimationFinished("ShopAnim") then
+        closing = false
+        StopWidgetAnimation("ShopAnim", true)
+        SetWidgetVisible(false)
+    end
+end
 ```
 
 ### Локальные трансформации и инстансы
@@ -11030,6 +11215,10 @@ SetSubWidgetElementFontSize("HealthBar", "Label", 18)
 local fs  = GetSubWidgetElementFontSize("HealthBar", "Label")-- → number
 SetSubWidgetElementTextColor("HealthBar", "Label", 1, 1, 1, 1)
 local tc  = GetSubWidgetElementTextColor("HealthBar", "Label") -- → {r, g, b, a}
+SetSubWidgetElementTextOutlineWidth("HealthBar", "Label", 2)
+local ow  = GetSubWidgetElementTextOutlineWidth("HealthBar", "Label") -- → number
+SetSubWidgetElementTextOutlineColor("HealthBar", "Label", 0, 0, 0, 1)
+local oc  = GetSubWidgetElementTextOutlineColor("HealthBar", "Label") -- → {r, g, b, a}
 
 -- ── Image / Flipbook ──────────────────────────────────────
 SetSubWidgetElementFlipbook("HealthBar", "Fx", "Content/FX/spin.ice_flipbook")
@@ -11076,11 +11265,12 @@ SetSubWidgetSwitcherActiveChild("Tabs", "Pages", 1)
 GetSubWidgetSwitcherActiveChild("Tabs", "Pages")             -- → int
 
 -- ── Анимации (во вложенном виджете) ───────────────────────
-PlaySubWidgetAnimation("HealthBar", "Pulse")                 -- запуск по имени
-StopSubWidgetAnimation("HealthBar", "Pulse")
+-- Вложенный виджет общий для всех элементов SubWidget, которые его встраивают, поэтому вызовы действуют на все.
+PlaySubWidgetAnimation("HealthBar", "Pulse")                 -- запуск по имени; первый кадр виден сразу
+StopSubWidgetAnimation("HealthBar", "Pulse")                 -- остановить и сбросить анимируемые свойства
 PauseSubWidgetAnimation("HealthBar", "Pulse")
 ResumeSubWidgetAnimation("HealthBar", "Pulse")
-IsSubWidgetAnimationPlaying("HealthBar", "Pulse")            -- → bool
+IsSubWidgetAnimationPlaying("HealthBar", "Pulse")            -- → bool, false на паузе
 
 -- Необязательный индекс экземпляра (если на сущности несколько WidgetInstance):
 SetSubWidgetElementText("HealthBar", "Label", "0/100", 1)
@@ -11158,6 +11348,8 @@ SetSubWidgetElementTooltipCorner("Menu", "Btn", "TopLeft");         GetSubWidget
 SetSubWidgetElementTooltipFont("Menu", "Btn", "Content/Fonts/Hint.ice_font"); GetSubWidgetElementTooltipFont("Menu", "Btn")
 SetSubWidgetElementTooltipFontSize("Menu", "Btn", 18);              GetSubWidgetElementTooltipFontSize("Menu", "Btn")
 SetSubWidgetElementTooltipTextColor("Menu", "Btn", 1, 0.9, 0.6, 1); GetSubWidgetElementTooltipTextColor("Menu", "Btn")
+SetSubWidgetElementTooltipTextOutlineWidth("Menu", "Btn", 1);       GetSubWidgetElementTooltipTextOutlineWidth("Menu", "Btn")
+SetSubWidgetElementTooltipTextOutlineColor("Menu", "Btn", 0, 0, 0, 0.8); GetSubWidgetElementTooltipTextOutlineColor("Menu", "Btn")
 SetSubWidgetElementTooltipBackground("Menu", "Btn", "Content/UI/tooltip.ice_sprite"); GetSubWidgetElementTooltipBackground("Menu", "Btn")
 SetSubWidgetElementTooltipBackgroundColor("Menu", "Btn", 1, 1, 1, 0.9); GetSubWidgetElementTooltipBackgroundColor("Menu", "Btn")
 SetSubWidgetElementTooltipNineSlice("Menu", "Btn", true, 12, 12, 12, 12); GetSubWidgetElementTooltipNineSlice("Menu", "Btn")
@@ -11422,7 +11614,7 @@ function OnUpdate(dt)
 end
 
 function OnLanguageChanged(newLang, oldLang)
-    -- После того как SetGameLanguage сменил язык игры.
+    -- После того как SetGameLanguage или UseSystemLanguage сменили язык игры.
 end
 
 function OnDestroy()
@@ -11598,9 +11790,13 @@ local img = GetElementImage("Icon")
 SetElementFlipbook("Anim", "Content/Flipbooks/fire.ice_flipbook")
 local fb = GetElementFlipbook("Anim")
 
--- Цвет текста
+-- Цвет текста и обводка текста (обводка: Text, InputField и Dropdown)
 SetElementTextColor("Title", 1, 1, 1, 1)
 local tc = GetElementTextColor("Title")          -- → {r, g, b, a}
+SetElementTextOutlineWidth("Title", 2)           -- пиксели холста, 0–16; 0 = без обводки (по умолчанию)
+local ow = GetElementTextOutlineWidth("Title")
+SetElementTextOutlineColor("Title", 0, 0, 0, 1)
+local oc = GetElementTextOutlineColor("Title")   -- → {r, g, b, a}, по умолчанию {0, 0, 0, 1}
 
 -- Z-порядок и глобальный Z
 SetElementZOrder("Panel", 5)
@@ -11639,6 +11835,10 @@ SetElementTooltipFontSize("Button", 18)
 local tfs = GetElementTooltipFontSize("Button")
 SetElementTooltipTextColor("Button", 1, 0.9, 0.6, 1)
 local ttc = GetElementTooltipTextColor("Button")        -- → {r, g, b, a}
+SetElementTooltipTextOutlineWidth("Button", 1)          -- px, 0–16; 0 = без обводки (по умолчанию)
+local tow = GetElementTooltipTextOutlineWidth("Button")
+SetElementTooltipTextOutlineColor("Button", 0, 0, 0, 0.8)
+local toc = GetElementTooltipTextOutlineColor("Button") -- → {r, g, b, a}
 SetElementTooltipBackground("Button", "Content/UI/tooltip.ice_sprite")  -- .ice_sprite или .ice_flipbook; "" = стандартная тёмная плашка
 local tbg = GetElementTooltipBackground("Button")
 SetElementTooltipBackgroundColor("Button", 1, 1, 1, 0.9)  -- оттенок спрайта/флипбука фона
@@ -11822,14 +12022,24 @@ RemoveElement("DynamicLabel")
 local info = GetElement("Title")                 -- → {name, visible, text, value, scale_x, scale_y,
                                                  --    rotation, flip_x, flip_y, opacity}
 
--- Анимации
-PlayAnimation("FadeIn")
-PlayAnimation("FadeIn", 2.0)                     -- со скоростью
-StopAnimation("FadeIn")
-StopAnimation("FadeIn", true)                    -- сброс в начало
+-- Анимации. Они идут сразу на всех экземплярах виджета (и на виджете везде, где он встроен как
+-- SubWidget); PlayAnimation и StopAnimation также возвращают в это общее воспроизведение экземпляры,
+-- которые скрипт сущности забрал себе через PlayWidgetAnimation и подобные функции.
+PlayAnimation("FadeIn")                          -- первый кадр виден сразу
+PlayAnimation("FadeIn", 2.0)                     -- со скоростью; отрицательная скорость — задом наперёд
+StopAnimation("FadeIn")                          -- сброс (по умолчанию): анимируемые свойства возвращаются
+                                                 -- к значениям до Play
+StopAnimation("FadeIn", false)                   -- остановить и оставить текущий вид
 PauseAnimation("FadeIn")
 ResumeAnimation("FadeIn")
-local playing = IsAnimationPlaying("FadeIn")
+local playing  = IsAnimationPlaying("FadeIn")    -- false на паузе
+local paused   = IsAnimationPaused("FadeIn")
+local finished = IsAnimationFinished("FadeIn")   -- дошла до конца (без зацикливания)
+local exists   = HasAnimation("FadeIn")
+local length   = GetAnimationDuration("FadeIn")  -- секунды
+SetAnimationTime("FadeIn", 0.25)                 -- перемотка; остановленная анимация показывает этот момент на паузе
+local t = GetAnimationTime("FadeIn")
+SetAnimationCompleteCallback("FadeIn", "OnFadeInDone")   -- OnFadeInDone("FadeIn") в конце
 AddAnimationEvent("FadeIn", 0.5, "OnHalfway")   -- коллбэк в момент 0.5
 AddAnimationEvent("FadeIn", 1.0, "OnDone", "param")
 ```
@@ -11931,6 +12141,8 @@ GetSubElementColor("HealthBar", "Icon")          -- → {r, g, b, a}
 -- Внешний вид
 SetSubElementFontSize("HealthBar", "Label", 18); GetSubElementFontSize("HealthBar", "Label")
 SetSubElementTextColor("HealthBar", "Label", 1,1,1,1); GetSubElementTextColor("HealthBar", "Label")
+SetSubElementTextOutlineWidth("HealthBar", "Label", 2); GetSubElementTextOutlineWidth("HealthBar", "Label")
+SetSubElementTextOutlineColor("HealthBar", "Label", 0,0,0,1); GetSubElementTextOutlineColor("HealthBar", "Label")
 SetSubElementFlipbook("HealthBar", "Fx", "Content/FX/spin.ice_flipbook"); GetSubElementFlipbook("HealthBar", "Fx")
 GetSubElementImage("HealthBar", "Icon")
 SetSubElementZOrder("HealthBar", "Icon", 5);     GetSubElementZOrder("HealthBar", "Icon")
@@ -11943,6 +12155,8 @@ SetSubElementTooltipCorner("HealthBar", "Icon", "TopLeft"); GetSubElementTooltip
 SetSubElementTooltipFont("HealthBar", "Icon", "Content/Fonts/Hint.ice_font"); GetSubElementTooltipFont("HealthBar", "Icon")
 SetSubElementTooltipFontSize("HealthBar", "Icon", 18); GetSubElementTooltipFontSize("HealthBar", "Icon")
 SetSubElementTooltipTextColor("HealthBar", "Icon", 1,0.9,0.6,1); GetSubElementTooltipTextColor("HealthBar", "Icon")
+SetSubElementTooltipTextOutlineWidth("HealthBar", "Icon", 1); GetSubElementTooltipTextOutlineWidth("HealthBar", "Icon")
+SetSubElementTooltipTextOutlineColor("HealthBar", "Icon", 0,0,0,0.8); GetSubElementTooltipTextOutlineColor("HealthBar", "Icon")
 SetSubElementTooltipBackground("HealthBar", "Icon", "Content/UI/tooltip.ice_sprite"); GetSubElementTooltipBackground("HealthBar", "Icon")
 SetSubElementTooltipBackgroundColor("HealthBar", "Icon", 1,1,1,0.9); GetSubElementTooltipBackgroundColor("HealthBar", "Icon")
 SetSubElementTooltipNineSlice("HealthBar", "Icon", true, 12,12,12,12); GetSubElementTooltipNineSlice("HealthBar", "Icon")
@@ -12034,12 +12248,13 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `SetElementImage` | `SetWidgetElementImage` |
 | `SetElementFlipbook` | `SetWidgetElementFlipbook` |
 | `SetElementTextColor` | `SetWidgetElementTextColor` |
+| `SetElementTextOutlineColor` / `SetElementTextOutlineWidth` | `SetWidgetElementTextOutlineColor` / `SetWidgetElementTextOutlineWidth` |
 | `SetElementZOrder` | `SetWidgetElementZOrder` |
 | `SetElementGlobalZ` | `SetWidgetElementGlobalZ` |
 | `SetElementIsPostProcessed` | `SetWidgetElementIsPostProcessed` |
 | `SetElementAnchor` | `SetWidgetElementAnchor` |
 | `SetElementTooltip` | `SetWidgetElementTooltip` |
-| `SetElementTooltip<Свойство>` (`LocalizationKey`, `Mode`, `Corner`, `Font`, `FontSize`, `TextColor`, `Background`, `BackgroundColor`, `NineSlice`, `Size`, `Padding`) | `SetWidgetElementTooltip<Свойство>` |
+| `SetElementTooltip<Свойство>` (`LocalizationKey`, `Mode`, `Corner`, `Font`, `FontSize`, `TextColor`, `TextOutlineColor`, `TextOutlineWidth`, `Background`, `BackgroundColor`, `NineSlice`, `Size`, `Padding`) | `SetWidgetElementTooltip<Свойство>` |
 | `SetStateColors` | `SetWidgetStateColors` |
 | `SetStateSounds` | `SetWidgetStateSounds` |
 | `SetFillColor` | `SetFillColor` |
@@ -12062,6 +12277,11 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `GetRootElements` | `GetWidgetRootElements` |
 | `MoveElement` | `MoveWidgetElement` |
 | `PlayAnimation` | `PlayWidgetAnimation` |
+| `StopAnimation` / `PauseAnimation` / `ResumeAnimation` | `StopWidgetAnimation` / `PauseWidgetAnimation` / `ResumeWidgetAnimation` |
+| `IsAnimationPlaying` / `IsAnimationPaused` / `IsAnimationFinished` | `IsWidgetAnimationPlaying` / `IsWidgetAnimationPaused` / `IsWidgetAnimationFinished` |
+| `SetAnimationTime` / `GetAnimationTime` | `SetWidgetAnimationTime` / `GetWidgetAnimationTime` |
+| `GetAnimationDuration` / `HasAnimation` | `GetWidgetAnimationDuration` / `HasWidgetAnimation` |
+| `SetAnimationCompleteCallback` / `AddAnimationEvent` | те же имена на стороне сущности |
 | `CreateElement` | `AddWidgetElement` |
 | `FocusElement` | `FocusWidgetElement` |
 | `SetGamepadEnabled` *(и все хелперы `SetGamepad*`)* | то же имя на стороне сущности |
@@ -13064,6 +13284,7 @@ Settings.SetRenderer("OpenGL 4.6")          -- явный OpenGL на дескт
 >
 > - **Применяются сразу:** `CullPadding`, `CullingMode`, `IsSuspended`.
 > - **Требуют перезапуска** (GPU-буферы/шейдеры, текстурные атласы и кэшированный лимит размера текстуры устройства строятся один раз при старте из этих значений): `MaxPointLights`, `MaxTextureSlotsGL`, `MaxTextureSlotsGLES`, `MaxQuadsPerBatch`, `MaxParticlesPerBatch`, `MaxInstancesPerBatch`, `DebugVertexBufferSize`, `AtlasSize`, `MaxSpriteSize`, `MaxTextureSize`.
+> - `AtlasSize` и `MaxSpriteSize` также применяются при `Atlas.Rebuild()`, который перепаковывает текстурный атлас без перезапуска.
 
 ```lua
 -- Отсечение (culling)
@@ -13096,8 +13317,8 @@ local slES = Settings.GetMaxTextureSlotsGLES()
 Settings.SetMaxPointLights(32)            -- диапазон: 1 .. 128
 local mpl = Settings.GetMaxPointLights()
 
--- Текстурный атлас / текстуры (требуют перезапуска)
-Settings.SetAtlasSize(4096)               -- размер страницы атласа в px (диапазон: 256 .. 16384)
+-- Текстурный атлас / текстуры (требуют перезапуска; Atlas.Rebuild() сразу применяет оба размера атласа)
+Settings.SetAtlasSize(4096)               -- размер страницы атласа в px (диапазон: 256 .. 16384, не больше лимита текстур GPU)
 local atl = Settings.GetAtlasSize()
 Settings.SetMaxSpriteSize(2048)           -- максимальный спрайт, упаковываемый в общий атлас (диапазон: 64 .. 16384)
 local mss = Settings.GetMaxSpriteSize()
@@ -13108,6 +13329,83 @@ local mts = Settings.GetMaxTextureSize()
 Settings.SetDebugVertexBufferSize(128)    -- диапазон: 16 .. 4096
 local dvb = Settings.GetDebugVertexBufferSize()
 ```
+
+### Сборщик мусора Lua
+
+> Настраивает сборщик мусора Lua 5.5 **обеих** скриптовых VM: игровой (скрипты сущностей, уровня и модов)
+> и UI (скрипты виджетов). Значения проекта берутся из вкладки **Оптимизация** редактора
+> (`Config/Engine.json` → `Optimization` → `LuaGC`). Изменение значения этими функциями создаёт
+> переопределение игры: оно применяется сразу и сохраняется в `GameSettings.json` через `Settings.Save()`;
+> `Settings.ResetDefaults()` снимает переопределение и возвращает значения проекта. В редакторе
+> переопределение действует до остановки режима игры.
+
+```lua
+-- Пресеты: "default"    поколенческий режим с параметрами Lua 5.5 по умолчанию (лучший выбор для большинства игр)
+--          "low_memory" инкрементальный режим с короткой паузой: примерно на 1/3 меньше пиковой памяти, больше CPU
+--          "throughput" поколенческий режим с более редкими сборками: меньше времени GC, больше памяти
+--          "custom"     сохраняет текущие значения и позволяет менять их по одному
+Settings.SetLuaGCPreset(Settings.LUA_GC_PRESET_LOW_MEMORY)  -- → true (false + предупреждение для неизвестного имени)
+local preset = Settings.GetLuaGCPreset()                     -- "low_memory"
+
+-- Режим: "generational" или "incremental". Другой режим переключает пресет на "custom".
+Settings.SetLuaGCMode(Settings.LUA_GC_INCREMENTAL)           -- → true / false
+local mode = Settings.GetLuaGCMode()
+
+-- Параметры с именами как у collectgarbage("param"). Значения ограничиваются диапазонами ниже;
+-- изменённое значение переключает пресет на "custom".
+Settings.SetLuaGCParam("minormul", 20)       -- поколенческий: 5 .. 300 (%)
+Settings.SetLuaGCParam("minormajor", 70)     -- поколенческий: 10 .. 500 (%)
+Settings.SetLuaGCParam("majorminor", 50)     -- поколенческий: 0 .. 100 (%)
+Settings.SetLuaGCParam("pause", 250)         -- инкрементальный и полные сборки: 100 .. 1000 (%)
+Settings.SetLuaGCParam("stepmul", 200)       -- инкрементальный и полные сборки: 100 .. 1000 (%)
+Settings.SetLuaGCParam("stepsize", 0)        -- байт между шагами: 0 = значение Lua по умолчанию, иначе 1024 .. 262144
+local pause = Settings.GetLuaGCParam("pause") -- nil для неизвестного имени
+
+-- Полная сборка обеих VM сразу после каждой загрузки уровня (после OnLevelStart). По умолчанию: true
+Settings.SetLuaGCCollectOnLevelLoad(true)
+local onLoad = Settings.IsLuaGCCollectOnLevelLoad()
+
+-- GC в простое кадра: до указанного числа мс работы сборщика в свободное время кадра перед сном
+-- ограничителя FPS (1 мс всегда остаётся свободной). 0 = выключено (по умолчанию), максимум
+-- LUA_GC_IDLE_BUDGET_MAX (8). Нужен лимит FPS; в вебе не действует — там кадры задаёт браузер.
+Settings.SetLuaGCIdleBudget(1.5)
+local budget = Settings.GetLuaGCIdleBudget()
+
+-- Пуловый аллокатор для мелких объектов Lua (до 256 байт: таблицы, строки, замыкания). По умолчанию: true.
+-- Переключается в любой момент; уже выделенная память остаётся корректной.
+Settings.SetLuaPooledAllocator(true)
+local pooled = Settings.IsLuaPooledAllocator()
+
+-- Полная сборка обеих VM прямо сейчас (например, за экраном загрузки); возвращает освобождённые КБ
+local freedKB = Settings.CollectLuaGarbage()
+
+-- Статистика в реальном времени
+local s = Settings.GetLuaGCStats()
+-- s.preset, s.mode, s.collectOnLevelLoad, s.idleBudgetMs, s.pooledAllocator
+-- s.runtimeOverride  -- true, пока действует переопределение игры
+-- s.memoryKB         -- обе VM вместе
+-- s.lastCollectMs    -- длительность последней полной сборки
+-- s.lastIdleMs       -- длительность последнего отрезка GC в простое кадра
+-- s.game, s.ui       -- по каждой VM (s.ui = nil, пока UI VM не запущена):
+--   .memoryKB, .mode, .running (false после collectgarbage("stop")),
+--   .pooling, .poolReservedKB, .poolUsedKB
+```
+
+| Параметр | Где действует | По умолчанию в Lua | Смысл |
+| -------- | ------------- | ------------------ | ----- |
+| `minormul` | поколенческий | 20 % | Малая сборка начинается, когда память вырастает на этот процент от объёма, занятого после последней полной сборки. |
+| `minormajor` | поколенческий | 70 % | Полная сборка запускается, когда старые объекты вырастают на этот процент с последней полной сборки. |
+| `majorminor` | поколенческий | 50 % | После полной сборки сборщик возвращается к малым, только если освободил больше этого процента памяти, выделенной с предыдущей полной сборки. |
+| `pause` | инкрементальный, полные сборки | 250 % | Новый цикл начинается, когда память достигает этого процента от объёма, занятого после предыдущей сборки. |
+| `stepmul` | инкрементальный, полные сборки | 200 % | Сколько работы выполняет каждый шаг относительно выделенной памяти. |
+| `stepsize` | инкрементальный, полные сборки | 0 (≈ 9,4 КБ) | Сколько байт выделяется между двумя шагами сборщика. |
+
+Константы: `Settings.LUA_GC_PRESET_DEFAULT`, `LUA_GC_PRESET_LOW_MEMORY`, `LUA_GC_PRESET_THROUGHPUT`,
+`LUA_GC_PRESET_CUSTOM`, `LUA_GC_GENERATIONAL`, `LUA_GC_INCREMENTAL`, `LUA_GC_PARAM_MINOR_MULTIPLIER`,
+`LUA_GC_PARAM_MAJOR_MINOR`, `LUA_GC_PARAM_MINOR_MAJOR`, `LUA_GC_PARAM_PAUSE`,
+`LUA_GC_PARAM_STEP_MULTIPLIER`, `LUA_GC_PARAM_STEP_SIZE` и `LUA_GC_IDLE_BUDGET_MAX`.
+Слушатели `Settings.OnSettingChanged` получают ключи `"LuaGCPreset"`, `"LuaGCMode"`, `"LuaGCParam"`,
+`"LuaGCCollectOnLevelLoad"`, `"LuaGCIdleBudget"` и `"LuaPooledAllocator"`.
 
 ### Звук (через Settings)
 
@@ -13777,7 +14075,7 @@ Prewarm.Font("Content/Fonts/Roboto.ttf")
 Prewarm.Animation("Content/Anims/AC_Player.ice_animation")
 Prewarm.View("Content/Views/V_Underwater.ice_view")
 Prewarm.Sound("Content/Audio/sfx_explosion.wav")
-Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- сырое изображение (в атлас если влезает, иначе standalone)
+Prewarm.Texture("Content/UI/bg_titlescreen.png")  -- сырое изображение (в атлас, если это разрешает его .ice_texture, иначе standalone)
 
 -- Поставить в очередь целую папку (рекурсивно). Распознаются расширения:
 --   .ice_sprite, .ice_flipbook, .ice_skeleton, .ice_material, .ice_matinst, .ice_decal,
@@ -13842,16 +14140,82 @@ end
   - view прогревает текстуры пост-процесса (небо / LUT / bloom-dirt) под теми же
     ключами, что и рантайм, и компилирует свои кастомные материалы пост-процесса.
 - `Prewarm.Texture` (и любое сырое изображение, найденное `Prewarm.Folder`)
-  прогревает картинку так же, как это делает спрайт: в общий атлас если она
-  влезает (с учётом настроек `.ice_texture`), иначе как standalone-текстуру по
-  ключу полного пути. Операция идемпотентна и делит запись кеша с
+  прогревает картинку так же, как это делает спрайт: в общий атлас, когда в её
+  `.ice_texture` включено **Упаковать в атлас**, остальные настройки совместимы
+  с атласом и картинка не больше **Макс. размера спрайта**; иначе как
+  standalone-текстуру по ключу полного пути. Картинка без `.ice_texture` в атлас
+  не попадает никогда. Операция идемпотентна и делит запись кеша с
   соответствующим спрайтом/материалом/тайлсетом, поэтому дублирующая копия не
   создаётся.
+- Картинки для атласа (из `Prewarm.Texture`, `Prewarm.Folder` и текстуры
+  спрайтов из очереди) декодируются в рабочих потоках и упаковываются в
+  главном потоке с небольшим бюджетом на кадр; `GetProgress` и `IsComplete`
+  дожидаются их.
+- Картинки атласа, которые упаковал Prewarm, остаются в атласе и после
+  `Atlas.Rebuild()` — до вызова `Prewarm.Clear()`: после пересборки они
+  упаковываются заново в фоне, и `GetProgress` и `IsComplete` дожидаются и этого.
 - `Prewarm.Material` компилирует шейдер и грузит текстуры материала;
   `Prewarm.MaterialInstance` (или любой путь `.ice_matinst`) дополнительно
   резолвит родительский материал и применяет override-текстуры.
 - Очередь переживает переход между сценами — `Prewarm.Clear()` это
   единственный способ отбросить ещё необработанные элементы.
+
+### Atlas.* — текстурный атлас
+
+Картинки, у которых в `.ice_texture` включено **Упаковать в атлас** (и остальные настройки импорта совместимы с атласом,
+см. *Текстуры и сайдкар `.ice_texture`* в руководстве по ассетам), делят большие страницы атласа, поэтому спрайты с ними
+собираются в меньшее число draw call. `Atlas.*` позволяет скрипту посмотреть страницы и перепаковать их.
+
+```lua
+local stats = Atlas.GetStats()
+-- stats.pages          -- используемые страницы атласа
+-- stats.images         -- картинки, упакованные в них
+-- stats.pending        -- картинки, которые ещё декодируются в рабочих потоках
+-- stats.pageSize       -- ширина и высота страницы в пикселях (не больше лимита текстур GPU)
+-- stats.maxSpriteSize  -- самая большая картинка, которая упаковывается; большие остаются отдельными
+-- stats.vramMB         -- память всех страниц
+-- stats.deadPixels     -- площадь страниц, которую ещё занимают картинки, удалённые после обновления ассетов
+-- stats.occupancy      -- средняя заполненность страниц, 0..1 (с учётом мёртвого места)
+
+if Atlas.IsPacked("Content/Sprites/Hero/T_Hero.png") then
+    local r = Atlas.GetRegion("Content/Sprites/Hero/T_Hero.png")
+    -- r.page                     -- индекс страницы, с 0, как в панели Stats
+    -- r.x, r.y, r.w, r.h         -- где картинка лежит на странице, в пикселях от левого верхнего угла
+    -- r.pageWidth, r.pageHeight  -- размер страницы в пикселях
+end
+
+for _, page in ipairs(Atlas.GetPages()) do
+    print(page.index, page.width, page.height, page.minFilter, page.magFilter,
+          page.images, page.occupancy, page.usedPixels, page.deadPixels)
+end
+
+Atlas.Rebuild()   -- перепаковать все страницы в начале следующего кадра
+```
+
+| Функция | Возвращает | Описание |
+|---------|------------|----------|
+| `Atlas.GetStats()` | table | Итоги по всем страницам (поля выше). |
+| `Atlas.IsPacked(path)` | bool | `true`, если файл картинки сейчас в атласе. |
+| `Atlas.GetRegion(path)` | table или nil | Страница и прямоугольник упакованной картинки в пикселях; `nil`, если она не упакована. |
+| `Atlas.GetPages()` | table | По записи на страницу: `index`, `width`, `height`, `minFilter` и `magFilter` (`"nearest"` или `"linear"`), `images`, `occupancy` (0..1), `usedPixels`, `deadPixels`. |
+| `Atlas.Rebuild()` | — | Перепаковывает все страницы в начале следующего кадра. |
+
+**Примечания**
+- `path` — файл картинки (`.png`, `.jpg`), а не `.ice_sprite`; для спрайта на сущности его возвращает
+  `GetSpriteFrameRegion().texture`. Пути нормализуются, как любые пути контента.
+- Картинка упаковывается, когда её впервые загружает спрайт, флипбук, скелет, виджет, эффект частиц или вызов `Draw`,
+  либо заранее через `Prewarm` и `LoadLevelAsync`, поэтому до этого `IsPacked` возвращает `false`.
+- Страницы живут всю сессию, поэтому упакованная картинка сама никуда не сдвигается. Когда обновление ассетов удаляет
+  картинку или меняет её размер, её старая область становится мёртвым местом. `Atlas.Rebuild()` укладывает картинки,
+  которые ещё используются, на новые страницы, освобождает старые и применяет новые `Settings.SetAtlasSize` /
+  `Settings.SetMaxSpriteSize`. Спрайты, эффекты и виджеты сохраняют материалы, регионы и прочее состояние; картинка,
+  которая больше не помещается на страницу, рисуется из отдельной копии. Картинки, которые `Prewarm` или
+  `LoadLevelAsync` ещё декодируют или уже упаковали, после пересборки упаковываются заново, даже если их пока ничего не
+  использует, поэтому идущая предзагрузка всё равно заканчивается с ними в атласе: `Prewarm` держит свои картинки до
+  `Prewarm.Clear()`, `LoadLevelAsync` — пока уровень не применён или загрузка не отменена. Используемые картинки
+  пересборка заново читает с диска в том же кадре, поэтому вызывайте её в спокойный момент, например на экране загрузки.
+- Функции регионов, такие как `SetSpriteRegion`, `GetSpriteFrameRegion` и `GetFlipbookFrameRegion`, всегда работают в
+  координатах исходной картинки, а не страницы атласа.
 
 ### События изменения настроек
 
@@ -14062,7 +14426,9 @@ SetRandomSeed(42)
 > движка. Достаточно один раз вызвать `SetRandomSeed(n)` (или `RNG.SetSeed`) — и **каждый** вызов
 > `Random*`, выпадение лута, перемешивание массива и случайный выбор в Behavior Tree станут
 > полностью воспроизводимыми. Это фундамент для seed-забегов рогаликов и реплеев.
-> `SetRandomSeed` по умолчанию также пересевает таблицы шума. Про именованные под-потоки,
+> `SetRandomSeed` по умолчанию также пересевает таблицы шума. Сид повторяет последовательность
+> чисел, поэтому и вытягивать их нужно в том же порядке: когда вы берёте по числу на каждый элемент
+> словаря, обходите `Map.SortedKeys(t)`, а не `pairs`. Про именованные под-потоки,
 > строковые сиды и точное сохранение/загрузку см.
 > [RNG — Детерминированные потоки случайных чисел](#rng--детерминированные-потоки-случайных-чисел).
 
@@ -14321,6 +14687,11 @@ seed-забегов рогаликов, ежедневных испытаний 
 > `RandomWeighted`, `RandomPointInCircle`, … а также `Array.Shuffle`, выпадение лута из
 > лут-таблиц и случайные селекторы Behavior Tree) идут через этот же генератор — поэтому
 > один `RNG.SetSeed(...)` делает воспроизводимым **всё** сразу.
+
+> **Тот же сид — тот же порядок.** Сид повторяет последовательность чисел, поэтому и вытягивать их
+> нужно в том же порядке. `pairs` обходит строковые ключи в порядке, который может меняться от
+> запуска к запуску: когда вы берёте по числу на каждый элемент словаря, обходите
+> `Map.SortedKeys(t)`.
 
 #### Установка сида
 
@@ -14813,6 +15184,10 @@ local allDone = AreAllTexturesLoaded({
 | `IsTextureLoaded(name)` | bool | true если текстура готова |
 | `AreAllTexturesLoaded(paths)` | bool | true если все указанные текстуры готовы |
 
+`SoftRef(...).Load()` и `PreloadTextures` декодируют картинки в рабочих потоках и применяют настройки импорта из
+`.ice_texture` картинки (фильтрация, обёртывание, мипмапы, premultiplied alpha, максимальный размер) так же, как при
+загрузке текстуры по требованию.
+
 ### PersistentTable — Автосохраняемое хранилище данных
 
 Key-value хранилище с сохранением/загрузкой на диск. Идеально для статистики, настроек, достижений.
@@ -14876,6 +15251,10 @@ stats.Clear()                                  -- очистить все дан
 > с `..` или буквой диска (`C:`) либо начинающийся с `/` отклоняется: `Save`, `Load`, `Exists` и `Delete`
 > возвращают `false`, а `Update` пропускает автосохранение.
 
+> Числа сохраняют свой тип Lua при `Save` и `Load`: целое вроде `10` возвращается целым со всеми его 64 битами,
+> а дробное вроде `0.8` — ровно таким, каким было сохранено. `Increment` оставляет целое целым, пока и значение,
+> и прибавка целые, а `GetMax` / `GetMin` сравнивают целые точно, какими бы большими они ни были.
+
 ---
 
 ## 28. Localization — Локализация
@@ -14902,11 +15281,37 @@ local langs = GetAvailableLanguages()  -- → {"en", "ru", "zh"}
 
 -- Проверить ключ
 local has = HasLocalizationKey("menu_play")
+
+-- Языки системы игрока, начиная с самого предпочитаемого
+local sys = GetSystemLanguage()        -- → "ru"
+local locales = GetSystemLocales()     -- → {"ru-RU", "en-US"}
+
+-- Начать на родном языке игрока, если он есть в таблице
+local picked = UseSystemLanguage()     -- → "ru" или nil (язык остаётся прежним)
 ```
+
+> `LocalizeFmt` подставляет числа так же, как `ToString`: целое — без десятичной точки (`50`), дробное — с дробной
+> частью (`2.5`).
 
 > При смене языка вызывается `OnLanguageChanged(newLang, oldLang)` во всех скриптах сущностей.
 > Текст и тултипы виджетов, привязанные к ключу локализации (`SetWidgetLocalizationKey`,
 > `SetWidgetElementTooltipLocalizationKey`), переключаются на новый язык автоматически.
+
+> Сам движок язык не выбирает: после `LoadLocalization` игра, как и раньше, на первом языке из `Languages`
+> таблицы. `UseSystemLanguage` — это явное включение: вызывайте её после `LoadLocalization`, обычно один раз,
+> пока у игрока нет сохранённого выбора. Она проходит языки системы в порядке, заданном игроком, и для каждого
+> пробует точную локаль (`pt-BR`), затем сам язык (`pt`), затем другой регион того же языка в порядке `Languages`
+> (`pt-PT`) и только потом переходит к следующему — поэтому игрок с `en-GB` и `fr-FR` получит `en-US`, а не
+> французский. Китайский сохраняет письменность: `zh-TW`, `zh-HK`, `zh-MO` и `zh-Hant` — традиционный, любой
+> другой `zh` — упрощённый, и один заменяет другой, только если иначе ни одного из языков игрока в таблице нет.
+> Язык меняется так же, как через `SetGameLanguage`, поэтому срабатывает `OnLanguageChanged`, а функция
+> возвращает выбранный код — или `nil`, оставляя язык прежним, если ни одного языка системы в таблице нет.
+
+> `GetSystemLanguage` возвращает язык первой локали системы в нижнем регистре (`"ru"`, `"en"`), а
+> `GetSystemLocales` — все предпочитаемые локали по порядку в виде `язык-СТРАНА` (`"en-US"`) или только языка,
+> если страну система не указала. На платформе, которая ничего не сообщает, они возвращают `""` и пустую
+> таблицу. Каждый вызов спрашивает операционную систему, поэтому вызывайте их один раз, а не каждый кадр. Языки
+> игрока сообщают Windows, macOS, Linux, Android, iOS и веб-сборка.
 
 ---
 
@@ -15288,7 +15693,7 @@ SaveChromeTrace("boss_fight.json")       -- явное имя/путь
 | `StartProfilerTrace` | `StartProfilerTrace([name])` → `bool` | Начинает новый трейс. `name` необязательно — если не передать, профайлер подставит своё имя. Возвращает `true`, если запись реально началась. |
 | `StopProfilerTrace` | `StopProfilerTrace()` | Останавливает текущий трейс и кладёт его в историю трейсов (видно в панели Profiler в редакторе). Без эффекта, если запись не шла. |
 | `IsProfilerTracing` | `IsProfilerTracing()` → `bool` | Возвращает `true`, пока идёт запись трейса. |
-| `SaveChromeTrace` | `SaveChromeTrace([filename])` → `bool` | Сохраняет последний завершённый трейс (или живой, или снапшот одного кадра, если трейсов ещё нет) как Chrome Trace Event JSON. На Emscripten (Web) дополнительно вызывает скачивание через браузер. Возвращает `true` при успехе. |
+| `SaveChromeTrace` | `SaveChromeTrace([filename])` → `bool` | Сохраняет последний завершённый трейс (или живой, или снапшот одного кадра, если трейсов ещё нет) как Chrome Trace Event JSON. На Emscripten (Web) дополнительно вызывает скачивание через браузер. Возвращает `true` при успехе. Относительный `filename` берётся от папки игры; абсолютный должен лежать внутри папки проекта или папок данных игры, `..` запрещено — для отклонённого пути вызов возвращает `false` и пишет предупреждение в лог. |
 
 > **Привяжите свои клавиши.** Подключите трейс-API к любому удобному вводу проекта —
 > например `IsKeyJustPressed("f7")` для start/stop и `IsKeyJustPressed("f8")` для
@@ -15393,7 +15798,7 @@ end
 | `ResetScriptProfiler` | `ResetScriptProfiler()` | Сбрасывает накопленную статистику по скриптам без перезапуска игры. |
 | `GetScriptProfilerTimeMs` | `GetScriptProfilerTimeMs()` → `number` | Суммарное время Lua в колбэках, вызванных движком, за последний кадр. |
 | `GetScriptProfilerCalls` | `GetScriptProfilerCalls()` → `number` | Число измеренных вызовов Lua-колбэков за последний кадр. |
-| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Текущий размер кучи Lua в КБ. |
+| `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Текущий размер кучи игровой Lua VM в КБ (обе VM: `Settings.GetLuaGCStats()`). |
 | `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Сглаженная скорость аллокаций Lua в КБ/с — растущее значение означает расход памяти скриптами. |
 | `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Массив строк по скриптам, отсортированный по стоимости за последний кадр. У каждой записи есть `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
 
@@ -16756,7 +17161,7 @@ punching) и дальше работает обычная сессия: RPC, п�
 
 | Бэкенд | Что нужно | Что даёт |
 |---|---|---|
-| `"p2p"` — без сервера | Ничего. Комната публикуется в публичной сети BitTorrent **Mainline DHT** (миллионы узлов, бесплатно, без аккаунтов) | Коды комнат через интернет, пробивку NAT с предсказанием портов, автоматический UPnP / NAT-PMP, поиск в той же Wi-Fi/локальной сети, список комнат локальной сети |
+| `"p2p"` — без сервера | Ничего. Комната публикуется в публичной сети BitTorrent **Mainline DHT** (миллионы узлов, бесплатно, без аккаунтов) | Коды комнат через интернет, пробивку NAT с предсказанием портов, автоматический UPnP / NAT-PMP, поиск в той же Wi-Fi/локальной сети, списки комнат локальной сети и интернета |
 | `"rendezvous"` | Свой **сервер-посредник** — тот же бинарник движка, запущенный с `--rendezvous-server` (см. [Профайлинг и сборка → Сервер-посредник](Profiling-And-Building-RU-DOC.md#сервер-посредник-rendezvous)) | Всё перечисленное **плюс** ретранслятор, когда прямой канал невозможен, игроки из браузера (Web-сборка) через его WebSocket-шлюз и публичный список комнат через интернет |
 
 `"auto"` (по умолчанию) выбирает сервер-посредник, если он задан через
@@ -16800,8 +17205,21 @@ local ok = Network.HostOnline({
 срабатывает на каждого вошедшего), и поверх него открывает комнату. P2P-бэкенд создаёт случайный
 код из **8 символов** (буквы и цифры без похожих `I`, `O`, `0`, `1`) и сразу вызывает `OnRoomReady`:
 в локальной сети комната доступна сразу, из интернета — через несколько секунд, когда состояние
-станет `hosting`. Бэкенд `rendezvous` вызывает `OnRoomReady` после того, как сервер
+станет `hosting`. С `internet = false` комната вообще не обращается к DHT: состояние сразу
+становится `hosting`, а код работает только для игроков той же сети (`lan` должен быть включён). Бэкенд `rendezvous` вызывает `OnRoomReady` после того, как сервер
 зарегистрировал комнату (его коды — 6 символов). `Network.StopServer()` закрывает комнату.
+
+Ещё три поля описывают комнату без сервера в списках комнат:
+
+| Поле | По умолчанию | Что значит |
+|---|---|---|
+| `info` | `""` | Свой короткий текст (до 64 байт) для списков комнат, например режим игры |
+| `global` | `false` | Показывать публичную комнату и в интернет-списке комнат |
+| `internet` | `true` | `false` — комната только для локальной сети, без DHT |
+
+```lua
+Network.HostOnline({ name = "Стол Билла", public = true, global = true, info = "holdem|8000" })
+```
 
 #### Вход в комнату
 
@@ -16858,6 +17276,8 @@ Network.UpdateRoom({ name = "Финальный стол", public = false, locke
 -- Передавайте все нужные поля: пропущенные возвращаются к значениям по умолчанию.
 ```
 
+`Network.UpdateRoom` так же принимает `global` и `info` (p2p).
+
 Состояния `OnOnlineStatus`:
 
 | Состояние | Сторона | Смысл |
@@ -16898,7 +17318,7 @@ Network.UpdateRoom({ name = "Финальный стол", public = false, locke
 #### Список комнат
 
 ```lua
-Network.ListRooms(function(rooms, err)
+Network.ListRooms(function(rooms, err, done)
     if err ~= "" then Print("Список не получен: " .. err) return end
     for _, r in ipairs(rooms) do
         -- r.code, r.name, r.players, r.maxPlayers, r.hasPassword, r.locked,
@@ -16909,8 +17329,59 @@ Network.ListRooms(callback, "p2p")        -- публичные комнаты �
 Network.ListRooms(callback, "rendezvous") -- публичные комнаты этой игры на сервере-посреднике
 ```
 
-В список попадают только комнаты, созданные с `public = true`. У бэкенда без сервера нет общего
-каталога, поэтому его список — это локальная сеть; комната в интернете находится по коду.
+Интернет-список комнат без сервера принимает третий аргумент:
+
+```lua
+Network.ListRooms(callback, "p2p", { scope = "internet", duration = 8, progress = true })
+```
+
+| Параметр | По умолчанию | Что значит |
+|---|---|---|
+| `scope` | `"lan"` | `"internet"` — искать в интернет-списке комнат без сервера |
+| `duration` | `8` | Интернет: через сколько секунд прислать итоговый список, от 2 до 60 |
+| `progress` | `false` | Интернет: присылать и найденное по ходу поиска (`done = false`) |
+
+Интернет-поиск продолжается между вызовами. Новый интернет-`ListRooms` того же app id продолжает
+уже идущий поиск (тот же UDP-порт, то же состояние DHT): с `progress = true` уже известные комнаты
+приходят сразу, и каждая комната опрашивается заново ради свежего числа игроков. После итогового
+списка поиск ещё 90 секунд работает в фоне и держит комнаты свежими, поэтому снова открытый список
+заполняется мгновенно; потом поиск останавливается сам. Комната, переставшая отвечать, уходит из
+списка примерно через 15 секунд. Повторный `ListRooms` сразу после итогового списка (например, раз в
+секунду, пока открыт экран списка) почти ничего не стоит.
+
+```lua
+Network.StopRoomList()      -- остановить поиск сейчас и отменить ожидающий callback ListRooms
+Network.PrewarmOnline()     -- → true, пока идёт фоновый поиск
+```
+
+`Network.PrewarmOnline()` запускает этот фоновый поиск без callback — вызывайте его, когда игрок
+открывает онлайн-меню, и тогда создание комнаты, вход по коду и список комнат начинаются с уже
+прогретой DHT. Возвращает `false`, если сессия уже идёт или бэкенд не `"p2p"`. Узлы DHT, с которыми
+движок общался, сохраняются в `Saved/Cache/Network/dht_nodes.bin` (папка для записи), поэтому
+следующий запуск не начинает с bootstrap-серверов. `HostOnline` и `JoinOnline` останавливают поиск;
+вход в комнату, которая только что отвечала поиску, обращается к хосту напрямую с того же UDP-порта,
+что использовал поиск, поэтому такой вход обычно занимает один обмен пакетами.
+
+У комнат бэкенда без сервера есть ещё `r.global` (комната в интернет-списке) и `r.info` (текст
+`info` хоста).
+
+В список попадают только комнаты, созданные с `public = true`; интернет-список бэкенда без сервера
+показывает комнаты с `public = true` и `global = true`. `done` равен `true` у итогового списка —
+callback вызывается один раз, если только `progress = true` не попросил промежуточные списки.
+Интернет-список, который не достучался до DHT и ничего не нашёл, заканчивается `dht_unreachable`.
+
+**Интернет-список комнат без сервера.** Хост показываемой комнаты объявляет себя в DHT под ключом
+списка комнат своего app id, а ищущий игрок — под вторым ключом. Каждая сторона находит другую, и
+обе обмениваются несколькими маленькими пакетами — той же пробивкой NAT, что и при входе, — так что
+хост сообщает ищущему свою комнату: код, имя, игроков, флаги и `info`. Комнаты отвечают по одной в
+первые секунды (с `progress = true` они появляются по мере ответов); глобальные комнаты той же сети
+находятся и через локальную рассылку. Пока идёт поиск, обе стороны продолжают слать пакеты, поэтому
+комната находится, даже если её первые пакеты потерялись. Игроки за NAT, выдающим новый порт на каждый
+адрес назначения, достигаются предсказанием портов: такой хост публикует порт, который его NAT выдаст
+следующим, под ключом, выведенным из его адреса, а другая сторона прощупывает небольшое окно портов
+вокруг него. Запрос дополняется до размера ответа, а каждый хост ограничивает число ответов, поэтому
+список нельзя использовать для засыпания чужого адреса трафиком. Когда за такими NAT находятся обе
+стороны или NAT выбирает порты случайно, прямого канала нет — см. *Когда прямой канал невозможен*.
 
 #### Как работает P2P без сервера
 
@@ -16919,9 +17390,11 @@ Network.ListRooms(callback, "rendezvous") -- публичные комнаты �
 другим. Каждая сторона находит другую, и обе одновременно шлют «пробивающие» пакеты — это и
 открывает канал через оба роутера. Если роутер поддерживает UPnP или NAT-PMP, порт дополнительно
 открывается и тоже объявляется. NAT, выдающие новый порт на каждый адрес назначения, обходятся
-предсказанием портов, если порты выделяются последовательно. В одной Wi-Fi комната также находится
-через широковещательный пакет на **UDP 7794**: многие роутеры не умеют возвращать трафик на свой же
-внешний адрес. Обычно вход занимает 3–15 секунд.
+предсказанием портов, если порты выделяются последовательно; хост за таким NAT ещё и публикует порт,
+который выдаст следующим. В одной Wi-Fi комната также находится через широковещательный пакет на
+**UDP 7794**: многие роутеры не умеют возвращать трафик на свой же внешний адрес. Bootstrap-серверы
+разрешаются параллельно, а узлы DHT прошлых сессий используются повторно, поэтому вход обычно
+занимает 2–6 секунд, а из списка комнат — около секунды.
 
 #### Когда прямой канал невозможен
 
@@ -17805,6 +18278,122 @@ Network.SetMaxVoiceRelayPlayers(16)              -- макс. игроков д�
 local maxRelay = Network.GetMaxVoiceRelayPlayers() -- текущий лимит
 ```
 
+Голосовой чат включает каждый, кто должен **слышать** остальных: игрок с выключенным голосовым
+чатом ничего не получает. Микрофон вычитывается целиком на каждом обновлении (при любой частоте
+кадров и тиков задержка не растёт), и каждый 20-мс кадр перед кодированием проходит голосовой
+процессор: фильтр высоких частот убирает гул, спектральный шумодав убирает постоянный фоновый шум
+(вентиляторы, улицу, фон сети, шипение), автоматическая регулировка усиления приводит тихие и громкие
+микрофоны к одному уровню речи, детектор голоса решает, когда игрок говорит (короткая предзапись
+сохраняет первый слог, удержание — окончания слов), а лимитер не даёт сигналу клиппировать. В сеть
+уходят только кадры, пока игрок говорит, — Opus 40 кбит/с с упреждающей коррекцией ошибок по
+умолчанию, — и уходят сразу, не дожидаясь следующего сетевого тика. Сказанное в мьюте после снятия
+мьюта не отправляется. На Android микрофон открывается через вход для голосовой связи, поэтому
+собственные эхоподавитель и шумоподавление устройства работают как при телефонном звонке.
+
+У слушающего у каждого говорящего свой адаптивный джиттер-буфер (40–300 мс, подстраивается под
+измеренный джиттер); потерянный пакет восстанавливается из коррекции ошибок следующего или
+маскируется, а все голоса сводятся в один голосовой выход. Троттлинг пакетов ENet, который
+выбрасывает ненадёжные пакеты при любых колебаниях задержки, по умолчанию выключен, чтобы ни один
+голосовой кадр не терялся ещё до отправки (`Network.SetPacketThrottle(true)` включает его обратно).
+Громкость голоса следует *группе голосового чата* проекта (настройки аудио): выберите в ней Voice — и
+`Audio.SetGroupVolume(Audio.GROUP_VOICE, v)` станет регулятором громкости голосового чата. На
+Android микрофон открывается только после выдачи `RECORD_AUDIO` (`Permissions.Request`); с
+`SetVoiceReleaseMicWhenMuted(true)` игроку, который не говорит, это разрешение не нужно вовсе.
+
+**Кнопка-переключатель.** `Network.SetVoiceReleaseMicWhenMuted(true)` держит микрофон закрытым,
+пока игрок в мьюте (по умолчанию `false` — микрофон открыт, пока включён голосовой чат). Тогда
+слушать могут все без разрешения на микрофон, а открывается он только пока игрок говорит:
+
+```lua
+Network.SetVoiceReleaseMicWhenMuted(true)
+Network.SetVoiceMuted(true)
+Network.EnableVoiceChat(true)
+
+local function setTalking(on)
+    Network.SetVoiceMuted(not on)
+end
+```
+
+`Network.GetVoiceReleaseMicWhenMuted()` возвращает текущую настройку. Свой микрофон:
+
+| Функция | Что возвращает |
+|---|---|
+| `Network.IsVoiceCapturing()` | `true`, пока микрофон открыт |
+| `Network.IsVoiceTransmitting()` | `true`, пока ваш голос уходит в сеть (игрок говорит) |
+| `Network.GetVoiceInputLevel()` | сглаженный уровень микрофона до обработки, `0..1` (`0` в мьюте) |
+
+#### Настройки качества голоса
+
+`Network.SetVoiceSettings(table)` меняет только переданные в таблице ключи и возвращает `true`
+(`false` при неизвестном имени `activation` или `inputPreset`); `Network.GetVoiceSettings()`
+возвращает все ключи. Настройки применяются сразу, в том числе во время работы голосового чата, и
+действуют, пока их не изменят. Числа вне диапазона ограничиваются. Значения по умолчанию ниже
+подходят для речи на телефонах и компьютерах:
+
+```lua
+Network.SetVoiceSettings({
+    noiseSuppression = true,         -- спектральный шумодав
+    noiseSuppressionDb = 24,         -- насколько убирается постоянный шум, 0..40 дБ
+    autoGain = true,                 -- автоматически выравнивать уровень микрофона
+    autoGainTarget = -18,            -- целевой уровень речи, -40..-6 дБFS
+    autoGainMax = 30,                -- наибольшее усиление, 0..40 дБ
+    inputGain = 1.0,                 -- постоянное усиление микрофона до обработки, 0..8
+    activation = "auto",             -- "auto" (детектор голоса), "threshold" (порог уровня), "always"
+    threshold = -50,                 -- "threshold": уровень, открывающий передачу, -90..0 дБFS
+    hold = 300,                      -- сколько ещё передавать после того, как голос стих, 0..2000 мс
+    highPass = true,                 -- фильтр гула
+    highPassHz = 90,                 -- его частота среза, 40..300 Гц
+    limiter = true,                  -- пиковый лимитер
+    bitrate = 40000,                 -- битрейт Opus, 6000..128000 бит/с
+    fec = true,                      -- упреждающая коррекция ошибок: отправлять и использовать
+    expectedLoss = 10,               -- потери пакетов, к которым готовится кодер, 0..50 %
+    jitterMin = 40,                  -- наименьшая задержка воспроизведения, мс
+    jitterMax = 300,                 -- наибольшая задержка воспроизведения, мс
+    outputGain = 1.0,                -- усиление голоса поверх громкости голосовой группы, 0..4
+    inputPreset = "voice",           -- путь микрофона на Android, см. ниже
+    duckGroup = -1,                  -- звуковая группа, приглушаемая, пока кого-то слышно (-1 или false: выкл.)
+    duckDb = -10,                    -- насколько её приглушить, -40..0 дБ
+})
+local current = Network.GetVoiceSettings()
+```
+
+`duckGroup` принимает значение `Audio.GROUP_*`: `duckGroup = Audio.GROUP_MUSIC` приглушает музыку,
+пока слышно другого игрока, и вскоре возвращает её. Низкий битрейт (16000–24000) экономит трафик на
+медленном мобильном интернете; 64000 и выше дают студийное качество. Больший `jitterMin` меняет
+задержку на меньшее число пропусков в нестабильной сети.
+
+| `inputPreset` | Путь микрофона на Android |
+|---|---|
+| `"voice"` | голосовая связь — эхоподавитель, шумоподавление и усиление устройства (по умолчанию) |
+| `"generic"` | обычный микрофон |
+| `"camcorder"` | микрофон видеокамеры |
+| `"recognition"` | настроен под распознавание речи, без обработки устройством |
+| `"unprocessed"` | сырой сигнал микрофона |
+| `"performance"` | низкая задержка |
+| `"system"` | путь платформы по умолчанию |
+
+Остальные платформы открывают системный микрофон по умолчанию и `inputPreset` не используют. Если
+устройство не может открыть запрошенный путь, голосовой чат переходит на микрофон по умолчанию.
+
+```lua
+local s = Network.GetVoiceStats()
+-- s.enabled, s.capturing, s.muted, s.transmitting, s.speech, s.speechProbability (0..1)
+-- s.inputLevel, s.inputPeak     микрофон до обработки, 0..1
+-- s.outputLevel                 после обработки, 0..1
+-- s.gainDb                      текущее автоматическое усиление
+-- s.noiseFloorDb                оценка фонового шума
+-- s.playbackLevel               уровень всех слышимых голосов, 0..1
+local p = Network.GetPlayerVoiceStats(playerId)   -- nil, пока этого игрока не было слышно
+-- p.playing, p.level, p.delayMs, p.bufferedMs, p.jitterMs, p.loss (%)
+-- p.received, p.played, p.recovered (восстановлено коррекцией ошибок), p.concealed, p.late, p.dropped
+local level = Network.GetVoicePlaybackLevel()     -- дешёвый покадровый уровень всех голосов, 0..1
+```
+
+| Функция | Что делает |
+|---|---|
+| `Network.SetPacketThrottle(enabled)` | `true` снова включает троттлинг пакетов ENet для всех соединений (по умолчанию `false`) |
+| `Network.IsPacketThrottleEnabled()` | текущая настройка |
+
 ### Администрирование
 
 ```lua
@@ -17848,6 +18437,11 @@ Network.AddProfanityWord("плохоеслово")
 Network.ClearProfanityWords()
 local filtered = Network.FilterProfanity("текст с плохоеслово")
 ```
+
+> **Пути.** `SaveBanList`, `LoadBanList`, `SaveWhitelist` и `LoadWhitelist` отсчитывают относительный
+> путь от папки игры. Абсолютный путь должен лежать внутри папки проекта или папок данных игры (обе
+> функции `Load…` могут читать и из папки мода), а `..` запрещено. Для отклонённого пути вызов
+> возвращает `false` и пишет предупреждение в лог.
 
 ### Настройки и статистика
 
@@ -18151,7 +18745,7 @@ end
 
 #### Сохранение отчёта
 
-`SaveReport(path?)` записывает JSON-файл с итогами, wire-счётчиками, статистикой по типам и каналам (с самым большим сообщением каждого типа), полной историей, подключёнными пирами (RTT, потери пакетов, байты) и сетевыми настройками и возвращает полный путь к записанному файлу (пустую строку в Release или при ошибке). Без пути отчёт попадает в `Tools/Helpers/NetworkProfiler/` в записываемой папке движка (в редакторе — папка проекта, в сборке игры — пользовательская папка данных); относительный путь берётся от рабочей папки, недостающие папки создаются.
+`SaveReport(path?)` записывает JSON-файл с итогами, wire-счётчиками, статистикой по типам и каналам (с самым большим сообщением каждого типа), полной историей, подключёнными пирами (RTT, потери пакетов, байты) и сетевыми настройками и возвращает полный путь к записанному файлу (пустую строку в Release или при ошибке). Без пути отчёт попадает в `Tools/Helpers/NetworkProfiler/` в записываемой папке движка (в редакторе — папка проекта, в сборке игры — пользовательская папка данных); относительный путь берётся от рабочей папки, абсолютный должен лежать внутри папки проекта или папок данных игры (`..` запрещено), недостающие папки создаются.
 
 ```lua
 -- Путь по умолчанию (Tools/Helpers/NetworkProfiler/network_profile_<дата>_<время>.json)
@@ -18226,7 +18820,7 @@ Rollback работает только если геймплей **детерм�
 **Правила детерминизма** (соблюдать все):
 - Внутри `OnAdvanceFrame` управляй симуляцией **только** из `inputs` — никогда не читай живой ввод (`IsKeyPressed`, `GetMousePosition`, …) и покадровые глобалы.
 - Для случайности используй `RNG.*` или глобальные хелперы `Random*()` — оба берут числа из движкового `RandomService`. Его состояние сохраняется и восстанавливается **автоматически** каждый кадр (управляется конфигом сессии), поэтому броски кубика воспроизводятся идентично сквозь откат. Когда P2P-сессия синхронизируется, движок засевает его сидом, выбранным игроком 0, поэтому все участники начинают с одного и того же состояния случайности; чтобы использовать свой сид, задай его в событии `"synchronized"` (одинаковый у всех участников). `math.random` и `math.randomseed` направлены в тот же сервис, поэтому тоже покрыты.
-- Не используй настенное время (`GetTime()`, `GetDeltaTime()`, `os.time()`), неупорядоченный обход (`pairs` по хешу, на порядок которого ты полагаешься) и любые значения, отличающиеся от запуска к запуску.
+- Не используй настенное время (`GetTime()`, `GetDeltaTime()`, `os.time()`), неупорядоченный обход (`pairs` по хешу, на порядок которого ты полагаешься, — обходи `Map.SortedKeys(t)`) и любые значения, отличающиеся от запуска к запуску.
 - Физика Box2D детерминирована для **одного бинаря на одной платформе** — оба участника должны запускать одну сборку. Кроссплатформенный детерминизм float не гарантируется; для рейтинговых матчей поставляй идентичные исполняемые файлы.
 
 ### Кадровый цикл
@@ -18339,7 +18933,7 @@ function OnFixedUpdate()
 end
 ```
 
-> **Совет:** Перед выходом в онлайн запусти `Rollback.StartSyncTest(1, 7)` и поиграй локально. Если увидишь событие `desync` — какое-то состояние ускользает из твоего `OnSaveState` (или ты использовал недетерминированные данные); исправь до релиза.
+> **Совет:** Перед выходом в онлайн запусти `Rollback.StartSyncTest(1, 7)` и поиграй локально. Если увидишь событие `desync` — какое-то состояние ускользает из твоего `OnSaveState` (или ты использовал недетерминированные данные); исправь до релиза. Sync-тест идёт в одном процессе, поэтому может не заметить строку состояния, собранную через `pairs`: на двух машинах одна и та же таблица может обойтись в разном порядке, контрольные суммы разойдутся и пиры сообщат `desync`. Собирай строки состояния в фиксированном порядке — обходи `Map.SortedKeys(t)` или используй `Network.JsonEncode`, который пишет ключи объектов отсортированными.
 
 ---
 
@@ -19519,11 +20113,12 @@ Map.Remove(data, "mana")
 Map.Clear(data)
 
 -- Информация
-local keys = Map.Keys(data)              -- {"name", "hp", "level"}
-local values = Map.Values(data)          -- {"Hero", 100, 5}
+local keys = Map.Keys(data)              -- {"name", "hp", "level"} в любом порядке
+local sorted = Map.SortedKeys(data)      -- {"hp", "level", "name"} всегда в этом порядке
+local values = Map.Values(data)          -- {"Hero", 100, 5} в любом порядке
 local has = Map.HasKey(data, "hp")       -- true
 local count = Map.Count(data)            -- 3
-local entries = Map.Entries(data)        -- {{key="name", value="Hero"}, ...}
+local entries = Map.Entries(data)        -- {{key="name", value="Hero"}, ...} в любом порядке
 
 -- Копирование
 local copy = Map.Copy(data)             -- Поверхностная копия
@@ -19540,6 +20135,24 @@ Map.ForEach(data, function(k, v) Print(k .. "=" .. tostring(v)) end)
 local any = Map.Any(data, function(k, v) return v > 50 end)
 local all = Map.All(data, function(k, v) return v ~= nil end)
 ```
+
+> **Порядок.** `pairs` и функции `Map`, которые обходят весь словарь (`Keys`, `Values`, `Entries`,
+> `ForEach`, `Filter`, …), посещают элементы в произвольном порядке, а для строковых ключей порядок
+> может меняться от одного запуска игры к другому. Когда порядок важен — сборка сохранения или
+> сетевого сообщения, случайное число на каждый элемент, rollback-неткод, реплеи — обходите
+> `Map.SortedKeys(t)`:
+>
+> ```lua
+> for _, key in ipairs(Map.SortedKeys(data)) do
+>     local value = data[key]
+>     -- один и тот же порядок при каждом запуске и на любой машине
+> end
+> ```
+>
+> `Map.SortedKeys` возвращает ключи массивом: сначала числа по возрастанию, затем строки в
+> побайтовом порядке (`"B"` раньше `"a"`), затем `false` и `true`. У ключей-таблиц, функций и
+> userdata нет естественного порядка — они идут последними, без сортировки. Сортировка стоит
+> дополнительного времени, поэтому используйте её там, где порядок важен, а не в каждом цикле.
 
 ### Set — Множество
 
@@ -20909,11 +21522,26 @@ Mods/
 
 ### 41.3 Песочница (Sandbox)
 
-Каждый мод исполняется в **изолированном окружении**. Это означает:
+Каждый мод исполняется в **собственном окружении**. Это означает:
 
 - Мод **видит** весь глобальный Lua API движка (все функции из этой документации).
-- Мод **не может** перезаписать глобальные функции или переменные другого мода.
+- Глобалы, объявленные модом, принадлежат только ему: другой мод **не может** их увидеть или
+  перезаписать.
 - Переменные `MOD_NAME`, `MOD_VERSION`, `MOD_DIR` уникальны для каждого мода.
+- Таблицы модулей движка (`Audio`, `Map`, …), таблицы стандартных библиотек (`string`, `math`, …)
+  и `_G` — **общие**: мод может оборачивать их функции, чтобы хукать игру, и изменение действует
+  на игру и на все остальные моды. Правила и пример — в
+  [Плагины и моды → 4.4](Plugins-And-Mods-RU-DOC.md#44-среда-мода-и-внедряемые-глобалы).
+- Мод не может загрузить нативную библиотеку или байткод, если проект не включил опцию **Разрешить
+  нативные модули Lua и байткод** ([Стандартные библиотеки](#стандартные-библиотеки)).
+- Пути к файлам не выходят за папки игры: `loadfile`, `dofile`, `require` и функции, которые читают
+  файл по переданному пути (`LoadInputBindings`, `Network.LoadBanList`, `Network.LoadWhitelist`),
+  читают только из проекта, папки данных игры и папок найденных модов. Функции, которые записывают
+  файл по переданному пути (`SaveInputBindings`, `Voice.StartRecording`, `Webcam.SaveFrameToPNG`,
+  `Network.SaveBanList`, `Network.SaveWhitelist`, `SaveChromeTrace`, `NetworkProfiler.SaveReport`),
+  пишут только внутри проекта и папок данных игры — папка мода за их пределами остаётся только для
+  чтения — и не могут перезаписать `Config/Engine.json` проекта или редиректоры ассетов в
+  `Saved/Redirectors`. Папка, добавленная через `Mods.AddSearchPath`, сама по себе ничего не открывает.
 
 ### 41.4 Доступные переменные мода
 
@@ -21187,8 +21815,9 @@ print("Моды обновлены. Найдено: " .. Mods.GetCount())
 
 Регистрирует **дополнительную директорию для поиска модов**, помимо `Mods/`. Директория сканируется точно так же,
 как `Mods/`: каждая её непосредственная подпапка, содержащая `mod.json`, становится модом, а `MOD_DIR` и
-`ModRequire()` разрешаются относительно того места, где мод реально лежит. Возвращает `false`, если путь пуст или
-не является существующей директорией.
+`ModRequire()` разрешаются относительно того места, где мод реально лежит. Директория, в которой `mod.json` лежит
+сама, — это и есть один мод: так устроена папка предмета Steam Workshop, поэтому каждый подписанный предмет можно
+зарегистрировать отдельно. Возвращает `false`, если путь пуст или не является существующей директорией.
 
 Пути поиска действуют **в пределах сессии** — они не пишутся в `Config/Mods.json` и должны регистрироваться заново
 при каждом запуске, до сканирования. Добавление пути само по себе не пересканирует — после него вызовите
@@ -21199,6 +21828,10 @@ print("Моды обновлены. Найдено: " .. Mods.GetCount())
 
 Именно это позволяет модам жить вне папки игры без копирования файлов: зарегистрируйте папки с ними и
 пересканируйте.
+
+Зарегистрированная папка сама по себе не даёт скриптам доступа к файлам: `loadfile`, `dofile` и `require` могут
+читать папки найденных в ней модов, а запись файлов остаётся внутри проекта и папок данных игры
+([41.3](#413-песочница-sandbox)).
 
 ```lua
 -- Скрипт уровня или стартовый менеджер: просканировать дополнительные папки модов и загрузить включённые моды.
@@ -26410,7 +27043,7 @@ API `Voice` даёт Lua прямой доступ к:
 
 | Функция | Возвращает | Описание |
 |---------|------------|----------|
-| Voice.StartRecording(filePath) | bool | Начать запись микрофона в WAV. Создаёт родительские папки |
+| Voice.StartRecording(filePath) | bool | Начать запись микрофона в WAV. Создаёт родительские папки. Относительный путь отсчитывается от папки игры; абсолютный должен лежать внутри папки проекта или папок данных игры, `..` запрещено |
 | Voice.StopRecording() | bool | Завершить и закрыть WAV |
 | Voice.IsRecording() | bool | Запись идёт? |
 | Voice.GetRecordedDuration() | float | Сколько уже записано, в секундах |
@@ -27110,6 +27743,10 @@ local speed = Console.GetCVarFloat("player_speed")
 Console.SetCVarFloat("player_speed", speed * 1.5)
 ```
 
+> Тип CVar берётся из `defaultValue`: `true` / `false` → bool, целое вроде `10` → int, число с десятичной точкой
+> вроде `200.0` или `0.5` → float, всё остальное → string. `Console.SetCVar` приводит значение к типу CVar,
+> поэтому `Console.SetCVar("spawn_count", 12.0)` всё равно запишет целое `12`.
+
 ### 60.4 Console — Выполнение и логирование
 
 | Функция | Возвращает | Описание |
@@ -27523,6 +28160,7 @@ Draw.Text("HP", x, y, 18, {
     rtl = false,                                 -- принудительная раскладка справа налево
     lit = false,                                 -- учитывать освещение сцены
     receiveShadows = false,                      -- освещённый текст темнеет и в 2D-тенях
+    outline = { r = 0, g = 0, b = 0, a = 0.6, width = 1 },  -- ореол под глифами
 })
 
 -- Замеряйте перед размещением. Возвращает ширину самой длинной строки, высоту, межстрочный интервал
@@ -27550,6 +28188,20 @@ Draw.GetMaxTexts()
   глифов (около миллисекунды); глифы растеризуются при первом использовании в строке, так что новые размеры и новые
   символы посреди игры не подвешивают кадр. Каждый отдельный размер — свой атлас, поэтому анимированные размеры лучше
   привязывать к нескольким ступеням, а не к новому целому числу каждый кадр.
+- `outline` рисует обводку вокруг глифов: собственная форма каждого глифа, расширенная на `width` (в единицах
+  размера текста, 0–16, по умолчанию 1; `r`, `g`, `b` по умолчанию 0, `a` по умолчанию 1), цветом обводки под всей
+  строкой и в том же пакете. Так подпись читается на пёстром или меняющемся фоне — от тонкого ореола до толстой
+  обводки. Движок равномерно расширяет форму глифа во все стороны при первом появлении глифа с данной толщиной
+  (толщина округляется до четверти пикселя глифа) и хранит результат в атласе глифов шрифта, поэтому обводка стоит
+  одного дополнительного квада на глиф и ни одного лишнего вызова отрисовки. `a` — точная непрозрачность обводки; там,
+  где обводки соседних глифов перекрываются, полупрозрачная обводка плотнее, поэтому толстой обводке лучше давать
+  непрозрачный цвет.
+- Подряд идущие вызовы `Draw.Text` с общим состоянием рисования собираются в пакет: их глифы уходят одной загрузкой
+  вершин и одним вызовом отрисовки на атлас глифов, даже если у каждой строки свой цвет, потому что цвет передаётся в
+  вершинах. Строка другим шрифтом или другим размером переключает атлас и стоит ещё одного вызова, так же как смена
+  `lit` или смена `receiveShadows` у освещённого текста. Любое другое рисование между ними или смена смешивания,
+  пространства, слоя, клипа или цели рендера закрывает пакет. Группируйте текст по шрифту и размеру, чтобы вызовов
+  было меньше.
 
 ```lua
 -- Рендер текстовой сетки: один вызов на строку, весь экран за 50 вызовов.

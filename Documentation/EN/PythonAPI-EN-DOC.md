@@ -3776,7 +3776,7 @@ es = editor.get_editor_settings()
 #     'viewport_height': 720.0,
 #     'is_viewport_focused': True,
 #     'is_viewport_hovered': True,
-#     'last_opened_level': 'Content/Levels/main.icemap',
+#     'start_level': 'Content/Levels/main.icemap',
 #     'current_level_path': 'Content/Levels/main.icemap',
 #     'is_level_dirty': False,
 #     'grid_size': 32.0,
@@ -3785,6 +3785,8 @@ es = editor.get_editor_settings()
 ```
 
 `show_grid` is the effective grid visibility of the main viewport: the **Show Viewport Grid** setting AND the grid toggle on the toolbar. It is `False` if either of them is off. The class editor has its own grid toggle stored inside the `.ice_class` asset, and it is not reported here.
+
+`start_level` is the level game builds start on: the open level (the same as `current_level_path`) while **Use Current Level** is on, otherwise the level picked in [Editor → Preferences → Engine → Start Level](Editor-EN-DOC.md#101-engine). It is kept in the project's `.iceproject` (`StartScene`), and the editor opens it when the project is opened.
 
 #### `editor.set_editor_settings(data)` → `bool`
 
@@ -3805,7 +3807,7 @@ editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
 ```
 
 The remaining keys returned by `get_editor_settings()` (`grid_size`, `snap_to_grid`, viewport size,
-focus flags, `last_opened_level`) are **read-only** — they are owned by the Settings panel and the
+focus flags, `start_level`) are **read-only** — they are owned by the Settings panel and the
 viewport. Change the persistent ones through the project config instead:
 
 ```python
@@ -6184,7 +6186,7 @@ files, the plugin and mod registries, the build settings and the project layout.
 | `project.scripting_mode()` | `str` | `'code'` or `'visual'` |
 | `project.get_levels()` | `list[str]` | Every `.icemap` in the project |
 | `project.get_locales()` | `list[str]` | Language codes in `Config/Languages` |
-| `project.info()` | `dict` | All of the above plus the current level and its dirty flag |
+| `project.info()` | `dict` | All of the above plus the current level, its dirty flag and the project's start level (`start_level`) |
 
 ```python
 info = project.info()
@@ -6887,7 +6889,7 @@ IceBoxEngine[.exe] [<project path>] [flags]
 | `--quit-after-python` | — | Close the editor when the queued scripts finish |
 
 Scripts run **in the order given**, in the global (`__main__`) namespace, after the editor has
-initialised, loaded the last level and rendered `--python-delay-frames` frames — so the viewport,
+initialised, loaded the start level and rendered `--python-delay-frames` frames — so the viewport,
 the asset cache and the Lua VM are all live by the time your code runs.
 
 Inside the script, `__file__` is the script's own path and `sys.argv` is

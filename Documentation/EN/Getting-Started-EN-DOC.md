@@ -631,7 +631,10 @@ you set.
 > `project_thumbnail_high.png` (512 × 512) into the project folder when it shuts
 > down, capturing the last frame of the viewport. They are what you see in the row
 > and in the details panel — so a project only gets a picture after you have opened
-> and closed it once. Deleting the files simply removes the preview.
+> and closed it once. Deleting the files simply removes the preview. To show pictures
+> of your own, or to keep a capture you like, turn off **Thumbnails AutoSave** in the
+> editor's [Preferences → Editor](Editor-EN-DOC.md#104-editor): the editor then leaves
+> both files alone, and you can replace them with your own PNGs under the same names.
 
 **Selecting.**
 
@@ -716,7 +719,7 @@ The **New Project** tab creates a fresh project folder. You provide:
 | **Description** | Optional free-text blurb stored in the manifest (and editable later from the details panel). |
 | **License** | The project's license/EULA — see the table below. *Proprietary* additionally requires a **Studio / Copyright Holder** name, and the launcher refuses to create the project without it. |
 | **Location** | Parent folder the project is created in; **Browse…** opens a native folder picker. Defaults to `~/IceBoxProjects`. |
-| **Include Starter Content** + **Select Example** | Optionally seed the project with one of the bundled examples. Every example declares which scripting mode it is written for. **Refresh Catalog** re-reads `Examples.json` without restarting. |
+| **Include Starter Content** + **Select Example** | Optionally start the project from one of the bundled examples: its files go straight into the project's `Content/`, and the project opens on the example's start level. Every example declares which scripting mode it is written for. **Refresh Catalog** re-reads `Examples.json` without restarting. |
 | **Include Plugins / Include Mods** | Tick engine-level packages to copy into the new project. Each row shows the package icon, name and version, with its description as a tooltip. |
 | **Scripting Mode** | **Code Scripting** (gameplay logic in Lua, text editor) or **Visual Scripting** (node-graph, no coding required). |
 
@@ -727,7 +730,12 @@ out — so a Lua example can never be dropped into a Visual Scripting project, o
 other way round. The greyed-out radio button explains why in its tooltip, and a
 warning line repeats it under the choice. Examples that work with both modes leave
 the choice to you, and unticking **Include Starter Content** frees the choice again.
-Picking an example also **auto-ticks** the plugins and mods it declares.
+Picking an example also **auto-ticks** the plugins and mods it declares, and picking
+another one (or unticking **Include Starter Content**) unticks them again — unless you
+changed those ticks yourself. When the project is created, the packages the example
+declares are also switched on in its `Config/Plugins.json` / `Config/Mods.json`, so the
+example starts with them working. A package you tick yourself is only copied in: turn it
+on in the editor under `Tools → Plugins & Mods`.
 
 **The details panel.** With an example selected, the panel on the right of the tab
 shows its **preview image** (letterboxed, never stretched), name, mode badge,
@@ -803,8 +811,13 @@ Pressing **Create Project** makes the launcher:
 1. Refuse to continue if the target folder already exists, or if *Proprietary* was
    chosen without a studio name.
 2. Create `<Location>/<Name>/` with `Content/` and `Config/` inside it.
-3. Copy the chosen example into `Content/Examples/<Example>/` (the folder name is
-   validated first — a catalog entry can never escape `Content/Examples`).
+3. Copy the contents of the chosen example straight into `Content/`, as if you had
+   dropped the example's assets into an empty project: its `Levels/`, `Art/`,
+   `Scripts/`… become `Content/Levels/`, `Content/Art/`, `Content/Scripts/`… On the way,
+   references to the example's install location are rewritten to match —
+   `Content/Examples/<Example>/…` becomes `Content/…`, and `Content.Examples.<Example>.…`
+   in a Lua `require` becomes `Content.…`. Only the catalog's preview image stays
+   behind, and the example in the install folder is left untouched.
 4. Write `Config/Engine.json` seeding the project's editor language, font name,
    font size and font color from your current preferences, plus
    `Rendering.RenderBackend` — probed right there by walking this machine's renderer
@@ -812,7 +825,9 @@ Pressing **Create Project** makes the launcher:
    a generic default.
 5. Copy the ticked plugins and mods into `Plugins/` and `Mods/`.
 6. Write `LICENSE.txt` for every license except *None*.
-7. Write the `<Name>.iceproject` manifest.
+7. Write the `<Name>.iceproject` manifest. A project made from an example gets the
+   example's `StartLevel` as its fixed start level, so the editor opens on that level and
+   every build starts there.
 8. Add the project to **My Projects** and **open it in the editor straight away** —
    the launcher exits as it hands over, exactly as it does for an existing project
    ([3.7](#37-opening-a-project-the-hand-off-to-the-editor)). When you next start the
@@ -824,7 +839,8 @@ The manifest the launcher writes looks like this:
 {
     "Name": "MyNewGame",
     "EngineVersion": "1.0.1",
-    "StartScene": "",
+    "StartScene": "Content/Levels/L_Frost_Title.icemap",
+    "UseCurrentLevelAsStartScene": false,
     "ScriptingMode": "Code",
     "Description": "…",
     "LicenseType": "MIT",
@@ -832,12 +848,17 @@ The manifest the launcher writes looks like this:
     "LicenseFile": "LICENSE.txt",
     "LicenseStudio": "…",
     "Plugins": [],
-    "Mods": ["PlatformerCrates"]
+    "Mods": ["PlatformerTimeAttack"]
 }
 ```
 
 `Description`, `LicenseFile` and `LicenseStudio` are only written when they have a
-value. The editor adds its own keys to the same file as you work.
+value. `StartScene` and `UseCurrentLevelAsStartScene` hold the project's start level. The
+manifest above belongs to a project made from the Platformer example, so the example's title
+level is fixed (`false`). A project made without an example gets `"StartScene": ""` and
+`true`: the editor then keeps `StartScene` on the level you have open. Either way you can
+change it in [Preferences → Engine](Editor-EN-DOC.md#101-engine). The editor adds its own
+keys to the same file as you work.
 
 #### The examples catalog — `Content/Examples/Examples.json`
 
@@ -850,18 +871,19 @@ sits directly inside `Content/Examples/`:
     "Examples": [
         {
             "Folder": "Platformer",
-            "Name": "2D Platformer",
+            "Name": "2D Platformer: Frost Peaks",
             "NameKey": "example_platformer_name",
-            "Description": "A ready-to-play 2D platformer: tilemap level, animated player…",
+            "Description": "A complete platformer to learn from. In Frost Peaks every zone teaches…",
             "DescriptionKey": "example_platformer_description",
             "Scripting": "Code",
             "Platforms": ["Windows", "Linux", "macOS", "Web"],
             "Image": "platformer_example_thumbnail.png",
+            "StartLevel": "Levels/L_Frost_Title.icemap",
             "Author": "IceBoxCrew",
-            "Version": "1.0.0",
-            "Tags": ["2D", "Platformer", "Tilemap", "Lua"],
+            "Version": "2.0.0",
+            "Tags": ["2D", "Platformer", "Tilemap", "Lua", "Tutorial"],
             "Plugins": [],
-            "Mods": ["PlatformerCrates"],
+            "Mods": ["PlatformerTimeAttack"],
             "SortOrder": 0,
             "Hidden": false
         }
@@ -878,7 +900,8 @@ sits directly inside `Content/Examples/`:
 | `DescriptionKey` | Optional localization key for the description, same rule as `NameKey`. |
 | `Scripting` | `"Code"`, `"Visual"`, or `"Both"` (an array such as `["Code", "Visual"]` works too). This is what locks **Scripting Mode**. `ScriptingMode` / `ScriptingModes` are accepted as aliases. Missing or unrecognized ⇒ both modes allowed, with a note in the log. |
 | `Platforms` | Target platforms the example is verified for: any of `Windows`, `Linux`, `macOS`, `Android`, `iOS`, `Web`, `Xbox`, plus the shorthands `"All"`, `"Desktop"`, `"Mobile"`, `"Console"`. `Platform` / `SupportedPlatforms` are accepted as aliases. Missing ⇒ all. Shown as badges with the platform you are running highlighted; if it is not listed, the panel says so. |
-| `Image` | Preview image, relative to the example folder — or, failing that, to `Content/Examples/` itself (`png`, `jpg`, `jpeg`, `bmp`, `tga`). It must stay inside the examples tree: absolute paths and `..` are rejected. `Preview` is accepted as an alias. |
+| `Image` | Preview image, relative to the example folder — or, failing that, to `Content/Examples/` itself (`png`, `jpg`, `jpeg`, `bmp`, `tga`). It must stay inside the examples tree: absolute paths and `..` are rejected. `Preview` is accepted as an alias. The image is for the launcher only and is not copied into new projects. |
+| `StartLevel` | The level a project made from this example opens on and builds from, relative to the example folder: `Levels/L_Frost_Title.icemap` ends up in the new project's manifest as `"StartScene": "Content/Levels/L_Frost_Title.icemap"` with `"UseCurrentLevelAsStartScene": false`. It must be an `.icemap` inside the example folder. Missing or invalid ⇒ the example's only level when it has exactly one; with several levels the new project gets no fixed start level, and the log says so. |
 | `Author`, `Version`, `Tags` | Free-text metadata for the details panel. |
 | `Plugins`, `Mods` | Engine-level packages (folder names under `Plugins/` and `Mods/`) that get ticked automatically when the example is picked. A single string works as well as an array. |
 | `SortOrder` | Position in the list, lowest first. Defaults to the entry's position in the file. |
@@ -920,25 +943,49 @@ How the launcher reads the file:
 A stock installation ships two examples, one per scripting mode. Both are verified
 on Windows, Linux, macOS and Web, and both take their names and descriptions from
 `Config/Languages/*.json` through `NameKey` / `DescriptionKey`, so the launcher
-shows them in your own language.
+shows them in your own language. They are small complete games made to be read:
+signs inside the level explain what each part demonstrates and name the script or
+graph to open. The games themselves speak English and Russian (switch in their
+menus); every asset, sound and font they use lives inside their own folder, and that
+folder is exactly what a new project gets in its `Content/`.
 
-**2D Platformer** (`Content/Examples/Platformer`, Code Scripting) is a tilemap level
-with an animated player driven by a Lua character controller, a follow camera and a
-bitmap-font HUD. Its catalog entry declares the **PlatformerCrates** mod, so ticking
-the example also ticks that mod, which adds collectible crates and a score counter
-on top. The mod doubles as a reference for asset bundling, runtime entity spawning
-and level lifecycle hooks — see [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
+**2D Platformer: Frost Peaks** (`Content/Examples/Platformer` in the install, Code
+Scripting). A project made from it opens on `Content/Levels/L_Frost_Title.icemap`: press
+Play — the title screen leads into `L_Frost_Peaks.icemap`, a snowy climb that introduces
+one mechanic per zone: running and jumping (with coyote time, jump buffering and
+variable jump height), crystals, spikes, lantern checkpoints, slimes you stomp, one-way
+planks, a moving platform and a lift, a spring, falling icicles, breakable ice, a key
+with its locked door and the summit flag. Around the level are a HUD, pause, settings
+(music, effects and language, saved to disk) and victory screens, parallax mountains,
+snow and particle effects, music and sound. All logic is commented Lua: one class per
+object under `Content/Classes/`, the widget scripts under `Content/UI/`, and
+`Content/Scripts/LU_Frost_Game.lua`, the shared module that holds the game-state keys,
+events and helpers. Its catalog entry declares the **PlatformerTimeAttack** mod, so
+picking the example also ticks that mod, and the new project starts with it switched on
+(`Tools → Plugins & Mods`, tab **Mods (Lua)**, turns it off). The mod adds a run timer,
+checkpoint splits and a saved best time while touching none of the example's files — it
+only listens to the events and reads the game values the example publishes. See
+[Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
 
-**2D Top-Down** (`Content/Examples/TopDown`, Visual Scripting) is a tilemap maze with
-solid walls, zero gravity and a character you walk around with WASD. Nothing in it is
-hand-written Lua: `CL_TopDownPlayerActor`, `CL_TopDownMapActor` and the level script
-are all node graphs, so it is the place to start reading if you picked Visual
-Scripting. The player graph is the whole game loop in one **On Update** chain — read
-the two axes, scale them by the `MoveSpeed` graph variable, push them into **Set
-Velocity**, feed the animator's `Speed` parameter and flip the sprite through a
-**Branch** — and the three comment boxes over it label each step. It reuses the
-platformer's placeholder art (same player sheet and tileset), so the two examples can
-sit side by side in a project without clashing.
+**2D Top-Down: Ember Crypt** (`Content/Examples/TopDown` in the install, Visual
+Scripting). A project made from it opens on `Content/Levels/L_Crypt.icemap`: press Play.
+Nothing in it is hand-written Lua: all the logic of its classes, of the five widgets and
+of the level script lives in node graphs split into numbered comment boxes, so it is the
+place to start reading if you picked Visual Scripting. The level renders **Lit** (see
+its World Settings): torches and braziers are point lights that a graph makes flicker
+and the walls cast real shadows, while the floor and the walls sit on two tilemap layers
+so the lit wall faces read in front of the darker floor. Along the way the graphs show a
+2D input action for walking, a sword swing that calls `TakeHit` through the
+`CryptHittable` interface, slimes that chase or wander, chests whose **Reward** is an
+instance-editable variable picked apart by a **Switch on String**, one door class
+configured per instance (`RequiredKey`, `Tint`), braziers that **Emit** an event the
+gate listens to with **On**, Y-sorting, a pixel-perfect camera, and title, pause,
+game-over and victory screens.
+
+A project made from either example has its title level (`L_Frost_Title.icemap` or
+`L_Crypt.icemap`) fixed as the start level, so every build starts on it whatever level
+you are editing. To let the start level follow the level you have open instead, tick
+**Use Current Level** in [Preferences → Engine](Editor-EN-DOC.md#101-engine).
 
 ### 3.4 Plugins & Mods
 
@@ -1058,10 +1105,12 @@ loads: the engine logo, the project name, a progress bar with a percentage, *Ste
 M*, and the current stage — *Loading editor…*, *Initializing renderer…*, *Compiling
 shaders…* (with a running *Shaders ready* count), *Initializing engine systems…*,
 *Initializing scripting…* (only in editors with Python scripting), *Loading level
-<name>…* and *Preparing workspace…*. Keyboard, mouse, touch and pen input is ignored
-until the splash fades into the editor, so nothing you press while it loads lands in a
-half-built workspace. On Android, where the launcher and the editor are one app, the
-hand-off happens inside that app and the splash simply continues.
+<name>…* and *Preparing workspace…*. The level it loads is the project's start level — the
+level you had open last time, or the fixed one picked in
+[Preferences → Engine](Editor-EN-DOC.md#101-engine). Keyboard, mouse, touch and
+pen input is ignored until the splash fades into the editor, so nothing you press while it
+loads lands in a half-built workspace. On Android, where the launcher and the editor are
+one app, the hand-off happens inside that app and the splash simply continues.
 
 ---
 
@@ -1252,10 +1301,15 @@ Right-click the project → **Manage Plugins & Mods…**, tick or untick package
 the project.
 
 **Authoring your own example.**
-1. Create `Content/Examples/<YourExample>/` in the install folder and put the
-   project content in it.
+1. Create `Content/Examples/<YourExample>/` in the install folder and put in it
+   everything a new project should start with in its `Content/` — the launcher copies
+   only this folder. Paths inside the files may already be the project's own
+   (`Content/Levels/…`, as when you copy in the `Content/` of a project you built the
+   example in), or point at the install location (`Content/Examples/<YourExample>/…`,
+   `Content.Examples.<YourExample>.…` in a Lua `require`), which the launcher rewrites
+   to `Content/…` while copying. Write paths with forward slashes, as the editor does.
 2. Add an entry to `Content/Examples/Examples.json` with at least `Folder`, and
-   ideally `Name`, `Description`, `Scripting`, `Platforms` and `Image`.
+   ideally `Name`, `Description`, `Scripting`, `Platforms`, `Image` and `StartLevel`.
 3. Drop a `preview.png` in the folder, or point `Image` at one.
 4. In the launcher's **New Project** tab, tick **Include Starter Content** and press
    **Refresh Catalog** — your example appears without a restart. Anything the
@@ -1321,13 +1375,13 @@ reports.
 
 | Path | What it holds |
 | ---- | ------------- |
-| `<Name>.iceproject` | The project manifest — name, engine version, scripting mode, description, license, plugin and mod lists. |
+| `<Name>.iceproject` | The project manifest — name, engine version, start level, scripting mode, description, license, plugin and mod lists. |
 | `Config/Engine.json` | Per-project editor and rendering settings, seeded from your preferences and from the renderer probe at creation. |
 | `Config/Editor.json`, `Config/CollisionGroups.json`, `imgui.ini` | The editor's other per-project state — open panels and asset editors, Build Game settings, collision groups, the dock layout ([Editor 2.3](Editor-EN-DOC.md#23-panel-persistence)). |
-| `Content/`, `Content/Examples/<Example>/` | Project content, including the copied starter example. |
+| `Content/` | Project content, including the files of the starter example the project was made from. |
 | `Plugins/`, `Mods/` | Packages copied in by the launcher. |
 | `LICENSE.txt` | Written at creation for every license except *None*. |
-| `project_thumbnail.png`, `project_thumbnail_high.png` | 256 × 256 and 512 × 512 viewport snapshots written by the editor on exit; used as the launcher preview. |
+| `project_thumbnail.png`, `project_thumbnail_high.png` | 256 × 256 and 512 × 512 viewport snapshots written by the editor on exit while **Thumbnails AutoSave** is on ([Editor 10.4](Editor-EN-DOC.md#104-editor)); used as the launcher preview. |
 | `Saved/` | Working data the editor keeps for the project: the asset redirectors in `Saved/Redirectors/` ([Assets 2.3](Assets-EN-DOC.md#23-asset-references--redirectors) — keep them), the shader and cook caches, cooked content and the editor's own crash reports. The caches and cooked content are rebuilt whenever they are missing. |
 | `Tools/Helpers/Profiler/` | Traces recorded with the Advanced Profiler ([Profiling 4.9](Profiling-And-Building-EN-DOC.md#49-where-traces-live--chrome-trace-export)). |
 | `Tools/PythonScripts/` | Your Python tool scripts, with `Startup/`, `Lib/` and `Modules/` — created by **Open Scripts Folder** in the Python Console's **Run Python Script** menu. Editor-only, never shipped with the game ([Python API → Tool script folders](PythonAPI-EN-DOC.md#tool-script-folders)). |
@@ -1362,7 +1416,18 @@ are not pinned. Pinned projects are always held at the top.
 
 **My project has no picture in the list.**
 Thumbnails are written by the **editor** when it closes. Open the project once and
-close it, and `project_thumbnail.png` appears in the project folder.
+close it, and `project_thumbnail.png` appears in the project folder. Nothing is written
+while **Thumbnails AutoSave** is turned off in the editor's
+[Preferences → Editor](Editor-EN-DOC.md#104-editor).
+
+**I want my own picture for a project.**
+Turn off **Thumbnails AutoSave** in the editor's
+[Preferences → Editor](Editor-EN-DOC.md#104-editor) and press **Save**, then put your
+PNG images into the project folder as `project_thumbnail.png` (shown in the project
+row) and `project_thumbnail_high.png` (shown in the details panel). The editor's own
+captures are 256 × 256 and 512 × 512; the launcher scales whatever it finds to fit. The
+editor no longer overwrites them when it closes, and the launcher shows them the next
+time it starts.
 
 **My example doesn't show up in New Project.**
 The folder has to sit directly inside `<install>/Content/Examples/` and the entry's

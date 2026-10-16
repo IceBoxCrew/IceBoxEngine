@@ -3773,7 +3773,7 @@ es = editor.get_editor_settings()
 #     'viewport_height': 720.0,
 #     'is_viewport_focused': True,
 #     'is_viewport_hovered': True,
-#     'last_opened_level': 'Content/Levels/main.icemap',
+#     'start_level': 'Content/Levels/main.icemap',
 #     'current_level_path': 'Content/Levels/main.icemap',
 #     'is_level_dirty': False,
 #     'grid_size': 32.0,
@@ -3782,6 +3782,8 @@ es = editor.get_editor_settings()
 ```
 
 `show_grid` — фактическая видимость сетки главного вьюпорта: настройка **Показывать сетку вьюпорта** И тумблер сетки на тулбаре. Значение `False`, если выключено хотя бы одно из них. У классового редактора свой тумблер сетки, он хранится внутри ассета `.ice_class` и здесь не отражается.
+
+`start_level` — уровень, с которого стартуют сборки игры: открытый уровень (тот же, что `current_level_path`), пока включено **Использовать текущий уровень**, иначе — уровень, выбранный в [Редактор → Настройки → Движок → Стартовый уровень](Editor-RU-DOC.md#101-движок). Он хранится в `.iceproject` проекта (`StartScene`), и редактор открывает его при открытии проекта.
 
 #### `editor.set_editor_settings(data)` → `bool`
 
@@ -3802,7 +3804,7 @@ editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
 ```
 
 Остальные ключи, возвращаемые `get_editor_settings()` (`grid_size`, `snap_to_grid`, размер вьюпорта,
-флаги фокуса, `last_opened_level`), доступны **только для чтения** — ими владеют панель настроек и
+флаги фокуса, `start_level`), доступны **только для чтения** — ими владеют панель настроек и
 вьюпорт. Постоянные значения меняйте через конфигурацию проекта:
 
 ```python
@@ -6183,7 +6185,7 @@ print('Скрипты Lua в порядке' if not broken else f'{len(broken)} 
 | `project.scripting_mode()` | `str` | `'code'` или `'visual'` |
 | `project.get_levels()` | `list[str]` | Все `.icemap` проекта |
 | `project.get_locales()` | `list[str]` | Коды языков в `Config/Languages` |
-| `project.info()` | `dict` | Всё вышеперечисленное плюс текущий уровень и его флаг изменений |
+| `project.info()` | `dict` | Всё вышеперечисленное плюс текущий уровень, его флаг изменений и стартовый уровень проекта (`start_level`) |
 
 ```python
 info = project.info()
@@ -6888,7 +6890,7 @@ IceBoxEngine[.exe] [<путь проекта>] [флаги]
 | `--quit-after-python` | — | Закрыть редактор, когда очередь скриптов отработает |
 
 Скрипты выполняются **в порядке указания**, в глобальном пространстве (`__main__`), после того как
-редактор инициализировался, загрузил последний уровень и отрисовал `--python-delay-frames` кадров —
+редактор инициализировался, загрузил стартовый уровень и отрисовал `--python-delay-frames` кадров —
 то есть вьюпорт, кэш ассетов и ВМ Lua уже живые к моменту запуска вашего кода.
 
 Внутри скрипта `__file__` — путь самого скрипта, а `sys.argv` — это
