@@ -41,6 +41,7 @@
    - 2.3 [Panel persistence](#23-panel-persistence)
    - 2.4 [Live content watching](#24-live-content-watching)
    - 2.5 [Language, fonts & RTL layout](#25-language-fonts--rtl-layout)
+   - 2.6 [Text fields & the right-click menu](#26-text-fields--the-right-click-menu)
 3. [The main menu bar](#3-the-main-menu-bar)
    - 3.1 [File](#31-file)
    - 3.2 [Edit](#32-edit)
@@ -263,6 +264,53 @@ Portuguese, Japanese, French, German, Italian, Polish, Hebrew and Korean.
 Font file, size and colour, plus the UI scale (1×–4×, or `0.40×`–`2.00×` on Android), are also on the
 [Editor](#104-editor) tab. Changing the font or the language rebuilds the font
 atlas.
+
+### 2.6 Text fields & the right-click menu
+
+Right-clicking any text field opens a menu with the usual editing commands. It works in every
+field of every panel, dialog and editor — names, paths, search boxes, multi-line text, password
+fields, number boxes, and a drag or slider field while you are typing a value into it — and in
+every code editor: the **Level Script**, the **Lua Script Editor**, the code editors of the
+**Class Editor** and the **Widget Editor**, the per-instance Lua override in **Properties**, the
+**Python Console**, text notes and the source view of the **Lua Script Debugger**. Text fields
+drawn by plugins get it too.
+
+| Item | Shortcut | Available when |
+| ---- | -------- | -------------- |
+| **Undo** | `Ctrl+Z` | the field has an edit to undo |
+| **Redo** | `Ctrl+Y` | an undone edit can be applied again |
+| **Cut** | `Ctrl+X` | text is selected and the field can be edited |
+| **Copy** | `Ctrl+C` | text is selected |
+| **Paste** | `Ctrl+V` | the clipboard holds text and the field can be edited |
+| **Delete** | `Delete` | text is selected and the field can be edited |
+| **Select All** | `Ctrl+A` | the field is not empty |
+
+* Commands that do not apply are greyed out: a read-only field offers only **Copy** and
+  **Select All**, and a password field never offers **Cut** or **Copy**.
+* Every item does exactly what its shortcut does, with the same rules: a numeric field drops the
+  letters from pasted text, a single-line field turns pasted line breaks into spaces, a field
+  with a length limit takes only what fits, and each change is one more step for **Undo**.
+* Right-clicking the field you are typing in keeps its caret and selection — select a part of
+  the text, then right-click it to copy or cut just that part. Right-clicking a field you are not
+  editing first activates it the way a left click does: the caret lands where you clicked, and a
+  numeric field selects its whole value. In a code editor the caret and the selection stay where
+  they are, and the editor takes the keyboard focus if it did not have it.
+* While the menu is open the field stays active: the selection stays highlighted, and a value
+  you are editing in place — an inline rename, for example — is neither confirmed nor cancelled
+  by opening the menu.
+* `↑` / `↓` (and `Home` / `End`) move the highlight, `Enter` runs the highlighted item, and `Esc`
+  closes the menu without touching the text or the dialog around it. Typing, or a shortcut such
+  as `Ctrl+V`, closes the menu and goes to the field as usual; a click or a wheel scroll outside
+  the menu closes it and then works as it normally would.
+* Where an element has its own right-click menu — a colour picker, a node in a graph editor — that
+  menu opens instead.
+* On macOS text fields use `Cmd` for these shortcuts and the menu lists them that way; the code
+  editors keep `Ctrl`.
+
+The launcher's text fields — including the license key box — have the same menu (see
+[Getting Started](Getting-Started-EN-DOC.md#31-the-window-at-a-glance)). On the Android editor
+the touch menu with **Cut**, **Copy**, **Paste** and **Select All** takes its place — see
+[The editor on Android](#the-editor-on-android).
 
 ---
 
@@ -1991,6 +2039,17 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+R` | Compile scripts + refresh assets |
 | `Delete` | Delete selected |
+
+**Text fields and code editors** (see [2.6](#26-text-fields--the-right-click-menu))
+
+| Shortcut | Action |
+| -------- | ------ |
+| `RMB` | Menu: Undo, Redo, Cut, Copy, Paste, Delete, Select All |
+| `Ctrl+X` / `Ctrl+C` / `Ctrl+V` | Cut / copy / paste text |
+| `Ctrl+A` | Select all text |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo your edits of the text |
+| `Delete` | Delete the selected text, or the character after the caret |
+| `↑` / `↓`, `Enter`, `Esc` | Move through the right-click menu, run the highlighted item, close it |
 
 **Selection**
 

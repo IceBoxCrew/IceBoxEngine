@@ -468,6 +468,12 @@ void OnEditorInit(const IceBox::EditorPluginContext& ctx) override {
 After that, your `OnEditorToolsMenu` and `OnEditorUI` can call ImGui normally and your
 widgets render inside the editor.
 
+Text fields you draw with `ImGui::InputText*` get the editor's right-click menu on their own —
+**Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Delete** and **Select All** (see
+[Editor → Text fields & the right-click menu](Editor-EN-DOC.md#26-text-fields--the-right-click-menu));
+there is nothing to call. If your field has a right-click menu of its own, that one opens
+instead.
+
 ### 3.8 Entry points: dynamic vs static
 
 A plugin exposes a factory pair, `CreatePlugin()` / `DestroyPlugin()`. The

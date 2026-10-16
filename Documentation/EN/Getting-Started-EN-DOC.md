@@ -398,7 +398,7 @@ hub:
 | Element | What it does |
 | ------- | ------------ |
 | **License key** | A multi-line box. Paste the key exactly as you received it — spaces, line breaks and the `ICEB-` prefix are all tolerated, and lookalike characters (`I`/`1`, `O`/`0`) are corrected automatically. |
-| **Paste** | Pastes the clipboard into the box. `Ctrl+V` inside the box works too. |
+| **Paste** | Pastes the clipboard into the box. `Ctrl+V` or right-click → **Paste** inside the box works too. |
 | **Clear** | Empties the box. |
 | Drag & drop | Dropping a key file (for example `mykey.icekey`) anywhere on the window loads its contents into the box. |
 | **Device ID** | The identifier of *this* computer, shown as `XXXX-XXXX-XXXX-XXXX`. |
@@ -543,6 +543,12 @@ launcher, or fails to start, the launcher says so instead of failing silently.
 You can **drag and drop** a project folder onto the window from anywhere in the
 launcher to add it to your list; dropping a file uses the folder that contains it,
 and a successful drop switches you to **My Projects**.
+
+Every text field in the launcher — the search box, a project's name, description and
+location, the Rename / Move / Duplicate dialogs and the license key box — has the
+same right-click menu as the editor: **Undo**, **Redo**, **Cut**, **Copy**, **Paste**,
+**Delete** and **Select All** (see
+[Editor → Text fields & the right-click menu](Editor-EN-DOC.md#26-text-fields--the-right-click-menu)).
 
 ### 3.2 My Projects
 
