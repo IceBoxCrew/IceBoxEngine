@@ -159,7 +159,7 @@ IceBoxEngine состоит из нескольких компонентов:
 
 | | |
 |-|-|
-| **ОС** | iOS 14.0+ (iPhone и iPad, arm64) |
+| **ОС** | iOS 15.0+ (iPhone и iPad, arm64) |
 | **GPU** | Metal (нативный рендерер Metal, либо рендеринг через MoltenVK) |
 
 ### Runtime — Android

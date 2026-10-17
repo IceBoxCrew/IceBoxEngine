@@ -115,7 +115,7 @@ font/theme preferences and its crash reporter, so they feel like one product.
 | -------- | --------------------- |
 | **Windows, Linux** | The same OS versions and graphics APIs as the editor above |
 | **macOS** | macOS 11.0 or newer (a game can raise it with its **Deployment Target**); Metal |
-| **iOS** | iOS 14.0 or newer (iPhone and iPad, arm64); Metal — native or through MoltenVK |
+| **iOS** | iOS 15.0 or newer (iPhone and iPad, arm64); Metal — native or through MoltenVK |
 | **Android** | Android 7.0 (API 24) or newer (a game can raise its minimum SDK); OpenGL ES 3.2 / 3.0 or Vulkan 1.1–1.4 |
 | **Web** | A modern browser with WebGL 2.0 or WebGPU ([wasm64](Profiling-And-Building-EN-DOC.md#84-web) builds need Chrome/Edge 133+ or Firefox 134+) |
 | **Xbox** | Xbox Series X\|S and Xbox One, or Windows 10+ x64 through the Microsoft Store / Xbox app; Direct3D 12 |

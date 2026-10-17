@@ -117,7 +117,7 @@ IceBoxEngine поставляется в виде **трёх отдельных 
 | --------- | ---------------- |
 | **Windows, Linux** | Те же версии ОС и графические API, что и для редактора выше |
 | **macOS** | macOS 11.0 или новее (игра может поднять порог своим **Deployment Target**); Metal |
-| **iOS** | iOS 14.0 или новее (iPhone и iPad, arm64); Metal — нативный или через MoltenVK |
+| **iOS** | iOS 15.0 или новее (iPhone и iPad, arm64); Metal — нативный или через MoltenVK |
 | **Android** | Android 7.0 (API 24) или новее (игра может поднять свой минимальный SDK); OpenGL ES 3.2 / 3.0 или Vulkan 1.1–1.4 |
 | **Web** | Современный браузер с WebGL 2.0 или WebGPU (сборкам [wasm64](Profiling-And-Building-RU-DOC.md#84-web) нужны Chrome/Edge 133+ или Firefox 134+) |
 | **Xbox** | Xbox Series X\|S и Xbox One либо Windows 10+ x64 через Microsoft Store / приложение Xbox; Direct3D 12 |
