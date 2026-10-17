@@ -29678,28 +29678,45 @@ XboxMultiplayer.GetConnectivityLevel() -> string
 недавних игроках — требование сертификации Xbox для любого тайтла с онлайном: вызывайте его, когда
 игроки заходят и выходят, и один раз сбрасывайте по окончании матча.
 
-**Заход из гайда.** Если игрок принимает приглашение при закрытой игре, тайтл запускается вместе с
-приглашением; если игра уже запущена, приглашение приходит событием. И то и другое попадает в одно
-место:
+**Заход по приглашению.** Платформа передаёт приглашение игре в одном из двух состояний — каждое
+приходит событием `OnInvite`, где `payload` — URI приглашения:
+
+- `"PendingInvite"` — игрок получил приглашение во время игры и ещё не ответил на него. Покажите
+  свой запрос; если игрок согласен, вызовите `AcceptInvite(payload)`. После этого платформа
+  сообщит о том же приглашении ещё раз — уже как `"AcceptedInvite"`.
+- `"AcceptedInvite"` — игрок принял приглашение: в вашем запросе или прямо из гайда Xbox.
+  Подключайтесь к сессии, на которую оно указывает.
+
+Если игрок принимает приглашение при закрытой игре, тайтл запускается вместе с ним, и событие
+приходит раньше, чем ваши скрипты успели зарегистрировать `OnInvite`. Для этого и есть
+`TakePendingInvite()`: он возвращает URI последнего ещё не забранного приглашения и сразу его
+очищает — второй вызов не подключит вас повторно.
+
+`GetLastInvite()` описывает последнее приглашение: `senderXuid` (кто его отправил), `invitedXuid`
+(локальный игрок, которому оно адресовано), `connectionString` (та, что отправитель опубликовал
+через `SetActivity` или `SendInvites`) и `accepted` (`true`, когда игрок его уже принял). Геймертега
+в самом приглашении нет — узнать отправителя можно через `Xbox.QueryProfile(invite.senderXuid)`.
 
 ```lua
-XboxMultiplayer.OnInvite(function(success, operation, sender, payload)
-    if operation == "InviteReceived" then
-        local invite = XboxMultiplayer.GetLastInvite()
-        AskToJoin(invite.senderGamertag, invite.connectionString)
-    elseif operation == "AcceptedInvite" or operation == "PendingInvite" then
-        XboxMultiplayer.AcceptInvite(payload)
+local function HandleInvite()
+    local uri = XboxMultiplayer.TakePendingInvite()
+    if uri == "" then return end
+    local invite = XboxMultiplayer.GetLastInvite()
+    if invite.accepted then
+        JoinGame(invite.connectionString)
+    elseif AskToAcceptInvite(invite.senderXuid) then
+        XboxMultiplayer.AcceptInvite(uri)
     end
+end
+
+XboxMultiplayer.OnInvite(function(success, operation)
+    if operation == "PendingInvite" or operation == "AcceptedInvite" then HandleInvite() end
 end)
 
 function OnLevelStart()
-    local pending = XboxMultiplayer.TakePendingInvite()
-    if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+    HandleInvite()
 end
 ```
-
-`TakePendingInvite()` возвращает приглашение, с которым игру запустили, и сразу его очищает —
-второй вызов не подключит вас повторно.
 
 **Сеть на консоли.** `GetPreferredLocalUdpPort()` возвращает UDP-порт, который консоль
 зарезервировала под мультиплеерный трафик: привязывайте сокет хоста к нему, а не к жёстко
@@ -29799,8 +29816,10 @@ function OnLevelStart()
             Xbox.SetPresence(true, "PresenceInMenu")
         end
 
-        local pending = XboxMultiplayer.TakePendingInvite()
-        if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+        if XboxMultiplayer.TakePendingInvite() ~= "" then
+            local invite = XboxMultiplayer.GetLastInvite()
+            if invite.accepted then JoinGame(invite.connectionString) end
+        end
     end)
 
     Xbox.OnLicense(function(success)

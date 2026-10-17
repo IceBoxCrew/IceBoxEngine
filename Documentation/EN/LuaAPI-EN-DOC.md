@@ -29584,28 +29584,45 @@ other consoles running your title, and `GetActivities()` reports each friend's `
 recent players is an Xbox certification requirement for any title with online multiplayer — call
 it as players join and leave, then flush once when the match ends.
 
-**Joining from the guide.** When a player accepts an invite while the game is closed, the title is
-launched with the invite attached; when it is already running, the invite arrives as an event.
-Both land in the same place:
+**Joining from an invite.** The platform hands an invite to the game in one of two states, each as
+an `OnInvite` event whose `payload` is the invite URI:
+
+- `"PendingInvite"` — the player received an invite while playing and has not answered it yet.
+  Show your own prompt; if they accept, call `AcceptInvite(payload)`. The platform then reports
+  the same invite again as `"AcceptedInvite"`.
+- `"AcceptedInvite"` — the player accepted the invite, in your prompt or from the Xbox guide.
+  Join the session it points to.
+
+When the player accepts an invite while the game is closed, the title is launched with it, and the
+invite is reported before your scripts had a chance to register `OnInvite`. `TakePendingInvite()`
+covers that case: it returns the URI of the last invite nobody has taken yet and clears it, so
+calling it twice never joins twice.
+
+`GetLastInvite()` describes the most recent invite: `senderXuid` (who sent it), `invitedXuid`
+(the local player it is meant for), `connectionString` (the one the sender published with
+`SetActivity` or `SendInvites`) and `accepted` (`true` once the player has accepted it). The
+invite itself carries no gamertag — look the sender up with `Xbox.QueryProfile(invite.senderXuid)`.
 
 ```lua
-XboxMultiplayer.OnInvite(function(success, operation, sender, payload)
-    if operation == "InviteReceived" then
-        local invite = XboxMultiplayer.GetLastInvite()
-        AskToJoin(invite.senderGamertag, invite.connectionString)
-    elseif operation == "AcceptedInvite" or operation == "PendingInvite" then
-        XboxMultiplayer.AcceptInvite(payload)
+local function HandleInvite()
+    local uri = XboxMultiplayer.TakePendingInvite()
+    if uri == "" then return end
+    local invite = XboxMultiplayer.GetLastInvite()
+    if invite.accepted then
+        JoinGame(invite.connectionString)
+    elseif AskToAcceptInvite(invite.senderXuid) then
+        XboxMultiplayer.AcceptInvite(uri)
     end
+end
+
+XboxMultiplayer.OnInvite(function(success, operation)
+    if operation == "PendingInvite" or operation == "AcceptedInvite" then HandleInvite() end
 end)
 
 function OnLevelStart()
-    local pending = XboxMultiplayer.TakePendingInvite()
-    if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+    HandleInvite()
 end
 ```
-
-`TakePendingInvite()` returns the invite the game was launched with and clears it, so calling it
-twice never joins twice.
 
 **Networking on a console.** `GetPreferredLocalUdpPort()` returns the UDP port the console has
 reserved for multiplayer traffic — bind your host socket to it instead of a hardcoded port.
@@ -29705,8 +29722,10 @@ function OnLevelStart()
             Xbox.SetPresence(true, "PresenceInMenu")
         end
 
-        local pending = XboxMultiplayer.TakePendingInvite()
-        if pending ~= "" then XboxMultiplayer.AcceptInvite(pending) end
+        if XboxMultiplayer.TakePendingInvite() ~= "" then
+            local invite = XboxMultiplayer.GetLastInvite()
+            if invite.accepted then JoinGame(invite.connectionString) end
+        end
     end)
 
     Xbox.OnLicense(function(success)
