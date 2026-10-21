@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** renders 2D worlds through a modern, backend-agnostic graphics
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —

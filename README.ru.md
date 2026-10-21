@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-1.0.1-brightgreen?style=for-the-badge" alt="Release 1.0.1">
+  <img src="https://img.shields.io/badge/Release-1.0.2-brightgreen?style=for-the-badge" alt="Release 1.0.2">
   <img src="https://img.shields.io/badge/C%2B%2B-26-blue?style=for-the-badge&logo=cplusplus" alt="C++26">
   <img src="https://img.shields.io/badge/CMake-4.3%2B-064F8C?style=for-the-badge&logo=cmake" alt="CMake 4.3+">
   <img src="https://img.shields.io/badge/vcpkg-Managed-purple?style=for-the-badge" alt="vcpkg">
@@ -137,7 +137,7 @@ IceBoxEngine состоит из нескольких компонентов:
 
 ## ✅ Статус проекта
 
-**IceBoxEngine вышел в релиз.** Текущая стадия — **Release 1.0.1**: лаунчер, редактор, апдейтер и рантайм стабильны, и на движке можно собирать и выпускать полноценные коммерческие игры на всех поддерживаемых платформах.
+**IceBoxEngine вышел в релиз.** Текущая стадия — **Release 1.0.2**: лаунчер, редактор, апдейтер и рантайм стабильны, и на движке можно собирать и выпускать полноценные коммерческие игры на всех поддерживаемых платформах. Что изменилось в этом релизе — в [Changelog.txt](Changelog.txt).
 
 Релиз — не значит «закончен». Движок таким и не бывает: новые возможности, новые инструменты и постоянные улучшения продолжают выходить, и каждое из них приходит к вам бесплатным обновлением. На версии 1.0 изменилось другое — то, как они приходят: как дополнения поверх стабильной основы, а не как почва, уходящая из-под проекта, который вы уже на нём строите.
 

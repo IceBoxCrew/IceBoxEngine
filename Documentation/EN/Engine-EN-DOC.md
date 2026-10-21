@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > This document covers the parts of **IceBoxEngine** that live *below* the editor and
 > *beside* the scripting API: how the runtime is put together, how **multiplayer** works
@@ -148,15 +148,25 @@ One iteration of the main loop, in order:
 8. **`Render()`** — the render graphs execute ([Graphics → 3.2](Graphics-EN-DOC.md#32-the-frame-step-by-step)).
    In headless mode this step is replaced by an FX-only update so particle lifetimes still
    expire.
-9. **Input roll-over** — per-frame edge state (*just pressed* / *just released*), scroll
-   and touch deltas are rolled over for the next frame.
-10. **Counters** — entity/component statistics and the profiler are updated.
-11. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
+9. **Level change** — a pending level change — `LoadLevel`, `ReloadLevel`, or
+   `ApplyAsyncLevel` / an async load set to apply itself once its level is ready — is carried
+   out here, after the render step: the old level ends (`OnDestroy`, `OnLevelEnd`), the new
+   one is loaded, its World Settings rendering override is applied and it starts
+   (`OnLevelStart`, `OnCreate`). The frame that asked for the change is therefore still shown,
+   and the new level is first drawn by the next frame, after its first full `Update()` —
+   scripts, widgets (auto-play animations and the widgets embedded in them included), its own
+   camera. It is never shown in its raw, as-saved state. Input roll-over and networking run
+   after this step, so they already belong to the new level. The step shows up in the
+   [Profiler](Profiling-And-Building-EN-DOC.md#43-cpu-tab) as `LevelChange`.
+10. **Input roll-over** — per-frame edge state (*just pressed* / *just released*), scroll
+    and touch deltas are rolled over for the next frame.
+11. **Counters** — entity/component statistics and the profiler are updated.
+12. **Networking** — `Network.*`, `Rollback.*` and LAN discovery are ticked, in that
     order, followed by the network profiler in the editor and in Debug builds.
-12. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
+13. **Applied settings** — the editor pushes its live Preferences (FPS target, clipping
     planes, backend, lighting) into the engine; a level's rendering override is re-applied
     if it is enabled.
-13. **Frame pacing** — if a target FPS is set, the loop sleeps the remaining time. On
+14. **Frame pacing** — if a target FPS is set, the loop sleeps the remaining time. On
     desktop it sleeps to within ~1.5 ms and then spins to hit the deadline precisely; on
     Android and iOS it sleeps the whole remainder; on Web the browser owns the cadence and
     the limiter is skipped.
@@ -180,13 +190,19 @@ One iteration of the main loop, in order:
    **unscaled** delta, so slow-motion never changes network rates
    ([5.7](#57-automatic-replication)).
 5. **Widgets** — the UI runtime updates and then processes pointer/text input, with
-   [split-screen routing](#43-cameras-ui--audio-per-player) in standalone builds.
+   [split-screen routing](#43-cameras-ui--audio-per-player) in standalone builds. A widget is
+   updated together with the widgets embedded in its visible SubWidget elements, which load
+   with it. A widget is drawn only once it has been updated, so one that first loads later in
+   the frame — for example when a button callback shows it — appears on the next frame,
+   already initialized, never in its as-saved state.
 6. **Camera** — the primary Camera component (with optional camera lag) or a free (ejected)
-   camera sets the gameplay view. A playing cinema that controls the camera is then blended
-   over it — by its blend-in / blend-out weight, zoom and roll included — and `Cinema.ShakeCamera`
-   is added. The resulting frame is what is rendered, what `Cinema.GetCameraPosition`, the
-   screen ↔ world conversions and the cinema audio listener use. Finally camera shake is
-   decayed for the primary and every split-screen camera.
+   camera sets the gameplay view. When a level starts, the view begins exactly at the
+   camera's target; camera lag only smooths the movement after that. A playing cinema that
+   controls the camera is then blended over the gameplay view — by its blend-in / blend-out
+   weight, zoom and roll included — and `Cinema.ShakeCamera` is added. The resulting frame is
+   what is rendered, what `Cinema.GetCameraPosition`, the screen ↔ world conversions and the
+   cinema audio listener use. Finally camera shake is decayed for the primary and every
+   split-screen camera.
 
    While the editor camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), the free
    camera is the frame as it is: no cinema is blended over it and no shake is added. The
@@ -208,7 +224,7 @@ The scene simulation itself runs these stages, each of which appears by name in 
 | **`Update.Cinema`** | Cinemas advance: event keys and markers fire, actors are posed, dialogue, audio and nested shots update, and cinema hooks are delivered to scripts. It runs after scripts and physics interpolation, so an actor ends the frame exactly where its keys put it. |
 | **`Update.Hierarchy`** | Parent→child transforms are propagated. |
 | **`Update.Audio`** | Listener position(s) and every spatial audio source position — the entity transform combined with the instance's local offset — are pushed to the audio engine ([4.3](#43-cameras-ui--audio-per-player), [6](#6-the-audio-engine)). |
-| **`Update.Video`** | Video players advance on the real (unscaled) frame delta. |
+| **`Update.Video`** | Video players advance. On the FFmpeg platforms and the Xbox consoles a video with sound follows its own sound, so picture and sound stay together through long frames; a video without sound advances on the real (unscaled) frame delta. While the game is paused, while a script is stopped in the Lua debugger and while the app is suspended, videos pause — picture and sound. |
 | **`Update.CinemaTriggers`** | Placed cinemas with **Trigger On Overlap** check their trigger boxes and start when a matching entity enters. |
 | **`Update.Debris`** | Destructible entities spawned during play with **Destruct On Start** break, destruction fragments age, fade and expire (permanent debris is kept), and the live debris cap is enforced. |
 | *(animation)* | Flipbooks, animators and skeletons advance and resolve their frames. Skeletons also simulate their dynamic bones, hair and cloth here ([3.7](#37-ragdolls--bone-physics)). |
@@ -296,6 +312,21 @@ A **debugger stop** is different again: when the
 script in the editor, the frame is frozen in the middle of that script call — nothing
 else in the frame runs until you continue — and the time spent stopped is left out of the
 frame delta, so the game does not jump ahead afterwards.
+
+A **level start** is kept out of gameplay time in the same spirit. The frame that swaps a new
+level in spends most of its time loading it, and that time belongs to no level — the new
+level's clocks (`GetTime`, `GetRealTime`) start from zero when it starts. So the first update
+of a new level reuses the delta of the update before it — a normal frame — instead of the
+length of the frame that loaded the level; the same goes for the start of Play in the editor,
+and at the start of the game the first update advances by nothing. The game delta, the
+unscaled script delta, widgets, timers and the camera of the new level therefore begin with
+a normal frame — a fade-in or an intro animation starts from its first frame instead of
+jumping ahead by the loading time. From the second update on the real frame length counts
+again, including the slow first frame of the new level, so gameplay and cinemas stay in step
+with sounds and videos that started with the level and play in real time. Adaptive Quality
+skips the frame that starts the level and the level's first frame, so loading never lowers
+the quality. Outside the browser build, the profiler, the audio engine and networking still
+see the real frame delta.
 
 ### 2.7 Determinism & random streams
 
@@ -1449,7 +1480,7 @@ underneath.
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
 | **Command system & CVars** | Named commands and console variables — the engine's own plus those your scripts register from Lua — executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
 | **Crash reporter** | Installed by every IceBoxEngine application; it records the active renderer, GPU and driver at startup so a crash report always names them. Reporting options are set per build in [Profiling & Building → Crash Reporter](Profiling-And-Building-EN-DOC.md#73-crash-reporter). |
-| **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web, Media Foundation on the Xbox consoles) that decodes video into a texture the game can draw and streams the audio track alongside it, with play/pause/resume/stop, a **skippable** flag, volume, looping of the whole video or of a chosen part, frame-accurate seeking, playback speed from 0.25× to 4× with or without pitch correction, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
+| **Video playback** | An FFmpeg-based player (AVFoundation on iOS, the browser's `<video>` element on Web, Media Foundation on the Xbox consoles) that decodes video into a texture the game can draw and streams the audio track alongside it, keeping the picture in sync with the sound, with play/pause/resume/stop, a **skippable** flag, volume, looping of the whole video or of a chosen part, frame-accurate seeking, playback speed from 0.25× to 4× with or without pitch correction, progress and duration, and a completion event. Several videos play at once in named **channels**: the main channel is shown full screen, and every channel's texture (`video:<channel>`) can be put on sprites, `Draw` geometry, materials and decals, so a video can play on a TV in the world. The video asset's **Is Post Processed** and **Is Lit** settings decide whether the full-screen picture receives post-processing and scene lighting. |
 | **Localization** | The editor UI and game text are separate: the editor reads `Config/Languages/*.json` ([Editor → 2.5](Editor-EN-DOC.md#25-language-fonts--rtl-layout)), while your game reads a `.ice_localization` asset ([Assets → 4.18](Assets-EN-DOC.md#418-localization-ice_localization)), which hot-reloads when it changes on disk. |
 | **Platform services** | Ads, in-app purchases, Play Games, saved games, analytics, notifications, consent, reviews, deep links, permissions, Bluetooth and Web3 are bridged per platform and exposed to script; see the [Lua API](LuaAPI-EN-DOC.md). |
 

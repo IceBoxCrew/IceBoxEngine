@@ -1,0 +1,116 @@
+================================================================================
+                            IceBoxEngine - CHANGELOG
+================================================================================
+
+Version:           Release 1.0.2 (R-1.0.2)
+Previous release:  Release 1.0.1 (R-1.0.1)
+
+This file lists what changed in this version of IceBoxEngine since the previous
+release: what was added, what was improved and what was fixed in the editor,
+the launcher, the updater and the runtime your games are built with. Every
+feature named here is described in full in the documentation - the
+Documentation folder next to this file, which you can also read in the editor
+under Help > Documentation.
+
+--------------------------------------------------------------------------------
+
+:Added:
+
+- Profiler: CPU and GPU temperatures on macOS - from the SMC on Intel Macs, and
+  from the SMC and the IOHID thermal sensors on Apple silicon.
+- Profiler: CPU and GPU temperatures on Android - from the kernel thermal zones
+  and, on Adreno GPUs, from kgsl - on devices whose SELinux policy lets apps
+  read them.
+- Profiler: Thermal Status and Thermal Load on Android - how hard the system is
+  throttling the device to keep it cool - with a Thermal Load graph. Both are
+  also written into recorded traces.
+- Lua API: Settings.GetThermalStatus(), Settings.GetThermalStatusName(),
+  Settings.IsThermalStatusAvailable(), Settings.GetThermalLoad(),
+  Settings.IsThermalLoadAvailable() and the Settings.THERMAL_* constants, so a
+  game can lower its own quality before Android starts throttling the device.
+  Settings.OnSettingChanged reports status changes with the key "ThermalStatus".
+  The five functions are also available as Visual Script nodes.
+- Profiler: Core Temp and MSI Afterburner are read as temperature sources on
+  Windows while they run, with nothing to configure.
+- Profiler: hovering a temperature that shows N/A explains why it is
+  unavailable on your platform and, where possible, how to make it available.
+
+:Improved:
+
+- Temperature sensors: a hardware monitor started while the editor is already
+  open is picked up within seconds, without a restart, and a source that stops
+  answering is dropped.
+- Temperature sensors: the profiler names the source and the exact sensor it
+  reads - for example "LibreHardwareMonitor: CPU Package" or
+  "hwmon: k10temp Tctl" - and shows the hottest one when several qualify. At
+  startup the log names the source of each temperature, or why there is none.
+- Profiler: Chrome-trace exports now carry CPU and GPU temperature tracks and,
+  on Android, Thermal Status and Thermal Load tracks.
+- AI Helper plugin: its version numbering starts over at 1.0.0 (it showed 3.1.0
+  before); the plugin itself is unchanged.
+
+:Fixed:
+
+- Launcher and editor text fields: clicking an item of the right-click menu
+  (Undo, Redo, Cut, Copy, Paste, Delete, Select All) with the mouse did
+  nothing. The item now runs, and the menu closes, when the left or the right
+  mouse button is released over it.
+- Level changes: LoadLevel, ReloadLevel, ApplyAsyncLevel and
+  LoadLevelAsync(path, true) could show the new level for one frame in its raw,
+  as-saved state. The level is now swapped right after the current frame is
+  shown - so a fade to black that ends with LoadLevel really reaches black -
+  and the new level is first drawn only after its first full update, scripts,
+  widgets and camera included, with its World Settings already applied.
+- Level start: the first update of a new level - after a level change or when
+  Play starts in the editor - advanced by the length of the frame that loaded
+  it, so fade-ins and intro animations jumped ahead. It now reuses the delta of
+  the frame before.
+- Camera lag: when a level started, the camera slid in from its previous
+  position. The view now starts exactly at the camera's target, and lag only
+  smooths the movement after that.
+- Adaptive Quality: loading a level could be mistaken for a frame-rate drop and
+  lower the quality. The frame that starts a level and the level's first frame
+  are now ignored.
+- Widgets: a widget that loaded in the middle of a frame - for example one
+  shown from a button callback - could be drawn once in its as-saved state. In
+  Play a widget is now drawn only after OnInit and its first update, and the
+  widgets in its visible SubWidget elements load and update together with it.
+  A cinema's Custom Widget dialogue follows the same rule.
+- Editor: a level change that a script had requested but that had not happened
+  yet (LoadLevel, ReloadLevel, LoadLevelAsync) carried over into the next Play
+  session. Leaving Play now drops it.
+- Touch screens: a UI element stayed hovered after the finger lifted, keeping
+  its hover color, so it looked selected. The hover now ends, with OnUnhover,
+  when the touch ends.
+- Video: picture and sound could drift apart after long frames or loading
+  hitches. The picture now follows the video's own sound, and a sound track
+  that starts later than the picture or has a gap is played at its place. On
+  Web and iOS the browser and AVFoundation keep them in sync, as before.
+- Video: videos kept playing - picture and sound - while the game was paused,
+  stopped at a Lua debugger breakpoint or suspended. Every video channel now
+  pauses with the game and resumes in sync from the same moment.
+- Networking: Connect, JoinOnline, HostOnline or StartServer called while an
+  automatic reconnect was still pending could fail. The pending reconnect is
+  now abandoned and the new session starts.
+- Android: with Is Suspended on, an active network session - hosting,
+  connected, connecting or reconnecting - froze while the app was in the
+  background. It now keeps running, with nothing drawn until the app returns,
+  and Settings.SetIsSuspended takes effect at once instead of on the next
+  launch.
+- Metal and Vulkan (MoltenVK) on macOS and iOS: shadows and light cookies used
+  texture slots beyond the 16 samplers Apple GPUs provide per shader stage, so
+  they could render incorrectly.
+- Windows: without a hardware monitor running, the CPU temperature could be
+  read from a battery, charger or other thermal zone that is not the
+  processor. Such zones are now ignored.
+- Laptops with two GPUs: reading the GPU temperature could wake the sleeping
+  dedicated GPU and report a GPU the editor was not rendering on. Only the GPU
+  the editor renders on is read now.
+
+--------------------------------------------------------------------------------
+
+This file is rewritten for every new version of IceBoxEngine. It always lists
+only the changes of the version it ships with; the changes of earlier versions
+are not kept here.
+
+================================================================================

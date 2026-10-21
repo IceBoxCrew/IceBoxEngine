@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
@@ -5094,7 +5094,7 @@ info = engine.audio_info()
 | `engine.platform()` | `str` | `'windows'`, `'macos'` or `'linux'` |
 | `engine.arch()` | `str` | `'64-bit'` or `'32-bit'` |
 | `engine.render_backend()` | `str` | Active backend, e.g. `'OpenGL 4.6'`, `'Vulkan'`, `'Direct3D 12'`, `'Metal'` |
-| `engine.gpu_info()` | `dict` | `backend`, `driver`, `gpu_time_ms`, `gpu_timer_available`, `gpu_temperature_c`, `vram_mb`, `vram_total_mb` |
+| `engine.gpu_info()` | `dict` | `backend`, `driver`, `gpu_time_ms`, `gpu_timer_available`, `gpu_temperature_c` (°C, `-1` when no sensor answers), `vram_mb`, `vram_total_mb` |
 | `engine.build_info()` | `dict` | `version`, `editor`, `configuration`, `compiled`, `python` |
 | `engine.python_version()` | `str` | Embedded Python version |
 | `engine.python_paths()` | `list[str]` | Current `sys.path` |

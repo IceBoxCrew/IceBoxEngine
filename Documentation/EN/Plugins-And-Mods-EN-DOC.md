@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** is extensible in two complementary ways:
 >

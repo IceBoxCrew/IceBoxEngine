@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии R-1.0.1
+### Актуальная для версии R-1.0.2
 
 > Это **первая остановка** для всех, кто только что установил **IceBoxEngine**.
 > Ещё до того, как вы откроете редактор, вас встречают два небольших
@@ -133,14 +133,14 @@ IceBoxEngine поставляется в виде **трёх отдельных 
 под которые они собраны:
 
 ```
-IceBoxEngine-1.0.1-Release-Windows-x64-Setup.exe
-IceBoxEngine-1.0.1-Release-Windows-x86-Setup.exe
-IceBoxEngine-1.0.1-Release-Windows-arm64-Setup.exe
-IceBoxEngine-1.0.1-Release-Linux-x64-Setup.deb
-IceBoxEngine-1.0.1-Release-Linux-x86-Setup.deb
-IceBoxEngine-1.0.1-Release-Linux-arm64-Setup.deb
-IceBoxEngine-1.0.1-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-1.0.1-Release-macOS-x64-Setup.pkg
+IceBoxEngine-1.0.2-Release-Windows-x64-Setup.exe
+IceBoxEngine-1.0.2-Release-Windows-x86-Setup.exe
+IceBoxEngine-1.0.2-Release-Windows-arm64-Setup.exe
+IceBoxEngine-1.0.2-Release-Linux-x64-Setup.deb
+IceBoxEngine-1.0.2-Release-Linux-x86-Setup.deb
+IceBoxEngine-1.0.2-Release-Linux-arm64-Setup.deb
+IceBoxEngine-1.0.2-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-1.0.2-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** Файл `…-Setup.exe` — это установщик **NSIS**, ему нужны права
@@ -205,10 +205,10 @@ desktop-файлов и MIME.
 
 | Файл | Для чего |
 | ---- | -------- |
-| `IceBoxEngine-1.0.1-Release-Android-arm64-v8a.apk` | Любой телефон или планшет примерно последних восьми лет. **Если не знаете, что выбрать — берите этот.** |
-| `IceBoxEngine-1.0.1-Release-Android-armeabi-v7a.apk` | Старые 32-битные ARM-устройства |
-| `IceBoxEngine-1.0.1-Release-Android-x86_64.apk` | Эмуляторы Android на ПК, Chromebook, x86-планшеты |
-| `IceBoxEngine-1.0.1-Release-Android-x86.apk` | 32-битные x86-эмуляторы и совсем старые x86-планшеты |
+| `IceBoxEngine-1.0.2-Release-Android-arm64-v8a.apk` | Любой телефон или планшет примерно последних восьми лет. **Если не знаете, что выбрать — берите этот.** |
+| `IceBoxEngine-1.0.2-Release-Android-armeabi-v7a.apk` | Старые 32-битные ARM-устройства |
+| `IceBoxEngine-1.0.2-Release-Android-x86_64.apk` | Эмуляторы Android на ПК, Chromebook, x86-планшеты |
+| `IceBoxEngine-1.0.2-Release-Android-x86.apk` | 32-битные x86-эмуляторы и совсем старые x86-планшеты |
 
 В каждом файле только одна архитектура — именно поэтому он небольшой; не тот файл просто
 не установится с ошибкой `INSTALL_FAILED_NO_MATCHING_ABIS`, так что ошибиться нестрашно —
@@ -278,6 +278,7 @@ Android спросит. Отдельного апдейтера на Android н�
 ├── Lib/  DLLs/  python(.exe)    ← среда Python для Python-скриптинга редактора
 │                                  (раскладка Windows; на Linux — lib/python3.x/ и bin/python3)
 ├── CMakeLists.txt  vcpkg.json   ← их читает Build Game
+├── Changelog.txt                ← что изменилось в этой версии движка
 ├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  PRIVACY_NOTICE.txt  ThirdPartyLicenses/
 └── Uninstall.exe                ← только Windows
 ```
@@ -522,7 +523,7 @@ Android неудачный старт Vulkan переходит на OpenGL ES 3
 ┌───────────────────┬──────────────────────────────────────────────┐
 │ 🧊 лого           │                                              │
 │ IceBoxEngine™     │                                              │
-│ Release 1.0.1     │          Содержимое активной вкладки         │
+│ Release 1.0.2     │          Содержимое активной вкладки         │
 │ ───────────────── │   (Мои проекты / Новый проект / Плагины и    │
 │ Мои проекты       │    моды / Настройки / О программе)           │
 │ Новый проект      │                                              │
@@ -857,7 +858,7 @@ all of the code used other than those components.
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "1.0.1",
+    "EngineVersion": "1.0.2",
     "StartScene": "Content/Levels/L_Frost_Title.icemap",
     "UseCurrentLevelAsStartScene": false,
     "ScriptingMode": "Code",
@@ -1387,6 +1388,7 @@ Play — титульный экран ведёт в `L_Frost_Peaks.icemap`, с�
 | `<install>/Plugins/`, `Mods/` | Пакеты уровня движка, которые лаунчер может подключать к проектам. |
 | `<install>/Content/Examples/` | Стартовый контент, предлагаемый вкладкой **Новый проект**; описан в `Examples.json` ([3.3](#33-новый-проект)). |
 | `<install>/Documentation/` | Этот набор документации, его же можно читать в панели «Документация» редактора. |
+| `<install>/Changelog.txt` | Что изменилось в установленной версии по сравнению с предыдущим релизом — что добавлено, улучшено и исправлено. Каждое обновление движка заменяет его списком новой версии. |
 
 **В папке пользовательских данных** — Windows: `%APPDATA%\IceBoxEngine` ·
 Linux/macOS: `~/.config/IceBoxEngine` (или `$XDG_CONFIG_HOME/IceBoxEngine`)

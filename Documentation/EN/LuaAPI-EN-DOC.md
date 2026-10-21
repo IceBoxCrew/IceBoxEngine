@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -7346,6 +7346,8 @@ CameraFollowSmooth(0.1)         -- lerpFactor (0..1). Lower = smoother.
 -- Camera lag is a persistent setting. Call ONCE (e.g. in OnCreate)
 -- to configure how the engine smooths the primary camera toward its
 -- follow target. Speed is in pixels/second.
+-- When a level starts the camera begins exactly on its target; lag
+-- only smooths the movement that follows.
 SetCameraLag(600, 120)          -- speed (px/s), max distance (px)
 
 -- Query / disable.
@@ -9637,6 +9639,13 @@ local rt = GetRealTime()
 local udt = GetUnscaledDeltaTime()
 ```
 
+> **The first frame of a level.** `GetTime()` and `GetRealTime()` count from the start of the current
+> level. On a level's first frame — after a level change, when the game starts and when Play starts in
+> the editor — `GetDeltaTime()` and `GetUnscaledDeltaTime()` are computed from the same frame length as on
+> the frame before (zero at game start), so the time spent loading the level is not included; from the
+> next frame on they follow the real frame length again. See
+> [Engine → Time, pause & suspend](Engine-EN-DOC.md#26-time-pause--suspend).
+
 ### Time scale (Slow-Mo, Pause)
 
 ```lua
@@ -10092,6 +10101,17 @@ QuitGame()
 local quit = IsQuitRequested()
 ```
 
+> **A level change never shows a half-ready level.** `LoadLevel` and `ReloadLevel` only request
+> the change: the current frame is finished and shown as usual — so a fade to black that ends with
+> `LoadLevel` really reaches black on screen — and the level is swapped right after it. The new level
+> then runs `OnLevelStart`, `OnCreate` and its first `OnUpdate` / `OnLevelUpdate` — widgets, the
+> widgets embedded in them and their auto-play animations included — before its first frame is drawn,
+> with its own camera and its World Settings already applied. `ApplyAsyncLevel` and
+> `LoadLevelAsync(path, true)` swap the level the same way. The time the swap takes is added neither to
+> `dt` nor to `GetUnscaledDeltaTime()` / `GetRealTime()`, so a fade-in or an intro animation starts from
+> its first frame instead of jumping ahead, and camera lag starts from the camera's target, not from
+> where the previous level's camera was.
+
 ### Application suspend (pause everything)
 
 Freezes update, render and audio across all 6 platforms (Windows, Linux, macOS, iOS, Android, Web). Useful for in-game pause menu when window is minimized, sent to background or when you need to pause the whole app from script.
@@ -10378,7 +10398,7 @@ Ideal for loading screens with real progress.
 -- Start async loading (scene keeps running)
 LoadLevelAsync("Content/Maps/Level2.icemap")
 
--- Start with auto-apply (swaps immediately when ready)
+-- Start with auto-apply (swaps as soon as it is ready, right after the current frame is shown)
 LoadLevelAsync("Content/Maps/Level2.icemap", true)
 
 -- In OnUpdate / OnLevelUpdate — poll progress:
@@ -11574,6 +11594,8 @@ A widget script can define these functions:
 ```lua
 function OnInit()
     -- Once, when the widget loads: the first time it is shown or used.
+    -- A widget embedded through a visible SubWidget element loads together with
+    -- the widget that contains it.
     -- The short-name functions below work from OnInit on, not in code that runs
     -- at the top level of the script.
 end
@@ -11593,6 +11615,13 @@ function OnDestroy()
     -- loads again the next time it is shown or used and gets OnInit once more.
 end
 ```
+
+> **A widget is drawn only after its first update.** In Play a widget, and every widget embedded in it,
+> appears on screen only after `OnInit` and its first `OnUpdate`, with its layout and auto-play animations
+> already applied. A widget that first loads late in a frame — for example when a button callback shows
+> it — therefore appears on the next frame, already initialized, instead of being drawn once as it was
+> saved. The widget a cinema shows its dialogue in (**Dialogue UI** → **Custom Widget**) follows the same
+> rule.
 
 > **Subscriptions end with the widget.** After `OnDestroy` the engine removes everything the widget subscribed
 > with functions defined in its own script (or in its parent widget's script): `On` listeners, `Delay`,
@@ -13866,7 +13895,9 @@ Details:
 - Cooldowns: 2 s after a downgrade, 4 s after a recovery. If the system starts
   oscillating (downgrade soon after a recovery), the recovery cooldown backs
   off exponentially up to 32 s.
-- Frame hitches longer than 0.5 s (loading, alt-tab) are ignored.
+- Frame hitches longer than 0.5 s (loading, alt-tab) are ignored, and so are the frame
+  in which a level starts — a level change or the start of Play in the editor — and the
+  level's first frame, the first frame of the game included, however long they take.
 - Changing AA mode or render scale manually (Lua, editor, `AutoDetect`) while
   a downgrade is active re-bases the system on your new values instead of
   reverting them later.
@@ -13880,6 +13911,108 @@ Settings.SetAdaptiveQuality(false)            -- disable (target is preserved)
 
 local enabled = Settings.IsAdaptiveQualityEnabled()
 local target  = Settings.GetAdaptiveQualityTargetFPS()
+```
+
+### Thermal status (Android throttling)
+
+Tells the game how hard Android is throttling the device because it is getting
+hot — the signal Android's performance guidelines (ADPF) ask games to watch.
+Lower the quality as soon as it rises, *before* the system slows the CPU and GPU
+down on its own, and restore it once the device has cooled down: the frame rate
+stays steady and the device stays cool for longer. Adaptive Quality reacts only
+after the frame rate has already dropped; these values let a game act earlier.
+
+The values come from the same background sampler as the profiler's thermal rows
+(see [Profiling & Building → Temperature sensors](Profiling-And-Building-EN-DOC.md#28-temperature-sensors)),
+which asks the Android thermal service about every 1.5 seconds, so reading them
+from a script costs nothing.
+
+| Constant | Value | `GetThermalStatusName()` | Meaning |
+| -------- | ----- | ------------------------ | ------- |
+| `Settings.THERMAL_NONE` | `0` | `"none"` | Not throttled. |
+| `Settings.THERMAL_LIGHT` | `1` | `"light"` | Light throttling; performance is barely affected. |
+| `Settings.THERMAL_MODERATE` | `2` | `"moderate"` | Moderate throttling; performance is still barely affected. |
+| `Settings.THERMAL_SEVERE` | `3` | `"severe"` | Severe throttling; the CPU and GPU are slowed down noticeably. |
+| `Settings.THERMAL_CRITICAL` | `4` | `"critical"` | The system has done everything it can to reduce power. |
+| `Settings.THERMAL_EMERGENCY` | `5` | `"emergency"` | Key components are shutting down; the device's functionality is limited. |
+| `Settings.THERMAL_SHUTDOWN` | `6` | `"shutdown"` | The device is about to shut down. |
+| `Settings.THERMAL_UNAVAILABLE` | `-1` | `"unavailable"` | No thermal status on this platform or device (see below). |
+
+The **thermal load** is Android's *thermal headroom*: how much of the device's
+thermal budget is in use. `0.0` means the device is far from throttling, `1.0`
+means it is throttled at the Severe level, and values above `1.0` mean heavier
+throttling. Up to `1.0` it grows roughly in step with the temperature, so it
+climbs steadily long before the status jumps to Severe — the best signal for
+reacting early.
+
+```lua
+local status      = Settings.GetThermalStatus()        -- THERMAL_NONE (0) .. THERMAL_SHUTDOWN (6), or THERMAL_UNAVAILABLE (-1)
+local statusName  = Settings.GetThermalStatusName()    -- "none" .. "shutdown", or "unavailable"
+local hasStatus   = Settings.IsThermalStatusAvailable()
+
+local thermalLoad = Settings.GetThermalLoad()          -- 0.0 = far from throttling, 1.0 = Severe throttling; -1 when unavailable
+local hasLoad     = Settings.IsThermalLoadAvailable()
+```
+
+Details:
+- Thermal status needs **Android 11 (API 30)**. Thermal load needs **Android 12
+  (API 31)**, and device makers do not have to support it, so some devices
+  report the status but no load.
+- On Windows, Linux, macOS, iOS, Web and Xbox, and on Android 10 or older,
+  `GetThermalStatus()` returns `Settings.THERMAL_UNAVAILABLE` (`-1`),
+  `GetThermalStatusName()` returns `"unavailable"`, `GetThermalLoad()` returns
+  `-1`, and `IsThermalStatusAvailable()` / `IsThermalLoadAvailable()` return
+  `false`. Check those instead of the platform, and the same script runs
+  everywhere.
+- Works the same in a built game and in the editor running on Android; no
+  permission is needed.
+- The values are refreshed about every 1.5 seconds, so polling faster gains
+  nothing. Right after the engine starts they can read as unavailable for a
+  moment, until the first sample arrives.
+- `Settings.OnSettingChanged` fires with the key `"ThermalStatus"` whenever the
+  status changes, including the moment it first becomes available. The thermal
+  load changes with every sample, so it has no event — read it on a timer.
+- Do not call `Settings.Save()` while the quality is lowered because of heat, or
+  the lowered values become the player's saved settings.
+
+```lua
+-- Level script: trade render resolution for temperature. The thresholds have
+-- hysteresis, so the quality does not flip back and forth around one of them.
+local SCALES = { [0] = 1.0, [1] = 0.8, [2] = 0.6 }
+local baseScale, tier, timer = 1.0, 0, 0
+
+local function ThermalTier()
+    local thermalLoad = Settings.GetThermalLoad()
+    if thermalLoad < 0 then                            -- no load on this device: use the status
+        local status = Settings.GetThermalStatus()
+        if status >= Settings.THERMAL_SEVERE then return 2 end
+        if status == Settings.THERMAL_MODERATE then return 1 end
+        return 0                                       -- also THERMAL_UNAVAILABLE off Android
+    end
+    if thermalLoad >= 0.95 or (tier == 2 and thermalLoad >= 0.85) then return 2 end
+    if thermalLoad >= 0.80 or (tier >= 1 and thermalLoad >= 0.70) then return 1 end
+    return 0
+end
+
+function OnLevelStart()
+    baseScale = Settings.GetRenderScale()
+    Settings.OnSettingChanged(function(key)
+        if key == "ThermalStatus" then
+            print("Thermal status:", Settings.GetThermalStatusName())
+        end
+    end)
+end
+
+function OnLevelUpdate(dt)
+    timer = timer + dt
+    if timer < 2.0 then return end
+    timer = 0
+    local wanted = ThermalTier()
+    if wanted ~= tier then
+        tier = wanted
+        Settings.SetRenderScale(baseScale * SCALES[tier])
+    end
+end
 ```
 
 ### Low Latency Mode (reduced input-to-display lag)
@@ -13943,6 +14076,12 @@ the window becomes active again everything resumes exactly where it left
 off. This works on all 6 platforms (Windows, Linux, macOS, iOS, Android,
 Web) and matches the editor's behavior as well.
 
+A network session is never suspended: while the game hosts, is connected,
+is connecting or reconnecting, update, networking and audio keep running
+with the setting on (only the frames of a hidden or backgrounded window are
+skipped), so a host never freezes the table for the other players and a
+client is not dropped while its window is out of focus.
+
 When disabled, the automatic window-driven suspend is turned off entirely —
 the game keeps updating, rendering and playing audio in the background, as
 if the suspend system did not exist. The manual `SuspendApp()` /
@@ -13952,13 +14091,12 @@ Platform notes:
 - **Windows / Linux / macOS** — the game simply keeps running while
   unfocused or minimized (a zero-size minimized surface is safely skipped
   by the renderer).
-- **Android** — SDL latches the OS-level "block event loop on pause" flag
-  once at startup, so background execution for a launch is controlled by
-  the value persisted in `Config/Engine.json` → `Optimization.IsSuspended`.
-  A runtime `SetIsSuspended` still applies the audio/frame gating
-  immediately, but lifting the OS-level block takes effect on the next
-  launch. Background execution is best-effort — the OS may still throttle
-  or kill the process.
+- **Android** — the OS never blocks the engine's event loop on pause: the
+  engine suspends itself according to this setting, so a runtime
+  `SetIsSuspended` takes effect at once, and an active network session keeps
+  running while the app is in the background (nothing is drawn until it
+  comes back). Background execution is best-effort — the OS may still
+  throttle or kill the process.
 - **iOS** — with the setting off, the app keeps running through transient
   focus losses (control center, notification shade, app switcher preview);
   a full switch to background is still frozen by the OS itself, as with
@@ -14179,10 +14317,11 @@ Atlas.Rebuild()   -- repack every page at the start of the next frame
 ### Settings change events
 
 Subscribe to a callback that is fired whenever a setting is changed (via Lua,
-the editor settings panel, AutoDetect, or AdaptiveQuality). The callback
-receives the changed key as a string (for example `"AAMode"`, `"FPSLimit"`,
-`"RenderScale"`, `"UpscalingMode"`, `"UpscalingQuality"`, `"UpscalingSharpness"`,
-`"UpscalingSharpening"`, `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, ...).
+the editor settings panel, AutoDetect, or AdaptiveQuality) and whenever the
+Android thermal status changes. The callback receives the changed key as a
+string (for example `"AAMode"`, `"FPSLimit"`, `"RenderScale"`, `"UpscalingMode"`,
+`"UpscalingQuality"`, `"UpscalingSharpness"`, `"UpscalingSharpening"`,
+`"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, `"ThermalStatus"`, ...).
 
 ```lua
 local id = Settings.OnSettingChanged(function(key)
@@ -18458,6 +18597,8 @@ Network.EnableReconnect(true, 5, 2.0)  -- enable, maxAttempts, interval
 -- attempt that fails is reported once through OnConnectionFailed and is not retried.
 -- A player who comes back before the host noticed the drop keeps the same player id;
 -- online rooms (Network.JoinOnline) are re-joined by their code.
+-- A new Connect, JoinOnline, HostOnline or StartServer while the reconnect is still pending
+-- abandons it and starts the new session instead of failing; Disconnect() just stops it.
 local reconnecting = Network.IsReconnecting()
 local attempt = Network.GetReconnectAttempt()
 local connState = Network.GetConnectionState()
@@ -26399,7 +26540,7 @@ Video.SetVolume(0.2, "tv")
 local t = Video.GetTime("tv")
 
 Video.StopAll()      -- stop every channel, including the main one
-Video.PauseAll()     -- pause every playing channel (e.g. when the pause menu opens)
+Video.PauseAll()     -- pause every playing channel (e.g. under a menu that keeps the game running)
 Video.ResumeAll()    -- resume them
 
 local channels = Video.GetChannels()   -- { "main", "tv", ... } — channels that currently hold a video
@@ -26445,6 +26586,17 @@ local t   = Video.GetTime()       -- current playback time (seconds)
 local dur = Video.GetDuration()   -- total duration (seconds)
 local pct = Video.GetProgress()   -- progress 0.0–1.0
 ```
+
+### Sync and pausing with the game
+
+- On the FFmpeg platforms and on the Xbox consoles the picture follows the video's own sound: it always shows the frame
+  that belongs to what is being heard, so picture and sound stay together through long frames and loading hitches, and
+  a sound track that starts later than the picture or has a gap is played at its place. A video without sound — or
+  once its sound has ended — runs on real time. On Web and iOS the browser / AVFoundation keep them in sync.
+- Videos pause together with the game: while the game is paused (`PauseGame()` or the editor's **Pause**), while a
+  script is stopped in the Lua debugger and while the app is suspended, every channel stops — picture and sound — and
+  continues from the same moment, in sync, when the game goes on. `IsPaused` is not affected: a video paused with
+  `Video.Pause` stays paused. The game's time scale alone (`SetTimeScale`, `0` included) does not stop videos.
 
 ### Seeking — rewind and fast-forward to any moment
 

@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -136,7 +136,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame       Release 1.0.1 │
+│                             │ Remote Preview │ MyNewGame       Release 1.0.2 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -298,6 +298,10 @@ drawn by plugins get it too.
 * While the menu is open the field stays active: the selection stays highlighted, and a value
   you are editing in place — an inline rename, for example — is neither confirmed nor cancelled
   by opening the menu.
+* Click an item to run it: the menu closes and the command goes to the field. Both the left and
+  the right mouse button work. An item runs when you let go of the button over it, so you can
+  press, slide to another item and let go there. If you let go anywhere else — over a greyed-out
+  item, on a separator or outside the menu — nothing runs and the menu stays open.
 * `↑` / `↓` (and `Home` / `End`) move the highlight, `Enter` runs the highlighted item, and `Esc`
   closes the menu without touching the text or the dialog around it. Typing, or a shortcut such
   as `Ctrl+V`, closes the menu and goes to the field as usual; a click or a wheel scroll outside
@@ -707,7 +711,9 @@ captured.
 
 **Leaving Play** stops the runtime, clears pause and eject, destroys live FX
 emitters, wipes the registry and **restores the pre-play snapshot** — any change
-made during Play is discarded — then restores the cursor. A script that calls
+made during Play is discarded — then restores the cursor. A level change a script has
+requested but that has not happened yet (`LoadLevel`, `ReloadLevel`, `LoadLevelAsync`) is
+dropped too, so it never carries over into the next Play session. A script that calls
 `QuitGame()` leaves Play mode the same way and the editor stays open; in a built game
 the same call closes the application.
 
@@ -1518,8 +1524,9 @@ Tuning knobs for the renderer and memory:
   hold.
 * **Suspend** — **Is Suspended**: when on (the default behaviour), the app pauses
   update, render and audio while the window is unfocused, minimized or
-  backgrounded, on all seven platforms; when off, the game keeps running and playing
-  audio without focus. Also scriptable via `Settings.SetIsSuspended`.
+  backgrounded, on all seven platforms (except during an active network session, which
+  keeps running); when off, the game keeps running and playing audio without focus. Also
+  scriptable via `Settings.SetIsSuspended`.
 * **Lua Garbage Collector** — the collector of both script VMs (game and UI):
   * **GC Preset** — **Default (generational)** for most games, **Low memory
     (incremental)** for about a third less peak memory at a higher CPU cost (mobile,

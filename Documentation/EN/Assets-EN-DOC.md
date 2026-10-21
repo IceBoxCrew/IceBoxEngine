@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > **IceBoxEngine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
@@ -2384,7 +2384,7 @@ rotation of the elements and of their parents into account.
 | **OnClick / OnHover / OnUnhover / OnPressed / OnReleased** | Names of Lua functions called on those events. |
 | **OnValueChanged** | Only for Slider, InputField, Checkbox, Dropdown and Toggle. |
 | **OnFocusGained / OnFocusLost** | Called when the element gains or loses input focus. |
-| **State Colors** | **Use Custom State Colors** replaces the built-in hover/press tints with **Hovered Color** and **Pressed Color**. |
+| **State Colors** | **Use Custom State Colors** replaces the built-in hover/press tints with **Hovered Color** and **Pressed Color**. On a touch screen an element counts as hovered only while a finger is on it: once the finger lifts, the hover ends (with **OnUnhover**), so the element under the last touch never keeps its **Hovered Color** and is not mistaken for a selected one. |
 | **State Sounds** | **Use Custom State Sounds** plays **Hovered Sound** and **Pressed Sound** on interaction. |
 
 **Document-level settings** (the widget itself, not an element)
@@ -2726,7 +2726,7 @@ The **Settings** tab of the Cinema Editor holds the options of the whole cinema:
 | | **Show Prompt** / **Prompt Text** | A prompt in the top-right corner (Double Press and Hold). The text is a game localization key or plain text; empty = the game key `ICE_CinemaSkipAgain` (Double Press) or `ICE_CinemaSkipHold` (Hold), falling back to built-in English text when the game has no such key. |
 | | **Skip Fade** | Total time of the fade to black and back when skipping (`0` = skip at once). |
 | Dialogue | **Dialogue UI** | **Built-in Box**, **Custom Widget** or **None (Lua only)** — with None, show lines yourself from `OnCinemaDialogue`. |
-| | **Widget** | The `.ice_widget` used with Custom Widget. Elements named `Speaker`, `SpeakerPanel`, `Text`, `Portrait` and `Continue` are filled in automatically (`SpeakerPanel` hides when there is no speaker, `Portrait` when the line has no portrait, and `Continue` shows while a line waits for input). |
+| | **Widget** | The `.ice_widget` used with Custom Widget. Elements named `Speaker`, `SpeakerPanel`, `Text`, `Portrait` and `Continue` are filled in automatically (`SpeakerPanel` hides when there is no speaker, `Portrait` when the line has no portrait, and `Continue` shows while a line waits for input). Like every widget in Play, it is drawn only after its first update, so it never shows up in its as-saved state. |
 | | **Advance Buttons** | Buttons that reveal the whole line at once or continue after a line that waits for input. |
 | | **Box Color**, **Text Color**, **Speaker Color**, **Font**, **Font Size**, **Outline Width**, **Outline Color**, **Box Width**, **Max Lines** | Look of the built-in box. Font size and outline width are in pixels at 1080p and scale with the screen height; the outline (`0`–`16`, default `0` — none) goes around the speaker name and the line, which keeps subtitles readable with a transparent box; width is a fraction of the screen width; longer text scrolls up as it is typed. |
 | | **Continue Indicator** | A blinking marker when a line waits for input. |

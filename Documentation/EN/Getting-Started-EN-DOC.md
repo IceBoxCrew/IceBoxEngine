@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.1 Version
+### Actual for R-1.0.2 Version
 
 > This is the **first stop** for anyone who has just installed **IceBoxEngine**.
 > Before you ever open the editor you meet two small companion applications, and
@@ -131,14 +131,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-1.0.1-Release-Windows-x64-Setup.exe
-IceBoxEngine-1.0.1-Release-Windows-x86-Setup.exe
-IceBoxEngine-1.0.1-Release-Windows-arm64-Setup.exe
-IceBoxEngine-1.0.1-Release-Linux-x64-Setup.deb
-IceBoxEngine-1.0.1-Release-Linux-x86-Setup.deb
-IceBoxEngine-1.0.1-Release-Linux-arm64-Setup.deb
-IceBoxEngine-1.0.1-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-1.0.1-Release-macOS-x64-Setup.pkg
+IceBoxEngine-1.0.2-Release-Windows-x64-Setup.exe
+IceBoxEngine-1.0.2-Release-Windows-x86-Setup.exe
+IceBoxEngine-1.0.2-Release-Windows-arm64-Setup.exe
+IceBoxEngine-1.0.2-Release-Linux-x64-Setup.deb
+IceBoxEngine-1.0.2-Release-Linux-x86-Setup.deb
+IceBoxEngine-1.0.2-Release-Linux-arm64-Setup.deb
+IceBoxEngine-1.0.2-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-1.0.2-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -204,10 +204,10 @@ one that matches your device:
 
 | File | For |
 | ---- | --- |
-| `IceBoxEngine-1.0.1-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
-| `IceBoxEngine-1.0.1-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
-| `IceBoxEngine-1.0.1-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
-| `IceBoxEngine-1.0.1-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
+| `IceBoxEngine-1.0.2-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
+| `IceBoxEngine-1.0.2-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
+| `IceBoxEngine-1.0.2-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
+| `IceBoxEngine-1.0.2-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
 
 Each file holds one architecture only, which is what keeps it small; the wrong one simply
 refuses to install with `INSTALL_FAILED_NO_MATCHING_ABIS`, so nothing breaks if you guess wrong
@@ -278,6 +278,7 @@ Whatever the platform, the layout inside that folder is the same:
 ├── Lib/  DLLs/  python(.exe)    ← the Python runtime of the editor's Python scripting
 │                                  (Windows layout; Linux uses lib/python3.x/ and bin/python3)
 ├── CMakeLists.txt  vcpkg.json   ← read by Build Game
+├── Changelog.txt                ← what changed in this version of the engine
 ├── LICENSE.txt  THIRD_PARTY_NOTICES.txt  PRIVACY_NOTICE.txt  ThirdPartyLicenses/
 └── Uninstall.exe                ← Windows only
 ```
@@ -512,7 +513,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 ┌───────────────────┬──────────────────────────────────────────────┐
 │   🧊 logo          │                                              │
 │ IceBoxEngine™     │            Active tab content                │
-│ Release 1.0.1     │   (My Projects / New Project / Plugins &     │
+│ Release 1.0.2     │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
 │ New Project       │                                              │
@@ -844,7 +845,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "1.0.1",
+    "EngineVersion": "1.0.2",
     "StartScene": "Content/Levels/L_Frost_Title.icemap",
     "UseCurrentLevelAsStartScene": false,
     "ScriptingMode": "Code",
@@ -1357,6 +1358,7 @@ the project.
 | `<install>/Plugins/`, `Mods/` | Engine-level packages the launcher can attach to projects. |
 | `<install>/Content/Examples/` | Starter content offered by **New Project**, described by `Examples.json` ([3.3](#33-new-project)). |
 | `<install>/Documentation/` | This documentation set, also readable from the editor's Help panel. |
+| `<install>/Changelog.txt` | What changed in the installed version since the previous release — added, improved and fixed. Every engine update replaces it with the list of the new version. |
 
 **In your user-data folder** — Windows: `%APPDATA%\IceBoxEngine` · Linux/macOS:
 `~/.config/IceBoxEngine` (or `$XDG_CONFIG_HOME/IceBoxEngine`)
