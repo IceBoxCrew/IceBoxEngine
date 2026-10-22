@@ -10,7 +10,9 @@
 >   **runtime** through a stable C ABI. Use them to add panels, tools, menu items,
 >   custom asset types, toolbar buttons, viewport overlays, settings pages, Visual
 >   Script nodes, and integrations with external services — each with its own
->   documentation and its own editor translations.
+>   documentation and its own editor translations. They can also add pieces of the
+>   engine itself: **engine settings**, **class components**, **world asset types** for
+>   the Level Outliner and the viewport, and **widget elements** for the Widget Editor.
 > * **Mods** — **Lua + content** bundles loaded at runtime. Use them to add or change
 >   gameplay and ship new assets (sprites, classes, widgets, …) without
 >   touching the base game or recompiling anything.
@@ -47,6 +49,7 @@
    - 3.11 [Worked example: a minimal editor plugin](#311-worked-example-a-minimal-editor-plugin)
    - 3.12 [Shipping data & Visual Script nodes with a plugin](#312-shipping-data--visual-script-nodes-with-a-plugin)
    - 3.13 [Building a plugin — the Plugin Builder](#313-building-a-plugin--the-plugin-builder)
+   - 3.14 [Extending the engine — settings, components, world assets & widget elements](#314-extending-the-engine--settings-components-world-assets--widget-elements)
 
 **Part II — Mods (Lua + content)**
 
@@ -145,7 +148,7 @@ The engine ships one reference example of each:
 | **Toggle without restarting?** | Yes, once the library is built (see [5.1](#51-the-plugins--mods-panel)) | Yes — enabled/disabled and refreshed live |
 | **Sandboxed?** | No (native code, full power) | Own Lua environment: private globals, shared engine API that mods can hook ([4.4](#44-the-mod-environment--injected-globals)); no native code unless the project allows it |
 | **Versioning** | C ABI version (`ICE_PLUGIN_API_VERSION`) | mod `APIVersion` |
-| **Typical use** | New panels/tools, custom asset types, menu/toolbar items, viewport overlays, Visual Script nodes, external integrations | New levels/mechanics/content, total conversions, gameplay tweaks |
+| **Typical use** | New panels/tools, custom asset types, menu/toolbar items, viewport overlays, Visual Script nodes, engine settings, class components, world asset types, widget elements, external integrations | New levels/mechanics/content, total conversions, gameplay tweaks |
 
 **Rule of thumb:** if you need new **editor tooling** or native performance/integration,
 write a **plugin**. If you want to add or change **game content and behavior** with
@@ -183,6 +186,19 @@ Through the editor host API a plugin can, among other things:
   nodes to the Visual Script graph editor, documentation that opens in the editor's
   **Documentation** panel, and translations of its own interface for every editor
   language (see [3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)).
+
+Through the runtime host API it can also extend the engine itself — described declaratively,
+edited in the editor like the built-in features, saved with the project and running in the
+shipped game (see [3.14](#314-extending-the-engine--settings-components-world-assets--widget-elements)):
+
+* **Engine settings** — its own section in **Edit → Preferences → Plugins**, saved to
+  `Config/Engine.json`.
+* **Class components** — new component types in **Add Component**, with instances, local
+  transforms, inheritance, viewport drawing and per-frame logic.
+* **World asset types** — a file extension that is placed in levels through the **Level
+  Outliner**, moved in the viewport and run every frame.
+* **Widget elements** — new element types in the **Widget Editor** that draw themselves and
+  react to the pointer and the gamepad.
 
 ### 3.2 Anatomy of a plugin
 
@@ -347,8 +363,13 @@ with `StructSize` and `AbiVersion` so you can sanity-check what you were given.
 * **Scene:** `GetScenePath`, `SaveScene`, `LoadScene`, `NewScene`, `MarkSceneDirty`,
   `IsSceneDirty`.
 * **Assets / browser:** `OpenAsset`, `RefreshContentBrowser`, `GetContentBrowserPath`.
-* **Viewport / camera:** `GetViewportSize`, `ScreenToWorld`, `IsViewportHovered`,
-  `IsViewportFocused`, `Get/SetCamera`, `FocusEntity`.
+* **Viewport / camera:** `GetViewportSize`, `ScreenToWorld`, `WorldToScreen`,
+  `GetViewportOrigin`, `IsViewportHovered`, `IsViewportFocused`, `Get/SetCamera`,
+  `FocusEntity`. `WorldToScreen(wx, wy, &sx, &sy)` is the inverse of `ScreenToWorld`: it
+  turns a world position into pixels relative to the viewport's top-left corner and
+  returns `false` while no viewport exists. `GetViewportOrigin(&x, &y)` gives that corner
+  in ImGui screen coordinates, so `origin + WorldToScreen(...)` is where a viewport overlay
+  draws a world position.
 * **Editor control:** `RecordUndo`, `Undo`, `Redo`, `IsPlayMode`, `Play`, `Stop`,
   `Set/IsPanelVisible`.
 * **Environment:** `GetEngineRootPath`, `GetProjectRootPath`, `GetProjectName`.
@@ -376,6 +397,10 @@ with `StructSize` and `AbiVersion` so you can sanity-check what you were given.
   display shaping to a string you built yourself, such as a formatted one, and
   `GetLanguage(outBuf, bufSize)` gives the current language code (`en`, `ru`, …). Call
   all four from the UI thread only.
+* **Plugin settings:** `GetSettingsDraft()` returns the editable draft of the settings your
+  plugin declared with `RegisterSettings`, for a custom settings page to edit;
+  `OpenSettings()` opens **Edit → Preferences → Plugins** at your plugin's section. See
+  [3.14.3](#3143-engine-settings).
 * **Registration:** see [Section 3.6](#36-editor-extension-points).
 
 Functions that fill a buffer (`GetEntityName`, `GetScenePath`, `ExportEntityJson`,
@@ -399,8 +424,32 @@ in-memory key/value store shared by all runtime plugins; `FireEvent` emits a Lua
 that `On("name", handler)` listeners receive. `CheckScriptPath(h, path, write, errorBuf, errorBufSize)`
 applies the engine's rules for file paths that scripts pass in (inside the game folders, no `..`; see
 [LuaAPI 41.3](LuaAPI-EN-DOC.md#413-sandbox)) — call it before your plugin reads, writes or uploads a path a
-script gave it. It returns `false` and writes the reason into `errorBuf` for a refused path. It is the last
-field of the struct, so a plugin that may run on an older engine checks `StructSize` before calling it.
+script gave it. It returns `false` and writes the reason into `errorBuf` for a refused path.
+
+API version 2 appends the functions that extend the engine itself
+([3.14](#314-extending-the-engine--settings-components-world-assets--widget-elements)):
+
+* **Registration:** `RegisterSettings`, `RegisterComponentType`, `RegisterWorldAssetType`,
+  `RegisterWidgetElementType` — call them from `OnEngineInit`, so they run in the editor and
+  in the game alike.
+* **Settings:** `GetSettings()` — the applied values of your settings, read-only.
+* **Components:** `EnumComponents(typeName, cb, user)` visits every instance of a type in the
+  running scene; `WithComponent(entity, typeName, index, cb, user)` visits one;
+  `AddComponent(entity, typeName)` returns the new instance's index among the entity's
+  instances of that type (`-1` on failure); `RemoveComponent(entity, typeName, index)`.
+* **World assets:** `EnumWorldAssets(extension, cb, user)` visits the placed world assets of
+  the running level; an empty extension visits all of them.
+* **Entities:** `EntityExists(uuid)`, `FindEntityByName(name)` (`0` when none),
+  `GetEntityTransform(uuid, position[3], scale[2], &rotation)` and
+  `SetEntityTransform(uuid, position, scale, rotation)` — pass `nullptr` for a part you do not
+  want to read or change; a physics body follows the new position and rotation.
+
+Entities are addressed by their **UUID** — the `Entity` field of a component context, or the
+value `EnumEntities` reports. All of these functions work on the scene that is running (Play
+mode or the game); outside it they find nothing.
+
+Every entry of a host API may be absent on another engine version, so test a function
+pointer for null before you call it.
 
 ### 3.6 Editor extension points
 
@@ -415,7 +464,8 @@ from `OnEditorInit` (or later) — they are only available in editor builds.
 | `RegisterToolbarButton(id, tooltip, cb, user)` | A toolbar button. | The main toolbar, after the built-in buttons. `id` is the visible label; `tooltip` shows on hover. |
 | `RegisterViewportOverlay(cb, user)` | A draw callback. | Rendered last inside the viewport window each frame, so `ImGui::GetWindowDrawList()` draws over the scene. |
 | `RegisterContextMenuItem(context, label, cb, user)` | A context-menu item. | The viewport right-click menu. `context` must be `"viewport"` (always shown) or `"entity"` (shown only when at least one entity is selected). |
-| `RegisterSettingsPage(category, cb, user)` | A settings page. | The **Settings** tab of the Plugins & Mods panel, as a collapsible header named `category`. The tab itself only appears once at least one page is registered. |
+| `RegisterSettingsPage(category, cb, user)` | A settings page. | **Edit → Preferences → Plugins**, inside your plugin's section, under a heading named `category`. The **Plugins** tab appears once a loaded plugin has a page or declared settings ([3.14.3](#3143-engine-settings)), and the plugin's row in the Plugins & Mods panel gets a **Settings** button that opens it. |
+| `RegisterInspector(kind, typeName, fn, user)` | A custom property editor for one of your component types, world asset types or widget element types. | Replaces the generated property fields of that type in the Properties panel, the Class Editor and the Widget Editor ([3.14.7](#3147-custom-inspectors)). |
 
 Notes:
 
@@ -433,8 +483,10 @@ Notes:
   key is shown as written, so plain text keeps working, and a translated one switches
   together with the editor language.
 * **Unloading cleans up.** When a plugin is unloaded (or disabled), every panel, asset
-  type, menu item, toolbar button, overlay, context item and settings page it registered
-  is removed automatically — you do not have to unregister them yourself.
+  type, menu item, toolbar button, overlay, context item, settings page and inspector it
+  registered is removed automatically — you do not have to unregister them yourself. The
+  same goes for its settings, component types, world asset types and widget element types;
+  their running instances get `OnStop` first.
 * `RegisterAssetType` is how plugins introduce brand-new asset kinds; the Content
   Browser queries registered types for their icon, color and create-menu entry — see
   [Assets & Content Browser](Assets-EN-DOC.md).
@@ -560,13 +612,16 @@ version gate.
 
 ### 3.9 API / ABI versioning
 
-The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **1**). Your
+The plugin ABI is versioned by `IceBox::ICE_PLUGIN_API_VERSION` (currently **2**). Your
 plugin reports the version it was built against in `PluginInfo::APIVersion` (set it to
 `ICE_PLUGIN_API_VERSION`).
 
 * If a plugin's `APIVersion` is **greater** than the engine's, the engine **refuses to
   load it** (it was built for a newer ABI) and logs
-  `Plugin '<name>' requires API version N (engine has 1)`.
+  `Plugin '<name>' requires API version N (engine has 2)`.
+* Version **2** appended the engine-extension functions to both host APIs
+  ([3.14](#314-extending-the-engine--settings-components-world-assets--widget-elements)); a
+  plugin built for version 1 keeps working unchanged.
 * A loaded plugin gets every hook of the table in [3.4](#34-the-iplugin-interface--lifecycle)
   and every entry of the host APIs; test each host function pointer for null before
   calling it.
@@ -938,6 +993,386 @@ device family — and keep `--min-sdk` / `--deployment-target` at or below the g
 `Tools/PluginBuilder/README.md` covers each platform in detail, including what a
 `CMakeLists.txt` needs to build everywhere.
 
+### 3.14 Extending the engine — settings, components, world assets & widget elements
+
+Besides editor tooling, a plugin can add pieces of the engine itself. You describe them with
+plain C structs, the editor builds their user interface, the project saves their values, and
+the game runs them — with no editor code in your plugin at all.
+
+| What | Register with | Where it shows up | Saved in |
+| ---- | ------------- | ----------------- | -------- |
+| Engine settings | `RegisterSettings` | **Edit → Preferences → Plugins** | `Config/Engine.json` → `"Plugins"` |
+| Class components | `RegisterComponentType` | **Add Component → Plugins** in the Class Editor; the Properties panel of level entities | the class or level file |
+| World asset types | `RegisterWorldAssetType` | the **Level Outliner** and the viewport | the level file (`WorldAssets`) |
+| Widget elements | `RegisterWidgetElementType` | **Add Element → Plugins** in the Widget Editor | the `.ice_widget` file |
+
+All four registration functions live in the `RuntimeHostAPI`, so the same registration
+serves the editor and the shipped game. Call them from `OnEngineInit`:
+
+```cpp
+void OnEngineInit(const IceBox::PluginRuntimeContext& ctx) override {
+    m_Host = ctx.Host;
+    m_HostContext = ctx.HostContext;
+    if (!m_Host || !m_Host->RegisterComponentType) return;
+    m_Host->RegisterComponentType(m_HostContext, &kSpinnerType);
+}
+```
+
+Every descriptor, context and table starts with `StructSize`; the defaults in
+`PluginInterface.h` fill it in. Descriptors are copied when you register, so they can live on
+the stack. The function pointers you register are called on the main thread.
+
+#### 3.14.1 Properties
+
+Settings, components, world assets and widget elements all describe their data the same way —
+as an array of `IcePropertyDesc`:
+
+| Field | Meaning |
+| ----- | ------- |
+| `Name` | The key the value is stored under. Unique within the array. |
+| `Type` | One of the `IcePropertyType` values below. |
+| `Label` | Text of the field in the editor; defaults to `Name`. |
+| `Tooltip` | Hover text in the editor. |
+| `Default` | The default value, written as text (see below). |
+| `Min`, `Max` | When `Max > Min`, numbers are clamped to this range (also every component of a vector). |
+| `Step` | Drag speed of numeric fields. |
+| `Options` | `Enum`: the choices, separated by `\|` — `"Low\|Medium\|High"`. `Asset`: the allowed file extensions — `"png\|ice_sprite"`; without them the field takes any path, typed in or dragged from the Content Browser. |
+
+`Label`, `Tooltip` and every enum choice are looked up as keys of your plugin's
+`Config/Languages/` files ([3.12](#312-shipping-data--visual-script-nodes-with-a-plugin)), so
+they follow the editor language.
+
+| `IcePropertyType` | Editor field | Stored as | `Default` text |
+| ----------------- | ------------ | --------- | -------------- |
+| `Bool` | checkbox | `true` / `false` | `"true"`, `"1"`, `"yes"`, `"on"` — anything else is `false` |
+| `Int` | integer drag | integer | `"10"` |
+| `Float` | drag | number | `"0.5"` |
+| `String` | text field | string | the text |
+| `Text` | multi-line text field | string | the text |
+| `Vec2` / `Vec3` | 2 / 3 drags | `[x, y]` / `[x, y, z]` | `"1, 2"` — separated by commas, semicolons or spaces |
+| `Color` | color picker | `[r, g, b, a]`, 0…1 | `"1, 0.5, 0, 1"` — a missing component is `1` |
+| `Enum` | combo box | index of the choice | a choice name or its index |
+| `Asset` | asset picker | path relative to the project | the path |
+
+Whatever reaches a value — a saved file, the editor, Lua, Python or your own code — is
+**sanitized** against the declaration: a missing value takes its default, a value of another
+type is converted (`"12"` becomes `12` for an `Int`), numbers are clamped to `Min`…`Max` and an
+enum index to the list of choices. Keys you did not declare are kept as they are, so values
+written by a newer version of your plugin survive an older one.
+
+Your code reads and writes values through an **`IcePropertyBag`** — a table of functions plus
+an opaque pointer, always called with the bag as the first argument:
+
+| Function | Does |
+| -------- | ---- |
+| `Has(bag, key)` | Whether the key exists. |
+| `GetBool` / `GetInt` / `GetFloat(bag, key, fallback)` | The value, or `fallback` when it is missing or not a number/bool. |
+| `GetString(bag, key, outBuf, bufSize)` | Copies the text (a non-string value as JSON) and returns the length it needs. |
+| `GetFloats(bag, key, outValues, count)` | Copies up to `count` numbers of a vector or color and returns how many it holds. |
+| `SetBool` / `SetInt` / `SetFloat` / `SetString(bag, key, value)` | Writes a value; `false` when the bag is read-only. |
+| `SetFloats(bag, key, values, count)` | Writes a vector or color. |
+| `ToJson(bag, outBuf, bufSize)` | The whole bag as a JSON object. |
+| `FromJson(bag, json)` | Merges the keys of a JSON object into the bag. |
+
+Bags handed to drawing callbacks and the applied settings are **read-only**; everything else
+— `OnStart`, `OnUpdate`, `OnStop`, `OnEvent`, the enumeration callbacks, the settings draft and
+custom inspectors — gets a writable bag, and what you write is stored with the instance.
+
+```cpp
+static const IceBox::IcePropertyDesc kSpinnerProps[] = {
+    { sizeof(IceBox::IcePropertyDesc), "speed",  IceBox::IcePropertyType::Float, "spinner_speed", "spinner_speed_tooltip", "90", -720.0f, 720.0f, 1.0f, nullptr },
+    { sizeof(IceBox::IcePropertyDesc), "tint",   IceBox::IcePropertyType::Color, "spinner_tint",  nullptr,                 "1, 0.8, 0.2, 1" },
+    { sizeof(IceBox::IcePropertyDesc), "shape",  IceBox::IcePropertyType::Enum,  "spinner_shape", nullptr,                 "Bar", 0.0f, 0.0f, 0.0f, "Bar|Cross" },
+    { sizeof(IceBox::IcePropertyDesc), "sprite", IceBox::IcePropertyType::Asset, "spinner_sprite", nullptr,                "", 0.0f, 0.0f, 0.0f, "ice_sprite|png" },
+};
+```
+
+#### 3.14.2 Drawing — `IceDrawContext`
+
+Components, world assets and widget elements draw through an `IceDrawContext`. The same
+callback serves the editor and the game; `Editor` tells them apart, and the engine maps your
+coordinates to the screen:
+
+* `x` grows to the **right** and `y` grows **up**; `(0, 0)` is the origin of the thing you draw —
+  the component instance's position, the world asset's bottom-left corner, the widget
+  element's bottom-left corner.
+* Rotation, scale and mirroring of the owner are already applied: you always draw in its own
+  unrotated, unscaled space.
+* `Width` and `Height` are the size of the box you draw into — a world asset's `Size`, a widget
+  element's size — and `0` for components.
+* `Time` is a clock in seconds for animations.
+
+| Function | Draws |
+| -------- | ----- |
+| `Rect(dc, x, y, w, h, color)` | A filled rectangle; `(x, y)` is its bottom-left corner. |
+| `RectOutline(dc, x, y, w, h, thickness, color)` | A rectangle outline whose stroke lies inside the rectangle. |
+| `Line(dc, x1, y1, x2, y2, thickness, color)` | A line. |
+| `Circle(dc, x, y, radius, thickness, color)` | A filled circle when `thickness <= 0`, otherwise a ring that thick, inside the radius. |
+| `Image(dc, path, x, y, w, h, color)` | An `.ice_sprite` (its frame rectangle) or an image file, tinted by `color`. |
+| `Text(dc, text, font, x, y, size, align, color)` | Text whose **baseline** starts at `(x, y)`; `size` is the font size, `align` is `0` left, `1` centered, `2` right of `x`; `font` is a `.ttf` / `.otf` path or `nullptr` for the default font. |
+
+`color` points at four floats, RGBA from 0 to 1; `nullptr` is white. Lengths — sizes,
+thickness, radius, text size — are in the same units as the coordinates.
+
+The editor's own previews — components and world assets in the level viewport and the Class
+Editor, elements on the Widget Editor canvas — are drawn with ImGui, so text there uses the
+editor's font and stays upright. Everywhere else the engine renderer draws: components and
+world assets into the world through the script draw list, where text stays upright as well and
+only its position follows the owner's rotation; widget elements inside their widget (also in
+the level viewport), with their text rotated and mirrored like the rest of the element, clipped
+by **Clip Children** like the built-in elements and faded by the element's opacity.
+
+#### 3.14.3 Engine settings
+
+Settings a plugin declares show up in **Edit → Preferences → Plugins** and are saved with the
+project:
+
+```cpp
+static void OnSettingsChanged(const IceBox::IcePropertyBag* settings, void* user) {
+    static_cast<MyPlugin*>(user)->ApplyQuality(settings->GetInt(settings, "quality", 1));
+}
+
+static const IceBox::IcePropertyDesc kSettings[] = {
+    { sizeof(IceBox::IcePropertyDesc), "quality", IceBox::IcePropertyType::Enum, "myplugin_quality", nullptr, "Medium", 0, 0, 0, "Low|Medium|High" },
+    { sizeof(IceBox::IcePropertyDesc), "endpoint", IceBox::IcePropertyType::String, "myplugin_endpoint", nullptr, "https://example.com" },
+};
+
+void OnEngineInit(const IceBox::PluginRuntimeContext& ctx) override {
+    IceBox::IceSettingsDesc desc;
+    desc.Category = "myplugin_title";
+    desc.Properties = kSettings;
+    desc.PropertyCount = 2;
+    desc.OnChanged = &OnSettingsChanged;
+    desc.User = this;
+    ctx.Host->RegisterSettings(ctx.HostContext, &desc);
+
+    const IceBox::IcePropertyBag* settings = ctx.Host->GetSettings(ctx.HostContext);
+    ApplyQuality(settings->GetInt(settings, "quality", 1));
+}
+```
+
+| `IceSettingsDesc` field | Meaning |
+| ----------------------- | ------- |
+| `Category` | Heading of your section in the **Plugins** tab; defaults to the plugin name. |
+| `Properties`, `PropertyCount` | The declared settings. |
+| `OnChanged(settings, user)` | Called after the applied values changed, with the read-only applied bag. |
+| `User` | Handed back to `OnChanged`. |
+
+* **Values.** `GetSettings()` returns the **applied** values. They come from
+  `Config/Engine.json` → `"Plugins"` → `"<PluginName>"`, completed with the defaults; the file
+  ships with the game, so the game starts with the values you saved.
+* **Editing.** The **Plugins** tab draws a field for each declared setting. The tab's buttons
+  work like the other tabs: **Apply** makes the edited values live (calling `OnChanged` where
+  something changed), **Save** writes them to `Config/Engine.json`, **Reset** returns the
+  fields to the defaults; the global **Save All**, **Apply All** and **Reset All to Defaults**
+  include the plugins.
+* **Your own page.** A page registered with `RegisterSettingsPage` is drawn inside your
+  section, below the generated fields. Edit the same values there through
+  `EditorHostAPI::GetSettingsDraft()` — the draft the tab's buttons apply and save — and
+  `OpenSettings()` brings the user to your section.
+* **Scripts.** Lua reads the applied values with `Plugins.GetSettings(name)` and
+  `Plugins.GetSetting(name, key)` ([LuaAPI](LuaAPI-EN-DOC.md)); editor Python reads them with
+  `project.get_plugin_settings(name)` and changes them with
+  `project.set_plugin_settings(name, values, save=False)` ([PythonAPI](PythonAPI-EN-DOC.md)).
+
+Calling `RegisterSettings` again replaces the declaration and keeps the stored values.
+
+#### 3.14.4 Class components
+
+A component type adds an entry to **Add Component → Plugins** in the Class Editor; on the
+entities of a level the Properties panel shows and edits its instances:
+
+```cpp
+static void SpinnerUpdate(IceBox::IceComponentContext* ctx, float dt, void* user) {
+    const float speed = ctx->Properties->GetFloat(ctx->Properties, "speed", 90.0f);
+    auto* host = static_cast<MyPlugin*>(user)->Host();
+    float rotation = 0.0f;
+    if (host->GetEntityTransform(static_cast<MyPlugin*>(user)->HostContext(), ctx->Entity, nullptr, nullptr, &rotation)) {
+        rotation += speed * dt;
+        host->SetEntityTransform(static_cast<MyPlugin*>(user)->HostContext(), ctx->Entity, nullptr, nullptr, &rotation);
+    }
+}
+
+static void SpinnerDraw(IceBox::IceComponentContext* ctx, IceBox::IceDrawContext* draw, void*) {
+    float tint[4] = { 1, 1, 1, 1 };
+    ctx->Properties->GetFloats(ctx->Properties, "tint", tint, 4);
+    draw->Rect(draw, -32, -4, 64, 8, tint);
+}
+
+IceBox::IceComponentTypeDesc kSpinnerType = [] {
+    IceBox::IceComponentTypeDesc d;
+    d.TypeName = "MyPlugin.Spinner";
+    d.DisplayName = "spinner_title";
+    d.Category = "MyPlugin";
+    d.Flags = IceBox::ICE_COMPONENT_DRAW_IN_GAME;
+    d.Properties = kSpinnerProps;
+    d.PropertyCount = 4;
+    d.OnUpdate = &SpinnerUpdate;
+    d.OnDraw = &SpinnerDraw;
+    return d;
+}();
+```
+
+| `IceComponentTypeDesc` field | Meaning |
+| ---------------------------- | ------- |
+| `TypeName` | Unique type name: letters, digits, `_`, `-` and `.`. Prefix it with your plugin's name. It cannot be the name of a built-in component. |
+| `DisplayName`, `Tooltip` | Text of the menu entry and the component header (localization keys or plain text). |
+| `Category` | Groups types into a sub-menu of **Add Component → Plugins** (a localization key or plain text); types without one are listed directly. |
+| `Flags` | `ICE_COMPONENT_UNIQUE` — at most one instance per entity. `ICE_COMPONENT_DRAW_IN_GAME` — `OnDraw` also runs in the game. |
+| `Properties`, `PropertyCount` | The values every instance carries. |
+| `OnStart(ctx, user)` | The instance starts running: the first runtime frame it exists in. |
+| `OnUpdate(ctx, dt, user)` | Every runtime frame while the entity is enabled. |
+| `OnStop(ctx, user)` | The instance stops: Play stops, the level changes, the component or its entity is removed, or your plugin unloads. |
+| `OnDraw(ctx, draw, user)` | Draws the instance — in the editor viewport and the Class Editor always, in the game with `ICE_COMPONENT_DRAW_IN_GAME`. |
+| `User` | Handed to every callback. |
+
+`IceComponentContext` describes the instance a callback is about:
+
+| Field | Meaning |
+| ----- | ------- |
+| `Entity` | UUID of the entity — the address of every `RuntimeHostAPI` entity function. |
+| `TypeName`, `InstanceName` | The type, and the instance's name shown in the editor. |
+| `Index` | The instance's index among the entity's instances of this type. |
+| `Position[3]`, `Scale[2]`, `Rotation` | The instance's world transform — the entity's transform combined with the instance's local transform. |
+| `Properties` | The instance's values (read-only in `OnDraw`). |
+| `State` | A pointer of your own. What you store here comes back in every later callback of this instance — allocate in `OnStart`, free in `OnStop`. |
+
+In the editor each instance has a name, a **local transform** (offset, scale and rotation from
+the entity, with a gizmo in the Class Editor viewport) and its property fields. A type without
+`ICE_COMPONENT_UNIQUE` can have several instances, added with **+ Add Instance**. Plugin
+components take part in everything built-in components do:
+
+* **Classes** — child classes inherit them, a value edited in the child overrides only that
+  value (reset it from the instance's context menu), and class components contribute them.
+* **Levels** — they are saved with the entity, duplicated with it, and the editor's undo
+  covers them.
+* **Multiplayer** — they replicate with the rest of the entity's components.
+* **Scripts** — Lua's `HasComponent`, `AddComponent` and `RemoveComponent` accept your type
+  name, and the `Plugins` table reads and writes their properties
+  ([LuaAPI](LuaAPI-EN-DOC.md)); every component function of the editor Python API accepts it as
+  well ([PythonAPI](PythonAPI-EN-DOC.md)).
+
+From native code, `EnumComponents`, `WithComponent`, `AddComponent` and `RemoveComponent` of
+the `RuntimeHostAPI` reach the instances of the running scene
+([3.5](#35-host-apis--talking-back-to-the-engine)).
+
+#### 3.14.5 World asset types
+
+A world asset type turns a file extension into something that is **placed in levels**: drag a
+file with that extension from the Content Browser into the Level Outliner or the viewport, and
+the level gets an entry with a position, a scale and the type's properties. Combine it with
+`RegisterAssetType` ([3.6](#36-editor-extension-points)) to let users create such files.
+
+| `IceWorldAssetTypeDesc` field | Meaning |
+| ----------------------------- | ------- |
+| `Extension` | The file extension, with or without the dot; case does not matter. Extensions starting with `.ice` belong to the engine. |
+| `DisplayName` | Type name shown in the Level Outliner. |
+| `Badge`, `BadgeColor[4]` | The tag drawn before its entries in the Level Outliner; `[WA]` by default. |
+| `Size[2]` | Size of its box in world units, starting at the position (the bottom-left corner) and scaled by the entry's scale. `0, 0` makes it a point with a small handle. |
+| `Flags` | `ICE_WORLD_ASSET_DRAW_IN_GAME` — `OnDraw` also runs in the game. |
+| `Properties`, `PropertyCount` | The values every placed entry carries. |
+| `OnStart` / `OnUpdate` / `OnStop` | Like components: the level starts running, every runtime frame, the level stops or your plugin unloads. |
+| `OnDraw` | Draws an entry — in the editor viewport always, in the game with the flag. |
+| `User` | Handed to every callback. |
+
+`IceWorldAssetContext` carries `AssetPath`, `Name`, `Index` (the entry's position in the level's
+world asset list), `Position[3]`, `Scale[2]`, `Size[2]`, `Properties` and `State`, with the
+same meaning as for components.
+
+In the editor the entries are listed and managed in the Level Outliner like the built-in view
+and cinema assets, under the type's badge; selecting one shows its transform and properties in
+the Properties panel and a move/scale gizmo in the viewport, and a click on its box in the
+viewport selects it. Lua reaches the entries of the running level through
+`Plugins.GetWorldAssets` and the `Plugins.*WorldAssetProperty*` functions, editor Python
+through `editor.get_world_assets()` / `editor.set_world_asset()`, which carry a `properties`
+dictionary, and native code through `EnumWorldAssets`.
+
+#### 3.14.6 Widget elements
+
+A widget element type adds an entry to **Add Element → Plugins** in the Widget Editor (and to
+the **Plugins** section of an element's right-click menu, as a child). The element has
+everything a built-in element has — anchors, pivot, size, rotation, scale, flip, opacity,
+color, visibility, Z order, clipping, tooltip, navigation, Lua callbacks and animations — and
+your plugin draws its content and handles its input.
+
+| `IceWidgetElementTypeDesc` field | Meaning |
+| -------------------------------- | ------- |
+| `TypeName` | Unique type name, with the same rules as components; it cannot be the name of a built-in element (`Button`, `Text`, …). |
+| `DisplayName` | Text of the menu entry and of the element's type in the inspector. |
+| `Badge` | The tag before the element in the hierarchy; `[PL]` by default. |
+| `DefaultSize[2]` | The size of a new element, and its desired size when **Desired Size** is on. |
+| `Properties`, `PropertyCount` | The values every element of this type carries, shown under **Plugin Properties**. |
+| `OnDraw(ctx, draw, user)` | Draws the element every frame it is visible — in the Widget Editor, in the level viewport and in the game. |
+| `OnEvent(ctx, eventName, x, y, user)` | Pointer and gamepad input; see below. A type without it ignores input. |
+| `User` | Handed to every callback. |
+
+`IceWidgetElementContext` fields:
+
+| Field | Meaning |
+| ----- | ------- |
+| `TypeName`, `ElementName`, `ElementId` | The type, and the element's name and id inside its widget. |
+| `WidgetPath` | The `.ice_widget` that holds the element. |
+| `Entity`, `Instance` | UUID of the entity showing the widget and the id of that widget instance — together with `ElementId` they identify one element on screen. Both are `0` in the Widget Editor. |
+| `Width`, `Height` | The element's size in widget units — the box you draw into. |
+| `Color[4]` | The element's **Color**; while the element uses custom state colors, its hovered or pressed color. |
+| `Opacity` | The element's effective opacity (parents and animations included). The draw context already applies it to everything you draw. |
+| `Hovered`, `Pressed`, `Focused` | Pointer over the element, pressed (by the pointer or the gamepad), selected by gamepad navigation. |
+| `Editor` | `true` when drawing outside a running game. |
+| `Properties` | The element's values — read-only in `OnDraw`, writable in `OnEvent`; what you write stays on that widget instance. |
+
+`OnEvent` receives these events while the element is visible and **Interactable**; `x`, `y`
+are the pointer position in the element's own space (`(0, 0)` at its bottom-left corner,
+`y` up):
+
+| Event | When |
+| ----- | ---- |
+| `HoverEnter` / `HoverExit` | The pointer entered / left the element (`HoverExit` passes `0, 0`). |
+| `Move` | The pointer moved over the element without a button held. |
+| `Press` | A button was pressed on the element. |
+| `Drag` | The pointer moved while the press that started on the element is held — also outside the element. |
+| `Release` | That press ended — always sent after `Press`, wherever the pointer is. |
+| `Click` | Sent after `Release` when the pointer is still over the element, and when gamepad navigation activates it (at its center). The element's **On Click** Lua callback runs as well. |
+
+An element whose type has `OnEvent` can be focused by gamepad and keyboard navigation, and a
+drag that starts on it is not taken over by a dragging **Scroll View**.
+
+Scripts address plugin elements like the others: `AddWidgetElement`, `CreateElement` and
+`AddSubWidgetElement` accept your type name, `GetElementType` returns `"Plugin"`, and the
+`…PluginType`, `…PluginProperties`, `…PluginProperty` functions read and write the values
+([LuaAPI](LuaAPI-EN-DOC.md)). In the `.ice_widget` file the element is saved as
+`"Type": "Plugin"` with `"PluginType"` and `"PluginProperties"`.
+
+#### 3.14.7 Custom inspectors
+
+The editor generates fields for your properties. To draw them yourself, register an inspector
+from `OnEditorInit`:
+
+```cpp
+static bool SpinnerInspector(IceBox::IcePropertyBag* properties, const char* typeName, void* user) {
+    float speed = properties->GetFloat(properties, "speed", 90.0f);
+    if (ImGui::SliderFloat("Speed", &speed, -720.0f, 720.0f)) {
+        properties->SetFloat(properties, "speed", speed);
+        return true;
+    }
+    return false;
+}
+
+ctx.Host->RegisterInspector(ctx.HostContext, IceBox::IceInspectorKind::Component, "MyPlugin.Spinner", &SpinnerInspector, this);
+```
+
+`kind` is `Component`, `WorldAsset` (then `typeName` is the extension) or `WidgetElement`. The
+callback draws ImGui in place of the generated fields and edits a sanitized copy of the
+values; the editor stores the copy and records an undo step when it changed. Return `true`
+when you changed something the engine cannot see — for example after `FromJson`. Registering
+the same type again replaces the callback, and unloading removes it.
+
+#### 3.14.8 When the plugin is missing
+
+A level, class or widget that uses your types stays valid when your plugin is disabled or not
+installed: the entries keep all their values and are saved unchanged, the editor marks them
+(a note in the component, the extension in the Level Outliner, a placeholder box in the Widget
+Editor), and nothing runs or draws until the plugin is back.
+
 ---
 
 # Part II — Mods (Lua + content)
@@ -1188,17 +1623,18 @@ engine Lua functions; see the Lua API doc.)
 
 ### 5.1 The Plugins & Mods panel
 
-Open it from `Tools → Plugins & Mods`. It has up to three tabs:
+Open it from `Tools → Plugins & Mods`. It has two tabs:
 
 * **Plugins (C++)** — every discovered plugin with its icon, an **enable checkbox**, name
   (green when **loaded**, gray otherwise), version, a `[Loaded]` badge, an
   `[Editor Only]` badge for plugins that declare `"EditorOnly": true`, description,
-  author, and a **Show in File Browser** button.
+  author, and a **Show in File Browser** button. A loaded plugin with settings — declared
+  ones or a page registered with `RegisterSettingsPage` — also gets a **Settings** button that
+  opens its section in **Edit → Preferences → Plugins**
+  ([3.14.3](#3143-engine-settings)).
 * **Mods (Lua)** — the same layout for mods, plus each mod's **Load Order**. A mod that is
   enabled but not yet running shows a yellow `[Pending]` badge; a running one turns green
   with `[Loaded]`.
-* **Settings** — appears only when a loaded plugin registered a settings page (via
-  `RegisterSettingsPage`); shows those pages grouped by category.
 
 Both list tabs have a **Refresh** button and a **search box** that filters the list by
 name (case-insensitive substring). Toggling a checkbox immediately writes the
@@ -1253,6 +1689,21 @@ Two small files under `Config/` record which extensions are enabled:
 
 You can edit these by hand; the editor rewrites them when you toggle checkboxes, merging
 into whatever else the file contains.
+
+The values of the settings plugins declare live in a third file, `Config/Engine.json`, under
+`"Plugins"` — one object per plugin, keyed by the plugin name:
+
+```json
+{
+    "Plugins": {
+        "MyPlugin": { "quality": 2, "endpoint": "https://example.com" }
+    }
+}
+```
+
+**Save** in **Edit → Preferences → Plugins** writes it ([3.14.3](#3143-engine-settings)). The
+file ships with the game, so a game starts with the values you saved; the values of a plugin
+that is not loaded stay in the file untouched.
 
 > **Read-only installs.** If the config lives inside a macOS `.app` bundle, the engine
 > keeps the shipped file as the baseline and writes/reads a per-user override in the
@@ -1395,9 +1846,11 @@ Steps 1–3 run once when the editor or the game starts; step 4 runs on every Pl
 **Unloading.** Mods are unloaded on play stop, in **reverse** load order, receiving
 `OnLevelEnd` then `OnModUnload`. Plugins are unloaded on shutdown (or when you untick
 them) in **reverse** load order as well, so a plugin always outlives the plugins that
-depend on it; each one first loses every editor registration it made, then gets
-`OnUnregisterLua`, `OnEditorShutdown` (if its editor side is still live) and `OnUnload`,
-and only then are its translations dropped and the library freed.
+depend on it; each one first loses every editor registration it made, then its running
+component and world asset instances get `OnStop` and its settings, component types, world
+asset types and widget element types are removed, then it gets `OnUnregisterLua`,
+`OnEditorShutdown` (if its editor side is still live) and `OnUnload`, and only then are its
+translations dropped and the library freed.
 
 ## 7. Shipping plugins & mods in a build
 
@@ -1478,7 +1931,7 @@ the same Plugin Manager flow as the editor.
 | Form | Native C++ library / static | Lua + content folder |
 | Manifest | `plugin.json` | `mod.json` |
 | Entry | `ICE_PLUGIN_ENTRY(Class)` → `IPlugin` | `main.lua` |
-| SDK / API | `IceBoxPluginSDK`, C ABI v`1` | engine Lua API, mod `APIVersion` (≤ `1`) |
+| SDK / API | `IceBoxPluginSDK`, C ABI v`2` | engine Lua API, mod `APIVersion` (≤ `1`) |
 | Folder / config | `Plugins/` · `Config/Plugins.json` | `Mods/` · `Config/Mods.json` |
 | Alive in | Editor + runtime | Play mode / game only |
 | Live toggle | Yes, once built | Yes |
@@ -1493,7 +1946,13 @@ the same Plugin Manager flow as the editor.
 
 Editor registration: `RegisterPanel` · `RegisterAssetType` · `RegisterMenuItem` ·
 `RegisterToolbarButton` · `RegisterViewportOverlay` · `RegisterContextMenuItem` ·
-`RegisterSettingsPage` (+ `ShowPanel` · `IsPanelOpen`)
+`RegisterSettingsPage` · `RegisterInspector` (+ `ShowPanel` · `IsPanelOpen` ·
+`GetSettingsDraft` · `OpenSettings` · `WorldToScreen` · `GetViewportOrigin`)
+
+Engine extension (`RuntimeHostAPI`): `RegisterSettings` · `GetSettings` ·
+`RegisterComponentType` · `RegisterWorldAssetType` · `RegisterWidgetElementType` ·
+`EnumComponents` · `WithComponent` · `AddComponent` · `RemoveComponent` · `EnumWorldAssets` ·
+`EntityExists` · `FindEntityByName` · `GetEntityTransform` · `SetEntityTransform`
 
 Editor localization: `Localize` · `LocalizeRaw` · `ShapeText` · `GetLanguage` · the
 `language_changed` editor event
@@ -1518,6 +1977,7 @@ Lua module: `Mods.GetAll` · `GetInfo` · `GetCount` · `GetEnabledCount` · `Is
 | `Plugins/<Name>/Binaries/<Platform>/…` | Game-platform libraries from the Plugin Builder: `Android/<ABI>/*.so`, `iOS/<slice>/*.a`, `Web/<variant>/*.a`, `Xbox/<family>/*.dll`. |
 | `Mods/<Name>/mod.json` | Mod manifest. |
 | `Config/Plugins.json` · `Config/Mods.json` | Which packages are enabled. |
+| `Config/Engine.json` → `"Plugins"` | The saved values of the settings plugins declare; ships with the game. |
 | `Config/Editor.json` → `PanelVisibility.PluginsPanel` | Whether the panel is open. |
 | `Config/Editor.json` → `BuildSettings.IncludePlugins` / `.IncludeMods` | The Build Game **Packages** switches. |
 | `Plugins/<Name>/<Name>.dll` (`.so`, `.dylib`) | The desktop library the Plugin Builder built — the one the editor loads and desktop games ship. |
@@ -1560,6 +2020,16 @@ exists for the languages you have not translated yet
 The files have to be Markdown under `Plugins/<Name>/Documentation/<LANG>/`, and the panel
 shows one language at a time — pick the language whose folder holds them. Press the
 panel's **Refresh** after adding files by hand.
+
+**A component, world asset or widget element says its plugin is not loaded.**
+The plugin that registered the type is disabled, failed to load or is not installed. The
+values are kept and saved unchanged; enable or install the plugin and everything comes back
+([3.14.8](#3148-when-the-plugin-is-missing)).
+
+**My plugin's settings do not show up in Preferences.**
+Register them from `OnEngineInit` with at least one property, or register a settings page in
+the editor; the **Plugins** tab appears once a loaded plugin has either
+([3.14.3](#3143-engine-settings)).
 
 **`HasCapability("python")` says no in `OnEditorInit`.**
 At editor start the Python bridge comes up after the plugins. Ask again from

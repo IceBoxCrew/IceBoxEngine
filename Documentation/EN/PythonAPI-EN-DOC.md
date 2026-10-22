@@ -1425,7 +1425,7 @@ types = editor.get_component_types()
 #  'Replication', 'Hierarchy']
 ```
 
-> 26 types. See [Component kinds](#component-kinds) for which of them can be added or removed — `editor.describe_components()` returns the same table as data.
+> 26 built-in types, followed by the component types of the loaded native plugins, such as `'MyPlugin.Spinner'` (see [Plugin components](#plugin-components)). See [Component kinds](#component-kinds) for which of them can be added or removed — `editor.describe_components()` returns the same table as data.
 
 ---
 
@@ -1575,7 +1575,7 @@ if editor.has_component(uuid, 'Rigidbody'):
     print('Has physics body')
 ```
 
-**Supported types**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
+**Supported types**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`, and the type names of [plugin components](#plugin-components)
 
 > ℹ️ `PointLight` and `SpotLight` are two faces of one underlying light component, so an entity carrying either will report `True` for `has_component` on both. Use `get_instance_count(uuid, 'PointLight')` / `get_instance_count(uuid, 'SpotLight')` to tell which kind of lights it actually holds.
 
@@ -1599,7 +1599,7 @@ editor.remove_component(uuid, 'Rigidbody')
 
 #### Component kinds
 
-Every component falls into one of four kinds, and the API tells you which:
+Every component falls into one of five kinds, and the API tells you which:
 
 | Kind | `add_component` | `remove_component` | Types |
 |------|:---:|:---:|-------|
@@ -1607,12 +1607,14 @@ Every component falls into one of four kinds, and the API tells you which:
 | **managed** | ❌ | ❌ | `Hierarchy` — created and destroyed by `set_parent` / `clear_parent` |
 | **instanced** | ✅ | ✅ | `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Tilemap`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Joint`, `ClassComponent` |
 | **single** | ✅ | ✅ | `Camera`, `Rigidbody`, `Collider`, `Animator`, `Skeleton`, `Script`, `AI`, `Destructible`, `GameplayTag`, `Interface` |
+| **plugin** | ✅ | ✅ | Every type a loaded native plugin registers — see [Plugin components](#plugin-components) |
 
 `add_component` returns `False` when the component is already present or when the type cannot be added.
 `remove_component` returns `False` for core and managed types and logs a warning explaining why.
 
-> `describe_components()` lists 28 rows while `get_component_types()` returns 26: the two identity
-> components `Tag` and `ID` are readable with `get_component()` but are not offered as addable types.
+> `describe_components()` lists 28 built-in rows while `get_component_types()` returns 26 built-in types:
+> the two identity components `Tag` and `ID` are readable with `get_component()` but are not offered as
+> addable types. Both then add one entry per plugin component type.
 
 > **Adding an instanced component also creates its first instance**, exactly like the editor's own
 > *Add Component* menu — so `add_component(uuid, 'PointLight')` gives you a light you can see, not an
@@ -1624,6 +1626,8 @@ Every component falls into one of four kinds, and the API tells you which:
 #### `editor.describe_components()` → `list[dict]`
 
 The whole table above as data — `type`, `kind`, `addable`, `removable`, `multi_instance`, `notes`.
+Plugin component types follow the built-in ones with the kind `'plugin'`, their tooltip (or display
+name) as `notes` and one more key, `plugin` — the name of the plugin that registered them.
 
 ```python
 for c in editor.describe_components():
@@ -2209,6 +2213,43 @@ editor.set_component(uuid, 'Hierarchy', {
 ```
 
 > ⚠️ `parent_uuid` and `children` are **read-only** — change the links with `set_parent` / `clear_parent` (see [5.6](#56-folders)). Only `local_position`, `local_scale`, and `local_rotation` can be written.
+
+#### Plugin components
+
+Native plugins can register their own component types, named `Plugin.Type`
+([Plugins & Mods → Class components](Plugins-And-Mods-EN-DOC.md#3144-class-components)). Every
+component function of this section, the batch functions of [5.7](#57-batch-operations) and the
+instance functions of [5.13](#513-multi-instance-components) accept those names.
+
+**Example for a plugin component:**
+```python
+spinner = editor.get_component(uuid, 'MyPlugin.Spinner')
+# {
+#     'instance_count': 2,
+#     'name': 'Spinner',               # the first instance
+#     'type': 'MyPlugin.Spinner',
+#     'position': (0.0, 0.0, 0.0),     # local, relative to the entity
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0,
+#     'properties': {'speed': 90.0, 'tint': [1.0, 1.0, 1.0, 1.0], 'mode': 0}
+# }
+
+# Only the keys you pass change
+editor.set_component(uuid, 'MyPlugin.Spinner', {'properties': {'speed': 180}})
+```
+
+* `get_component` / `set_component` work on the first instance of the type; `get_instance` /
+  `set_instance` reach the others. `name`, `position`, `scale`, `rotation` and `properties` are
+  writable, `type` and `instance_count` are not.
+* `properties` holds every property the plugin declares, completed with its default: a `Vec2`,
+  `Vec3` or `Color` comes back as a list, an `Enum` as the index of its choice, an `Asset` as a
+  project path. Values you write are converted and clamped by the declaration, so
+  `{'speed': '180'}` stores the number `180`; a key the plugin does not declare is stored as given.
+* `add_component` adds the first instance with the default values. It returns `False` when the
+  entity already holds the type or when no loaded plugin registers it. `remove_component` removes
+  every instance of the type.
+* An entity keeps the instances of a plugin that is not loaded: reading, writing and removing them
+  still works, adding needs the plugin.
 
 `get_instance(uuid, type, index)` — see section [5.13](#513-multi-instance-components).
 
@@ -3037,7 +3078,7 @@ Cuts current selection to clipboard.
 
 Some components support multiple instances on one entity. For example, SpriteRenderer can have multiple sprite layers, PointLight — multiple light sources.
 
-**Multi-instance components**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent`
+**Multi-instance components**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent`, and every [plugin component](#plugin-components) type its plugin does not declare unique
 
 #### `editor.get_instance_count(uuid, component_type)` → `int`
 
@@ -3360,6 +3401,22 @@ cc_data = editor.get_instance(uuid, 'ClassComponent', 0)
 # }
 ```
 
+**Plugin component:**
+```python
+spinner = editor.get_instance(uuid, 'MyPlugin.Spinner', 1)
+# {
+#     'name': 'Spinner1',
+#     'type': 'MyPlugin.Spinner',      # read-only
+#     'position': (0.0, 40.0, 0.0),
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0,
+#     'properties': {'speed': 45.0, 'tint': [0.0, 1.0, 0.0, 1.0], 'mode': 1}
+# }
+```
+
+For a plugin type, `index` counts only the instances of that type. `properties` follows the rules of
+[Plugin components](#plugin-components).
+
 #### `editor.set_instance(uuid, component_type, index, data)` → `bool`
 
 Changes instance data. Pass only fields to change. For each instance you can also change `name`, `position`, `scale`, `rotation` (if supported by the component).
@@ -3406,7 +3463,13 @@ Adds a new instance. If name is not specified, uses the component type name.
 editor.add_instance(uuid, 'SpriteRenderer', 'Shadow')
 editor.add_instance(uuid, 'PointLight', 'RedLight')
 editor.add_instance(uuid, 'Audio', 'FootstepSound')
+editor.add_instance(uuid, 'MyPlugin.Spinner')   # 'Spinner1' next to an existing 'Spinner'
 ```
+
+> Like every other type, a plugin type needs its first instance already — `add_component` adds it.
+> A new plugin instance starts with the default property values; without a name it is named after
+> the part of the type name after the last dot, with a number added when that name is taken. A type
+> declared unique never gets a second instance, and the plugin must be loaded.
 
 #### `editor.remove_instance(uuid, component_type, index)` → `bool`
 
@@ -3607,7 +3670,7 @@ for level in scene.list_scenes():
 
 ### 5.14.2 Level world assets
 
-Besides entities, a level can hold **world assets** — assets placed directly on the level rather than on an entity, listed in the Level Outliner under the level itself and saved inside the `.icemap`. Typical uses are post-process **View** volumes (`.ice_view`) and **Cinema** sequences (`.ice_cinema`).
+Besides entities, a level can hold **world assets** — assets placed directly on the level rather than on an entity, listed in the Level Outliner under the level itself and saved inside the `.icemap`. Typical uses are post-process **View** volumes (`.ice_view`) and **Cinema** sequences (`.ice_cinema`), plus the world asset types native plugins add, each with its own file extension ([Plugins & Mods → World asset types](Plugins-And-Mods-EN-DOC.md#3145-world-asset-types)).
 
 Each world asset is a dict:
 
@@ -3624,6 +3687,7 @@ Each world asset is a dict:
 | `cinema_trigger_on_overlap` | `bool` | Cinema: start when a tagged entity overlaps |
 | `cinema_trigger_tag` | `str` | Cinema: which gameplay tag triggers it (empty = any entity) |
 | `cinema_trigger_size` | `(w, h)` | Cinema: trigger box size in pixels, centered on the position (minimum 1) |
+| `properties` | `dict` | Plugin world assets: the values of the properties the plugin declares, completed with defaults (`{}` for other assets) |
 
 #### `editor.get_world_asset_count()` → `int`
 
@@ -3662,7 +3726,13 @@ editor.set_world_asset(1, {
     'cinema_trigger_size': (256.0, 128.0),
     'cinema_play_once': True
 })
+
+# Change one property of a plugin world asset — the other properties keep their values
+editor.set_world_asset(2, {'properties': {'radius': 300}})
 ```
+
+> `properties` follows the rules of [plugin components](#plugin-components): each value is converted
+> and clamped by the plugin's declaration, and a key it does not declare is stored as given.
 
 #### `editor.add_world_asset(asset_path, x=0, y=0, z=0)` → `bool`
 
@@ -3673,7 +3743,7 @@ editor.add_world_asset('Content/Views/cave_grade.ice_view', 1200, -300)
 editor.add_world_asset('Content/Cinema/intro.ice_cinema')
 ```
 
-> ℹ️ Unlike dragging an asset into the viewport — which centres the volume on the drop point — this places the asset's origin at exactly the coordinates you give.
+> ℹ️ Unlike dragging an asset into the viewport — which centres the volume on the drop point — this places the asset's origin at exactly the coordinates you give. A plugin world asset starts with the default values of its properties.
 
 #### `editor.remove_world_asset(index)` → `bool`
 
@@ -4720,7 +4790,8 @@ for name, count in sorted(s['components'].items(), key=lambda kv: -kv[1]):
 #### `scene.validate()` → `dict`
 
 Walks every entity (including every multi-instance component) and every world asset on the level and
-reports any asset reference that does not resolve on disk. Returns `ok`, `checked_entities` and
+reports any asset reference that does not resolve on disk — the `Asset` properties of plugin
+components and plugin world assets included. Returns `ok`, `checked_entities` and
 `problems` — a list of `{uuid, entity, reference}`.
 
 ```python
@@ -6228,6 +6299,8 @@ print(project.get_config('Engine')['Physics']['GravityY'])
 |----------|---------|-------------|
 | `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
 | `project.set_plugin_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Plugins.json`; the plugin is loaded or unloaded on the next editor frame |
+| `project.get_plugin_settings(name)` | `dict`/`None` | Applied values of the settings a plugin adds to **Edit → Preferences → Plugins**, completed with defaults |
+| `project.set_plugin_settings(name, values, save=False)` | `bool` | Change some of them and apply them at once; `save=True` also writes them to `Config/Engine.json` |
 | `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
 | `project.set_mod_enabled(name, enabled)` | `bool` | Enable/disable and persist to `Config/Mods.json` |
 | `project.reload_plugin_config()` | — | Rescan `Plugins/` and `Mods/`, re-read both registries from disk and reload what is enabled, on the next editor frame |
@@ -6244,6 +6317,25 @@ for p in project.get_plugins():
 > unloaded before it goes and loaded again once it is back. `reload_plugin_config()` is deferred the same
 > way: on the next frame every plugin and mod is unloaded, both folders are rescanned and the enabled
 > plugins are loaded again — the enabled mods too if the game is running.
+
+**Plugin settings.** A plugin can add its own section to **Edit → Preferences → Plugins**
+([Plugins & Mods → Engine settings](Plugins-And-Mods-EN-DOC.md#3143-engine-settings)); these two
+functions read and change the same values.
+
+```python
+settings = project.get_plugin_settings('MyPlugin')
+if settings is not None:
+    print(settings['quality'])
+
+project.set_plugin_settings('MyPlugin', {'quality': 2})              # for this session
+project.set_plugin_settings('MyPlugin', {'quality': 2}, save=True)   # and in Config/Engine.json
+```
+
+> `set_plugin_settings` works like the tab's **Apply** button — with `save=True` like **Save** as
+> well: each value is converted to the type the plugin declares, keys you leave out keep their
+> values, and the plugin is told about the change. It returns `False` while the plugin is not loaded
+> or registers no settings. `get_plugin_settings` returns what `Config/Engine.json` stores for a
+> plugin that is not loaded, and `None` when nothing is stored.
 
 ---
 
@@ -6696,6 +6788,7 @@ icebox.log.trace('entering import loop')
 | `Interface` | ❌ | Implemented interface names. `{'interfaces': ['IDamageable', ...]}`. |
 | `Replication` | ❌ | Network replication: ownership, what to sync, script mode, relevancy. Cannot be removed. |
 | `Hierarchy` | ❌ | Parent/child links: `parent_uuid`, `children`, `local_position`, `local_scale`, `local_rotation`. **Read** via `get_component`; **edit** via `set_parent` / `clear_parent` (see 5.6). |
+| `Plugin.Type` | ✅ | Component types of loaded native plugins: instance name, local transform and the declared `properties`. A type its plugin declares unique holds one instance. See [Plugin components](#plugin-components). |
 
 ### Enum reference
 
@@ -6775,8 +6868,8 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 |------|:---:|-------------|
 | `name` | All multi-instance | Instance name (`str`) |
 | `position` | All multi-instance | Local position `(x, y, z)` relative to entity |
-| `scale` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent | Local scale `(x, y)` |
-| `rotation` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent | Local rotation in degrees |
+| `scale` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent, plugin types | Local scale `(x, y)` |
+| `rotation` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent, plugin types | Local rotation in degrees |
 | `render_in_game` | SpriteRenderer, Flipbook, FX, Widget, PointMarker | Render in game mode |
 | `attach_to_collider` | SpriteRenderer, Flipbook | Name of the collider the instance follows (`''` = none) |
 | `attach_to_socket` | SpriteRenderer, Flipbook | Name of the socket (attach point) the instance follows (`''` = none). The engine keeps the instance glued to it every frame, correct under entity rotation, entity scale and Flip X. |
@@ -6824,6 +6917,8 @@ When using `get_instance` / `set_instance` for multi-instance components, **addi
 | `max_force` / `max_torque` | Joint | Motor joint force / torque caps |
 | `correction_factor` | Joint | Motor joint correction factor |
 | `linear_offset` | Joint | Motor joint linear offset `(x, y)` |
+| `type` | Plugin types | The component type name (read-only) |
+| `properties` | Plugin types | Values of the properties the plugin declares (see [Plugin components](#plugin-components)) |
 
 > ⚠️ `PointLight` and `SpotLight` instances have **no** `visible` or `render_in_game` field — use `enabled` instead.
 

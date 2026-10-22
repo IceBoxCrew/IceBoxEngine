@@ -70,7 +70,7 @@
    - 7.1 [Entity header & class overrides](#71-entity-header--class-overrides)
    - 7.2 [Components](#72-components)
    - 7.3 [Multi-selection editing](#73-multi-selection-editing)
-   - 7.4 [World-asset properties (Views & Cinemas)](#74-world-asset-properties-views--cinemas)
+   - 7.4 [World-asset properties](#74-world-asset-properties)
    - 7.5 [Per-instance script overrides](#75-per-instance-script-overrides)
    - 7.6 [Instance variables](#76-instance-variables)
 8. [World Settings](#8-world-settings)
@@ -90,6 +90,7 @@
     - 10.7 [Audio](#107-audio)
     - 10.8 [Accessibility](#108-accessibility)
     - 10.9 [Network](#109-network)
+    - 10.10 [Plugins](#1010-plugins)
 11. [Network Manager (ENet)](#11-network-manager-enet)
 12. [Remote Preview](#12-remote-preview)
 13. [The Help panels](#13-the-help-panels)
@@ -571,12 +572,12 @@ level of storage through that picker — pick a subfolder there, or type the pat
 which works for any folder the app can write.
 
 > Besides Tools items and panels, a plugin can also add **toolbar buttons**,
-> **viewport overlays**, **right-click context items**, **settings pages** (shown on the
-> **Settings** tab of the Plugins & Mods panel, not in Preferences) and even **new asset
-> types** with their own editors. A plugin's labels are translated into the editor
-> language from its own files, and its documentation opens in the **Documentation**
-> panel. All of those surfaces are described in
-> [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
+> **viewport overlays**, **right-click context items**, **settings** (on the
+> [Plugins](#1010-plugins) tab of Preferences), **class components**, **world assets**,
+> **widget elements** and even **new asset types** with their own editors. A plugin's
+> labels are translated into the editor language from its own files, and its
+> documentation opens in the **Documentation** panel. All of those surfaces are described
+> in [Plugins & Mods](Plugins-And-Mods-EN-DOC.md).
 
 ### 3.5 Help
 
@@ -901,6 +902,7 @@ Drag from the **Content Browser** onto the viewport:
 | **Class** (`.ice_class`) | Instantiates the class as a new entity at the drop point (snapped to grid if enabled), then selects it. |
 | **View** (`.ice_view`) | Places a **post-process / nav-grid volume** at the drop point (appears under *World Assets* in the Outliner). |
 | **Cinema** (`.ice_cinema`) | Places a **cutscene trigger** at the drop point (also a *World Asset*). |
+| **Plugin world asset** (a file type a plugin registers) | Places it at the drop point — centred on it when the type declares a size (also a *World Asset*). See [Plugins & Mods → World asset types](Plugins-And-Mods-EN-DOC.md#3145-world-asset-types). |
 
 Any other asset type dropped on the viewport is ignored. Dropping is blocked while
 Play mode is running unless the camera is ejected. Other asset types are placed via
@@ -976,10 +978,11 @@ both panels:
 | `[EN]` | **Entity** — an entity with no class behind it. |
 | `[VW]` | **View** world asset (`.ice_view`). |
 | `[CN]` | **Cinema** world asset (`.ice_cinema`). |
+| *(the type's own)* | A world asset of a type a plugin adds — the badge and colour that type declares. |
 | `[WA]` | Any other world asset. |
 
-The same legend is printed at the bottom of the **right-click-empty-space** menu, and
-hovering a row for a moment shows its type in a tooltip.
+The same legend, with a row for each plugin world asset type, is printed at the bottom of the
+**right-click-empty-space** menu, and hovering a row for a moment shows its type in a tooltip.
 
 * **Entities** are listed by their tag (name). If an entity was instantiated from a
   class and later renamed, the row shows `Tag (ClassName)` so you can still tell what
@@ -987,10 +990,11 @@ hovering a row for a moment shows its type in a tooltip.
 * **Folders** are purely organizational groupings. Drag entities onto a folder to file
   them; folders can be nested (the tree stops recursing past 10 levels). Expansion
   state and membership are saved with the level.
-* **World Assets** — placed **view** and **cinema** volumes appear in their own section
-  at the bottom, under a *World Assets* heading, tinted per type. Hovering one shows
-  its type, asset path and position (and scale, for a bounded view volume, or
-  *Infinite* for an unbounded one); a view with an audio volume also shows its snapshot.
+* **World Assets** — placed **view** and **cinema** volumes and the world assets of
+  plugin types appear in their own section at the bottom, under a *World Assets* heading,
+  tinted per type. Hovering one shows its type, asset path and position (and scale, for a
+  bounded view volume or a plugin world asset, or *Infinite* for an unbounded view); a view
+  with an audio volume also shows its snapshot.
 
 **Operations**
 
@@ -999,7 +1003,7 @@ hovering a row for a moment shows its type in a tooltip.
 | **Click** | Select an entity, folder or world asset — the three selection kinds are mutually exclusive. |
 | **Ctrl + Click** | Toggle an entity in the multi-selection. |
 | **Shift + Click** | Select the whole visible range between the last clicked entity and this one. |
-| **Double-click** | On a class entity: opens its Class asset. On a world asset: opens the `.ice_view` / `.ice_cinema` asset. |
+| **Double-click** | On a class entity: opens its Class asset. On a world asset: opens the `.ice_view` / `.ice_cinema` asset, or a plugin world asset in the editor its plugin registers for that file type. |
 | **F2** | Rename the selected entity, or the selected folder. |
 | **Delete** | Delete the selected entity, folder or world asset. |
 | **Ctrl + C / X / V** | Copy / cut / paste entities (pasted copies are offset slightly and renamed). Also works while the viewport is focused. [Instance variables](#76-instance-variables) that point at entities copied together are redirected to the new copies; after a cut and paste, other entities keep pointing at the moved ones. |
@@ -1015,8 +1019,9 @@ active.
 
 > Dragging a **class** asset onto the Outliner instantiates it at the origin
 > (drop it on a folder to file it there at the same time); dragging a **view**
-> asset adds a world volume. **Cinema** volumes must be dropped on the
-> [viewport](#55-dragging-assets-into-the-scene), where they get a position.
+> asset or a **plugin world asset** adds it as a world asset at the origin. **Cinema**
+> volumes must be dropped on the [viewport](#55-dragging-assets-into-the-scene), where
+> they get a position.
 
 ---
 
@@ -1076,11 +1081,13 @@ own fields, open by default. The available component types are:
 | **Stencil Mask** | Stencil mask/clip control for masked rendering. |
 | **Replication** | Network replication settings for the whole entity: whether it replicates, who owns it, which aspects sync (transform, velocity, visuals, full state — with its own send rate), whether Lua runs on replicas, Area-Of-Interest relevancy, and whether replicas are made kinematic on clients. Off by default, so singleplayer projects are unaffected. |
 | **Class Component** | Embeds other classes as sub-objects (composition). Each instance has a name, a transform and its class path; below the list, a *Provides (resolved at runtime)* summary groups everything the embedded classes contribute (sprites, colliders, lights, …). |
+| *Plugin components* | Component types added by native plugins, one section per type under its own name. Each instance has a name, a local position, scale and rotation, and the plugin's properties — or the plugin's own inspector. While the plugin is not loaded, the section says so and keeps the values untouched ([Plugins & Mods → Class components](Plugins-And-Mods-EN-DOC.md#3144-class-components)). |
 
 > **Where components come from.** The Properties panel edits the components an
 > entity **already has** — it has no *Add Component* button. Components are added to
-> and removed from a **Class** in the [Class Editor](Assets-EN-DOC.md), and every
-> instance of that class picks the change up. That is what keeps instances in sync
+> and removed from a **Class** in the [Class Editor](Assets-EN-DOC.md) — plugin
+> components under **Add Component → Plugins** — and every instance of that class picks
+> the change up. That is what keeps instances in sync
 > with their template and what the "Modified from class" indicator measures.
 
 > The data each component renders/simulates is detailed in the
@@ -1100,7 +1107,7 @@ gizmo or edit entities one at a time.
 For bulk editing of *assets* (not entities), use the **Property Matrix** from the
 Content Browser (see [Assets](Assets-EN-DOC.md)).
 
-### 7.4 World-asset properties (Views & Cinemas)
+### 7.4 World-asset properties
 
 When a placed **view** or **cinema** volume is selected (instead of an entity), the
 Properties panel shows that volume's placement: its **name**, its **asset path**,
@@ -1113,6 +1120,11 @@ and an editable **Position**. Everything else lives elsewhere:
 * A cinema's **Auto Play / Play Once / Trigger On Overlap / Trigger Tag / Trigger Size** settings are
   per-placement and live in [World Settings → Cutscene](#8-world-settings); the
   cutscene timeline itself is in the Cinema Editor.
+
+A selected **plugin world asset** shows its type's badge and name under the asset path and
+edits its **Position**, its **Scale** and the properties its plugin declares — or the plugin's
+own inspector. The viewport gizmo moves it and, in scale mode, scales it
+([Plugins & Mods → World asset types](Plugins-And-Mods-EN-DOC.md#3145-world-asset-types)).
 
 ### 7.5 Per-instance script overrides
 
@@ -1331,7 +1343,8 @@ in order.
 ## 10. Preferences
 
 **Edit → Preferences** opens the editor's settings window. It is organized into
-**nine tabs**, and each tab ends with three buttons:
+**nine tabs** — plus a [Plugins](#1010-plugins) tab while a loaded plugin adds settings — and
+each tab ends with three buttons:
 
 * **Save** — write that tab's settings to disk (`Config/Engine.json`, or
   `Config/CollisionGroups.json` for the Collision tab; the Engine tab's start level goes to
@@ -1669,6 +1682,22 @@ into:
   running; otherwise a note that the network is not active.
 
 The **live** test client/host is the [Network Manager](#11-network-manager-enet).
+
+### 10.10 Plugins
+
+This tab follows the nine built-in ones as soon as a loaded native plugin declares settings or
+registers a settings page of its own
+([Plugins & Mods → Engine settings](Plugins-And-Mods-EN-DOC.md#3143-engine-settings)). Each
+such plugin gets a collapsible section — titled with the category its settings declare, or with
+its name — holding the fields generated from its declaration and, below them, its own pages. The
+**Settings** button of a plugin's row in the Plugins & Mods panel opens this tab at that
+plugin's section.
+
+The tab's buttons act on every plugin section: **Save** writes the values to the `Plugins`
+section of `Config/Engine.json`, which a game build keeps, so the plugin finds the same values
+in the shipped game; **Apply** makes the edited values live and tells each plugin about its
+changes; **Reset** puts the fields back to their defaults until you apply or save them.
+**Save All**, **Apply All** and **Reset All to Defaults** include the plugin settings too.
 
 ---
 

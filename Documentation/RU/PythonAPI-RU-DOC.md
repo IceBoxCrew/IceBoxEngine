@@ -1422,7 +1422,7 @@ types = editor.get_component_types()
 #  'Replication', 'Hierarchy']
 ```
 
-> 26 типов. О том, какие из них можно добавлять и удалять, см. [Виды компонентов](#виды-компонентов) — `editor.describe_components()` возвращает ту же таблицу в виде данных.
+> 26 встроенных типов, а за ними — типы компонентов загруженных нативных плагинов, например `'MyPlugin.Spinner'` (см. [Компоненты плагинов](#компоненты-плагинов)). О том, какие из них можно добавлять и удалять, см. [Виды компонентов](#виды-компонентов) — `editor.describe_components()` возвращает ту же таблицу в виде данных.
 
 ---
 
@@ -1572,7 +1572,7 @@ if editor.has_component(uuid, 'Rigidbody'):
     print('Есть физическое тело')
 ```
 
-**Поддерживаемые типы**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`
+**Поддерживаемые типы**: `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `Collider`, `Flipbook`, `Audio`, `Animator`, `Skeleton`, `Tilemap`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Script`, `AI`, `Joint`, `Destructible`, `ClassComponent`, `Stencil`, `GameplayTag`, `Interface`, `Replication`, `Hierarchy`, а также имена типов [компонентов плагинов](#компоненты-плагинов)
 
 > ℹ️ `PointLight` и `SpotLight` — две грани одного светового компонента, поэтому сущность с любым из них вернёт `True` для `has_component` по обоим. Чтобы понять, какие именно источники света на ней есть, используйте `get_instance_count(uuid, 'PointLight')` / `get_instance_count(uuid, 'SpotLight')`.
 
@@ -1596,7 +1596,7 @@ editor.remove_component(uuid, 'Rigidbody')
 
 #### Виды компонентов
 
-Каждый компонент относится к одному из четырёх видов, и API сообщает, к какому именно:
+Каждый компонент относится к одному из пяти видов, и API сообщает, к какому именно:
 
 | Вид | `add_component` | `remove_component` | Типы |
 |-----|:---:|:---:|------|
@@ -1604,12 +1604,14 @@ editor.remove_component(uuid, 'Rigidbody')
 | **managed** | ❌ | ❌ | `Hierarchy` — создаётся и удаляется через `set_parent` / `clear_parent` |
 | **instanced** | ✅ | ✅ | `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Tilemap`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Joint`, `ClassComponent` |
 | **single** | ✅ | ✅ | `Camera`, `Rigidbody`, `Collider`, `Animator`, `Skeleton`, `Script`, `AI`, `Destructible`, `GameplayTag`, `Interface` |
+| **plugin** | ✅ | ✅ | Все типы, которые регистрируют загруженные нативные плагины, — см. [Компоненты плагинов](#компоненты-плагинов) |
 
 `add_component` возвращает `False`, если компонент уже есть или если тип нельзя добавить.
 `remove_component` возвращает `False` для видов core и managed и пишет в лог предупреждение с объяснением.
 
-> `describe_components()` выдаёт 28 строк, а `get_component_types()` — 26: два компонента идентичности,
-> `Tag` и `ID`, читаются через `get_component()`, но не предлагаются как добавляемые типы.
+> `describe_components()` выдаёт 28 встроенных строк, а `get_component_types()` — 26 встроенных типов:
+> два компонента идентичности, `Tag` и `ID`, читаются через `get_component()`, но не предлагаются как
+> добавляемые типы. Затем обе функции добавляют по записи на каждый тип компонента плагина.
 
 > **Добавление instanced-компонента создаёт и его первый инстанс** — ровно как пункт *Add Component* в
 > самом редакторе, поэтому `add_component(uuid, 'PointLight')` даёт видимый свет, а не пустой контейнер.
@@ -1621,6 +1623,8 @@ editor.remove_component(uuid, 'Rigidbody')
 #### `editor.describe_components()` → `list[dict]`
 
 Вся таблица выше в виде данных — `type`, `kind`, `addable`, `removable`, `multi_instance`, `notes`.
+Типы компонентов плагинов идут после встроенных с видом `'plugin'`, своей подсказкой (или отображаемым
+именем) в `notes` и ещё одним ключом, `plugin`, — именем плагина, который их зарегистрировал.
 
 ```python
 for c in editor.describe_components():
@@ -2206,6 +2210,43 @@ editor.set_component(uuid, 'Hierarchy', {
 ```
 
 > ⚠️ `parent_uuid` и `children` — **только для чтения**: изменяйте связи функциями `set_parent` / `clear_parent` (см. [5.6](#56-папки-folders)). Записывать можно только `local_position`, `local_scale` и `local_rotation`.
+
+#### Компоненты плагинов
+
+Нативные плагины могут регистрировать собственные типы компонентов с именами вида `Plugin.Type`
+([Плагины и моды → Компоненты классов](Plugins-And-Mods-RU-DOC.md#3144-компоненты-классов)). Все
+функции компонентов из этого раздела, пакетные функции из [5.7](#57-пакетные-операции-batch) и
+функции инстансов из [5.13](#513-мульти-инстансные-компоненты-multi-instance) принимают такие имена.
+
+**Пример для компонента плагина:**
+```python
+spinner = editor.get_component(uuid, 'MyPlugin.Spinner')
+# {
+#     'instance_count': 2,
+#     'name': 'Spinner',               # первый инстанс
+#     'type': 'MyPlugin.Spinner',
+#     'position': (0.0, 0.0, 0.0),     # локально, относительно сущности
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0,
+#     'properties': {'speed': 90.0, 'tint': [1.0, 1.0, 1.0, 1.0], 'mode': 0}
+# }
+
+# Меняются только переданные ключи
+editor.set_component(uuid, 'MyPlugin.Spinner', {'properties': {'speed': 180}})
+```
+
+* `get_component` / `set_component` работают с первым инстансом типа; до остальных добираются
+  `get_instance` / `set_instance`. `name`, `position`, `scale`, `rotation` и `properties` можно
+  записывать, `type` и `instance_count` — нет.
+* `properties` содержит все свойства, объявленные плагином, дополненные значениями по умолчанию:
+  `Vec2`, `Vec3` и `Color` возвращаются списком, `Enum` — индексом варианта, `Asset` — путём в
+  проекте. Записываемые значения преобразуются и ограничиваются объявлением, так что
+  `{'speed': '180'}` сохраняет число `180`; ключ, который плагин не объявлял, сохраняется как передан.
+* `add_component` добавляет первый инстанс со значениями по умолчанию. Он возвращает `False`, если
+  у сущности этот тип уже есть или ни один загруженный плагин его не регистрирует. `remove_component`
+  удаляет все инстансы типа.
+* Сущность сохраняет инстансы плагина, который не загружен: читать, менять и удалять их можно,
+  а для добавления нужен плагин.
 
 `get_instance(uuid, type, index)` — см. раздел [5.13](#513-мульти-инстансные-компоненты-multi-instance).
 
@@ -3034,7 +3075,7 @@ new_uuids = editor.paste_entities()
 
 Некоторые компоненты поддерживают несколько экземпляров (инстансов) на одной сущности. Например, SpriteRenderer может иметь несколько слоёв спрайтов, PointLight — несколько источников света.
 
-**Мульти-инстансные компоненты**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent`
+**Мульти-инстансные компоненты**: `SpriteRenderer`, `Flipbook`, `Audio`, `FX`, `Widget`, `PointLight`, `SpotLight`, `PointMarker`, `Decal`, `Tilemap`, `Joint`, `ClassComponent` и все типы [компонентов плагинов](#компоненты-плагинов), которые плагин не объявил уникальными
 
 #### `editor.get_instance_count(uuid, component_type)` → `int`
 
@@ -3357,6 +3398,22 @@ cc_data = editor.get_instance(uuid, 'ClassComponent', 0)
 # }
 ```
 
+**Компонент плагина:**
+```python
+spinner = editor.get_instance(uuid, 'MyPlugin.Spinner', 1)
+# {
+#     'name': 'Spinner1',
+#     'type': 'MyPlugin.Spinner',      # только чтение
+#     'position': (0.0, 40.0, 0.0),
+#     'scale': (1.0, 1.0),
+#     'rotation': 0.0,
+#     'properties': {'speed': 45.0, 'tint': [0.0, 1.0, 0.0, 1.0], 'mode': 1}
+# }
+```
+
+Для типа плагина `index` считает только инстансы этого типа. `properties` подчиняется правилам из
+[Компонентов плагинов](#компоненты-плагинов).
+
 #### `editor.set_instance(uuid, component_type, index, data)` → `bool`
 
 Изменяет данные инстанса. Передавать нужно только изменяемые поля. Для каждого инстанса можно менять также `name`, `position`, `scale`, `rotation` (если компонент их поддерживает).
@@ -3403,7 +3460,13 @@ editor.set_instance(uuid, 'Joint', 0, {
 editor.add_instance(uuid, 'SpriteRenderer', 'Shadow')
 editor.add_instance(uuid, 'PointLight', 'RedLight')
 editor.add_instance(uuid, 'Audio', 'FootstepSound')
+editor.add_instance(uuid, 'MyPlugin.Spinner')   # 'Spinner1' рядом с уже имеющимся 'Spinner'
 ```
+
+> Как и любому другому типу, типу плагина нужен уже существующий первый инстанс — его добавляет
+> `add_component`. Новый инстанс плагина получает значения свойств по умолчанию; без имени он
+> называется частью имени типа после последней точки, а если это имя занято, к нему добавляется
+> число. Тип, объявленный уникальным, второго инстанса не получает, и плагин должен быть загружен.
 
 #### `editor.remove_instance(uuid, component_type, index)` → `bool`
 
@@ -3604,7 +3667,7 @@ for level in scene.list_scenes():
 
 ### 5.14.2 World-ассеты уровня
 
-Помимо сущностей уровень может содержать **world-ассеты** — ассеты, размещённые прямо на уровне, а не на сущности. В Level Outliner они перечислены под самим уровнем и сохраняются внутри `.icemap`. Типичное применение — пост-процесс тома **View** (`.ice_view`) и последовательности **Cinema** (`.ice_cinema`).
+Помимо сущностей уровень может содержать **world-ассеты** — ассеты, размещённые прямо на уровне, а не на сущности. В Level Outliner они перечислены под самим уровнем и сохраняются внутри `.icemap`. Типичное применение — пост-процесс тома **View** (`.ice_view`) и последовательности **Cinema** (`.ice_cinema`), а также типы ассетов мира, которые добавляют нативные плагины, каждый со своим расширением файла ([Плагины и моды → Типы ассетов мира](Plugins-And-Mods-RU-DOC.md#3145-типы-ассетов-мира)).
 
 Каждый world-ассет — это словарь:
 
@@ -3621,6 +3684,7 @@ for level in scene.list_scenes():
 | `cinema_trigger_on_overlap` | `bool` | Cinema: запускать при перекрытии сущностью с тегом |
 | `cinema_trigger_tag` | `str` | Cinema: какой геймплейный тег запускает (пусто — любая сущность) |
 | `cinema_trigger_size` | `(w, h)` | Cinema: размер зоны триггера в пикселях с центром в позиции (минимум 1) |
+| `properties` | `dict` | Ассеты мира плагинов: значения объявленных плагином свойств, дополненные значениями по умолчанию (`{}` у остальных ассетов) |
 
 #### `editor.get_world_asset_count()` → `int`
 
@@ -3659,7 +3723,13 @@ editor.set_world_asset(1, {
     'cinema_trigger_size': (256.0, 128.0),
     'cinema_play_once': True
 })
+
+# Изменить одно свойство ассета мира плагина — остальные свойства сохраняют значения
+editor.set_world_asset(2, {'properties': {'radius': 300}})
 ```
+
+> `properties` подчиняется правилам [компонентов плагинов](#компоненты-плагинов): каждое значение
+> преобразуется и ограничивается объявлением плагина, а ключ, который он не объявлял, сохраняется как передан.
 
 #### `editor.add_world_asset(asset_path, x=0, y=0, z=0)` → `bool`
 
@@ -3670,7 +3740,7 @@ editor.add_world_asset('Content/Views/cave_grade.ice_view', 1200, -300)
 editor.add_world_asset('Content/Cinema/intro.ice_cinema')
 ```
 
-> ℹ️ В отличие от перетаскивания ассета во вьюпорт — где том центрируется по точке сброса — здесь начало координат ассета ставится ровно в указанные координаты.
+> ℹ️ В отличие от перетаскивания ассета во вьюпорт — где том центрируется по точке сброса — здесь начало координат ассета ставится ровно в указанные координаты. Ассет мира плагина получает значения свойств по умолчанию.
 
 #### `editor.remove_world_asset(index)` → `bool`
 
@@ -4717,7 +4787,8 @@ for name, count in sorted(s['components'].items(), key=lambda kv: -kv[1]):
 #### `scene.validate()` → `dict`
 
 Проходит по всем сущностям (включая все мульти-инстансные компоненты) и по всем мировым ассетам уровня и
-сообщает о каждой ссылке на ассет, которая не разрешается на диске. Возвращает `ok`, `checked_entities` и
+сообщает о каждой ссылке на ассет, которая не разрешается на диске, — включая свойства `Asset` у
+компонентов и ассетов мира плагинов. Возвращает `ok`, `checked_entities` и
 `problems` — список `{uuid, entity, reference}`.
 
 ```python
@@ -6227,6 +6298,8 @@ print(project.get_config('Engine')['Physics']['GravityY'])
 |---------|-----------|----------|
 | `project.get_plugins()` | `list[dict]` | `name`, `description`, `author`, `version`, `folder`, `icon`, `dependencies`, `enabled`, `loaded`, `static`, `editor_only`, `api_version` |
 | `project.set_plugin_enabled(name, enabled)` | `bool` | Включить/выключить и записать в `Config/Plugins.json`; плагин загружается или выгружается на следующем кадре редактора |
+| `project.get_plugin_settings(name)` | `dict`/`None` | Применённые значения настроек, которые плагин добавляет в **Правка → Настройки → Плагины**, дополненные значениями по умолчанию |
+| `project.set_plugin_settings(name, values, save=False)` | `bool` | Изменить часть из них и сразу применить; `save=True` также записывает их в `Config/Engine.json` |
 | `project.get_mods()` | `list[dict]` | `name`, …, `entry_script`, `load_order` |
 | `project.set_mod_enabled(name, enabled)` | `bool` | Включить/выключить и записать в `Config/Mods.json` |
 | `project.reload_plugin_config()` | — | Пересканировать `Plugins/` и `Mods/`, перечитать оба реестра с диска и заново загрузить включённое — на следующем кадре редактора |
@@ -6243,6 +6316,26 @@ for p in project.get_plugins():
 > ним — выгружаются раньше него и загружаются снова, когда он вернётся. `reload_plugin_config()` отложен
 > так же: на следующем кадре выгружаются все плагины и моды, обе папки сканируются заново и включённые
 > плагины загружаются снова — а включённые моды тоже, если игра запущена.
+
+**Настройки плагинов.** Плагин может добавить свой раздел в **Правка → Настройки → Плагины**
+([Плагины и моды → Настройки движка](Plugins-And-Mods-RU-DOC.md#3143-настройки-движка)); эти две
+функции читают и меняют те же значения.
+
+```python
+settings = project.get_plugin_settings('MyPlugin')
+if settings is not None:
+    print(settings['quality'])
+
+project.set_plugin_settings('MyPlugin', {'quality': 2})              # на этот сеанс
+project.set_plugin_settings('MyPlugin', {'quality': 2}, save=True)   # и в Config/Engine.json
+```
+
+> `set_plugin_settings` работает как кнопка **Применить** на вкладке, а с `save=True` — ещё и как
+> **Сохранить**: каждое значение преобразуется к объявленному плагином типу, непереданные ключи
+> сохраняют свои значения, а плагин получает уведомление об изменении. Функция возвращает `False`,
+> пока плагин не загружен или не регистрирует настроек. Для незагруженного плагина
+> `get_plugin_settings` возвращает то, что для него хранит `Config/Engine.json`, и `None`, если там
+> ничего нет.
 
 ---
 
@@ -6697,6 +6790,7 @@ icebox.log.trace('вход в цикл импорта')
 | `Interface` | ❌ | Имена реализуемых интерфейсов. `{'interfaces': ['IDamageable', ...]}`. |
 | `Replication` | ❌ | Сетевая репликация: владение, что синхронизировать, режим скрипта, релевантность. Нельзя удалить. |
 | `Hierarchy` | ❌ | Связи родитель/потомок: `parent_uuid`, `children`, `local_position`, `local_scale`, `local_rotation`. **Чтение** через `get_component`; **изменение** через `set_parent` / `clear_parent` (см. 5.6). |
+| `Plugin.Type` | ✅ | Типы компонентов загруженных нативных плагинов: имя инстанса, локальный трансформ и объявленные `properties`. Тип, который плагин объявил уникальным, держит один инстанс. См. [Компоненты плагинов](#компоненты-плагинов). |
 
 ### Справочник enum-значений
 
@@ -6776,8 +6870,8 @@ icebox.log.trace('вход в цикл импорта')
 |------|:---:|----------|
 | `name` | Все мульти-инстансные | Имя инстанса (`str`) |
 | `position` | Все мульти-инстансные | Локальная позиция `(x, y, z)` относительно сущности |
-| `scale` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent | Локальный масштаб `(x, y)` |
-| `rotation` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent | Локальный поворот в градусах |
+| `scale` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent, типы плагинов | Локальный масштаб `(x, y)` |
+| `rotation` | SpriteRenderer, Flipbook, FX, Tilemap, ClassComponent, типы плагинов | Локальный поворот в градусах |
 | `render_in_game` | SpriteRenderer, Flipbook, FX, Widget, PointMarker | Рендерить ли в игровом режиме |
 | `attach_to_collider` | SpriteRenderer, Flipbook | Имя коллайдера, за которым следует инстанс (`''` = нет) |
 | `attach_to_socket` | SpriteRenderer, Flipbook | Имя сокета (точки привязки), за которым следует инстанс (`''` = нет). Движок держит инстанс приклеенным к нему каждый кадр, корректно с учётом поворота сущности, её масштаба и Flip X. |
@@ -6825,6 +6919,8 @@ icebox.log.trace('вход в цикл импорта')
 | `max_force` / `max_torque` | Joint | Ограничения силы / момента Motor-соединения |
 | `correction_factor` | Joint | Коэффициент коррекции Motor-соединения |
 | `linear_offset` | Joint | Линейное смещение Motor-соединения `(x, y)` |
+| `type` | Типы плагинов | Имя типа компонента (только чтение) |
+| `properties` | Типы плагинов | Значения свойств, объявленных плагином (см. [Компоненты плагинов](#компоненты-плагинов)) |
 
 > ⚠️ У инстансов `PointLight` и `SpotLight` **нет** полей `visible` и `render_in_game` — вместо них используйте `enabled`.
 

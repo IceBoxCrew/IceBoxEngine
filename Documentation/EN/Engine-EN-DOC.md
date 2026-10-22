@@ -1157,8 +1157,10 @@ share; hole punching and relaying are the job of online rooms.
 server session and receives a short **room code**; a player joins with that code from
 anywhere and nobody forwards a port. Finding the host, opening the path and — with a server
 — relaying happen inside the engine on the session's own UDP socket (signaling packets are
-told apart from ENet traffic on it), so the path that gets opened is exactly the one the
-session then uses, and everything in this chapter works over it unchanged.
+told apart from ENet traffic on it); a serverless join opens the path from extra sockets, and
+the session then takes over the port of the one that got through. Either way the path that
+gets opened is exactly the one the session then uses, and everything in this chapter works
+over it unchanged.
 
 Two interchangeable **backends** find the host:
 
@@ -1171,20 +1173,27 @@ The **Auto** setting (the default) uses the rendezvous server when one is config
 serverless P2P otherwise.
 
 **Opening the path.** Both sides send small *punch* packets to each other's candidate
-addresses at the same time, which opens a mapping in both routers. A candidate becomes the
-session path only after a full **round trip** — a punch answered by an acknowledgement from
-exactly that address — so a path that works in one direction only is never used. For
-routers that give every destination a new port, the engine predicts the next ports when they
-are allocated sequentially, and hosts also ask the router to open the session port through
+addresses, which opens a mapping in both routers. A candidate becomes the session path only
+after a full **round trip** — a punch answered by an acknowledgement from exactly that
+address — so a path that works in one direction only is never used. Many home routers and
+carrier NATs block an address for a long time after a single unexpected packet from it, so
+with serverless P2P the side that is found first never knocks first: the joiner opens its
+own routers from a ladder of extra UDP sockets whose packets expire after 2 to 16 router
+hops (and one with the normal time-to-live), announces those sockets only after that, and
+the host then contacts them; the socket whose packets stopped just before the host's router
+receives the host and carries the session. For routers
+that give every destination a new port, the engine predicts the next ports when they are
+allocated sequentially, and hosts also ask the router to open the session port through
 **UPnP IGD** or **NAT-PMP** (a double NAT, where a mapping cannot help, is detected and
 reported; UPnP only ever talks to the device that answered the discovery, by its IP address). With a rendezvous server, a joiner whose punching fails falls back to the
 server's **relay**. The **route** of every connection is reported to script: *local* (same
 machine), *lan*, *direct* (peer-to-peer over the internet), *relay* or *web*.
 
-**Limits of serverless P2P.** Without a server there is no relay: when both players are
-behind symmetric NATs with random ports, or behind the same carrier-grade NAT that cannot
-send traffic back to its own address, the join ends with `direct_connection_failed`; a
-rendezvous server removes that limit. The scripting contract with every state and error
+**Limits of serverless P2P.** Without a server there is no relay: a joiner behind a
+symmetric NAT with random ports reaches only a host that is directly reachable, and when
+both players are behind such NATs, or behind the same carrier-grade NAT that cannot send
+traffic back to its own address, the join ends with `direct_connection_failed`; a rendezvous
+server removes that limit. The scripting contract with every state and error
 code is in [Lua API → Online rooms](LuaAPI-EN-DOC.md#online-rooms-by-room-code-no-port-forwarding);
 running a rendezvous server is covered in
 [Profiling & Building → Rendezvous server](Profiling-And-Building-EN-DOC.md#rendezvous-server).

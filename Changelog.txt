@@ -21,19 +21,62 @@ under Help > Documentation.
 - Profiler: CPU and GPU temperatures on Android - from the kernel thermal zones
   and, on Adreno GPUs, from kgsl - on devices whose SELinux policy lets apps
   read them.
-- Profiler: Thermal Status and Thermal Load on Android - how hard the system is
-  throttling the device to keep it cool - with a Thermal Load graph. Both are
-  also written into recorded traces.
+- Profiler: Thermal Status on Android and macOS - how hard the system is
+  throttling the device to keep it cool - and, on Android, Thermal Load with a
+  Thermal Load graph. Both are also written into recorded traces.
 - Lua API: Settings.GetThermalStatus(), Settings.GetThermalStatusName(),
   Settings.IsThermalStatusAvailable(), Settings.GetThermalLoad(),
   Settings.IsThermalLoadAvailable() and the Settings.THERMAL_* constants, so a
-  game can lower its own quality before Android starts throttling the device.
-  Settings.OnSettingChanged reports status changes with the key "ThermalStatus".
-  The five functions are also available as Visual Script nodes.
+  game can lower its own quality before Android, iOS or macOS starts
+  throttling the device. Settings.OnSettingChanged reports status changes
+  with the key "ThermalStatus". The five functions are also available as
+  Visual Script nodes.
 - Profiler: Core Temp and MSI Afterburner are read as temperature sources on
   Windows while they run, with nothing to configure.
 - Profiler: hovering a temperature that shows N/A explains why it is
   unavailable on your platform and, where possible, how to make it available.
+- Plugins: native plugins can extend the engine itself. A plugin can add its
+  own settings to Edit > Preferences > Plugins, saved to Config/Engine.json so
+  they ship with the game; component types for classes, added in the Class
+  Editor under Add Component > Plugins; world asset types, placed from the
+  Content Browser into the Level Outliner and the Viewport like View and
+  Cinema assets; and widget element types, added in the Widget Editor under
+  + Add Element > Plugins.
+- Plugins: everything a plugin adds is described by declared properties -
+  Bool, Int, Float, String, Text, Vec2, Vec3, Color, Enum and Asset. The editor
+  builds the fields from them or shows the plugin's own inspector. The values
+  are saved with classes, levels and widgets, follow inheritance and undo,
+  keep their asset paths when assets are moved or renamed, and stay untouched
+  while the plugin is not loaded.
+- Plugins: plugin components start, update and stop with their entity while
+  the game runs and replicate in multiplayer. Plugin components and world
+  assets draw themselves in the editor viewports and, when their plugin asks
+  for it, in the game; plugin widget elements are drawn on the Widget Editor
+  canvas and in the game, and receive hover, press, release, click and drag
+  events and gamepad navigation.
+- Plugins: plugin API version 2, with the functions behind all of the above.
+  Plugins built for version 1 keep working unchanged.
+- Plugins & Mods panel: a Settings button for every loaded plugin that has
+  settings, opening its section in Edit > Preferences > Plugins.
+- Lua API: the Plugins table - Plugins.IsLoaded, GetSettings, GetSetting,
+  HasComponent, GetComponentCount, AddComponent, RemoveComponent,
+  GetComponentProperties, GetComponentProperty, SetComponentProperty,
+  GetWorldAssets, GetWorldAssetProperties, GetWorldAssetProperty and
+  SetWorldAssetProperty. HasComponent, AddComponent and RemoveComponent also
+  accept the type names of plugin components.
+- Lua API: GetWidgetElementPluginType, GetWidgetElementPluginProperties,
+  GetWidgetElementPluginProperty and SetWidgetElementPluginProperty in entity
+  scripts, and GetElementPluginType, GetElementPluginProperties,
+  GetElementPluginProperty and SetElementPluginProperty in widget scripts.
+  AddWidgetElement, AddSubWidgetElement and CreateElement accept the type
+  names of plugin elements, and GetElementType returns "Plugin" for them.
+  These and the Plugins functions are also available as Visual Script nodes.
+- Python API: project.get_plugin_settings() and project.set_plugin_settings().
+  The editor's component functions accept plugin component types,
+  describe_components() lists them with the kind 'plugin', world assets carry
+  a 'properties' dictionary, and scene.validate() also checks the asset paths
+  stored in plugin properties.
+- Statistics panel: the number of plugin components in the level.
 
 :Improved:
 
@@ -44,10 +87,22 @@ under Help > Documentation.
   reads - for example "LibreHardwareMonitor: CPU Package" or
   "hwmon: k10temp Tctl" - and shows the hottest one when several qualify. At
   startup the log names the source of each temperature, or why there is none.
-- Profiler: Chrome-trace exports now carry CPU and GPU temperature tracks and,
-  on Android, Thermal Status and Thermal Load tracks.
+- Profiler: Chrome-trace exports now carry CPU and GPU temperature tracks, a
+  Thermal Status track on Android, iOS and macOS, and a Thermal Load track on
+  Android.
 - AI Helper plugin: its version numbering starts over at 1.0.0 (it showed 3.1.0
   before); the plugin itself is unchanged.
+- Plugins & Mods panel: the settings pages of plugins moved from the panel's
+  Settings tab to Edit > Preferences > Plugins, into the section of the plugin
+  that registers them.
+- Class Editor: the Inheritance tab also lists the decals, the replication
+  settings and the plugin components a class inherits.
+- Networking: the host's log shows the address of every player it sees joining
+  its room; the joining player's log shows the moment the host's packets
+  arrive, which time-to-live opened the path and, when the join fails, whether
+  any packet from the host arrived at all; and a router that refuses the port
+  mapping is reported as "refused_by_router" with its UPnP error code instead
+  of "not_supported_by_router".
 
 :Fixed:
 
@@ -92,6 +147,25 @@ under Help > Documentation.
 - Networking: Connect, JoinOnline, HostOnline or StartServer called while an
   automatic reconnect was still pending could fail. The pending reconnect is
   now abandoned and the new session starts.
+- Online rooms without a server: joining by room code could stop at "the room
+  was found" and end with direct_connection_failed, and the internet room list
+  could stay empty, when a router or carrier NAT blocks an address after a
+  single unexpected packet from it - many home routers and carrier-grade NATs
+  do. The player who is found first no longer knocks first: a joining player,
+  and a player browsing the internet room list, opens its own routers from a
+  set of extra UDP sockets whose packets expire after 2 to 16 router hops, so
+  one of them always stops just before the other side's router, and announces
+  those sockets only after that; the host then contacts them, and the socket
+  the host reaches carries the connection.
+- Online rooms without a server: a host contacted a joining player only once,
+  for 15 seconds, so a joiner that found the host later could not connect.
+  The host now keeps contacting a joining player for about a minute and a
+  player browsing the internet room list for about 35 seconds.
+- Online rooms without a server: DHT nodes remembered from earlier sessions
+  were asked before the bootstrap servers even when none of them answered, so
+  stale nodes delayed finding a room by several seconds.
+- Online rooms: the connection that follows a found path now gets at least
+  10 seconds instead of the regular connection timeout.
 - Android: with Is Suspended on, an active network session - hosting,
   connected, connecting or reconnecting - froze while the app was in the
   background. It now keeps running, with nothing drawn until the app returns,
@@ -106,6 +180,12 @@ under Help > Documentation.
 - Laptops with two GPUs: reading the GPU temperature could wake the sleeping
   dedicated GPU and report a GPU the editor was not rendering on. Only the GPU
   the editor renders on is read now.
+- Widget Editor: adding a child from an element's right-click menu changed the
+  element list while the hierarchy was being drawn, which could crash the
+  editor. The child is now added once the hierarchy is drawn.
+- Class Editor: after an undo or a redo, the decals that a class component
+  provides were treated as the class's own, so they could be edited, deleted
+  and saved into the class. Undo and redo now keep track of them.
 
 --------------------------------------------------------------------------------
 

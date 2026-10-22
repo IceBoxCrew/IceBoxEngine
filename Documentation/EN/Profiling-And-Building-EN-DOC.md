@@ -152,7 +152,7 @@ Every frame the profiler can collect:
 | **Frame** | Frame time (ms), FPS, GPU frame time (ms). |
 | **CPU** | Process CPU usage (%, exponentially smoothed, sampled four times a second), physical core count, logical processor count, frequency (GHz). |
 | **Memory** | RAM current / peak / total (MB, current and peak sampled four times a second), VRAM tracked / peak / total (MB, via the VRAM tracker), GPU allocation count. |
-| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name; on Android also the system thermal status and thermal load (see [2.8](#28-temperature-sensors)). |
+| **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name; on Android, iOS and macOS also the system thermal status, and on Android the thermal load (see [2.8](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
 | **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners, mixer voices, streams, limiter reduction in dB), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
 | **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
@@ -385,23 +385,30 @@ and the IOHID thermal sensors on Apple silicon.
 GPUs, from `kgsl`. Many recent devices block apps from these files with their SELinux
 policy; on such a device no app can read CPU or GPU temperature without root.
 
-**Thermal status (Android).** Independently of the temperatures, the same sampler asks
-the Android thermal service how hard the system is throttling the device — the signal
-Android itself uses to protect the hardware, available on every device whatever its
-SELinux policy:
+**iOS.** iOS gives apps no access to the CPU and GPU temperature sensors, so both
+temperatures stay unavailable in a game running on iOS; the thermal status below is
+read there instead.
+
+**Thermal status (Android, iOS and macOS).** Independently of the temperatures, the same
+sampler asks the system how hard it is throttling the device to keep it cool — the
+signal the system itself uses to protect the hardware. On Android it comes from the
+Android thermal service and is available on every device whatever its SELinux policy;
+on iOS and macOS it comes from the system thermal state, which needs no sensor access
+either:
 
 | Value | Meaning | Needs |
 | ----- | ------- | ----- |
-| **Thermal Status** | *None* → *Light* → *Moderate* → *Severe* → *Critical* → *Emergency* → *Shutdown*. Light and Moderate barely affect performance; from Severe on, the CPU and GPU are slowed down noticeably. | Android 11 (API 30) |
-| **Thermal Load** | Android's *thermal headroom*: how much of the thermal budget is in use. `1.00` means the device is throttled at the Severe level; higher values mean heavier throttling. | Android 12 (API 31); some devices do not report it |
+| **Thermal Status** | *None* → *Light* → *Moderate* → *Severe* → *Critical* → *Emergency* → *Shutdown*. Light and Moderate barely affect performance; from Severe on, the CPU and GPU are slowed down noticeably. iOS and macOS report four states, placed on the same scale: *Nominal* → None, *Fair* → Light, *Serious* → Severe, *Critical* → Critical. | Android 11 (API 30); always available on iOS and macOS |
+| **Thermal Load** | Android's *thermal headroom*: how much of the thermal budget is in use. `1.00` means the device is throttled at the Severe level; higher values mean heavier throttling. | Android 12 (API 31); some devices do not report it. iOS and macOS have no such value |
 
 Watch both while a frame-rate drop happens: a rising Thermal Load and a status of Severe
 or worse mean the drop comes from overheating rather than from your content. Both are
-also written into recorded traces.
+also written into recorded traces. In the editor, the Advanced Profiler shows the Thermal
+Status on Android and macOS and the Thermal Load on Android.
 
 Your game can read the same two values from Lua and lower its own quality before the
 device starts throttling — see
-[Lua API → Thermal status](LuaAPI-EN-DOC.md#thermal-status-android-throttling).
+[Lua API → Thermal status](LuaAPI-EN-DOC.md#thermal-status-device-throttling).
 
 Whenever a temperature is unavailable, hover its *N/A* in the panel for the explanation
 for your platform. At startup the engine also logs one line per sensor naming the source
@@ -421,7 +428,7 @@ sections.
   with a rolling **frame-time graph**.
 * **Total Entities**, plus a live per-type breakdown: sprites, flipbooks, decals, audio,
   FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, rigidbodies,
-  colliders, sprite collisions, scripts, AI, destructibles, joints.
+  colliders, sprite collisions, scripts, AI, destructibles, joints, plugin components.
 * For the **selected entity**: its tag and **UUID**.
 
 > The breakdown counts *instances*, not entities: one entity with four sprite instances
@@ -557,9 +564,9 @@ A live dashboard: an overall **Performance** rating (Excellent ≥ 60 FPS / Good
 Poor < 30) plus **FPS**, **Frame Time**, **CPU Usage**, **GPU Frame Time**,
 **RAM Usage** (current / total, with peak), **VRAM Usage** (tracked / total, with peak),
 **CPU/GPU Temperature** with their sensor sources (hover an *N/A* temperature to see why
-it is unavailable on your platform), on Android the **Thermal Status** and **Thermal Load**
-([2.8](#28-temperature-sensors)), and headline render counts (draw calls, quads,
-entities). Every value is color-coded against a budget.
+it is unavailable on your platform), the **Thermal Status** on Android and macOS and the
+**Thermal Load** on Android ([2.8](#28-temperature-sensors)), and headline render counts
+(draw calls, quads, entities). Every value is color-coded against a budget.
 
 With **Show Graphs** on it also draws the rolling frame-time graph (overlaid with the
 current FPS/ms) and, when GPU timing is available, a GPU-time graph.
@@ -575,8 +582,8 @@ Below the graphs the Overview repeats the two things you usually want at a glanc
 
 * **Cores** — physical / logical processor count and, when readable, clock frequency in
   GHz.
-* **CPU Usage** (%) and **CPU Temperature** with its source name; on Android also the
-  **Thermal Status** and **Thermal Load**.
+* **CPU Usage** (%) and **CPU Temperature** with its source name; on Android and macOS
+  also the **Thermal Status**, and on Android the **Thermal Load**.
 * With **Show Graphs**: a CPU-usage graph (0–100 %) and, when a sensor is available, a
   CPU-temperature graph; on Android also a thermal-load graph.
 * **Live Flame Graph** — the last frame's scope tree, live, with one lane per thread, a
@@ -718,8 +725,8 @@ panel deletes its file too.
 
 A saved trace file contains the summary, the per-scope statistics (including self time),
 the per-script statistics, the counter key table, the thread table, the spike frame
-indices, and every captured frame (frame/GPU time, FPS, CPU, temperatures, the Android
-thermal status and load, RAM/VRAM, the scope event tree with thread ids, the render-pass
+indices, and every captured frame (frame/GPU time, FPS, CPU, temperatures, the thermal
+status and load, RAM/VRAM, the scope event tree with thread ids, the render-pass
 list, every counter value and all scene counters). Files are written compactly, and on load only the header and summary are parsed
 — the (potentially very large) frame array is read lazily the first time you open that
 trace in the timeline, so the editor starts instantly no matter how much you have
@@ -728,7 +735,7 @@ recorded.
 **Chrome-trace export** produces a Chrome Trace Event JSON (`chrome://tracing`,
 Perfetto-, Firefox-Profiler- and speedscope-compatible) with **one track per CPU thread**,
 a **GPU** track, **counter tracks** for both the built-in metrics (temperatures and the
-Android thermal status and load included, whenever they were available) and every custom
+thermal status and load included, whenever they were available) and every custom
 counter, frame markers with their stats, spike instants, and engine metadata. Three ways
 to produce one:
 

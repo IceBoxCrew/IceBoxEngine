@@ -120,6 +120,7 @@
 65. [Screen — Window Size and Device Orientation](#65-screen--window-size-and-device-orientation)
 66. [SystemFont — Font for the Console, Debug Overlays and Font-less Text](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)
 67. [FileDialog — Open, Save, Import and Export Player Files](#67-filedialog--open-save-import-and-export-player-files)
+68. [Plugins — Plugin Settings, Components and World Assets](#68-plugins--plugin-settings-components-and-world-assets)
 
 ---
 
@@ -10918,10 +10919,45 @@ RemoveWidgetInstance(idx)
 ```lua
 -- typeName: "Text", "Button", "Image", "ProgressBar", "Slider", "InputField",
 -- "Checkbox", "Dropdown", "ScrollView", "HorizontalBox", "VerticalBox",
--- "SizeBox", "Overlay", "Throbber", "WidgetSwitcher", "Spacer", "Toggle"
+-- "SizeBox", "Overlay", "Throbber", "WidgetSwitcher", "Spacer", "Toggle",
+-- or the type name of a widget element a plugin adds (see below)
 local elemId = AddWidgetElement("Text", "HintText", "Root")
 RemoveWidgetElement("HintText")
 ```
+
+### Plugin elements
+
+A native plugin can add its own widget element types
+([Plugins & Mods → Widget elements](Plugins-And-Mods-EN-DOC.md#3146-widget-elements)). Such an
+element works with every function of this section; `GetElementType` reports it as `"Plugin"`,
+and these functions read and change what is specific to it:
+
+```lua
+-- Create one by the plugin's type name. Like any unknown type name, the name of a plugin
+-- that is not loaded creates a Panel instead.
+local id = AddWidgetElement("MyPlugin.Gauge", "FuelGauge", "Root")
+
+local pluginType = GetWidgetElementPluginType("FuelGauge")     -- → "MyPlugin.Gauge", "" for other elements
+
+-- All values the plugin declares, completed with their defaults (nil for other elements)
+local props = GetWidgetElementPluginProperties("FuelGauge")
+
+-- One value: its default while it was never set, nil for a key that is neither declared nor set
+local level = GetWidgetElementPluginProperty("FuelGauge", "level")
+
+-- Change a value; the plugin's declaration converts and clamps it. → true on success
+SetWidgetElementPluginProperty("FuelGauge", "level", 0.75)
+SetWidgetElementPluginProperty("FuelGauge", "tint", { r = 1, g = 0.2, b = 0.2, a = 1 })
+
+-- The optional last argument picks the widget instance, as everywhere in this section
+SetWidgetElementPluginProperty("FuelGauge", "level", 0.5, 1)
+```
+
+Values come back as Lua values: numbers, booleans and strings as they are, a `Vec2` / `Vec3`
+property as `{x, y[, z]}`, a `Color` as `{r, g, b, a}` and an `Enum` as the index of the
+choice, starting at `0`. Set them in the same shapes. A key the plugin does not declare is
+stored as given, and setting it to `nil` removes it. The values belong to that widget instance,
+like every other change an entity script makes.
 
 ### Widget element hierarchy
 
@@ -11885,7 +11921,7 @@ local p = GetSubWidgetPath("HealthBar")
 -- Existence check
 local exists = HasElement("Title")
 
--- Element type as string ("Panel", "Text", "Button", ..., "SubWidget")
+-- Element type as string ("Panel", "Text", "Button", ..., "SubWidget", "Plugin")
 local typeName = GetElementType("Title")
 
 -- Tree navigation
@@ -12011,9 +12047,15 @@ local key = GetLocalizationKey("Title")
 #### Dynamic elements and animations
 
 ```lua
--- Create/remove elements at runtime
+-- Create/remove elements at runtime; the type can also be a plugin element type name
 local id = CreateElement("Text", "DynamicLabel", "Root")  -- type, name, parent
 RemoveElement("DynamicLabel")
+
+-- Plugin elements (see "Plugin elements" in the entity-bound part above)
+local pluginType = GetElementPluginType("FuelGauge")        -- → "MyPlugin.Gauge" or ""
+local props = GetElementPluginProperties("FuelGauge")       -- → table, or nil
+local level = GetElementPluginProperty("FuelGauge", "level")
+SetElementPluginProperty("FuelGauge", "level", 0.75)        -- every instance of this widget
 
 -- Element info
 local info = GetElement("Title")                 -- → {name, visible, text, value, scale_x, scale_y,
@@ -12269,6 +12311,9 @@ ResumeSubAnimation("HealthBar", "Pulse");        IsSubAnimationPlaying("HealthBa
 | `SetSubWidgetPath` | `SetSubWidgetPath` |
 | `HasElement` | `HasWidgetElement` |
 | `GetElementType` | `GetElementType` |
+| `GetElementPluginType` | `GetWidgetElementPluginType` |
+| `GetElementPluginProperties` / `GetElementPluginProperty` | `GetWidgetElementPluginProperties` / `GetWidgetElementPluginProperty` |
+| `SetElementPluginProperty` | `SetWidgetElementPluginProperty` |
 | `GetElementChildren` | `GetWidgetElementChildren` |
 | `GetElementParent` | `GetWidgetElementParent` |
 | `GetRootElements` | `GetWidgetRootElements` |
@@ -13913,37 +13958,43 @@ local enabled = Settings.IsAdaptiveQualityEnabled()
 local target  = Settings.GetAdaptiveQualityTargetFPS()
 ```
 
-### Thermal status (Android throttling)
+### Thermal status (device throttling)
 
-Tells the game how hard Android is throttling the device because it is getting
-hot — the signal Android's performance guidelines (ADPF) ask games to watch.
-Lower the quality as soon as it rises, *before* the system slows the CPU and GPU
-down on its own, and restore it once the device has cooled down: the frame rate
-stays steady and the device stays cool for longer. Adaptive Quality reacts only
-after the frame rate has already dropped; these values let a game act earlier.
+Tells the game how hard the system is throttling the device because it is
+getting hot — the signal Android's performance guidelines (ADPF) and Apple's
+energy-efficiency guidelines ask games to watch. Lower the quality as soon as it
+rises, *before* the system slows the CPU and GPU down on its own, and restore it
+once the device has cooled down: the frame rate stays steady and the device
+stays cool for longer. Adaptive Quality reacts only after the frame rate has
+already dropped; these values let a game act earlier.
 
 The values come from the same background sampler as the profiler's thermal rows
 (see [Profiling & Building → Temperature sensors](Profiling-And-Building-EN-DOC.md#28-temperature-sensors)),
-which asks the Android thermal service about every 1.5 seconds, so reading them
-from a script costs nothing.
+which asks the Android thermal service, or the system thermal state on iOS and
+macOS, about every 1.5 seconds, so reading them from a script costs nothing.
 
-| Constant | Value | `GetThermalStatusName()` | Meaning |
-| -------- | ----- | ------------------------ | ------- |
-| `Settings.THERMAL_NONE` | `0` | `"none"` | Not throttled. |
-| `Settings.THERMAL_LIGHT` | `1` | `"light"` | Light throttling; performance is barely affected. |
-| `Settings.THERMAL_MODERATE` | `2` | `"moderate"` | Moderate throttling; performance is still barely affected. |
-| `Settings.THERMAL_SEVERE` | `3` | `"severe"` | Severe throttling; the CPU and GPU are slowed down noticeably. |
-| `Settings.THERMAL_CRITICAL` | `4` | `"critical"` | The system has done everything it can to reduce power. |
-| `Settings.THERMAL_EMERGENCY` | `5` | `"emergency"` | Key components are shutting down; the device's functionality is limited. |
-| `Settings.THERMAL_SHUTDOWN` | `6` | `"shutdown"` | The device is about to shut down. |
-| `Settings.THERMAL_UNAVAILABLE` | `-1` | `"unavailable"` | No thermal status on this platform or device (see below). |
+| Constant | Value | `GetThermalStatusName()` | iOS / macOS state | Meaning |
+| -------- | ----- | ------------------------ | ----------------- | ------- |
+| `Settings.THERMAL_NONE` | `0` | `"none"` | *Nominal* | Not throttled. |
+| `Settings.THERMAL_LIGHT` | `1` | `"light"` | *Fair* | Light throttling; performance is barely affected. |
+| `Settings.THERMAL_MODERATE` | `2` | `"moderate"` | — | Moderate throttling; performance is still barely affected. |
+| `Settings.THERMAL_SEVERE` | `3` | `"severe"` | *Serious* | Severe throttling; the CPU and GPU are slowed down noticeably. |
+| `Settings.THERMAL_CRITICAL` | `4` | `"critical"` | *Critical* | The system has done everything it can to reduce power. |
+| `Settings.THERMAL_EMERGENCY` | `5` | `"emergency"` | — | Key components are shutting down; the device's functionality is limited. |
+| `Settings.THERMAL_SHUTDOWN` | `6` | `"shutdown"` | — | The device is about to shut down. |
+| `Settings.THERMAL_UNAVAILABLE` | `-1` | `"unavailable"` | — | No thermal status on this platform or device (see below). |
+
+iOS and macOS report four thermal states, and the engine places each of them on
+the same scale as Android's, as the table shows, so the same thresholds work on
+every platform; `THERMAL_MODERATE`, `THERMAL_EMERGENCY` and `THERMAL_SHUTDOWN`
+never occur there.
 
 The **thermal load** is Android's *thermal headroom*: how much of the device's
 thermal budget is in use. `0.0` means the device is far from throttling, `1.0`
 means it is throttled at the Severe level, and values above `1.0` mean heavier
 throttling. Up to `1.0` it grows roughly in step with the temperature, so it
 climbs steadily long before the status jumps to Severe — the best signal for
-reacting early.
+reacting early. iOS and macOS have no such value.
 
 ```lua
 local status      = Settings.GetThermalStatus()        -- THERMAL_NONE (0) .. THERMAL_SHUTDOWN (6), or THERMAL_UNAVAILABLE (-1)
@@ -13955,17 +14006,20 @@ local hasLoad     = Settings.IsThermalLoadAvailable()
 ```
 
 Details:
-- Thermal status needs **Android 11 (API 30)**. Thermal load needs **Android 12
-  (API 31)**, and device makers do not have to support it, so some devices
-  report the status but no load.
-- On Windows, Linux, macOS, iOS, Web and Xbox, and on Android 10 or older,
+- On Android the thermal status needs **Android 11 (API 30)** and the thermal
+  load needs **Android 12 (API 31)**; device makers do not have to support the
+  load, so some devices report the status but no load.
+- On iOS and macOS the thermal status is always available and the thermal load
+  never is: `GetThermalLoad()` returns `-1` and `IsThermalLoadAvailable()`
+  returns `false`.
+- On Windows, Linux, Web and Xbox, and on Android 10 or older,
   `GetThermalStatus()` returns `Settings.THERMAL_UNAVAILABLE` (`-1`),
   `GetThermalStatusName()` returns `"unavailable"`, `GetThermalLoad()` returns
   `-1`, and `IsThermalStatusAvailable()` / `IsThermalLoadAvailable()` return
   `false`. Check those instead of the platform, and the same script runs
   everywhere.
-- Works the same in a built game and in the editor running on Android; no
-  permission is needed.
+- Works the same in a built game and in the editor running on Android or macOS;
+  no permission is needed.
 - The values are refreshed about every 1.5 seconds, so polling faster gains
   nothing. Right after the engine starts they can read as unavailable for a
   moment, until the first sample arrives.
@@ -13983,11 +14037,11 @@ local baseScale, tier, timer = 1.0, 0, 0
 
 local function ThermalTier()
     local thermalLoad = Settings.GetThermalLoad()
-    if thermalLoad < 0 then                            -- no load on this device: use the status
+    if thermalLoad < 0 then                            -- no load (iOS, macOS, some Android devices): use the status
         local status = Settings.GetThermalStatus()
         if status >= Settings.THERMAL_SEVERE then return 2 end
-        if status == Settings.THERMAL_MODERATE then return 1 end
-        return 0                                       -- also THERMAL_UNAVAILABLE off Android
+        if status >= Settings.THERMAL_LIGHT then return 1 end
+        return 0                                       -- also THERMAL_UNAVAILABLE
     end
     if thermalLoad >= 0.95 or (tier == 2 and thermalLoad >= 0.85) then return 2 end
     if thermalLoad >= 0.80 or (tier >= 1 and thermalLoad >= 0.70) then return 1 end
@@ -14318,7 +14372,7 @@ Atlas.Rebuild()   -- repack every page at the start of the next frame
 
 Subscribe to a callback that is fired whenever a setting is changed (via Lua,
 the editor settings panel, AutoDetect, or AdaptiveQuality) and whenever the
-Android thermal status changes. The callback receives the changed key as a
+device's thermal status changes. The callback receives the changed key as a
 string (for example `"AAMode"`, `"FPSLimit"`, `"RenderScale"`, `"UpscalingMode"`,
 `"UpscalingQuality"`, `"UpscalingSharpness"`, `"UpscalingSharpening"`,
 `"AdaptiveQuality"`, `"AdaptiveQualityLevel"`, `"ThermalStatus"`, ...).
@@ -16809,7 +16863,8 @@ local has = HasComponent("Animator")
 local has = HasComponent("Skeleton")
 -- etc.: "Flipbook", "Audio", "FX", "Light" ("PointLight" and "SpotLight" check the same component), "Widget",
 -- "Camera", "Tilemap", "Joint", "PointMarker", "Decal", "AI", "Destructible", "ClassComponent",
--- "Stencil", "Replication", "Hierarchy", "Interface", "GameplayTag"
+-- "Stencil", "Replication", "Hierarchy", "Interface", "GameplayTag",
+-- and the type name of a component a plugin adds ("MyPlugin.Spinner")
 
 -- Check by component name on another entity (same names)
 local has = EntityHasComponent(entityId, "Sprite")
@@ -16842,11 +16897,13 @@ AddComponent("AI")
 AddComponent("Destructible")
 AddComponent("ClassComponent")
 AddComponent("Stencil")
+AddComponent("MyPlugin.Spinner")   -- a plugin component: its first instance, with default values
 
 -- Remove component
 RemoveComponent("Sprite")
 RemoveComponent("Rigidbody")
 RemoveComponent("ClassComponent")
+RemoveComponent("MyPlugin.Spinner") -- every instance of that plugin type
 -- etc. for all optional types
 -- Removing a component also releases what it owns in the physics world: sprite/flipbook
 -- collision shapes, collider shapes and their separate part bodies, skeleton bone bodies,
@@ -17439,7 +17496,7 @@ Network.ListRooms(callback, "p2p", { scope = "internet", duration = 8, progress 
 | `progress` | `false` | Internet: also call back with the rooms found so far (`done = false`) |
 
 The internet search keeps running between calls. A new internet `ListRooms` of the same app id
-continues the running search (same UDP port, same DHT state): with `progress = true` the rooms it
+continues the running search (same UDP ports, same DHT state): with `progress = true` the rooms it
 already knows arrive at once, and every room is asked again for fresh player counts. After the
 final list the search stays alive in the background for 90 seconds, keeping the rooms fresh, so a
 list that is opened again is filled immediately; it then stops by itself. A room that stops
@@ -17457,8 +17514,8 @@ warm DHT. It returns `false` when a session is already running or the backend is
 The DHT nodes the engine has talked to are kept in `Saved/Cache/Network/dht_nodes.bin` (writable
 folder), so the next launch does not start from the bootstrap servers. `HostOnline` and
 `JoinOnline` stop the search; joining a room the search has just heard from contacts that host
-directly, from the same UDP port the search used, so such a join usually needs only one round
-trip.
+directly, from the same UDP port the search reached it from, so such a join usually needs only one
+round trip.
 
 Rooms of the serverless backend also carry `r.global` (listed in the internet room list) and
 `r.info` (the host's `info` text).
@@ -17469,40 +17526,59 @@ list — the callback is called once, unless `progress = true` asked for updates
 An internet list that could not reach the DHT and found nothing ends with `dht_unreachable`.
 
 **The internet room list without a server.** A host of a listed room announces itself in the DHT
-under the room-list key of its app id, and a browsing player announces itself under a second key.
-Each side looks the other up and both send a few small packets — the same hole punching a join
-uses — so the host can tell the browser its room: code, name, players, flags and `info`. Rooms
-answer one by one within the first seconds (with `progress = true` they show up as they answer);
-global rooms on the same network are found through the local broadcast as well. Both sides keep
-sending while the search runs, so a room is found even when its first packets were lost. Players
-behind a NAT that gives every destination a new port are reached with port prediction: such a
-host publishes the port its NAT will use next under a key derived from its address, and the other
-side probes a small window of ports around it. A query is padded to the size of the answer and
-every host limits its answers, so the list cannot be used to flood a third party. When both sides
-are behind such NATs, or the NAT picks random ports, no direct path exists — see *When a direct
-path is impossible*.
+under the room-list key of its app id. A browsing player looks the hosts up, opens its own routers
+towards each of them the same way a joining player does (see *How serverless P2P works*) and only
+then announces itself under a second key. A host that sees a new browsing player waits a few
+seconds and then sends it the room: code, name, players, flags and `info`; after that the browser
+asks the room directly for fresh player counts. On a cold DHT the first rooms appear within about
+10–20 seconds (with `progress = true` they show up as they answer); a search that is already
+running or was started with `Network.PrewarmOnline()` shows them at once, and global rooms on the
+same network are found through the local broadcast as well. A host keeps sending to a browsing
+player for about 35 seconds after it first sees it, so a room is found even when its first packets
+were lost. A host behind a NAT that gives every destination a new port publishes the port its NAT
+will use next under a key derived from its address, and browsing players open their routers
+towards that port as well. A query is padded to the size of the answer and every host limits its
+answers, so the list cannot be used to flood a third party. When neither side can be reached this
+way, no direct path exists — see *When a direct path is impossible*.
 
 #### How serverless P2P works
 
 The room code is turned into hashed keys; the code itself is never published. The host
-announces its public address under one key in the DHT through the game's own UDP socket, and
-the joiner announces itself under another. Each side looks the other up and both send "punch"
-packets at the same time, which opens the path through both routers. When the router supports
-UPnP or NAT-PMP the port is also opened and announced. NATs that give every destination a new
-port are handled with port prediction when their ports are allocated sequentially; a host behind
-such a NAT also publishes the port it will use next. On the same Wi-Fi the room is also found
-through a local broadcast on **UDP 7794**, because many routers cannot send traffic back to their
-own public address. The bootstrap servers are resolved in parallel and the DHT nodes of earlier
-sessions are reused, so a join usually takes 2–6 seconds, and about one second from the room list.
+announces its public address under one key in the DHT through the game's own UDP socket. The
+joiner looks the host up and opens the path from 16 extra UDP sockets: each sends small packets
+towards the host with its own IP time-to-live — 2 to 16 router hops, and one with the normal
+time-to-live. A packet expires at the router where its time-to-live runs out, so the short-lived
+ones open the joiner's own routers and carrier NATs without ever reaching the host's router. Only
+then does the joiner announce the addresses of these sockets under a second key. The host
+watches that key, waits a moment so the joiner can learn all of the host's addresses, and then
+sends ordinary packets to every socket; the socket whose packets went far enough, but not too
+far, receives them and answers, a path is used only after a packet has made the full round trip,
+and the session then continues from that socket's port. The order matters: many home routers and
+carrier NATs block an address for a long time after a single unexpected packet from it, so the
+side that is found first never knocks first — and since there is a socket for every distance, one
+of them stops right in front of the host's router however many NATs are on the way. A host that is
+reachable directly — a public address, an open NAT or a port opened through UPnP or NAT-PMP —
+answers the socket with the normal time-to-live at once. The host keeps contacting a joining
+player for about a minute. NATs that give every destination a new port are handled with port
+prediction when their ports are allocated sequentially; a host behind such a NAT also publishes
+the port it will use next and waits a little longer, so the joiner can open that port first. On
+the same Wi-Fi the room is also found through a local broadcast on **UDP 7794**, because many
+routers cannot send traffic back to their own public address. The extra sockets take random ports
+and exist only while a join or an internet room search runs. The bootstrap servers are resolved in
+parallel and asked right away while the DHT nodes reused from earlier sessions are not confirmed
+yet, so a join usually takes 6–15 seconds, and about one second from the room list.
 
 #### When a direct path is impossible
 
-Without a server there is no relay. When **both** players are behind symmetric NATs with random
-ports, or both are behind the same carrier-grade NAT that cannot loop traffic back, the join ends
-with `direct_connection_failed`. This is rare on home Wi-Fi and happens on some mobile networks.
-Remedies: one of the players switches the network (for example Wi-Fi instead of mobile data), the
-host enables UPnP on the router, or the game uses the `"rendezvous"` backend, whose relay always
-connects.
+Without a server there is no relay. A NAT that gives every destination a new, unpredictable port —
+a symmetric NAT, found on some mobile networks — defeats hole punching: a joining player behind it
+reaches only a host that is directly reachable (a public address, an open NAT or a port opened
+through UPnP or NAT-PMP), and when **both** players are behind such NATs, or both are behind the
+same carrier-grade NAT that cannot loop traffic back, the join ends with
+`direct_connection_failed`. This is rare on home Wi-Fi. Remedies: the player on the mobile network
+hosts the room instead, one of the players switches the network (for example Wi-Fi instead of
+mobile data), the host enables UPnP on the router, or the game uses the `"rendezvous"` backend,
+whose relay always connects.
 
 #### Security
 
@@ -17537,7 +17613,9 @@ local s = Network.GetPortMappingStatus()
 -- s.externalAddress  public IP reported by the router ("" if unknown)
 -- s.externalPort, s.internalPort
 -- s.doubleNat        the router is itself behind another NAT, so the mapping cannot help
--- s.error            the reason when the state is "failed"
+-- s.error            the reason when the state is "failed": "not_supported_by_router" (no router
+--                    answered), "refused_by_router" (the router refused; the log names the UPnP
+--                    error code), "no_network"
 ```
 
 #### Rendezvous server
@@ -30721,5 +30799,100 @@ end
 > folder, [Mods](#4111-installing-and-removing-mods-from-inside-the-game) for installing mods
 > the player downloaded, and [Input → Drag & Drop](#6-input--input-keyboard-mouse-gamepad-touch)
 > for files dropped on the window.
+
+---
+
+## 68. Plugins — Plugin Settings, Components and World Assets
+
+> **Type:** Global functions. `Plugins` table.
+>
+> Native plugins can add engine settings, class components, world asset types and widget
+> elements ([Plugins & Mods → Extending the engine](Plugins-And-Mods-EN-DOC.md#314-extending-the-engine--settings-components-world-assets--widget-elements)).
+> The `Plugins` table lets scripts read and change their values. It exists in every Lua state —
+> entity and level scripts, widget scripts and mods. Plugin widget elements have their own
+> functions in the [Widget section](#plugin-elements).
+
+### Plugins and their settings
+
+```lua
+if Plugins.IsLoaded("MyPlugin") then
+    -- Applied values of the settings MyPlugin declares (Edit → Preferences → Plugins)
+    local settings = Plugins.GetSettings("MyPlugin")       -- → table, or nil
+    local quality = Plugins.GetSetting("MyPlugin", "quality")
+end
+```
+
+`GetSettings` returns every declared setting, completed with its default. While the plugin is
+not loaded, both functions return what `Config/Engine.json` stores for it, and `nil` when
+nothing is stored. Settings are changed in the editor; scripts only read them.
+
+### Plugin components
+
+Entities are addressed by their entity id, as everywhere else. `index` picks the instance
+when an entity holds several instances of a type; it starts at `0` and defaults to `0`.
+
+```lua
+local id = GetEntityId()
+local count = Plugins.GetComponentCount(id, "MyPlugin.Spinner")
+local has = Plugins.HasComponent(id, "MyPlugin.Spinner")
+
+-- Add an instance with default values → its index among the entity's instances of the type,
+-- or -1 (unknown type, or a type that allows one instance and already has it)
+local index = Plugins.AddComponent(id, "MyPlugin.Spinner")
+Plugins.RemoveComponent(id, "MyPlugin.Spinner", index)
+
+local props = Plugins.GetComponentProperties(id, "MyPlugin.Spinner")       -- → table, or nil
+local speed = Plugins.GetComponentProperty(id, "MyPlugin.Spinner", "speed")
+Plugins.SetComponentProperty(id, "MyPlugin.Spinner", "speed", 180)
+Plugins.SetComponentProperty(id, "MyPlugin.Spinner", "tint", { r = 0, g = 1, b = 0, a = 1 }, 1)
+```
+
+The generic `HasComponent`, `AddComponent` and `RemoveComponent` of
+[Section 31](#31-component--component-checks-and-management) accept plugin type names too;
+the functions here add the instance handling.
+
+### Plugin world assets
+
+```lua
+-- Every plugin world asset of the running level, or only those with one extension
+for _, asset in ipairs(Plugins.GetWorldAssets(".spawnzone")) do
+    print(asset.index, asset.name, asset.path, asset.x, asset.y, asset.z, asset.scaleX, asset.scaleY)
+    local radius = Plugins.GetWorldAssetProperty(asset.index, "radius")
+    Plugins.SetWorldAssetProperty(asset.index, "radius", radius * 2)
+end
+
+local props = Plugins.GetWorldAssetProperties(0)   -- → table, or nil
+```
+
+`index` is the entry's position in the level's list of world assets — it is stable while the
+level runs. Without an extension, `GetWorldAssets` lists the entries whose plugin is loaded.
+
+### Values
+
+Values come back as Lua values: numbers, booleans and strings as they are, a `Vec2` / `Vec3`
+property as `{x, y[, z]}`, a `Color` as `{r, g, b, a}` and an `Enum` as the index of the
+choice, starting at `0`. Set them in the same shapes; the plugin's declaration converts and
+clamps what you pass, so `SetComponentProperty(id, "MyPlugin.Spinner", "speed", "90")` stores
+the number `90`. A key the plugin does not declare is stored as given, and setting it to `nil`
+removes it. A changed value reaches the plugin in its next callback.
+
+### Reference
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Plugins.IsLoaded(name)` | `bool` | The plugin is enabled and running. |
+| `Plugins.GetSettings(name)` | `table` or `nil` | Applied settings of a plugin. |
+| `Plugins.GetSetting(name, key)` | value or `nil` | One setting. |
+| `Plugins.HasComponent(entityId, typeName)` | `bool` | The entity holds at least one instance. |
+| `Plugins.GetComponentCount(entityId, typeName)` | `int` | Instances of the type on the entity. |
+| `Plugins.AddComponent(entityId, typeName)` | `int` | Index of the new instance, `-1` on failure. |
+| `Plugins.RemoveComponent(entityId, typeName, index?)` | `bool` | Removes one instance; the plugin gets `OnStop`. |
+| `Plugins.GetComponentProperties(entityId, typeName, index?)` | `table` or `nil` | All values of an instance. |
+| `Plugins.GetComponentProperty(entityId, typeName, key, index?)` | value or `nil` | One value. |
+| `Plugins.SetComponentProperty(entityId, typeName, key, value, index?)` | `bool` | Changes one value. |
+| `Plugins.GetWorldAssets(extension?)` | `table` | `{ index, name, path, extension, x, y, z, scaleX, scaleY }` per entry. |
+| `Plugins.GetWorldAssetProperties(index)` | `table` or `nil` | All values of an entry. |
+| `Plugins.GetWorldAssetProperty(index, key)` | value or `nil` | One value. |
+| `Plugins.SetWorldAssetProperty(index, key, value)` | `bool` | Changes one value. |
 
 ---

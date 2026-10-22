@@ -1229,7 +1229,7 @@ After the scene is rendered, the **`PostProcessor`** applies screen-space effect
 produce the final image. The stack is configured by **View** assets
 (`.ice_view`) placed as **post-process volumes** (see
 [Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view) and
-[Editor → World-asset properties](Editor-EN-DOC.md#74-world-asset-properties-views--cinemas)).
+[Editor → World-asset properties](Editor-EN-DOC.md#74-world-asset-properties)).
 
 ### 9.1 The G-buffer & flow
 

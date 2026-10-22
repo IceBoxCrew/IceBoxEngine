@@ -834,7 +834,8 @@ selections:
 | **Videos** | The `.ice_video` runtime settings: **Is Post Processed** and **Is Lit**. Full-screen videos that are already playing pick the new values up right after **Apply**. |
 
 Per-asset content — file paths, names, texts, scripts, curves, gradients, frames, polygons,
-layers and tile layouts — is not bulk-edited; use the asset's own editor for that.
+layers, tile layouts and the properties of plugin components and plugin widget elements — is
+not bulk-edited; use the asset's own editor for that.
 
 This is ideal for large, repetitive edits that would be tedious one asset at a time — for
 example switching a hundred pixel-art textures to `Nearest` filtering, giving every
@@ -847,7 +848,9 @@ Drag an asset from the content area into the **Viewport** or the **Level Outline
 it in the level. Three kinds of asset can be placed this way: a **Class** (`.ice_class`)
 becomes a new entity, a **View** (`.ice_view`) becomes a post-process / nav-grid volume and a
 **Cinema** (`.ice_cinema`) becomes a cutscene trigger (cinemas only on the Viewport, where they
-get a position). Every other type is ignored by the scene — sprites, sounds, materials and the
+get a position). The file types of the world asset types native plugins add are placed the same
+way, as world assets ([Plugins & Mods → World asset types](Plugins-And-Mods-EN-DOC.md#3145-world-asset-types)).
+Every other type is ignored by the scene — sprites, sounds, materials and the
 rest reach a level through a class: add them to a component in the
 [Class Editor](#417-class-ice_class) and place the class. The exact rules are in
 [Editor → Dragging assets into the scene](Editor-EN-DOC.md#55-dragging-assets-into-the-scene).
@@ -2273,7 +2276,8 @@ There are **19 element types**, in five categories: `Panel`, `Text`, `Button` an
 (*Input*); `ProgressBar` and `Throbber` (*Display*); `HorizontalBox`, `VerticalBox`,
 `SizeBox`, `Overlay` and `ScrollView` (*Layout*); `Spacer`, `WidgetSwitcher` and
 `SubWidget` (*Misc*). Each one is described in
-[4.13.2](#4132-element-type-reference).
+[4.13.2](#4132-element-type-reference). Native plugins can add further element types of their
+own, listed under *Plugins* ([Plugins & Mods → Widget elements](Plugins-And-Mods-EN-DOC.md#3146-widget-elements)).
 
 Every element carries the same core set of properties — transform and anchoring,
 optional content-driven sizing, depth and post-processing, appearance, tooltip,
@@ -2284,7 +2288,8 @@ document-level canvas settings. They are documented field by field in
 **The Widget Editor** is a hierarchy, a canvas and an inspector:
 
 * **Hierarchy** — the element tree with a **search box**, **+ Add Element** (grouped into
-  *Common*, *Input*, *Display*, *Layout* and *Misc*), a per-element *add child* menu,
+  *Common*, *Input*, *Display*, *Layout* and *Misc*, plus *Plugins* while a loaded plugin adds
+  element types), a per-element *add child* menu with the same entries,
   **move up/down** to reorder siblings, **Move to Root**, copy/paste, and **Reparent** with
   cycle detection. Elements inherited from a parent widget are marked as such.
 * **Canvas** — the widget rendered at its real proportions. Click to select, drag to move,
@@ -2335,7 +2340,7 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | Property | Meaning |
 | -------- | ------- |
 | **Color** | Tint (RGBA). For a Panel/Image it is the fill; for a sprite it multiplies the sprite. |
-| **Lighting** | `Unlit` or `Lit` — whether the element takes part in the dynamic 2D lighting and shadow system. Available on Image, Button, Throbber, Panel, ProgressBar, Slider, Checkbox, Dropdown, ScrollView, Text, InputField and Toggle. |
+| **Lighting** | `Unlit` or `Lit` — whether the element takes part in the dynamic 2D lighting and shadow system. Available on Image, Button, Throbber, Panel, ProgressBar, Slider, Checkbox, Dropdown, ScrollView, Text, InputField, Toggle and plugin elements. |
 | **Shadow Receiver** | (`Lit` only) let dynamic shadows fall onto this element, in both world-space and screen-space widgets. |
 | **Sprite** | A `.ice_sprite` **or** `.ice_flipbook` drawn as the element's visual. Available on Image, Button, Throbber, InputField, Checkbox, Toggle and Dropdown. Assigning a flipbook clears the sprite and vice versa. |
 
@@ -2423,9 +2428,10 @@ rotation of the elements and of their parents into account.
 | **Spacer** | Misc | An invisible gap, used inside layout boxes. | None beyond the shared groups. |
 | **WidgetSwitcher** | Misc | Shows exactly one of its children. | **Active Child** — the index of the visible child. |
 | **SubWidget** | Misc | Embeds another widget document. | **Widget (.ice_widget)** — only widgets marked **Is Element** can be picked. |
+| *Plugin elements* | Plugins | An element type a native plugin adds: the plugin draws it and reacts to its pointer and gamepad input. | The properties the plugin declares, in a **Plugin Properties** section — or the plugin's own inspector. While the plugin is not loaded, the canvas shows a placeholder with the type name, the game draws nothing for the element and its values are kept as they are. |
 
 > The categories match the **+ Add Element** menu, which is grouped into *Common*, *Input*,
-> *Display*, *Layout* and *Misc*.
+> *Display*, *Layout* and *Misc*, plus *Plugins* for the element types of loaded plugins.
 
 > **Text Wrap.** With **Text Wrap** on, the text is broken into lines that fit the element's
 > width — in the game and on the editor canvas alike. Lines break at spaces; Chinese and
@@ -2851,8 +2857,9 @@ The Class Editor is a mini-scene with:
 * **A components panel** to add and configure components — Transform, Sprite Renderer,
   Collider (box/sphere/capsule), Tilemap Renderer, Flipbook, Audio, FX, Widget,
   Rigidbody (with ragdoll settings), Animator, Skeleton, Camera, Decal, Light (point/spot),
-  Point Marker, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync), and
-  nested **Class Components** (compose other classes).
+  Point Marker, AI, Joint, Stencil, Destructible, **Replication** (multiplayer sync),
+  nested **Class Components** (compose other classes), and the component types native
+  plugins add.
 * **Multiple instances per component.** Most visual and physical components are lists —
   a class can hold several sprites, colliders, lights, audio sources or joints at once.
   Each instance is named, can be reordered (**move up/down**), and has its own **socket
@@ -2878,7 +2885,8 @@ The Class Editor is a mini-scene with:
 
 #### 4.17.1 Component reference
 
-**Add Component** groups the catalogue into six sub-menus:
+**Add Component** groups the catalogue into six sub-menus, plus a seventh while a loaded plugin
+adds component types:
 
 | Menu | Components |
 | ---- | ---------- |
@@ -2888,6 +2896,7 @@ The Class Editor is a mini-scene with:
 | **Audio & Effects** | Audio, FX. |
 | **UI** | Widget, Point Marker. |
 | **Logic** | AI Brain, Class Component. |
+| **Plugins** | The component types of loaded native plugins — see [Plugins](#plugins) below. |
 
 **Stencil Mask** and **Replication** are always available on the entity rather than added
 from this menu, and **Transform** is intrinsic. Components marked *(single)* below exist
@@ -3206,6 +3215,28 @@ properties.
 | **Local Transform** | Where the embedded class sits relative to this entity. |
 | — | The embedded class's components appear in this class's list, marked as provided by the component: you can override their values here, but add, delete and rename only in the source class. |
 
+##### Plugins
+
+The **Plugins** sub-menu lists the component types of the loaded native plugins, grouped into
+further sub-menus by the category each type declares; hovering an entry shows its tooltip. A type
+its plugin declares unique is greyed out once the class holds it. Each type gets its own section,
+titled with the type's name and its instance count:
+
+| Property | Meaning |
+| -------- | ------- |
+| **+ Add Instance** | Adds another instance with the default values (not offered for a unique type). |
+| **Name** | Instance name, unique within the entity. |
+| **Local Transform** | Position, Scale and Rotation relative to the entity. The viewport gizmo moves the selected instance, and a click at its position in the viewport selects it. |
+| — | The properties the plugin declares, below the transform — or the plugin's own inspector. |
+
+Instances are reordered with the arrows, and their context menu offers **Copy Preferences /
+Paste Preferences** and **Delete**; the **X** on the section header removes every instance of the
+type. Instances inherited from a parent class are marked `(P)`: like the instances a class
+component provides, they are renamed and deleted only in their source class, while their values
+can be overridden here and restored with **Reset Overrides To Inherited Values**. While the
+plugin is not loaded, the section says so and keeps the saved values untouched
+([Plugins & Mods → Class components](Plugins-And-Mods-EN-DOC.md#3144-class-components)).
+
 ##### Always available
 
 **Stencil Mask**
@@ -3225,7 +3256,7 @@ it is ticked.
 | **Replicate** | Replicate this entity over the network: the host simulates it and clients receive its state. Off = purely local, exactly like singleplayer. |
 | **Owner** | `Server` (the host simulates it) or `Player` (the given player owns it — client-predicted characters). With `Player`, **Owner Player ID** (`0`–`255`, the owner's network player ID) appears. |
 | **Transform / Velocity / Visuals** | Which parts to sync every tick: position-rotation-scale; rigidbody linear velocity; the first sprite and the first flipbook, the skeleton, and the animator's state and parameters. With **Visuals** off, the visual components are sent once, when the entity appears on a client. |
-| **Full State** + **Full State Rate** | Sync every other component setting whenever it changes — the remaining sprite and flipbook instances, lights, tilemap, audio, FX, widgets, AI, the rigidbody's and colliders' physics state, and components added or removed on the host. Only the changed fields are sent. **Full State Rate** (shown while Full State is on, `0`–`60` Hz) is how often changes are checked; `0` = the global replication rate. |
+| **Full State** + **Full State Rate** | Sync every other component setting whenever it changes — the remaining sprite and flipbook instances, lights, tilemap, audio, FX, widgets, AI, plugin components, the rigidbody's and colliders' physics state, and components added or removed on the host. Only the changed fields are sent. **Full State Rate** (shown while Full State is on, `0`–`60` Hz) is how often changes are checked; `0` = the global replication rate. |
 | **Scripts On Replicas** | `Auto`, `Always Run` or `Never Run` — whether Lua callbacks run on a client for this entity when someone else owns it. `Auto` follows the global replica script gating, which is on by default (the host simulates the entity, the client only applies its state); `Always Run` / `Never Run` override that for this entity. Turning the gating off with `Network.SetReplicaScriptGating(false)` lets every replica run its scripts — see [Lua API → Automatic replication](LuaAPI-EN-DOC.md#automatic-replication-recommended). |
 | **Relevancy** | `Area Of Interest` (sent only to nearby players) or `Always Relevant` (sent to everyone — bosses, objectives). |
 | **Kinematic On Clients** | Make the rigidbody kinematic on clients so local physics never fights the replicated position. |
