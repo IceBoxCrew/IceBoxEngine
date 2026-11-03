@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** renders 2D worlds through a modern, backend-agnostic graphics
 > pipeline: a thin **RHI** (Render Hardware Interface) sits over **eleven** renderers —
@@ -56,6 +56,7 @@
    - 6.3 [Ambient & light cookies](#63-ambient--light-cookies)
    - 6.4 [The light budget & the light UBO](#64-the-light-budget--the-light-ubo)
    - 6.5 [Where lighting and shadow settings come from](#65-where-lighting-and-shadow-settings-come-from)
+   - 6.6 [Per-pixel light of pixel worlds](#66-per-pixel-light-of-pixel-worlds)
 7. [2D shadows](#7-2d-shadows)
    - 7.1 [How ray-cast shadows work](#71-how-ray-cast-shadows-work)
    - 7.2 [Shadow casters](#72-shadow-casters)
@@ -84,6 +85,7 @@
     - 13.6 [One-way platforms](#136-one-way-platforms)
     - 13.7 [Joints, queries & destruction](#137-joints-queries--destruction)
     - 13.8 [World settings reference](#138-world-settings-reference)
+    - 13.9 [Pixel worlds](#139-pixel-worlds)
 14. [Quick reference tables](#14-quick-reference-tables)
     - 14.1 [Render backends](#141-render-backends)
     - 14.2 [Platforms & selectable renderers](#142-platforms--selectable-renderers)
@@ -539,17 +541,21 @@ A single rendered frame proceeds roughly as:
    their **particle lights**.
 7. **Execute the scene graph** → Shadows → FX.Setup → Geometry, producing `SceneColor`
    (plus the G-buffer, when it is active), then finish that target with ray-traced GI,
-   particles, fog of war, foreground UI and debug overlays
-   ([3.3](#33-the-scene-drawing-chain)).
+   particles, script geometry, the per-pixel light of a pixel world, fog of war,
+   foreground UI and debug overlays ([3.3](#33-the-scene-drawing-chain)).
 8. **Execute the post-process graph** → PostProcess (or Composite) → `FinalColor`.
-9. **Composite the video and widget overlays.** When post-processing is on, full-screen
-   videos whose asset is not **Is Post Processed** are rendered into their own
-   full-resolution video-overlay framebuffer and composited over the post-processed image
-   first. Then UI drawn after the scene — with the **cinema overlay** (fades, letterbox,
-   flash, dialogue box, skip prompt) drawn right above the widgets — is rendered into its
-   own full-resolution framebuffer and composited over that, so the UI stays crisp at
-   reduced **Render Scale** and is not distorted by scene effects. Both composites are
-   HDR10-aware.
+9. **Composite the video and widget overlays.** When post-processing is on, or the scene
+   renders at its own internal resolution (a **Render Scale** other than 100 %, SSAA or
+   FSR/NIS upscaling), full-screen videos whose asset is not **Is Post Processed** are
+   rendered into their own full-resolution video-overlay framebuffer and composited over
+   the post-processed or upscaled image first. Then UI drawn after the scene — script
+   `Draw` geometry on the `overlay` layer, the widgets above it that are not
+   **Post Processed** and the **cinema overlay** (fades, letterbox, flash, dialogue box,
+   skip prompt) right above the widgets — is rendered into its own full-resolution
+   framebuffer and composited over that, so the UI stays crisp at reduced
+   **Render Scale** and is not distorted by scene effects. Both composites are
+   HDR10-aware. At full resolution without post-processing there is nothing to keep
+   apart, and all of it is drawn straight into the frame.
 10. **Finalize split-screen** — each player's image is blitted into its window rectangle.
 11. **Render the editor UI** (ImGui, gizmos) on top — in a shipped game this step is
     absent and the final image is presented directly.
@@ -572,11 +578,13 @@ post-process graph takes over:
 | 6 | `Render.Sprites` | Geometry pass | Sprite instances — the bulk of a typical scene. |
 | 7 | Ray-traced GI | after the graph | `Raytracer2D` traces and composites [global illumination](#8-ray-traced-global-illumination) over the scene colour. |
 | 8 | `FX.Update` / `FX.Render` | after the graph | Particle simulation and drawing (see below). |
-| 9 | `FogOfWar` | after the graph | The fog-of-war overlay, in Play mode only. |
-| 10 | `Widgets` | after the graph | Foreground UI widgets, plus the overlay capture described in [3.2](#32-the-frame-step-by-step). With post-processing on, the cinema overlay (`Render.CinemaOverlay`) is drawn into that overlay right above the widgets. |
-| 11 | `Video` / `Video.Overlay` | after the graph | Full-screen video channels in Play mode, letterboxed over a black background. Videos marked **Is Post Processed** (and every video while post-processing is off) are drawn here into the scene; the rest go to the video overlay from [3.2](#32-the-frame-step-by-step). **Is Lit** videos use the same screen-space lit path as UI. |
-| 12 | `CinemaOverlay` | after the graph | With post-processing off: the cinema overlay, above the widgets and videos. It holds, bottom to top, the cinema's fade, letterbox bars, flash, the script fade (`Cinema.FadeOut`), the dialogue box and the skip prompt — so dialogue stays readable over a fade to black. In the editor it previews the open Cinema Editor in **Cinema Mode**. |
-| 13 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
+| 9 | `ScriptDraw` | after the graph | Script `Draw` geometry of the scene layer, including the cells, pixel bodies and particles of a [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) (with its `background` option they are drawn at the start of the Geometry pass instead). |
+| 10 | `PixelWorld.Light` | after the graph | The per-pixel light of a pixel world, multiplied over everything drawn so far ([6.6](#66-per-pixel-light-of-pixel-worlds)). |
+| 11 | `FogOfWar` | after the graph | The fog-of-war overlay, in Play mode only. |
+| 12 | `Widgets` | after the graph | Foreground UI widgets, plus the overlay capture described in [3.2](#32-the-frame-step-by-step). Script `Draw` geometry on the `overlay` layer (`ScriptDraw.Overlay`) is drawn right before the widgets — into that overlay when the frame has one (post-processing on, or a scene at its own internal resolution), into the scene otherwise. In a frame with the overlay, the cinema overlay (`Render.CinemaOverlay`) is drawn into it right above the widgets. |
+| 13 | `Video` / `Video.Overlay` | after the graph | Full-screen video channels in Play mode, letterboxed over a black background. Videos marked **Is Post Processed** (and every video in a frame without the overlays — post-processing off at full resolution) are drawn here into the scene; the rest go to the video overlay from [3.2](#32-the-frame-step-by-step). **Is Lit** videos use the same screen-space lit path as UI. |
+| 14 | `CinemaOverlay` | after the graph | In a frame without the overlays (post-processing off at full resolution): the cinema overlay, above the widgets and videos. It holds, bottom to top, the cinema's fade, letterbox bars, flash, the script fade (`Cinema.FadeOut`), the dialogue box and the skip prompt — so dialogue stays readable over a fade to black. In the editor it previews the open Cinema Editor in **Cinema Mode**. |
+| 15 | Debug overlays | after the graph | Everything from [Debug visualization](#12-debug-visualization). |
 
 Particles are simulated and drawn once per frame even in split-screen (the first view
 owns the update), while every view redraws the geometry it can see.
@@ -599,11 +607,15 @@ renderer. Emitters also feed the fluid (SPH) solver, sub-emitters and collision 
 scene colliders — all authored in the [FX asset](Assets-EN-DOC.md#412-fx--particle-system-ice_fx).
 
 **Fog of war.** The fog-of-war stage maintains a grid of cells in three states — *Unseen*,
-*Explored*, *Visible* — computed with recursive shadow-casting field-of-view from each
-revealing point against per-cell opacity. It renders as a batched quad overlay at a
-configurable Z with per-state alphas, an optional smooth per-cell fade, and a
-serializable state so exploration survives a save/load. It is a Play-mode-only stage
-and is skipped entirely when disabled.
+*Explored*, *Visible* — computed from revealing points against explicit per-cell opacity.
+Classic recursive shadowcasting is the default. Optional strict line of sight uses the
+viewer's actual world position and blocks rays through sealed diagonal corners; the
+first opaque cell remains visible. Scripts update opacity when doors or terrain change.
+The batched overlay draws after the world and before foreground UI, independently of
+world depth, stencil masks and camera clip depth. Per-state alphas, optional smooth
+fades and optional coverage outside the grid control its appearance. Exploration can
+be serialized; smooth fades pause at zero delta time. This is a Play-mode-only stage
+and is skipped entirely when disabled. See [FogOfWar in the Lua API](LuaAPI-EN-DOC.md#335-fog-of-war--vision-and-visibility).
 
 **UI.** `WidgetRuntime` draws widgets through the batch renderer in **screen-space
 mode**: the lit shaders switch to a screen-space branch that transforms the fragment
@@ -763,10 +775,12 @@ Beyond quads, the batch renderer can:
 * **Draw meshes** — arbitrary triangle meshes (positions, UVs, indices) used by
   **skeletal** mesh attachments, with the same blend/shading/alpha-clip options.
 * **Panel backdrop blur** — a Gaussian backdrop blur behind UI panels (captures the
-  scene, blurs it, and composites it under the panel) for frosted-glass UI. When
-  post-processing is active the capture source is **redirected** to the post-processor's
-  own scene target (with the widget overlay layered in), so a blurred panel sees the
-  real, effect-processed image rather than a stale copy.
+  scene, blurs it, and composites it under the panel) for frosted-glass UI. When the
+  widgets go into the full-resolution overlay ([3.2](#32-the-frame-step-by-step)), the
+  capture source is **redirected** to the scene target — the post-processor's own one,
+  or the scaled scene framebuffer without post-processing — with the widget overlay
+  layered in, so a blurred panel sees the real scene rather than an empty overlay or a
+  stale copy.
 * **Custom materials** — draw a sprite or mesh with a compiled material-graph shader
   (Section [5](#5-materials--shaders)), including dynamic per-instance parameter
   overrides; the renderer can blit the current scene color so materials can sample
@@ -875,6 +889,17 @@ that every lit shader reads, and each lit fragment loops over the lights that re
 
 ### 6.2 Light types
 
+Pixel-art projects can set `Rendering.LightingPixelSize` to a world-space cell
+size (`1` for one world pixel) and `Rendering.LightingPixelOrigin` to `[0, 0]`
+in `Config/Engine.json`. A size of `0` preserves continuous lighting and is the
+default. The same settings support world overrides and Lua
+`SetLightingPixelSize` / `SetLightingPixelOrigin`. Light attenuation, soft
+shadows and indirect-light composition sample the centers of this fixed world
+grid; geometry, textures and overlay UI keep their original resolution. Softness
+still comes from the shadow settings. Independent screen post-effects retain
+their own sampling. See [Lua lighting API](LuaAPI-EN-DOC.md#pixel-art-lighting)
+for validation and persistence rules.
+
 | Light | Parameters | Notes |
 | ----- | ---------- | ----- |
 | **Point** | Position (including **Z**), **Radius**, Color, **Intensity**, **Falloff Exponent**, Cast Shadows, cookie | Omnidirectional. The most common scene light. |
@@ -964,6 +989,37 @@ the next startup (and when Play mode starts in the editor), which is what makes 
 graphics menu persist across launches. `Settings.ResetDefaults()` drops them all and returns
 to the `Engine.json` values.
 
+### 6.6 Per-pixel light of pixel worlds
+
+A [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) brings its own light, computed per cell instead of per
+light source. It is independent of the lighting mode and of the light budget above, and runs only while the game has a
+pixel world with lighting enabled (`PixelWorld.SetLighting`).
+
+**What it computes.** For the view of each camera, plus a margin of cells around it, the engine fills two small
+textures on the CPU — the emission of every cell (glowing materials, burning and sparked cells, and the level's point
+and spot lights placed as small emitters) and its opacity — and runs on the GPU:
+
+1. a **jump-flood** pass that turns the occupied cells into a distance field;
+2. **radiance cascades** — several passes from the longest rays to the shortest. Each traces its interval of rays
+   through the cells, skipping empty space with the distance field, adding up emission and losing light in
+   semi-transparent cells, and merges the light of the next, coarser cascade. Rays that leave the lit area pick up the
+   sky light and the sun of the level's directional light;
+3. a **resolve** into one light texture: ambient + gathered light + the cell's own glow;
+4. a **composite** — a world-space quad over the lit area that multiplies the scene colour by the light.
+
+It runs right after the scene's script geometry ([3.3](#33-the-scene-drawing-chain)), so it lights everything drawn
+in the world before it, the pixel world included, while the overlay UI drawn later is untouched.
+
+**Cost and quality.** One light texel covers 4 × 4, 2 × 2 or 1 cell (`quality` 0, 1, 2); a view too large for 1024
+texels per side or 655 360 texels in total coarsens the texel automatically. Light textures are kept per view and
+allocated with headroom, so moving the camera does not reallocate them, and the CPU side reuses the emission and
+opacity of every chunk that has not changed since the last frame. The targets are RGBA16F; where float render targets
+are not supported (some WebGL 2 and GLES devices) the same passes run on RGBA8 targets with packed coordinates and a
+smaller light range.
+
+**Gameplay light.** Separately from the GPU, a coarse light map of the same area is propagated on a worker thread a few
+times per second for `PixelWorld.GetLight` and `PixelWorld.IsLit`, so gameplay code never reads the GPU back.
+
 ---
 
 ## 7. 2D shadows
@@ -994,24 +1050,79 @@ the occluder's shadow Z is left lit — that is what makes a tall wall shadow th
 but not the roof, and lets sprites at different heights shadow each other correctly.
 All lights' shadow maps are packed into a single **texture array**.
 
-The fourth channel (**A**) of each layer is a *next-layer* flag — `1` when a deeper layer
-exists on that ray, `0` otherwise — so shading stops at the last occupied layer instead
-of always reading all four.
+The fourth channel (**A**) of each layer says how much light gets past the occluder:
+`0` for an ordinary caster, which shadows completely, a value between `0` and `1` where
+the light of a lamp buried in solid tiles comes out of the rock, and a negative value for
+a solid tile area — it also stores where the light leaves the area: everything past that
+point is in shadow, while the tiles themselves take their light from the area's light
+field (see below).
 
 Next to the shadow maps the system keeps a small **per-ray summary**: a second, 32-bit
 texture array with two rows per light. For every ray it stores the nearest start and the
-farthest end of any occluded interval within a window of neighbouring rays — a wide
-window that covers every soft-shadow tap and a narrow one that covers a single tap. A
-lit pixel reads the summary first: when its distance falls before the nearest start or
-past the farthest end, no layer of any tap can darken it and the shadow map is not read
-at all. Inside a penumbra each tap checks its own narrow window before touching the
-shadow map. The bounds are rounded conservatively and account for linear filtering
-between neighbouring rays, so the image is exactly the same as reading every layer —
+farthest end of any occluded interval and how many layers are occupied, within a window
+of neighbouring rays — a wide window that covers every soft-shadow tap and a narrow one
+that covers a single tap. A lit pixel reads the summary first: when its distance falls
+before the nearest start or past the farthest end, no layer of any tap can darken it and
+the shadow map is not read at all. Inside a penumbra each tap checks its own narrow
+window before touching the shadow map and reads only the occupied layers. The bounds
+are rounded conservatively and account for linear filtering between neighbouring rays,
+so the image is exactly the same as reading every layer —
 only the cost changes: most lit pixels pay one 32-bit read instead of up to 28
 full-precision shadow-map reads, which is what keeps shadows cheap on mobile GPUs.
 
+**The light field of solid tiles.** For every shadow-casting light that reaches a solid
+tile area the engine also builds a small *light field* on the tile grid of that area. It
+tests the faces of the area that look at the light — with exactly the shadow rules
+described here, so a face is lit only where a receiver just outside it would be lit — and
+spreads the light from the lit faces into the tiles, measuring the distance in tiles
+along paths that stay inside the area. The field covers the part of the light's radius
+that is in view (up to 256 × 256 tiles) and lives in extra rows of the same shadow-map
+texture array, so it needs no texture unit of its own, and scenes without solid tile
+areas allocate none of it. A field is rebuilt only when its light moves or changes, when
+the tiles or the casters at least as tall as them change, or when the view brings other
+tiles in; the fields of several lights are built in parallel. The directional light
+builds one field for the whole view in the same way.
+
 This is a true 2D visibility technique: shadows are cast by the actual silhouettes
 of scene geometry, support any number of occluders, and update every frame.
+
+**Where a shadow starts.** A caster's own outline is lit, and its shadow begins where
+the light **leaves** it: a crate is lit on the side facing the lamp and the floor behind
+it is dark. The same rules hold for every caster type, for the CPU and the GPU path,
+for the directional light and for [ray-traced shadows](#8-ray-traced-global-illumination),
+so a scene looks the same on every device. Two rules make solid geometry and carried
+lights behave the way players expect:
+
+* **Solid tiles are opaque, and light spreads into them from the faces it reaches.**
+  Box-shaped tiles (a tile with a collider and the default unit-box shape) that share the
+  same shadow settings form one solid area — across all visible layers of a tilemap and
+  across tilemap instances that sit side by side on the same grid, so a solid split into
+  chunks has no seams. Everything behind the area — background walls, characters and
+  decoration layers whose Z is below the area's **Shadow Z Order** — is in shadow, and the
+  shadows of other casters stop at its faces instead of being drawn across the tiles. The
+  tiles themselves are lit by the area's light field: every face the light reaches is
+  fully lit, and the light spreads from those faces into the tiles, getting dimmer with
+  the distance it travels through them. The tile's **Shadow Light Depth** sets how fast:
+  it is the brightness half a tile in from a lit face, that is, at the middle of the first
+  tile. `1` (the default) keeps every tile the light can reach through the area fully
+  lit, `0` keeps the tiles dark, and every further half tile multiplies the brightness by
+  the value again — with `0.5` the first tile is at 50 %, the second at about 12 % and
+  the third at about 3 %. A face in shadow — behind other tiles, behind a caster at least
+  as tall as the area's Shadow Z Order, or beyond the light's radius — lets no light in,
+  so the back of a wall stays dark and a bump casts a soft shadow onto the rock behind it.
+  The light travels only through tiles, never across a gap of air, so a cave under a lit
+  floor stays dark. The field is smooth across corners, steps and the edges of shadows —
+  there are no streaks, seams or wedges inside the rock — it does not change with the
+  camera, and it depends only on the tiles themselves, never on how the engine splits
+  them into layers, instances or internal groups.
+* **A light inside a caster is not shadowed by it.** A lantern held by a character with
+  a shadow-casting collider, a lamp sprite with its own collider or a glowing tile placed
+  inside a solid area is not blocked by the caster that contains it; that caster still
+  shadows other lights as usual. A light buried inside a solid tile area lights the rock
+  around it with the same fade, by its distance through the rock, and the light that comes
+  out of the rock keeps the brightness it had where it left it, so a crystal deep in the
+  rock lights only its own surroundings while a lamp just under the surface also shines
+  out of it.
 
 ### 7.2 Shadow casters
 
@@ -1023,7 +1134,7 @@ within the view region, for performance). A caster can be a:
 | **Box** | Box colliders and rectangular sprite/flipbook/skeleton bounds. |
 | **Circle** | Circle (sphere) colliders. |
 | **Polygon** | Sprite collision polygons, capsule colliders, traced texture contours and convex shapes. |
-| **Segment** | Edge/chain geometry (e.g. tilemap collision chains). |
+| **Segment** | Edge/chain geometry (e.g. tilemap collision chains) and the outlines of opaque cells of a [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) with `castShadows`. |
 
 Anything renderable can cast — sprites, flipbooks, skeletons, tilemaps and tilesets, FX
 instances, collider shapes, and the fragments produced by
@@ -1034,9 +1145,10 @@ settings:
 | ------- | ------ |
 | **Cast Shadow** | Whether this instance contributes to the shadow maps at all. |
 | **Cast Shadow Mode** | **Colliders** — use the attached collider shapes as the silhouette (cheap, predictable). **Contour** — trace the texture's alpha contour so the shadow matches the artwork exactly (the traced contour is cached per texture). Available where there is artwork to trace: sprites, flipbooks, skeletons, tilemaps and tilesets. Collider shapes and FX always cast from their own shape. |
-| **Shadow Origin** | Where the caster's height is anchored: **Bottom**, **Center** or **Top**. |
-| **Shadow Z Order** | The caster's height, which drives the height-aware occlusion described above. |
-| **Shadow Edge Fade** | Shrinks/feathers the caster's edges so hard silhouettes soften at their extremities. |
+| **Shadow Origin** | Where the caster's height is anchored: **Bottom**, **Center** or **Top**. For tiles it is applied per tile with the height of that one tile (the whole block for a tile with a span), so a solid area behaves exactly like the same tiles placed one by one. **Center** keeps the caster on the tile itself — the usual choice for side-view terrain. |
+| **Shadow Z Order** | The caster's height, which drives the height-aware occlusion described above. For side-view terrain set it above the Z of everything the terrain should hide (characters, pickups, decoration layers drawn over the terrain). |
+| **Shadow Edge Fade** | Shrinks/feathers the caster's edges so hard silhouettes soften at their extremities. On tiles every tile shrinks on its own, so tiles with an edge fade are kept as separate casters instead of joining a solid area. |
+| **Shadow Light Depth** | Tiles only (tileset tiles and animated tiles). How lit the inside of a solid area of box-shaped tiles is, `0`–`1`, `1` by default: the brightness half a tile in from a lit face, with deeper tiles fading smoothly — see [7.1](#71-how-ray-cast-shadows-work). Tiles with different values form separate solid areas. |
 | **Don't Block Shadows** | On by default. When cleared, this caster also **blocks** shadows cast by others — see below. |
 
 **Casting vs blocking.** Every edge carries two independent flags. *Casts* means "this
@@ -1049,6 +1161,22 @@ object out. Changing either invalidates the shadow cache.
 
 Each caster contributes **edges** to a spatial **edge grid** that accelerates the
 ray casts.
+
+**Tilemap casters are cached.** For every tilemap instance the engine keeps the casters
+it built from the cells of all its visible layers: box-shaped tiles with identical
+settings joined into solid areas of which only the outline becomes edges, tiles with a
+span or an edge fade as boxes of their own, plus polygon and contour tiles. The instance
+is rebuilt only when something it depends on changes — the cells, tile spans,
+visibility or tileset of a layer, the tilesets, the instance's flip, the animated-tile
+settings, **Colliders Block Shadows**, the tile shadow settings (`SetTileCastShadow` and
+the other tile-shadow setters, or a reloaded tileset or texture), or the frame of an
+animated tile whose collider differs per frame. On every other frame only the cached
+casters near the view are emitted, so a large static map no longer re-merges its cells
+each frame, and digging or an explosion rebuilds just the edited instance. Solid areas
+of instances that sit on the same grid are joined along their shared borders every
+frame — only the border edges take part, so splitting a map into chunks costs almost
+nothing. Contour shadows of animated tiles follow their current frame without a
+rebuild.
 
 ### 7.3 Quality, softness & bias
 
@@ -1064,7 +1192,7 @@ Shadow appearance is controlled in
 | **Shadow Intensity** | How dark the shadow is (0 = invisible, 1 = full); the final result is a lerp between "fully lit" and the sampled shadow. |
 | **Shadow Bias** | A **2D** offset (±1000): **X** is a *distance* bias along the ray, **Y** is a *perpendicular* bias that shifts the sample sideways. Together they prevent self-shadowing artifacts ("shadow acne") on both flat and glancing contacts. |
 | **PCF Samples** | Percentage-closer-filtering taps (1–7). The shader uses half that count on each side of centre, capped at 4. |
-| **Directional Shadow Length** | Maximum length of directional shadows in world units; beyond it the shadow fades out instead of stretching to the horizon. `0` = unlimited. |
+| **Directional Shadow Length** | Maximum length of directional shadows in world units, measured from where the shadow starts; beyond it the shadow fades out instead of stretching to the horizon. For a solid tile area it is measured from the side where the light leaves the area. `0` = unlimited. |
 | **Directional Shadow Depth Fade** | Fades a directional shadow out as the height gap between occluder and receiver grows, so tall objects do not paint hard shadows onto distant ground. |
 | **Colliders Block Shadows** | Makes collider geometry block other objects' shadows globally (see [7.2](#72-shadow-casters)). |
 
@@ -1098,7 +1226,10 @@ The shadow system has two execution paths and two big optimizations:
   dispatch builds the per-ray summary described in
   [7.1](#71-how-ray-cast-shadows-work).
 * **CPU fallback** — otherwise, a brute-force ray caster runs on the CPU using the
-  edge grid for acceleration, and builds the per-ray summary on the CPU as well.
+  edge grid for acceleration, and builds the per-ray summary on the CPU as well. Both
+  paths apply exactly the rules of [7.1](#71-how-ray-cast-shadows-work), so the shadows
+  do not change with the path a device takes. The light fields of solid tiles are built
+  on the CPU on both paths.
 * **Edge-grid acceleration** — ray casts query a uniform grid of edges instead of
   testing every edge, keeping cost roughly proportional to local complexity. The grid
   is rebuilt only when the edge set changes.
@@ -1163,9 +1294,17 @@ How it works:
   occluder (**Shadow Softness** is the light's physical size, **RT Quality** the
   sample count). The Z-ordering rules of the rasterised path are preserved
   exactly — a caster still only shadows receivers behind it, and a collider with
-  *Cast Shadow* off still casts nothing. If the acceleration structure or the
-  ray-traced shader variant is unavailable, every path falls back together to
-  the analytic shadow maps with no visual change.
+  *Cast Shadow* off still casts nothing — and so are the rules of
+  [7.1](#71-how-ray-cast-shadows-work): shadows start where light leaves a caster,
+  solid tiles are opaque and are lit by the same light field as with the shadow maps,
+  and a light inside a caster is not shadowed by it. Point and
+  spot light rays are traced from the light toward the pixel, and a light buried in
+  solid tiles lights the rock around it and shines out of it exactly as with the shadow
+  maps. The same rules apply to the shadow rays inside the GI, and so does blocking:
+  geometry that only blocks shadows (**Colliders Block Shadows**, see
+  [7.2](#72-shadow-casters)) cuts a shadow off exactly where the shadow maps cut it off.
+  If the acceleration structure or the ray-traced shader variant is unavailable, every
+  path falls back together to the analytic shadow maps with no visual change.
 * Ray hit distances also produce **ray-traced ambient occlusion** — contact
   darkening wherever geometry meets — at no extra ray cost. Open areas keep a
   visibility of 1 and are left untouched.
@@ -1207,8 +1346,9 @@ Quality settings trade cost for fidelity:
 > iOS 15+). **WebGPU** has no ray-query API at all, so web builds fall back to a
 > *software tracer*: the same compute shader traverses the shadow-edge buffer directly
 > instead of an acceleration structure. It is enabled when WebGPU compute shaders are
-> on, costs more per ray and traverses at most 1024 edges per frame. Bounced light and
-> ray-traced AO are identical to the hardware path; **Shadow rays** keeps working
+> on, costs more per ray and traverses at most 1024 casting and 1024 blocking edges per
+> frame. Bounced light and ray-traced AO are identical to the hardware path;
+> **Shadow rays** keeps working
 > *inside* the GI, but the direct sprite shadows stay on the analytic shadow maps
 > because the lit sprite shader has no ray-query variant on WebGPU. Everywhere else the
 > setting is shown as unsupported and the scene falls back to direct lighting + shadows.
@@ -1339,8 +1479,10 @@ Set in [Preferences → Engine](Editor-EN-DOC.md#101-engine).
 **Render Scale** is an internal-resolution multiplier exposed as 1–200 % and clamped to
 0.25×–4× at render time. Below 100 % the scene renders into a smaller framebuffer and
 is upscaled (performance); above 100 % it renders larger and is downsampled (quality).
-UI drawn after the scene is composited at full resolution regardless, so a low render
-scale does not blur the interface.
+UI drawn after the scene is composited at full resolution regardless, with or without
+post-processing, so a low render scale does not blur the interface. Widgets marked
+**Post Processed** and world-Z background widgets are part of the scene and follow the
+render scale.
 
 ### 10.2 Upscaling: FSR & NIS
 
@@ -1713,6 +1855,24 @@ globals (gain, Doppler, speed of sound, spatial audio, default attenuation dista
 limit, game-pause behavior, occlusion, bus effects, ducking and snapshots) and for the starting
 volumes, which the player's `GameSettings.json` then overrides.
 
+### 13.9 Pixel worlds
+
+A [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) shares the level's physics world:
+
+- **Cells become colliders.** In every 64 × 64 chunk the cells of materials with `collider` are traced with marching
+  squares, simplified and turned into Box2D chain shapes on one static body per chunk. The outline of a chunk reaches
+  into its neighbours, so the chains of adjacent chunks meet without seams, and every segment takes the friction and
+  restitution of the material it bounds. Only chunks whose cells changed are rebuilt, every `rebuildInterval` ticks,
+  and a chunk whose outline did not change keeps its body.
+- **Bodies take up cells.** Every tick the dynamic and kinematic bodies of the level are rasterized into the cells they
+  cover. Powders, liquids and gases there are pushed into nearby free cells (or thrown out as particles), and the liquid
+  under each body is measured: before every fixed step ([13.1](#131-the-simulation-loop)) the body receives buoyancy
+  from the submerged area and the liquid's density, and a drag that grows with the liquid's viscosity.
+- **Pixel bodies.** A pixel body is a dynamic body built from its own grid of cells: its outlines, holes included, are
+  triangulated and merged into convex polygons of at most 8 vertices, and its mass, centre of mass and inertia come
+  from the densities of its cells. The cells are stamped into the world every tick, so the simulation can burn,
+  dissolve or blow them away; the body notices the loss, finds its connected parts and splits.
+
 ---
 
 ## 14. Quick reference tables
@@ -1838,6 +1998,16 @@ Shadow Z Order against the receiver's Z. If a shadow falls through a floor it sh
 not, clear **Don't Block Shadows** on the floor (or turn on **Colliders Block
 Shadows**) so it blocks.
 
+**Side-view terrain looks lit inside, or characters stay lit behind the rock.**
+Make the solid tiles box-shaped colliders with **Cast Shadow** on, give them **Shadow
+Origin: Center** and a **Shadow Z Order** above the Z of everything the terrain should
+hide. Light then does not pass through the rock: everything behind it — background
+walls, characters and decoration layers drawn over the terrain — is in shadow, and the
+rock itself is lit from the faces the light reaches and fades inward by the tiles'
+**Shadow Light Depth** (`1` keeps it fully lit; lower it, for example to `0.5`, for a
+soft fade into darkness). A light carried by a character or placed inside a tile is not
+blocked by the caster it sits in.
+
 **The shadow doesn't match the artwork.**
 Set the caster's **Cast Shadow Mode** to **Contour**, which traces the texture's alpha
 outline instead of using the collider shape. **Colliders** mode is cheaper; **Contour**
@@ -1903,8 +2073,9 @@ HDR surface. See [10.3](#103-hdr10-output).
 
 **My UI is blurry when Render Scale is low.**
 It should not be: UI drawn after the scene is composited at full resolution over the
-post-processed image. If a specific widget is blurry, check that it is not part of the
-world-Z background stage, which renders with the scene.
+post-processed or upscaled image, with or without post-processing. If a specific widget
+is blurry, check that it is not marked **Post Processed** and not part of the world-Z
+background stage — both render with the scene.
 
 **How do I show a sprite only inside a shape?**
 Use the **Stencil** component — one object in **Write** mode stamps the mask, the other

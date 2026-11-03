@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** ships as a single editor application: a dockable, multi-panel
 > workspace built on Dear ImGui where you build levels, place and edit entities,
@@ -137,7 +137,7 @@ A fresh editor window has five regions:
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ File Edit Window Tools Help │ Q E R │ 🔊 100% ▦ │ Screenshot Pause PLAY Eject │  ← Menu bar + toolbar
-│                             │ Remote Preview │ MyNewGame       Release 1.0.2 │
+│                             │ Remote Preview │ MyNewGame       Release 1.0.3 │
 ├───────────────────────────────────────────────────┬──────────────────────────┤
 │                                                   │  Level Outliner          │
 │                                                   │  World Settings          │  ← Right dock
@@ -210,7 +210,7 @@ folder), so every project keeps its own layout, panels and settings:
 
 | File | Remembers |
 | ---- | --------- |
-| `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float — plus the positions of the dividers inside the editors. Delete it to reset to the default layout. |
+| `imgui.ini` | The dock layout — panel positions, sizes, which are tabbed, and which float — plus the positions of the dividers inside the editors. Delete it to reset to the default layout. The editor writes it while **Layout AutoSave** is on ([Preferences → Editor](#104-editor)). |
 | `Config/Editor.json` | Which panels are open, the list of open asset editors, the console preferences (auto-scroll, timestamps, word wrap, regex, collapse repeats, level mask, buffer limit), the gizmo mode, grid visibility, the per-level debug overlay flags, the editor audio monitor volume/mute and the editor's audio output device, **Update All Assets on Play**, **Auto-Compile on Play**, and every Build Game / DLC Packager field. |
 | `Config/Engine.json` | Everything on the [Preferences](#10-preferences) tabs except collision groups and the start level — window, rendering, optimization, audio, accessibility and network defaults. Shipped games read the same file. |
 | `Config/CollisionGroups.json` | The collision group names and the collision matrix ([Preferences → Collision](#103-collision)). |
@@ -669,9 +669,10 @@ drawn in Edit mode only.
 The **Screenshot** button captures the current viewport image and opens a native
 Save dialog, defaulting to a timestamped `screenshot_YYYYMMDD_HHMMSS.png`. Notes:
 
-* The capture is the **scene framebuffer** at its physical resolution, so
-  **Render Scale** (see [Preferences → Engine](#101-engine)) changes the output
-  size.
+* The capture is the **viewport framebuffer** at its physical resolution — the
+  finished frame after the upscale from **Render Scale** (see
+  [Preferences → Engine](#101-engine)), with the game UI on top — so its size is
+  always the viewport's.
 * Only the rendered scene is captured — no editor UI, no gizmos.
 * The image is saved as **RGBA PNG**; if you type a filename without `.png` the
   extension is appended. The saved path is echoed in the Console.
@@ -1210,6 +1211,9 @@ off the panel says so and the level uses the global physics.
 own look. This mirrors [Preferences → Rendering](#105-rendering):
 
 * **Lighting Mode** (Unlit / Lit) and, when Lit: **Ambient** color & intensity.
+* **Lighting Pixel Size** and **Lighting Grid Origin** — the same world-space
+  lighting grid as the project settings below; applied only when this level's
+  rendering override is enabled.
 * **2D Shadows** — enable, ray quality (Low/Medium/High/Ultra), softness,
   intensity, bias (X/Y), PCF samples, **directional shadow length**, **directional
   depth fade**, and **colliders block shadows**.
@@ -1357,8 +1361,8 @@ Below the tabs, three window-wide buttons act on **every** tab at once:
 applies in one step).
 
 Some settings note that they need a **restart** to take effect — the shader-limit values
-on the Optimization tab and the physics worker-thread count. Switching anti-aliasing to or
-from MSAA shows the same note, but the new mode is in fact applied as soon as you press
+on the Optimization tab, the physics worker-thread count and **Deterministic Lua**. Switching anti-aliasing
+to or from MSAA shows the same note, but the new mode is in fact applied as soon as you press
 **Apply**.
 
 ### 10.1 Engine
@@ -1418,6 +1422,14 @@ Window and top-level performance:
   computer. Turn it on only if your game needs it; native code of your own is safer in a C++
   plugin. Saved as `Engine.AllowLuaNativeCode` in `Config/Engine.json`; scripts cannot change
   it. See [Lua API → Standard libraries](LuaAPI-EN-DOC.md#standard-libraries).
+* **Scripting → Deterministic Lua** — off by default. Uses a fixed Lua hash seed for the
+  Game and Widget VMs when they are created or recreated. Saved as `Engine.DeterministicLua`
+  in `Config/Engine.json`. Existing VMs keep their seed; restart the editor or game to apply
+  the setting to both. With the same build and insertion history, `pairs` repeats the order
+  of numeric/string keys. This does not guarantee full cross-platform determinism; table/function
+  keys still depend on addresses. Seed the random generator separately, and remember that
+  `table.sort` remains unstable. Fixed hashing weakens protection against deliberately colliding
+  keys. See [Lua API → Deterministic Lua and table traversal](LuaAPI-EN-DOC.md#deterministic-lua-and-table-traversal).
 
 ### 10.2 Physics
 
@@ -1482,6 +1494,14 @@ Look-and-feel of the editor itself:
   files untouched. Because the snapshot is taken on exit, the switch counts for the
   current session as soon as you press either **Apply** or **Save**; **Save** also
   keeps it for the next sessions.
+* **Panel Layout** — **Layout AutoSave**, on by default. While you work and when it
+  closes, the editor writes the dock layout of its panels to `imgui.ini` in the project
+  folder (see [Panel persistence](#23-panel-persistence)). Turn it off to keep `imgui.ini`
+  untouched, for automated runs or a layout you want to keep: the editor still opens with
+  the saved layout but no longer writes it. The switch counts for the current session as
+  soon as you press **Apply** or **Save**; **Save** also keeps it for the next sessions.
+  Python scripts can switch it and **Thumbnails AutoSave** for one session with
+  `editor.set_editor_settings` ([Python API](PythonAPI-EN-DOC.md)).
 
 ### 10.5 Rendering
 
@@ -1489,6 +1509,11 @@ Global rendering defaults (a level can override these in
 [World Settings](#8-world-settings)):
 
 * **Lighting Mode** (Unlit / Lit).
+* When **Lit**: **Lighting Pixel Size** sets the world-space lighting and shadow
+  grid (`0` disables it, `1` samples each world pixel); **Lighting Grid Origin**
+  sets its lower-left X/Y. Soft lighting keeps discrete pixel steps without
+  changing geometry or textures. These fields follow the usual Apply, Save and
+  Reset controls and can be overridden per level.
 * **Render Backend** — the list depends on the platform and the build: OpenGL 4.6 /
   OpenGL 3.3 (/ Vulkan when compiled in, / Direct3D 12 on Windows when compiled in) on
   Windows and Linux, Metal (native, the default) / Metal (ANGLE) / Metal (MoltenVK)
@@ -1542,8 +1567,9 @@ Tuning knobs for the renderer and memory:
   scriptable via `Settings.SetIsSuspended`.
 * **Lua Garbage Collector** — the collector of both script VMs (game and UI):
   * **GC Preset** — **Default (generational)** for most games, **Low memory
-    (incremental)** for about a third less peak memory at a higher CPU cost (mobile,
-    Web), **Throughput (generational)** for less collector time at a higher memory
+    (incremental)** with pause 150 and step multiplier 300. Compare it on your workload:
+    memory use and CPU time can increase or decrease; lower peak memory is not guaranteed.
+    **Throughput (generational)** for less collector time at a higher memory
     cost, or **Custom**.
   * With **Custom**: the **GC Mode** (Generational / Incremental) and the six Lua 5.5
     parameters — **Minor Multiplier**, **Minor-to-Major Threshold** and
@@ -1901,8 +1927,7 @@ The full shortcut list is reproduced in [Section 15](#15-keyboard--mouse-referen
 ### 13.2 Documentation
 
 **Help → Documentation** opens an in-editor Markdown reader for this very
-documentation set, so the manuals can be read without leaving the editor. Pages look
-the way GitHub shows them.
+documentation set, so the manuals can be read without leaving the editor.
 
 **Top bar**
 
@@ -1937,12 +1962,12 @@ the way GitHub shows them.
 
 **What is rendered**
 
-* GitHub-flavoured Markdown: headings, paragraphs, **bold**, *italic*,
+* Markdown with its common extensions: headings, paragraphs, **bold**, *italic*,
   ~~strikethrough~~, `inline code`, links and bare URLs, ordered, unordered and nested
   lists, task lists with check boxes, tables (column alignment is kept), block quotes,
   horizontal rules, HTML entities and the common inline HTML tags (`<kbd>`, `<br>`,
   `<sub>`, `<sup>`, `<mark>`, `<a id="…">`).
-* GitHub alerts — `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]` and
+* Alerts — `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]` and
   `> [!CAUTION]` — as coloured boxes with a translated title.
 * Code blocks with syntax highlighting for Lua, Python, C, C++, C#, GLSL, HLSL and other
   C-like languages, JSON, shell / PowerShell, batch, CMake and INI / TOML. Hovering a

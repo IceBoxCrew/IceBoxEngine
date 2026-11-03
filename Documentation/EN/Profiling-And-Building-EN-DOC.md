@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > This document covers two production-critical workflows of **IceBoxEngine**:
 >
@@ -54,6 +54,7 @@
    - 4.10 [Scripts tab — per-script Lua profiling](#410-scripts-tab--per-script-lua-profiling)
    - 4.11 [Counters tab](#411-counters-tab)
    - 4.12 [Hitches tab](#412-hitches-tab)
+   - 4.13 [Lua Functions tab — sampling function profiler](#413-lua-functions-tab--sampling-function-profiler)
 5. [Runtime profiling & debugging](#5-runtime-profiling--debugging)
    - 5.1 [On-screen debug (DebugScreen)](#51-on-screen-debug-debugscreen)
    - 5.2 [Developer Console](#52-developer-console)
@@ -86,6 +87,7 @@
     - 10.1 [Build manifest](#101-build-manifest)
     - 10.2 [Packing content (IcePak)](#102-packing-content-icepak)
     - 10.3 [Installers](#103-installers)
+    - 10.4 [Uninstalling: what happens to player data](#104-uninstalling-what-happens-to-player-data)
 11. [What happens when you click Build](#11-what-happens-when-you-click-build)
 12. [Build scripts reference](#12-build-scripts-reference)
 13. [Build output locations](#13-build-output-locations)
@@ -155,8 +157,8 @@ Every frame the profiler can collect:
 | **Thermals** | CPU & GPU temperature (°C), when a source is available, with the source name; on Android, iOS and macOS also the system thermal status, and on Android the thermal load (see [2.8](#28-temperature-sensors)). |
 | **Scene counts** | Entities, sprites, draw calls, quads, physics bodies, active scripts, flipbooks, decals, audio, FX, lights, spot lights, cameras, widgets, tilemaps, animators, skeletons, colliders, AI agents, destructibles, joints. |
 | **Counters** | An open-ended, grouped set of named values published every frame by the engine and by your own code — physics (Box2D bodies/shapes/contacts/joints/islands/tree height, step, collide, solve, worker count), per-component-type entity counts, per-type instance counts, renderer (draw calls, quads, vertices, indices, pass CPU/GPU, pass count), FX (particles, emitters), decals (active, budget, pool slots), audio (playing voices, listeners, mixer voices, streams, limiter reduction in dB), assets (atlas pages, packed textures, atlas occupancy, textures, shaders, VRAM, GPU allocations), shadows (active, casters, edges, shadow lights, map resolution), memory, network (ping, players, in/out KB/s and packets/s, totals) and Lua. See [2.3](#23-counters). |
-| **Scripts** | Per-script, per-callback Lua timings, call counts, live instance counts, error counts, Lua heap size, peak and allocation rate. See [2.4](#24-script-lua-profiling). |
-| **Hitches** | Automatically captured stall frames with their full scope tree. See [2.5](#25-hitch-detection). |
+| **Scripts** | Per-script, per-callback Lua timings, call counts, allocated memory, live instance counts and error counts; heap size, peak, allocation rate and per-frame allocations of both Lua VMs; sampled per-function Lua costs. See [2.4](#24-script-lua-profiling). |
+| **Hitches** | Automatically captured stall frames with their full scope tree and, while Lua sampling is on, the Lua functions that ran. See [2.5](#25-hitch-detection). |
 
 These feed both the [Statistics panel](#3-the-statistics-panel) and the
 [Advanced Profiler](#4-the-advanced-profiler-panel), and every one of them is stored per
@@ -272,10 +274,16 @@ profiler**, keyed by *script* × *callback*:
 | Widget scripts | A widget's `OnUpdate`, keyed by widget asset path. |
 
 For each pair the profiler keeps **total**, **average**, **max** and **last-frame**
-milliseconds, **call count**, **live instance count** and **error count** (a callback that
-raised a Lua error is counted, so a spammy error is visible as cost *and* as a fault). On
-top of that it samples the **Lua heap** every frame (size, peak and a smoothed allocation
-rate in KB/s), which is how you catch script memory churn before it turns into GC spikes.
+milliseconds, **call count**, **live instance count**, **error count** (a callback that
+raised a Lua error is counted, so a spammy error is visible as cost *and* as a fault) and
+the **memory the callback allocated** — kilobytes and number of allocations in the last
+frame, and kilobytes since the start or the last reset. A callback that triggers another
+measured callback includes the inner one's allocations, just as it includes its time.
+
+The engine counts every allocation of both Lua VMs in its own allocator, so these numbers
+are what the scripts really allocate, including memory that the collector frees again in
+the same frame. On top of that the profiler reads both **Lua heaps** every frame (size and
+peak), which is how you catch script memory churn before it turns into GC spikes.
 
 **Lua counters.** The `Lua` group of the [Counters tab](#411-counters-tab):
 
@@ -284,9 +292,11 @@ rate in KB/s), which is how you catch script memory churn before it turns into G
 | **Script Time** | Lua time spent in engine-invoked callbacks during the frame (budget: 30 % of the frame). |
 | **Calls** | Measured Lua callback invocations during the frame. |
 | **Memory** / **Peak Memory** | Heap of the game Lua VM (entity, level and mod scripts) and its highest value. |
-| **UI Memory** | Heap of the UI Lua VM (widget scripts). |
-| **Alloc Rate** | Smoothed allocation rate of the game VM in KB/s (budget 50 KB/s). |
-| **GC Step** | Time the engine spent in the Lua garbage collector in the frame (budget 1 ms): full collections on level load, `Settings.CollectLuaGarbage()` or **Collect Now**, plus idle-frame GC slices. Idle-frame GC runs after the frame's script work and is shown in the next frame. The small incremental steps that Lua makes on its own while scripts allocate are part of **Script Time**. |
+| **Alloc Rate** | Memory the game VM allocates per second, in KB/s, smoothed over about ten frames. Every allocation counts, also memory freed again in the same frame. Budget: 64 KB per frame at the target frame rate (3840 KB/s at 60 FPS). |
+| **Frame Alloc** / **Frame Allocs** | Kilobytes and number of allocations of the game VM in the last frame (budget 64 KB). |
+| **UI Memory** / **UI Peak Memory** | Heap of the UI Lua VM (widget scripts) and its highest value. |
+| **UI Alloc Rate** / **UI Frame Alloc** / **UI Frame Allocs** | The same allocation numbers for the UI VM — the ones to watch for a game that runs its logic in widget scripts. |
+| **GC Step** | Time the engine itself spent in the Lua garbage collector of both VMs in the frame (budget 1 ms): full collections on level load, `Settings.CollectLuaGarbage()` or **Collect Now**, plus idle-frame GC slices. Idle-frame GC runs after the frame's script work and is shown in the next frame. The small incremental steps that Lua makes on its own while scripts allocate are part of **Script Time** — Lua does not report their duration, so a low **GC Step** does not mean that the collector is cheap: watch **Alloc Rate** for that. |
 | **Errors** | Lua errors raised by callbacks since start or the last profiler reset. |
 | **Tracked Scripts** | Scripts the script profiler currently knows. |
 
@@ -296,13 +306,23 @@ Collector** ([Editor → 10.6](Editor-EN-DOC.md#106-optimization)).
 The whole thing is a toggle: turn it off in the [Scripts tab](#410-scripts-tab--per-script-lua-profiling)
 or with `SetScriptProfilerEnabled(false)` and the measurement cost disappears entirely.
 
+**Per-function sampling.** The script profiler tells you which callback is expensive; the
+**function profiler** tells you which Lua functions and lines inside it run the most. Every
+*N* Lua VM instructions (10 000 by default) it takes a sample of the running Lua call stack,
+in both VMs and in coroutines. It is off by default and slows Lua down while it runs — see
+the [Lua Functions tab](#413-lua-functions-tab--sampling-function-profiler) and
+[5.5](#55-driving-the-profiler-from-lua).
+
 ### 2.5 Hitch detection
 
 The profiler watches frame time against a rolling average and, when a frame both exceeds
 a **threshold** (50 ms by default) and takes more than twice the running average, it
 **captures that frame** — the complete scope tree, the render-pass list, the GPU time and
-the heaviest scope — into a hitch list (the 32 most recent). Because scopes are always
-recorded, this works without a trace running, in the editor and in an instrumented build.
+the heaviest scope — into a hitch list (the 32 most recent). While the
+[function profiler](#413-lua-functions-tab--sampling-function-profiler) is on, the capture
+also keeps the Lua functions sampled in that frame, so a stall caused by a long Lua call
+shows which function it was. Because scopes are always recorded, this works without a
+trace running, in the editor and in an instrumented build.
 Inspect them in the [Hitches tab](#412-hitches-tab); configure from Lua with
 `SetProfilerHitchDetection` / `SetProfilerHitchThreshold`.
 
@@ -488,8 +508,8 @@ exports. Its **View** menu offers **Show Graphs**, **Show Engine Stats**,
 **Live Flame Graph**, and the refresh controls **Pause Updates**, **Auto Refresh** and
 **Step** described below.
 
-Tabs: **Overview · CPU · Memory · GPU · Scripts · Counters · Engine · Render Passes ·
-Hitches · Trace History.** The **Engine** tab is only present while *Show Engine Stats* is
+Tabs: **Overview · CPU · Memory · GPU · Scripts · Lua Functions · Counters · Engine ·
+Render Passes · Hitches · Trace History.** The **Engine** tab is only present while *Show Engine Stats* is
 enabled. **Live Flame Graph** shows the current frame's scope tree in the CPU tab.
 
 The trace controls sit above the tabs and stay visible on every tab. Next to the
@@ -529,11 +549,12 @@ reflects the action.
 
 **Everything you set in this panel is remembered.** The **View** menu toggles, the refresh
 mode and its interval, *Group by script* on the Scripts tab, *Bar chart* on the Render
-Passes tab, and the *Script profiling* / *Render pass profiling* / *Hitch detection*
-switches together with the hitch threshold are written to `Config/Editor.json` under
-`ProfilerSettings` when the editor closes, and restored on the next start. Transient state
-— filters, zoom levels, the selected trace/frame/hitch and the typed trace name — is not
-persisted.
+Passes tab, *Instructions per sample* on the Lua Functions tab, and the *Script profiling* /
+*Render pass profiling* / *Hitch detection* switches together with the hitch threshold are
+written to `Config/Editor.json` under `ProfilerSettings` when the editor closes, and
+restored on the next start. Transient state — filters, zoom levels, the selected
+trace/frame/hitch and the typed trace name — is not persisted. Lua function sampling is not
+remembered either: it slows Lua down, so it is always off when the editor starts.
 
 ### 4.1 Recording traces
 
@@ -606,8 +627,10 @@ needs a recorded trace.
 System **RAM** (current / total, peak, with a progress bar and a graph) and
 **Video RAM (VRAM)** (tracked / total, peak, with a progress bar and a graph), plus the
 running **GPU allocation count** — so you can watch for leaks and growth over a session
-or trace. A **Lua Memory** block closes the tab: current heap, peak heap, a color-coded
-allocation rate (green < 10 KB/s, yellow < 50, orange above) and a heap graph.
+or trace. A **Lua Memory** block closes the tab with one part per script VM — the game VM
+and the UI VM: current heap, peak heap, the allocation rate and the memory allocated in the
+last frame (kilobytes and number of allocations), both colored against the 64 KB-per-frame
+budget of [2.4](#24-script-lua-profiling), and a heap graph.
 
 VRAM numbers come from the engine's own **VRAM tracker** (every texture, buffer and
 render target the RHI allocates), not from the driver, so they measure *your* usage
@@ -756,14 +779,16 @@ The Lua view described in [2.4](#24-script-lua-profiling).
   script and one row per *script × callback*; the filter box narrows by script name or
   path.
 * A header line gives the frame's **total script time** (colored against 30 % of the frame
-  budget), the **call count**, the **Lua heap** and its **allocation rate**, plus a red
-  error count when any callback has faulted.
+  budget), the **call count**, the **Lua heap** and its **allocation rate**, the heap and
+  allocation rate of the **UI VM** once widget scripts run, plus a red error count when any
+  callback has faulted.
 * A graph plots script time per frame.
-* The table lists **Frame ms**, **Avg ms**, **Max ms**, **Total ms**, **Calls** and
-  **Instances** (and **Callback** when not grouping), sortable by any column, with the
-  full asset path in a tooltip. Instances is how many live entities currently run that
-  script, which is what turns "this script costs 4 ms" into "this script costs 4 ms across
-  120 entities".
+* The table lists **Frame ms**, **Avg ms**, **Max ms**, **Total ms**, **Calls**,
+  **Frame KB** and **Frame allocs** (memory the script allocated in the last frame),
+  **Total KB** (allocated since the start or the last reset) and **Instances** (and
+  **Callback** when not grouping), sortable by any column, with the full asset path in a
+  tooltip. Instances is how many live entities currently run that script, which is what
+  turns "this script costs 4 ms" into "this script costs 4 ms across 120 entities".
 
 The level script appears as `<Level Script>`, mods as `<Mods>`, and widget scripts under
 their widget asset path.
@@ -788,6 +813,72 @@ The automatic stall capture described in [2.5](#25-hitch-detection).
 * Selecting a row opens the captured frame's **flame graph** (all threads) and its
   **render-pass table** — the same analysis you would get from a recorded trace, except
   you did not have to be recording when it happened.
+* Below them, **Lua functions in this frame** lists up to 16 Lua functions sampled in that
+  frame — the busiest by total and by self samples — with their share of the frame's
+  samples. It needs the [function profiler](#413-lua-functions-tab--sampling-function-profiler)
+  to be on when the hitch happens; otherwise the section says how to turn it on.
+
+### 4.13 Lua Functions tab — sampling function profiler
+
+The [Scripts tab](#410-scripts-tab--per-script-lua-profiling) measures whole callbacks.
+This tab shows **which Lua functions and lines** take the work inside them, in the game VM
+and the UI VM, coroutines included.
+
+**How it measures.** While sampling is on, a Lua hook counts VM instructions and, every
+*N* instructions, records the running Lua call stack: one **sample**. A function that runs
+twice as many instructions gets about twice as many samples. Two things follow from that:
+
+* Time spent inside **engine functions called from Lua** — a raycast, `Draw.Text`, a file
+  read — runs no Lua instructions and is not sampled. The calling function looks cheaper
+  than it is; the [CPU tab](#43-cpu-tab) and the Scripts tab show that time.
+* A sample in a coroutine shows the coroutine's own stack, not the code that resumed it.
+
+**Cost.** While the hook is installed, every Lua instruction passes through it, so Lua runs
+noticeably slower; the stack walk of each sample adds a little more, less with a larger *N*.
+Sampling is therefore **off by default**, is never remembered between editor starts, and
+should be switched off before you measure frame times.
+
+**Controls.**
+
+* **Sample Lua functions** turns sampling on or off. When a play session starts in the
+  editor, the collected data is cleared; level changes keep it.
+* **Instructions per sample** — *N*, from 1000 to 1000000 (10 000 by default). Smaller
+  values give more samples per frame and cost more.
+* **Reset** clears all samples; **Export Chrome Trace** writes them as a timeline (below);
+  the filter box narrows the views by function name or source.
+* A status line shows the number of samples, the samples of the last frame and a warning
+  when call stacks deeper than 128 levels, more than 65 536 functions or more than 262 144
+  distinct call paths had to be cut short.
+
+**Three views.**
+
+* **Functions** — one row per function: **Self %** / **Self** (samples where the function
+  itself was running), **Total %** / **Total** (samples where it was anywhere on the stack,
+  counted once per sample even when it recurses), **Alloc KB** and **Hot line** (the line
+  with the most self samples). Sortable by every column; sorted by Self % by default.
+  Functions without a name — engine callbacks such as `OnUpdate` are called from C++ and
+  Lua cannot tell their name — show as `<source:line>`, native functions as `[C]` or their
+  name at the call site. **Alloc KB** is an estimate: the memory a VM allocated since its
+  previous sample is charged to the function the new sample lands in.
+* **Call Tree** — the same samples as a tree of call paths from the outermost function
+  down, with total and self shares per node. Nodes that hold at least a quarter of all
+  samples open by default.
+* **Frames** — samples per frame for the last 600 frames as a histogram and a table with the
+  hottest function of each frame. Select a frame to see its functions with their share of
+  that frame's samples.
+
+**Chrome Trace export.** **Export Chrome Trace** (or `SaveFunctionProfile()` from Lua)
+writes the last 262 144 samples as a Chrome Trace Event JSON into the profiler folder of
+[4.9](#49-where-traces-live--chrome-trace-export) as `LuaFunctions_<date>_<time>_chrome.json`
+(on Web the browser also offers it as a download). Consecutive samples are merged into a
+flame chart of Lua functions on a *Lua functions* track, with a *Frames* track for frame
+boundaries. Where no samples were taken — engine code, long native calls, the time between
+frames — the chart has a gap. Open it in `chrome://tracing`, ui.perfetto.dev,
+profiler.firefox.com or speedscope.app.
+
+**Tracy.** In builds with Tracy, every frame with samples sends a message to the Tracy
+timeline with the frame's sample count and its three hottest functions, so a frame you
+inspect in Tracy also tells you where its Lua time went.
 
 ---
 
@@ -846,8 +937,9 @@ straight onto the screen — no editor, no external tool. It is drawn top-left a
 * **Engine Stats** — entities, sprites, draw calls, quads, physics bodies, scripts,
   tilemaps, lights, spot lights, FX, audio, widgets, cameras, flipbooks, animators,
   colliders, AI, destructibles, joints.
-* **Lua** — the last frame's total script time and call count, the Lua heap and its
-  allocation rate (the line turns amber past 30 % of the frame budget).
+* **Lua** — the last frame's total script time and call count, the game VM heap and its
+  allocation rate (the line turns amber past 30 % of the frame budget), and a second line
+  with the UI VM heap and allocation rate once widget scripts run.
 * **Hitches** — how many stalls were captured and the last one's frame time and heaviest
   scope, shown only once something has been captured.
 * **Hot Scopes** — the 8 most expensive scopes of the last frame with time and call count.
@@ -932,8 +1024,13 @@ profile on a phone or in a shipped build:
 | `SetScriptProfilerEnabled(on)` / `IsScriptProfilerEnabled()` → `bool` | Turn per-script Lua measurement on or off. |
 | `ResetScriptProfiler()` | Clear accumulated per-script statistics. |
 | `GetScriptProfilerTimeMs()` → `number` / `GetScriptProfilerCalls()` → `number` | Last frame's total Lua time and call count. |
-| `GetLuaMemoryKB()` → `number` / `GetLuaAllocRateKBps()` → `number` | Lua heap size and smoothed allocation rate. |
-| `GetScriptProfilerRows()` → `table` | Array of per-script rows: `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
+| `GetLuaMemoryKB()` → `number` / `GetLuaAllocRateKBps()` → `number` | Heap size of the game VM and the memory it allocates per second (smoothed). Both VMs: `Settings.GetLuaGCStats()`. |
+| `GetScriptProfilerRows()` → `table` | Array of per-script rows: `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`, `frameAllocKB`, `frameAllocs`, `totalAllocKB`. |
+| `SetFunctionProfilerEnabled(on)` / `IsFunctionProfilerEnabled()` → `bool` | Turn Lua function sampling ([4.13](#413-lua-functions-tab--sampling-function-profiler)) on or off. It slows Lua down while it runs. |
+| `SetFunctionProfilerInterval(instructions)` / `GetFunctionProfilerInterval()` → `number` | Lua VM instructions between two samples (1000 – 1000000, default 10000). |
+| `ResetFunctionProfiler()` / `GetFunctionProfilerSamples()` → `number` | Clear the samples / read how many were taken. |
+| `GetFunctionProfilerRows([limit])` → `table` | The busiest functions by self samples (50 by default): `name`, `source`, `line`, `native`, `selfSamples`, `totalSamples`, `selfPercent`, `totalPercent`, `allocKB`, `hotLine`. |
+| `SaveFunctionProfile([filename])` → `bool` | Export the samples as a Chrome Trace timeline. A `filename` must stay inside the project folder or the game's data folders. |
 | `ToggleDebugProfiler()` / `GetDebugProfilerVisible()` | Flip / read the [runtime profiler overlay](#53-the-runtime-profiler-overlay). |
 | `NetworkProfiler.Toggle()` / `NetworkProfiler.IsVisible()` | Flip / read the [network overlay](#54-the-network-profiler). |
 | `NetworkProfiler.StartTrace([name])` → `bool` / `NetworkProfiler.StopTrace()` → `string` / `NetworkProfiler.IsTracing()` → `bool` | Record a [network trace](#54-the-network-profiler); `StopTrace` returns the path of the written JSON file. |
@@ -1163,11 +1260,13 @@ the game runs:
 | Xbox on PC (`Gaming.Desktop.x64`) | `%APPDATA%\<Publisher>\<Game Name>\`; the game never writes into its install folder |
 | Xbox consoles | The title's persistent local storage (`T:\`) |
 | Android, iOS | The app's private storage, separate for every app |
-| Web | `/persistent/<Publisher>/<Game Name>/` in the browser's IndexedDB storage of the site; a site that hosts several games (itch.io, GitHub Pages) keeps them in one database, each in its own folder |
+| Web | `/persistent/<Publisher>/<Game Name>/` in the browser's IndexedDB storage of the site; a site that hosts several games keeps them in one database, each in its own folder |
 
-The uninstallers of both Windows installers remove only the files they installed, so player
-data survives an uninstall wherever it lives: in `%APPDATA%`, or next to the executable when
-the player picked a folder they can write to ([10.3](#103-installers)).
+Uninstalling keeps player data by default, wherever it lives: in `%APPDATA%`, or next to the
+executable when the player picked a folder they can write to. The uninstaller of the `.exe`
+installer has a **Player data** option that deletes it from both places, and removing a
+`.deb` asks whether to delete it from `~/.local/share/`; the `.msi`, an `.AppImage` and
+macOS have no such choice and keep it ([10.4](#104-uninstalling-what-happens-to-player-data)).
 
 `<Publisher>` and `<Game Name>` are the **Publisher** and **Game Name** of the Build Game
 dialog ([7.1](#71-common-settings)); the build writes them into `game.json`
@@ -1918,11 +2017,12 @@ the script as `--format exe|msi|both`.
   build), puts the shortcuts on the desktop and in the Start menu of every user, and writes
   `HKLM\Software\<Game Name>` plus an Add/Remove Programs entry. Its uninstaller removes
   exactly the files it installed: the build script lists the game folder when it packs the
-  installer, so files a player created next to the game survive, and the folder itself goes
-  only once it is empty. Installers from earlier engine versions put the game into
-  `C:\Games\<Game Name>`, a folder the player can write to, so the game kept its saves next
-  to itself; a new installer of that game offers the same folder again, and an update keeps
-  those saves in place.
+  installer, so files a player created next to the game survive unless the player asks for
+  the player data to go too ([10.4](#104-uninstalling-what-happens-to-player-data)), and the
+  folder itself goes only once it is empty. Installers from earlier engine versions put the
+  game into `C:\Games\<Game Name>`, a folder the player can write to, so the game kept its
+  saves next to itself; a new installer of that game offers the same folder again, and an
+  update keeps those saves in place.
 * **`.msi`** (needs the **WiX Toolset**) — a real Windows Installer package, the format
   managed deployment expects: `msiexec /i <package> /qn` installs it unattended,
   Group Policy and Intune can push it, `winget` and Chocolatey can wrap it, and Windows
@@ -1948,7 +2048,8 @@ the script as `--format exe|msi|both`.
   for an upgrade to be recognised.
 * **Empty folders** in the build output are recreated by the installer, and uninstall
   removes exactly what was installed — files a player created next to the game (saves,
-  screenshots) survive, the same as with the `.exe`.
+  screenshots) survive, as they do with the `.exe` by default; the `.msi` never deletes
+  them ([10.4](#104-uninstalling-what-happens-to-player-data)).
 * Its component GUIDs are **deterministic**, derived from the same UpgradeCode, so two
   builds of the same game produce packages Windows Installer can reason about instead of
   a fresh set of unrelated components every time.
@@ -1993,7 +2094,8 @@ the script as `--format deb|appimage|both`.
   version with any leading `v` stripped. Removing the package also clears `/opt/<Game Name>`.
   The player cannot write there, so the game keeps saves, config and mods in
   `~/.local/share/<Publisher>/<Game Name>/` ([7.5](#75-where-a-shipped-game-keeps-its-player-data)),
-  and they survive an uninstall.
+  and they survive an uninstall unless the player answers *Yes* when the removal asks about
+  them ([10.4](#104-uninstalling-what-happens-to-player-data)).
 * **`.AppImage`** — one portable, self-contained file that runs on any reasonably modern
   distribution without being installed: the player only has to make it executable. Inside
   it is an AppDir whose `AppRun` `cd`s into the payload and starts the game exactly the way
@@ -2077,6 +2179,43 @@ re-signed:
 * **Notarize** submits **each** artifact that was produced (the `.dmg`, the `.pkg`, or the
   `.app` when neither was requested) to `notarytool --wait` using your keychain notary
   profile, and staples the ticket on success.
+
+### 10.4 Uninstalling: what happens to player data
+
+What a game writes while it runs — saves, settings, mods, DLC, caches and crash reports
+([7.5](#75-where-a-shipped-game-keeps-its-player-data)) — belongs to the player, so every
+package keeps it by default and only the player can choose to delete it:
+
+| Package | When the game is removed |
+| ------- | ------------------------ |
+| `.exe` | The uninstaller has a component list of its own, like the installer: the game itself (required, shown under its name) and **Player data**, which is unticked. Ticking **Player data** deletes the player data too. |
+| `.deb` | Removing the package asks *Also delete the player data of …?* — the same kind of question the engine's own package asks — and the answer starts at *No*. *Yes* deletes the player data of the user who removes the package (with `sudo`, that is you). A removal that cannot ask — from a software center, or with `DEBIAN_FRONTEND=noninteractive` — keeps it. |
+| `.msi` | Always keeps it. Windows removes an `.msi` from *Settings → Apps* without showing any page of the package itself, so there is nowhere to offer the choice. |
+| `.AppImage` | Always keeps it. There is nothing to uninstall: deleting the file removes the game. |
+| macOS (`.pkg`, `.dmg`) | Always keeps it. macOS has no uninstaller; the game goes by moving its `.app` to the Trash. |
+
+Deleting player data removes exactly what the game creates: `Saves/`, `Saved/`, `Config/`,
+`Mods/`, `Plugins/`, `DLC/`, `README.txt` and the profiler traces in `Tools/Helpers/`, then
+every folder that became empty — the game's own folder, and its publisher folder unless
+another game still keeps data there. The `.exe` clears both places the game can write to,
+`%APPDATA%\<Publisher>\<Game Name>\` and the install folder; the `.deb` clears
+`~/.local/share/<Publisher>/<Game Name>/`. Anything else in those folders — a file one of
+the game's scripts wrote next to them — stays, and keeps its folder in place. A link inside
+them (a junction or a symbolic link) is removed as a link, without touching what it points
+to, and a folder that is itself a link is left alone. A silent uninstall
+(`Uninstall.exe /S`) never deletes player data.
+
+The packaging step finds the folder exactly the way the game does: it reads **Game Name**
+and **Publisher** from the build's `game.json`, applies the same file-system rules
+([7.5](#75-where-a-shipped-game-keeps-its-player-data)) and names the result in the log as
+*Player data folder*. Where packaging runs in bash — on Linux, on macOS, and in WSL when a
+`.deb` is made on Windows — it reads the file with `python3`; without it, only a `game.json`
+in the layout the editor writes can be read, and if the name cannot be read the `.exe`
+option clears only the install folder and the `.deb` is built without the question — the
+log warns about it either way. A game whose name gives no folder name keeps
+its data in the folder it shares with games built by older engine versions, and no
+uninstaller deletes that one. An `.exe` built by CPack's NSIS generator — the fallback when
+`makensis` is missing — has no component list on its uninstaller and keeps player data.
 
 ---
 
@@ -2740,7 +2879,7 @@ play the game the way someone without the DLC would.
 | Surface | Where | Purpose |
 | ------- | ----- | ------- |
 | **Statistics** | Editor — `Window → Stats` | Live scene/renderer counts, atlas, physics, shadows, debug-draw toggles. |
-| **Profiler** (Advanced) | Editor — `Tools → Profiler (Tracy)` | Traces, CPU scopes & flame timeline, frame diff, trace compare, memory/GPU graphs, render passes & render-graph metrics. |
+| **Profiler** (Advanced) | Editor — `Tools → Profiler (Tracy)` | Traces, CPU scopes & flame timeline, frame diff, trace compare, memory/GPU graphs, render passes & render-graph metrics, per-script and per-function Lua costs. |
 | **Profiler overlay** | Debug runtime | On-screen FPS/CPU/RAM/VRAM/GPU, engine stats, hot scopes, render passes. |
 | **Network profiler** | Debug runtime + editor Network Manager + Python `engine.network_*()` | Ping, payload and wire bandwidth, packet counts, per-message-type and per-channel breakdown, per-peer quality, network traces. |
 | **DebugScreen** | Editor + runtime | On-screen & world-space debug text in the running game. |

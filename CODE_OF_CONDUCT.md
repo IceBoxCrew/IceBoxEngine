@@ -57,8 +57,8 @@ Everyone in the spaces listed below, on the same terms:
 What you do elsewhere is not our business — until it is aimed at someone because
 of these spaces. Harassment that starts in an issue and continues by DM, on
 another platform, or in a storefront review is still harassment we will act on.
-Conversely, we do not police your own game's community, your Discord, or an
-argument you had somewhere unrelated to IceBoxEngine.
+Conversely, we do not police your own game's community, your chat server, or
+an argument you had somewhere unrelated to IceBoxEngine.
 
 ---
 

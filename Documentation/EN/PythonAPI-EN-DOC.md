@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** integrates **Python** via **pybind11** for editor scripting.
 > The Python API lets you automate work in the editor, manage scenes, entities,
@@ -3544,6 +3544,15 @@ The override has two independent halves, each with its own `enabled` switch:
 
 Returns the level's override block as two nested dicts.
 
+The `rendering` dict also contains `lighting_pixel_size` (float, default `0`)
+and `lighting_pixel_origin` (two-component tuple, default `(0, 0)`). Pass these
+same keys to `editor.set_world_override()`; the origin accepts a tuple/list.
+A positive size samples lighting and shadows on a fixed world-space grid,
+independently of geometry and scene resolution; `0` disables it. Negative or
+non-finite sizes become `0`, positive sizes below `0.0001` use that minimum,
+and non-finite origin components become `0`. As with the other rendering
+fields, the level override only takes effect when `rendering.enabled` is true.
+
 ```python
 wo = editor.get_world_override()
 print(wo['physics']['enabled'], wo['rendering']['enabled'])
@@ -3850,7 +3859,9 @@ es = editor.get_editor_settings()
 #     'current_level_path': 'Content/Levels/main.icemap',
 #     'is_level_dirty': False,
 #     'grid_size': 32.0,
-#     'snap_to_grid': True
+#     'snap_to_grid': True,
+#     'thumbnails_autosave': True,
+#     'layout_autosave': True
 # }
 ```
 
@@ -3870,10 +3881,22 @@ applied; unknown or read-only keys are reported as a warning in the console.
 | `show_physics_colliders` | `bool` | Collider overlay (same flag as `editor.set_debug_flag('ShowColliders', …)`) |
 | `show_nav_grid` | `bool` | Nav-grid overlay |
 | `current_level_path` | `str` | Path the next save writes to |
+| `thumbnails_autosave` | `bool` | Write the project thumbnails when the editor closes (**Thumbnails AutoSave**), for this session |
+| `layout_autosave` | `bool` | Write the panel layout to `imgui.ini` (**Layout AutoSave**), for this session |
 
 ```python
 editor.set_editor_settings({'level_dirty': True})
 editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
+```
+
+`thumbnails_autosave` and `layout_autosave` change the two switches of
+[Preferences → Editor](Editor-EN-DOC.md#104-editor) for the current session only, as if they were set there and
+applied; `Config/Engine.json` keeps its saved values (`Editor.ThumbnailsAutoSave`, `Editor.LayoutAutoSave`) until the
+settings are saved. A tool that drives the editor automatically turns both off first, so the run leaves the
+project thumbnails and `imgui.ini` untouched:
+
+```python
+editor.set_editor_settings({'thumbnails_autosave': False, 'layout_autosave': False})
 ```
 
 The remaining keys returned by `get_editor_settings()` (`grid_size`, `snap_to_grid`, viewport size,
@@ -4855,7 +4878,8 @@ Returns entity count in the active scene.
 
 #### `engine.fps()` → `float`
 
-Returns current FPS (frames per second).
+Returns the frames per second, averaged over the last 60 frames — steady enough to print, but a
+single slow frame barely moves it. Use `engine.frame_time()` to catch individual hitches.
 
 ```python
 fps = engine.fps()
@@ -4864,7 +4888,8 @@ print(f'FPS: {fps:.0f}')
 
 #### `engine.frame_time()` → `float`
 
-Returns current frame time in **milliseconds**.
+Returns the time of the last frame in **milliseconds** — `engine.delta_time()` × 1000, not an average,
+so a single long frame shows up in full. `profiler_stats()['frame_time_ms']` is the same value.
 
 ```python
 ms = engine.frame_time()
@@ -4957,10 +4982,13 @@ print(len(flushes), 'batch flushes,', sum(p['cpu_ms'] for p in flushes), 'ms CPU
 
 #### `engine.lua_stats()` → `dict`
 
-The Lua script profiler: `total_ms` and `calls` of the last frame, `memory_kb`, `peak_memory_kb` and
-`alloc_rate_kbps` of the VM, the number of script `errors`, and `rows` — one dict per script callback with
-`script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`, `last_frame_calls`,
-`instances` and `errors`.
+The Lua script profiler: `total_ms` and `calls` of the last frame; for the game VM `memory_kb`,
+`peak_memory_kb`, `alloc_rate_kbps` (memory allocated per second, smoothed — every allocation counts, also
+garbage freed in the same frame), `frame_alloc_kb` and `frame_allocs` (allocated in the last frame); the same
+numbers for the UI VM of widget scripts as `ui_memory_kb`, `ui_peak_memory_kb`, `ui_alloc_rate_kbps`,
+`ui_frame_alloc_kb` and `ui_frame_allocs`; the number of script `errors`; and `rows` — one dict per script
+callback with `script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`,
+`last_frame_calls`, `last_frame_alloc_kb`, `last_frame_allocs`, `total_alloc_kb`, `instances` and `errors`.
 
 ```python
 lua_ms = engine.lua_stats()['total_ms']
@@ -5176,7 +5204,7 @@ info = engine.audio_info()
 | `engine.profiler_stats()` | `dict` | CPU/GPU/render counters in one dict |
 | `engine.cpu_scopes()` | `list[dict]` | CPU profiler scopes of the last frame, slowest first (see 7.2) |
 | `engine.render_passes()` | `list[dict]` | Render passes of the last frame with CPU/GPU times (see 7.2) |
-| `engine.lua_stats()` | `dict` | Lua script profiler: frame time, VM memory, per-callback rows (see 7.2) |
+| `engine.lua_stats()` | `dict` | Lua script profiler: frame time, memory and allocations of both VMs, per-callback rows (see 7.2) |
 | `engine.profiler_counters()` | `list[dict]` | Every named profiler counter (see 7.2) |
 | `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Recorded frame hitches (see 7.2) |
 | `engine.network_stats()` and the other `engine.network_…` functions | `dict` / `list[dict]` | Network profiler and network traces (see 7.8) |
@@ -5680,7 +5708,11 @@ types = browser.get_supported_types()
 
 #### `browser.import_file(external_path, dest_folder='')` → `bool`
 
-Imports an external file into the `Content` folder.
+Imports an external file into the `Content` folder exactly like the Content Browser's **+ Import**: an image,
+sound, font or video gets its type prefix (`T_`, `S_`, `F_`, `V_`) unless its name already starts with it, and
+its sidecar with default settings; a `.gif` becomes a flipbook. `dest_folder` defaults to the browser's current
+folder. Returns `False` when the source file is missing, a file with the resulting name already exists, or the
+import fails.
 
 ```python
 browser.import_file('C:/Downloads/texture.png', 'Content/Textures')
@@ -6123,6 +6155,13 @@ if not r['ok']:
 
 Evaluates a Lua expression and returns its value rendered as a string. Errors come back as
 `'Error: …'` text rather than raising.
+
+The expression runs where `lua.exec` runs code: in the level script's environment while a level script is
+loaded (every global is still visible there), otherwise in the global one — so a value one `lua.exec` call
+stored is readable here. Numbers come back exactly: integers in full, other numbers with as many digits as it
+takes to read them back unchanged (`0.1`, `1e-07`, `3.1415926535897931` for `math.pi`); a number with a whole value is written
+like an integer (`3`). A string comes back between double quotes exactly as it is, nothing escaped, so
+`lua.eval(expr)[1:-1]` is the text itself. A table shows its first 8 entries.
 
 ```python
 print(lua.eval('_VERSION'))

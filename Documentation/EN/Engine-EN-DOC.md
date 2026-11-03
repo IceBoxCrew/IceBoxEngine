@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > This document covers the parts of **IceBoxEngine** that live *below* the editor and
 > *beside* the scripting API: how the runtime is put together, how **multiplayer** works
@@ -189,13 +189,18 @@ One iteration of the main loop, in order:
 4. **Replication** — replication runs *after* the simulation, on the
    **unscaled** delta, so slow-motion never changes network rates
    ([5.7](#57-automatic-replication)).
-5. **Widgets** — the UI runtime updates and then processes pointer/text input, with
+5. **Pixel world** — when the game has a [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light), it is updated
+   on the game delta (`Update.PixelWorld`): chunks are streamed around the camera and the
+   anchors, the world runs its own fixed-rate ticks spread over the worker threads
+   ([2.5](#25-the-job-system)), its events are delivered to scripts, and its chunks, pixel
+   bodies and particles are submitted for drawing.
+6. **Widgets** — the UI runtime updates and then processes pointer/text input, with
    [split-screen routing](#43-cameras-ui--audio-per-player) in standalone builds. A widget is
    updated together with the widgets embedded in its visible SubWidget elements, which load
    with it. A widget is drawn only once it has been updated, so one that first loads later in
    the frame — for example when a button callback shows it — appears on the next frame,
    already initialized, never in its as-saved state.
-6. **Camera** — the primary Camera component (with optional camera lag) or a free (ejected)
+7. **Camera** — the primary Camera component (with optional camera lag) or a free (ejected)
    camera sets the gameplay view. When a level starts, the view begins exactly at the
    camera's target; camera lag only smooths the movement after that. A playing cinema that
    controls the camera is then blended over the gameplay view — by its blend-in / blend-out
@@ -216,7 +221,7 @@ The scene simulation itself runs these stages, each of which appears by name in 
 | Stage | What happens |
 | ----- | ------------ |
 | *(collision groups)* | If the collision matrix changed since last frame, every live shape's filter is rewritten ([3.9](#39-live-edits-collision-groups--flipping)). |
-| **`Update.Physics`** | The fixed-timestep loop: `b2World_Step`, contact/sensor/hit event dispatch, transform read-back, part-body sync, interpolation bookkeeping, joint-break checks, and `OnFixedUpdate` — repeated until the accumulator is drained, then render interpolation is applied. |
+| **`Update.Physics`** | The fixed-timestep loop: the forces of effectors, ropes, platformer controllers and a pixel world's buoyancy and drag, `b2World_Step`, contact/sensor/hit event dispatch, transform read-back, part-body sync, interpolation bookkeeping, joint-break checks, and `OnFixedUpdate` — repeated until the accumulator is drained, then render interpolation is applied. |
 | **`Update.TilemapAnimColliders`** | Animated tiles advance and their collider shapes are rebuilt when the visible frame changes. |
 | **`Update.Scripts`** | `OnUpdate` for every scripted entity and the level script. |
 | **`Update.BehaviorTree`** | AI behavior trees tick. |
@@ -274,10 +279,19 @@ back to a plain serial loop below it, so small scenes never pay for synchronizat
 | AI perception | ≥ 8 perceiving agents |
 | Particle simulation | ≥ 256 particles (per emitter) |
 | Emitter updates | ≥ 4 emitters |
-| Fluid (SPH) neighbour/force passes | ≥ 128 particles |
+| Fluid (SPH) neighbour/force passes | ≥ 512 particles |
+| Fluid (SPH) movement and collision | ≥ 512 particles, unless the fluid affects rigid bodies |
 | Sprite culling & sort | chunked across all workers |
 | CPU shadow ray casts, edge collection | chunked across all workers |
+| Pixel world: chunk simulation (four checkerboard passes per tick), heat, air, collider outlines, chunk generation | ≥ 2 chunks in a pass |
+| Pixel world particles | > 1024 particles (blocks of 1024) |
+| Pixel world gameplay light map | always (via `Submit`), a few times per second |
 | Texture decode / async asset loads | always (via `Submit`) |
+
+Fluid passes stay on the calling thread below 512 particles: every pass handed to the pool
+waits for the workers to wake up, which costs about as much as simulating a few hundred
+particles, so a smaller fluid is cheaper on one thread. From 512 particles a pass is split
+across all workers.
 
 On Web the pool exists but has **zero workers** unless the build enables pthreads, in
 which case it is capped at 4; every call site therefore has to work single-threaded, and
@@ -289,23 +303,30 @@ does.
 
 ### 2.6 Time, pause & suspend
 
-Three independent multipliers sit between the wall clock and gameplay:
+Four independent multipliers sit between the wall clock and gameplay:
 
 | Layer | Set by | Affects |
 | ----- | ------ | ------- |
 | **Real frame delta** | The frame loop | The editor, UI, debug overlays, network timing. Never scaled. |
 | **Game Speed** | [Preferences → Accessibility](Editor-EN-DOC.md#108-accessibility) (0.25×–2×) | The delta handed to the scene simulation in Play mode. A player-facing accessibility setting. |
-| **Time Scale** | Gameplay script | Scaled *again* on top, for slow-motion and pause effects; per-entity scales exist as well. |
+| **Time Scale** | Gameplay script | Multiplies the scene delta once, together with Game Speed and Hit stop, for slow motion and pause. Physics, scripts, animations, FX and game clocks share this delta. |
+| **Hit stop** | Gameplay script (`HitStop`) | Multiplies the delta handed to the scene simulation for a moment of real time — a freeze or a slow-down on impact. |
 
 When the effective scale reaches zero the engine broadcasts **`OnPause`** to scripts, and
 **`OnResume`** when it leaves zero — so systems can stop and restart cleanly instead of
-polling.
+polling. A hit stop is the exception: it can stop the scene for a moment without `OnPause`, and
+sounds keep playing through it ([Lua API → HitStop](LuaAPI-EN-DOC.md#hitstop--freeze-frames-on-impact)).
 
 **Suspend** is a different thing: with **Is Suspended** on (the default, in
 [Preferences → Optimization](Editor-EN-DOC.md#106-optimization)) the app stops updating,
 rendering and playing audio whenever the window loses focus, is minimized or is
 backgrounded, on all seven platforms. The loop then blocks on an event wait instead of
 spinning. A dedicated server never suspends, which is what lets it run unattended.
+When the app leaves the screen or its window is minimized, scripts get **`OnAppBackground`**
+first — the moment to save, because a phone may close a background app without warning —
+and **`OnAppForeground`** when it comes back. When the window loses or gets the keyboard
+focus, scripts get **`OnWindowFocusChanged(focused)`**; with Suspend on it, too, comes before
+the app stops.
 
 A **debugger stop** is different again: when the
 [Lua Script Debugger](LuaAPI-EN-DOC.md#lua-script-debugger-text-and-visual) pauses a
@@ -346,6 +367,11 @@ Physics contributes the other half of determinism: it advances in **fixed steps*
 sanitized timestep and sub-step count ([Graphics → 13.1](Graphics-EN-DOC.md#131-the-simulation-loop)),
 so the same inputs produce the same result at any framerate.
 
+A [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) does not draw from the random service: every chunk
+takes its random choices from a hash of the world's `seed`, the tick number and the chunk's
+position, so the result does not depend on the order in which the worker threads run the
+chunks.
+
 ### 2.8 Coordinate conventions
 
 One set of rules holds on every renderer and platform, in the editor and in every API:
@@ -361,7 +387,7 @@ One set of rules holds on every renderer and platform, in the editor and in ever
 
 The deliberate exceptions are rectangles and UVs *inside an image* (raster layout, origin
 top-left), widget layout positions (they grow downward, like any UI layout) and the raw grid
-coordinates of isometric and hexagonal tilemaps. The full table, with the API functions
+coordinates of isometric tilemaps. The full table, with the API functions
 each rule covers, is in the [Lua API](LuaAPI-EN-DOC.md#coordinate-conventions).
 
 ---
@@ -441,7 +467,7 @@ flipping an entity **rebuilds** the parts on the mirrored side.
 
 ### 3.4 Generated collision: sprites, flipbooks & tilemaps
 
-Not all collision is authored as primitives. Three sources generate shapes:
+Not all collision is authored as primitives. Four sources generate shapes:
 
 **Sprite and flipbook collision polygons.** A sprite's collision polygon (authored in the
 [Sprite Editor](Assets-EN-DOC.md#42-sprite-ice_sprite)) is normalized to the sprite's UV
@@ -472,6 +498,11 @@ are merged so a large map does not become thousands of shapes:
   collider differs, that tile's shapes are rebuilt in place.
 
 **Skeletons** generate bone bodies, covered in [3.7](#37-ragdolls--bone-physics).
+
+**Pixel worlds.** A [pixel world](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light) traces its solid cells into chain
+loops, one static body per 64 × 64 chunk, rebuilt only where cells changed, and turns each
+of its pixel bodies into convex polygons of up to 8 vertices — see
+[Graphics → 13.9](Graphics-EN-DOC.md#139-pixel-worlds).
 
 ### 3.5 How collision events reach your code
 
@@ -1506,6 +1537,7 @@ underneath.
 | Profilers, statistics, the developer console, building for seven platforms, installers, DLC, headless servers | [Profiling & Building Games](Profiling-And-Building-EN-DOC.md) |
 | Native C++ plugins and Lua/content mods | [Plugins & Mods](Plugins-And-Mods-EN-DOC.md) |
 | The complete gameplay scripting API | [Lua API](LuaAPI-EN-DOC.md) |
+| Pixel worlds — falling sand, per-pixel light and destructible terrain | [Lua API → PixelWorld](LuaAPI-EN-DOC.md#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light), [Graphics → 6.6](Graphics-EN-DOC.md#66-per-pixel-light-of-pixel-worlds) and [13.9](Graphics-EN-DOC.md#139-pixel-worlds) |
 | Editor automation and tooling | [Python API](PythonAPI-EN-DOC.md) |
 | Runtime architecture, the frame loop, the job system, determinism, **multiplayer** (local and online), **advanced physics**, audio and input internals | **this document** |
 

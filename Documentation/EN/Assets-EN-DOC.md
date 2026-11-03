@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** organizes every piece of game data — textures, sounds, sprites,
 > materials, tilemaps, particle effects, UI, cutscenes, AI and more — as **assets**
@@ -274,11 +274,10 @@ The Content Browser's folder tree and item grid show files and folders created, 
 deleted outside the editor within about a second and a half; changes made from the browser
 itself appear at once.
 
-The editor acts on at most one external change every two seconds, and holds off for a few
-seconds after its own saves so they do not trigger a reload storm. When many files arrive at
-once — a whole folder copied in — the refresh still picks all of them up, but only the first
-one gets its sidecar from the watcher: the others work with default settings until you first
-save their settings (or bring them in with **+ Import**, which writes every sidecar).
+The editor reloads assets at most once every two seconds, and holds off for a few seconds
+after its own saves so they do not trigger a reload storm. When many files arrive at once — a
+whole folder copied in — every new file still gets its sidecar from the watcher as soon as it
+appears, and the refresh picks all of them up.
 
 Class scripts are a separate case: with **Edit → Auto-Compile on Play** on, a changed
 `.ice_class` hot-reloads its script on the live entities — see
@@ -631,9 +630,8 @@ On import, the engine:
   `.ice_sound` for audio, `.ice_font` for fonts, `.ice_video` for video (the latter is
   probed for width/height/FPS/duration via FFmpeg when available). **+ Import** writes every
   sidecar straight away; for files dragged in from the OS the
-  [content watcher](#25-external-changes--auto-refresh) writes it, so when you drop many
-  files at once only the first gets its sidecar immediately and the rest use default settings
-  until you first save their settings.
+  [content watcher](#25-external-changes--auto-refresh) writes it as soon as each file
+  appears, for every file of a drop.
 * For **`.gif`** files, runs the [GIF importer](#52-gif-importer) (produces a flipbook
   of sprites) instead of a plain copy.
 * For **`.json`** files that are **Aseprite** exports, runs the
@@ -1158,6 +1156,14 @@ several pages is simply drawn in several batches. Characters outside the declare
 ranges still render as long as the face has them; the ranges are what the cooker
 subsets to and what the Font Editor preview bakes eagerly, so keep them honest.
 
+**Placement to a third of a pixel.** A smooth font — **Antialiased** on and **Nearest Filter** off — is hinted
+lightly, vertically only, so its glyphs keep their designed widths. Where a string is drawn at the font's own pixel
+size in screen space at a Render Scale of 100 % (interface text, `Draw.Text` in `screen` space at a whole size),
+every glyph is placed to a third of a pixel: the first time each one is needed, the engine renders up to three
+copies of a glyph shifted by a third of a pixel and draws the nearest, so the gaps between letters stay even at
+small sizes instead of jumping by a whole pixel. Outlines use the same copies. Pixel fonts (**Antialiased** off or
+**Nearest Filter** on), scaled text and world-space text keep whole-pixel positions.
+
 **Text outline.** Everywhere text has a style — widget Text, Input Field and Dropdown
 elements and their tooltips, the built-in Cinema dialogue box, `Draw.Text` and the Font
 Editor preview — it can get an outline around its glyphs: an **Outline Width** (`0`–`16`,
@@ -1433,9 +1439,8 @@ parameters.
 **Editor:** Skeleton Editor
 
 A full **2D skeletal animation** system (bones, slots, skins, meshes, constraints,
-events, physics, hair and cloth) — comparable to Spine-style rigs. It is not limited to
-characters: the same asset rigs animals, trees and foliage, ropes and banners, vehicles
-and machines.
+events, physics, hair and cloth). It is not limited to characters: the same asset rigs
+animals, trees and foliage, ropes and banners, vehicles and machines.
 
 | Group | Contents |
 | ----- | -------- |
@@ -1655,7 +1660,9 @@ painting tilemaps.
   * **Filtering** — collision group index and collision mode (`No Collision`,
     `Query Only`, `Physics Only`, `Query and Physics`).
   * **Shadows** — cast shadow on/off, cast mode (`Contour` or `Colliders`), shadow origin
-    (`Top` / `Center` / `Bottom`), Z-order, edge fade, and a *don't block shadows* flag.
+    (`Top` / `Center` / `Bottom`), Z-order, edge fade, light depth (how lit the inside of
+    a solid area of box-shaped tiles is, `0`–`1`, `1` by default), and a *don't block
+    shadows* flag.
   * **Fragments** (when the tile is destructible) — fragment count, break **pattern**
     (`Grid`, `Radial`, `Random`), piece **shape** (`Rectangles`, `Triangles`, `Shards`,
     `Splinters`) and seed, lifetime (`0` = permanent) and fade time, gravity scale, density,
@@ -2092,8 +2099,7 @@ names are what materials look the parameter up by — renaming one breaks the
 **Editor:** FX Editor
 
 A powerful **particle system**. An FX asset contains one or more **emitters**, each
-with **Spawn**, **Initialize** and **Update** module stacks plus a **Render** module —
-a stack-based design comparable to modern node/stack VFX systems.
+with **Spawn**, **Initialize** and **Update** module stacks plus a **Render** module.
 
 **Emitter settings:** duration, looping, max particles, start delay, warm-up time,
 simulation stages, **CPU or GPU** simulation, and a per-emitter **transform** (position,
@@ -2218,7 +2224,7 @@ Every module, grouped by the stack it belongs to. Modules can be toggled individ
 
 | Module | Parameters |
 | ------ | ---------- |
-| **Collision** | **Collision Response** — `None (Pass Through)`, `Destroy`, `Bounce`, `Slide`; **Bounce Factor** (bounce only); **Friction** (slide only); **Radius Scale** — collision radius relative to the visual size; **Destroy On Second Hit**; **Ignore Sensors** — skip trigger colliders; **Sensor Overlap Events** — report overlaps with sensors to Lua via `OnFXSensorOverlap` (damage zones, "in water" checks) without any physical response. |
+| **Collision** | **Collision Response** — `None (Pass Through)`, `Destroy`, `Bounce`, `Slide`; **Bounce Factor** (bounce only); **Friction** (slide only); **Radius Scale** — collision radius relative to the visual size; **Destroy On Second Hit**; **Ignore Sensors** — skip trigger colliders; **Sensor Overlap Events** — report overlaps with sensors to Lua via `OnFXSensorOverlap` (damage zones, "in water" checks) without any physical response. Particle motion is swept against boxes, circles, capsules, sprite outlines and tile collider polygons/chains, including tile rotation, spans and animated collider frames. Fast particles stop at thin surfaces; Slide removes inward speed and applies Friction to tangential speed, while Bounce changes only normal speed. Repeated contacts keep body displacement from pushing particles through solid terrain. Disabled colliders are skipped; Query Only behaves as a sensor, and Physics Only is solid. Tile queries cover the swept cells, and tilemaps whose tilesets have no colliders are skipped. |
 | **Particle Collision** | Particles collide with each other — balls, beads, marbles. **Collision Radius**; **Bounce**; **Repulsion Force** — extra push-apart that prevents stacking. |
 | **Kill Condition** | **Condition Type** — `Box Zone`, `Sphere Zone`, `Speed Min`, `Speed Max`; **Mode** — `Kill Inside`, `Kill Outside`, `Contain (Bounce Back)`; **Zone Center**; **Zone Size** (box) or **Zone Radius** (sphere); **Speed Threshold** (speed conditions); **Relative To Emitter**. |
 | **Event Handler** | **Trigger** — `On Spawn`, `On Collision`, `On Death`; the **FX asset** to spawn; **Spawn Count**; **Inherit Velocity** + **Velocity Scale**. |
@@ -2240,9 +2246,29 @@ Every module, grouped by the stack it belongs to. Modules can be toggled individ
 | **SPH Core** | **Rest Density** — target density (lower = more spread out); **Stiffness (Pressure)** — how strongly particles push apart above rest density; **Near Stiffness** — near-pressure that stops particles collapsing into each other, key to the liquid look; **Viscosity** — velocity smoothing between neighbours (low = water, high = honey); **Surface Tension** — cohesion that minimizes surface area; **Interaction Radius** — neighbour search radius, best at ~2–4× particle size; **Particle Mass**. |
 | **Stability & Control** | **Velocity Damping** per frame (`1.0` = none); **Max Speed** — prevents numerical blow-ups; **Collision Damping** — extra velocity lost when the fluid hits a collider; **Sub-Steps** per frame (2–3 is usually enough); **Allow Sleep** — stop simulating a settled pool and resume when disturbed (a large CPU saving; automatically disabled when a force module is present) and, with it on, **Sleep Speed** — the speed below which every particle must fall for the fluid to sleep (`0` disables sleeping). |
 | **Water / Pool Settings** | **Pre-Fill Area** — instantly fill the spawn shape on the first frame (use with a Box/Circle Spawn Shape); **Pre-Fill Count**. |
-| **Render Mode** | **Fluid Render** — `Particles` (individual sprites) or `Metaball (Surface)` (a smooth merged surface); **Surface Threshold** — density cutoff at the edge (lower = thicker liquid); **Blob Scale** — each particle's density contribution (higher = smoother but blurrier). |
+| **Render Mode** | **Fluid Render** — `Particles` (individual sprites) or `Metaball (Surface)` (a smooth merged surface); **Surface Threshold** — density cutoff at the edge (lower = thicker liquid); **Blob Scale** — multiplier of the drawn particle size (higher = wider, more connected blobs; collision sizes stay unchanged). Match Collision → Radius Scale to the drawn support: for square, unrotated blobs against axis-aligned terrain faces, use at least Blob Scale. A smaller radius allows the surface to overlap the collider even when particle centers stay outside. |
 | **Physics Interaction** | **Affect Rigid Bodies** — two-way coupling, so objects float, sink and get carried by the flow; **Push Scale** — momentum transferred to bodies (`0` = the fluid reacts to bodies but never moves them); **Body Drag** — viscous drag on bodies moving through the fluid. Requires the Collision module and a dynamic Rigidbody. |
 | **Fluid-To-Fluid** | **Interact With Other Fluids** — push against particles of other fluid emitters that also have this on, so water and lava do not pass through each other; the lighter fluid (lower Particle Mass) floats on top. **Separation** — how hard they push apart; **Mixing Drag** — how much they drag each other along. |
+
+`Metaball (Surface)` merges the particles of one emitter. Separate emitters remain
+separate surfaces, even with **Interact With Other Fluids** enabled. Particle size,
+color and opacity define the surface; overlapping particles blend their colors
+without adding their RGB brightness. Opacity also reduces the density contribution,
+so fading particles shrink out of the surface.
+
+At full opacity, an isolated Gaussian blob's density cutoff has normalized radius
+`sqrt(-ln(Surface Threshold) / 2.5)`. A threshold of `exp(-2.5)` (about `0.082085`)
+matches the drawn support radius; a larger threshold shrinks the visible contour and can leave a gap
+above physical contacts. The contour has a feathered alpha edge. For a circular collision bound that
+contains the entire drawn quad at arbitrary rotations, use Radius Scale at least
+`Blob Scale * length(particleSize) / max(particleSize.x, particleSize.y)` (`sqrt(2) * Blob Scale`
+for square particles).
+
+Keep a surface's particles on one Z plane. Its particle Z, including the emitter's
+position offset, is used for depth and Lit lighting/shadows. The surface uses alpha
+blending and the Sprite Renderer's **Shading Mode**; sprite textures, sub-images and
+custom materials are not used. Changing **Fluid Render** or **Blob Scale** changes
+only the appearance, not the SPH simulation or collision radii.
 
 > Tips shown in the panel: add a **Collision** module for the fluid to interact with
 > colliders, and a **Gravity** module to make it fall and pool.
@@ -2332,7 +2358,7 @@ The inspector shows these groups for **every** element, in this order. Type-spec
 | **Custom Anchors** | Use free **Anchor Min** / **Anchor Max** ranges (`0..1`) instead of a preset, so each edge tracks the parent independently. |
 | **Z Order** | Draw order within this widget. |
 | **Global Z** | Sort this element against the *scene* by Z instead of inside the UI overlay. A negative Z Order with Global Z on turns the element into a scene background. |
-| **Post Processed** | Draw the element inside the scene so it receives bloom, exposure, depth of field and so on. Off (default) draws it as a crisp overlay after post-processing. Forced on, and disabled in the UI, for a Global-Z background. |
+| **Post Processed** | Draw the element inside the scene so it receives bloom, exposure, depth of field and so on; it then also follows the scene's **Render Scale**. Off (default) draws it as a crisp full-resolution overlay after post-processing. Forced on, and disabled in the UI, for a Global-Z background. |
 | **Visible** | Hide the element (and its children) without deleting it. |
 
 **Appearance**
@@ -2637,7 +2663,7 @@ audio-only volumes are drawn in purple.
 
 **Editor:** Cinema Editor
 
-A **cinema** is a timeline for cutscenes, in the spirit of a film sequencer: camera moves,
+A **cinema** is a timeline for cutscenes: camera moves,
 actors that walk, turn, animate and talk, dialogue lines, audio, screen effects (fade,
 letterbox, flash, shake), **nested shots**, events and markers. A cinema plays when Lua calls
 `Cinema.Play` (see [Lua API → Cinema](LuaAPI-EN-DOC.md#23-cinema--cinematics)), when the level
@@ -2957,7 +2983,7 @@ Instances can be reordered (**move up/down**), and any component header offers
 | **Tilemap** | The `.ice_tm` to draw (drag one in from the Content Browser). |
 | **Layers** | Read-out of the map's layers. |
 | **Flip X / Flip Y** | Mirror the whole map — the layout, every tile image and every tile collider and shadow — for orthogonal, isometric and hexagonal maps alike. Both off = the map as painted in the Tilemap editor. |
-| — | Shadows are authored **per tile** in the Tileset and Tilemap editors, not here. |
+| — | Shadows are authored **per tile** in the Tileset and Tilemap editors, not here. Box-shaped tiles with the same shadow settings act as one solid area — across layers and across instances placed side by side on the same grid — that light does not pass through and whose inside fades from the lit faces by the tiles' **Shadow Light Depth** (fully lit by default) — see [Graphics → 2D shadows](Graphics-EN-DOC.md#71-how-ray-cast-shadows-work). |
 
 **Flipbook** — one or more flipbook instances.
 
@@ -3126,7 +3152,7 @@ properties.
 | **Inherit Velocity** | `0..1` — how much of the entity's own movement and spin the pieces keep when it breaks. |
 | **Impact Threshold** | Minimum hit speed (pixels per second) that breaks it by itself (`0` = only from scripts). Needs Hit Events on its collider (or on what it hits). |
 | **Impact Damage Scale** | Above `0`, hits at or above the Impact Threshold deal *hit speed × scale* damage to Health instead of breaking it at once; it breaks when Health reaches `0`. |
-| **Fragment Lifetime** / **Fragment Fade Time** | Total seconds a fragment exists (fade-out included; `0` = permanent debris), and how many of those seconds it spends fading out. |
+| **Fragment Lifetime** / **Fragment Fade Time** | Total seconds a fragment exists (fade-out included; `0` = permanent debris), and how many of those seconds it spends fading out. Fragments using the built-in Masked or Opaque shader switch to Translucent while fading, preserving their texture and tint without writing depth. Custom material shaders keep their authored blend behavior. |
 | **Fragment Gravity / Density / Friction / Restitution** | Physics of the debris. |
 | **Fragment Linear / Angular Damping** | Drag that slows the movement / spinning of the debris over time. |
 | **Fragment Is Sensor** | Make fragments non-blocking sensors instead of solid debris. |
@@ -3284,6 +3310,11 @@ bind text and tooltips directly to a localization key. The game starts in the fi
 language of `Languages` unless a script picks another: `SetGameLanguage` for a chosen one,
 `UseSystemLanguage` for the player's own system language when the table has it (Lua API,
 Localization).
+
+Plural forms are ordinary keys named `key#form` — `coins#one`, `coins#few`, `coins#many`,
+`coins#other` — so the Localization Creator edits them like any other key, and `LocalizePlural`
+picks the form a number needs in the current language
+([Lua API → Plural forms](LuaAPI-EN-DOC.md#plural-forms)).
 
 **The Localization Creator** manages the language list and the key/translation grid:
 

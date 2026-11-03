@@ -9,7 +9,7 @@ The documentation is available in two languages:
 | 🇬🇧 English  | [`EN/`](EN) | Primary reference set. |
 | 🇷🇺 Русский  | [`RU/`](RU) | Полный перевод всей документации. |
 
-Every document is also readable **inside the editor** through the `Help → Documentation` panel, which renders the Markdown the way GitHub shows it — alerts, task lists, tables, syntax-highlighted code blocks with a copy button, emoji — and adds search within a document and across all documents, a collapsible table of contents, back / forward history, clickable links between sections, documents and languages, text selection and copying, and an adjustable text size.
+Every document is also readable **inside the editor** through the `Help → Documentation` panel, which renders the Markdown — alerts, task lists, tables, syntax-highlighted code blocks with a copy button, emoji — and adds search within a document and across all documents, a collapsible table of contents, back / forward history, clickable links between sections, documents and languages, text selection and copying, and an adjustable text size.
 
 ---
 

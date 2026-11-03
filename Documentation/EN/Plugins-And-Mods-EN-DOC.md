@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** is extensible in two complementary ways:
 >
@@ -1749,8 +1749,8 @@ Mods.Refresh()
 ```
 
 A search path is scanned exactly like `Mods/`: every mod sits in its own subfolder with a `mod.json`. A search
-path that holds a `mod.json` itself is that one mod — the layout of a Steam Workshop item folder. Newly
-discovered mods start disabled — enable them with `Mods.SetEnabled(name, true)`.
+path that holds a `mod.json` itself is that one mod — the layout of a mod that a store or a launcher downloads
+into a folder of its own. Newly discovered mods start disabled — enable them with `Mods.SetEnabled(name, true)`.
 
 Registering a folder does not open it to scripts: `loadfile`, `dofile` and `require` can read only the folders of
 the mods found in it, and file writes stay inside the project folder and the game's data folders.

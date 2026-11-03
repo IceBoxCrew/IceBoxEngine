@@ -2,7 +2,7 @@
                      IceBoxEngine - LICENSE AGREEMENT
 ================================================================================
 
-Version:        1.0.2
+Version:        1.0.3
 Effective date: 2026-09-20
 Applies to:     IceBoxEngineEditor, IceBoxEngineLauncher, IceBoxEngineUpdater,
                 IceBoxEngineRuntime, and everything distributed with them

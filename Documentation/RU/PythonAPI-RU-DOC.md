@@ -2,7 +2,7 @@
 
 ## Полная документация на русском языке
 
-### Актуальная для версии R-1.0.2
+### Актуальная для версии R-1.0.3
 
 > **IceBoxEngine** интегрирует **Python** через библиотеку **pybind11** для скриптинга редактора.
 > Python API позволяет автоматизировать работу в редакторе, управлять сценами, сущностями,
@@ -3539,6 +3539,15 @@ editor.set_world_settings({'fixed_timestep': 1.0 / 60.0})
 
 #### `editor.get_world_override()` → `dict`
 
+В `rendering` также входят `lighting_pixel_size` (float, по умолчанию `0`) и
+`lighting_pixel_origin` (кортеж из двух компонентов, по умолчанию `(0, 0)`).
+Те же ключи принимает `editor.set_world_override()`, начало сетки — tuple/list.
+Положительный размер привязывает освещение и тени к мировой сетке независимо
+от геометрии и разрешения сцены; `0` отключает режим. Отрицательные и неконечные
+размеры становятся `0`, положительные меньше `0.0001` ограничиваются этим
+минимумом; неконечные компоненты начала заменяются на `0`. Как и остальные
+параметры рендеринга уровня, они действуют только при `rendering.enabled=True`.
+
 Возвращает блок оверрайда уровня в виде двух вложенных словарей.
 
 ```python
@@ -3847,7 +3856,9 @@ es = editor.get_editor_settings()
 #     'current_level_path': 'Content/Levels/main.icemap',
 #     'is_level_dirty': False,
 #     'grid_size': 32.0,
-#     'snap_to_grid': True
+#     'snap_to_grid': True,
+#     'thumbnails_autosave': True,
+#     'layout_autosave': True
 # }
 ```
 
@@ -3867,10 +3878,22 @@ es = editor.get_editor_settings()
 | `show_physics_colliders` | `bool` | Оверлей коллайдеров (тот же флаг, что `editor.set_debug_flag('ShowColliders', …)`) |
 | `show_nav_grid` | `bool` | Оверлей навигационной сетки |
 | `current_level_path` | `str` | Путь, по которому запишет следующее сохранение |
+| `thumbnails_autosave` | `bool` | Сохранять миниатюры проекта при закрытии редактора (**Автосохранение миниатюр**) в этой сессии |
+| `layout_autosave` | `bool` | Записывать раскладку панелей в `imgui.ini` (**Автосохранение раскладки**) в этой сессии |
 
 ```python
 editor.set_editor_settings({'level_dirty': True})
 editor.set_editor_settings({'show_grid': False, 'show_physics_colliders': True})
+```
+
+`thumbnails_autosave` и `layout_autosave` меняют два переключателя
+[Настройки → Редактор](Editor-RU-DOC.md#104-редактор) только в текущей сессии, как если бы их выставили там и
+применили; `Config/Engine.json` хранит сохранённые значения (`Editor.ThumbnailsAutoSave`, `Editor.LayoutAutoSave`),
+пока настройки не сохранят. Инструмент, который управляет редактором автоматически, сначала выключает оба, и запуск не
+трогает миниатюры проекта и `imgui.ini`:
+
+```python
+editor.set_editor_settings({'thumbnails_autosave': False, 'layout_autosave': False})
 ```
 
 Остальные ключи, возвращаемые `get_editor_settings()` (`grid_size`, `snap_to_grid`, размер вьюпорта,
@@ -4852,7 +4875,8 @@ print(f'Движок работает {hours:.1f} часов')
 
 #### `engine.fps()` → `float`
 
-Возвращает текущий FPS (кадров в секунду).
+Возвращает число кадров в секунду, усреднённое по последним 60 кадрам, — достаточно ровное, чтобы его
+выводить, но один медленный кадр почти не сдвигает его. Отдельные рывки ловите через `engine.frame_time()`.
 
 ```python
 fps = engine.fps()
@@ -4861,7 +4885,8 @@ print(f'FPS: {fps:.0f}')
 
 #### `engine.frame_time()` → `float`
 
-Возвращает время текущего кадра в **миллисекундах**.
+Возвращает время последнего кадра в **миллисекундах** — `engine.delta_time()` × 1000, а не среднее, поэтому
+один долгий кадр виден полностью. `profiler_stats()['frame_time_ms']` — то же значение.
 
 ```python
 ms = engine.frame_time()
@@ -4954,10 +4979,13 @@ print(len(flushes), 'сбросов батчей,', sum(p['cpu_ms'] for p in flu
 
 #### `engine.lua_stats()` → `dict`
 
-Профилировщик Lua-скриптов: `total_ms` и `calls` за последний кадр, `memory_kb`, `peak_memory_kb` и
-`alloc_rate_kbps` виртуальной машины, число ошибок `errors` и `rows` — по словарю на каждый колбэк скрипта
-с полями `script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`,
-`last_frame_calls`, `instances` и `errors`.
+Профилировщик Lua-скриптов: `total_ms` и `calls` за последний кадр; для игровой VM — `memory_kb`,
+`peak_memory_kb`, `alloc_rate_kbps` (память, выделяемая в секунду, сглаженно; считается каждая аллокация,
+в том числе мусор, освобождённый в том же кадре), `frame_alloc_kb` и `frame_allocs` (выделено за последний
+кадр); те же числа для UI VM скриптов виджетов — `ui_memory_kb`, `ui_peak_memory_kb`, `ui_alloc_rate_kbps`,
+`ui_frame_alloc_kb` и `ui_frame_allocs`; число ошибок `errors`; и `rows` — по словарю на каждый колбэк
+скрипта с полями `script`, `path`, `callback`, `total_ms`, `last_frame_ms`, `avg_ms`, `max_ms`, `calls`,
+`last_frame_calls`, `last_frame_alloc_kb`, `last_frame_allocs`, `total_alloc_kb`, `instances` и `errors`.
 
 ```python
 lua_ms = engine.lua_stats()['total_ms']
@@ -5174,7 +5202,7 @@ info = engine.audio_info()
 | `engine.profiler_stats()` | `dict` | Счётчики CPU/GPU/рендера одним словарём |
 | `engine.cpu_scopes()` | `list[dict]` | CPU-скоупы последнего кадра, от самого медленного (см. 7.2) |
 | `engine.render_passes()` | `list[dict]` | Проходы рендера последнего кадра с временем CPU/GPU (см. 7.2) |
-| `engine.lua_stats()` | `dict` | Профилировщик Lua: время кадра, память VM, строки по колбэкам (см. 7.2) |
+| `engine.lua_stats()` | `dict` | Профилировщик Lua: время кадра, память и аллокации обеих VM, строки по колбэкам (см. 7.2) |
 | `engine.profiler_counters()` | `list[dict]` | Все именованные счётчики профилировщика (см. 7.2) |
 | `engine.hitches()` / `engine.clear_hitches()` | `list[dict]` / `bool` | Записанные хитчи кадров (см. 7.2) |
 | `engine.network_stats()` и остальные функции `engine.network_…` | `dict` / `list[dict]` | Сетевой профайлер и сетевые трассы (см. 7.8) |
@@ -5680,7 +5708,10 @@ types = browser.get_supported_types()
 
 #### `browser.import_file(external_path, dest_folder='')` → `bool`
 
-Импортирует внешний файл в папку `Content`.
+Импортирует внешний файл в папку `Content` так же, как кнопка **+ Импорт** в Content Browser: изображение,
+звук, шрифт или видео получает префикс типа (`T_`, `S_`, `F_`, `V_`), если имя ещё не начинается с него, и
+сайдкар с настройками по умолчанию; файл `.gif` становится флипбуком. По умолчанию `dest_folder` — текущая папка
+браузера. Возвращает `False`, если исходного файла нет, файл с итоговым именем уже существует или импорт не удался.
 
 ```python
 browser.import_file('C:/Downloads/texture.png', 'Content/Textures')
@@ -6122,6 +6153,13 @@ if not r['ok']:
 
 Вычисляет выражение Lua и возвращает его значение строкой. Ошибки приходят текстом `'Error: …'`,
 а не исключением.
+
+Выражение считается там же, где `lua.exec` выполняет код: в окружении скрипта уровня, пока он загружен (все
+глобальные имена там тоже видны), иначе в глобальном, — поэтому значение, сохранённое одним вызовом `lua.exec`,
+здесь читается. Числа приходят точно: целые полностью, остальные с таким числом знаков, чтобы прочитать их обратно
+без изменений (`0.1`, `1e-07`, `3.1415926535897931` для `math.pi`); число с целым значением пишется как целое (`3`). Строка приходит
+в двойных кавычках как есть, без экранирования, поэтому `lua.eval(expr)[1:-1]` — это сам текст. Таблица показывает
+первые 8 записей.
 
 ```python
 print(lua.eval('_VERSION'))

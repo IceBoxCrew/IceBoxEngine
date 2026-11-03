@@ -2,8 +2,8 @@
                             IceBoxEngine - CHANGELOG
 ================================================================================
 
-Version:           Release 1.0.2 (R-1.0.2)
-Previous release:  Release 1.0.1 (R-1.0.1)
+Version:           Release 1.0.3 (R-1.0.3)
+Previous release:  Release 1.0.2 (R-1.0.2)
 
 This file lists what changed in this version of IceBoxEngine since the previous
 release: what was added, what was improved and what was fixed in the editor,
@@ -16,176 +16,428 @@ under Help > Documentation.
 
 :Added:
 
-- Profiler: CPU and GPU temperatures on macOS - from the SMC on Intel Macs, and
-  from the SMC and the IOHID thermal sensors on Apple silicon.
-- Profiler: CPU and GPU temperatures on Android - from the kernel thermal zones
-  and, on Adreno GPUs, from kgsl - on devices whose SELinux policy lets apps
-  read them.
-- Profiler: Thermal Status on Android and macOS - how hard the system is
-  throttling the device to keep it cool - and, on Android, Thermal Load with a
-  Thermal Load graph. Both are also written into recorded traces.
-- Lua API: Settings.GetThermalStatus(), Settings.GetThermalStatusName(),
-  Settings.IsThermalStatusAvailable(), Settings.GetThermalLoad(),
-  Settings.IsThermalLoadAvailable() and the Settings.THERMAL_* constants, so a
-  game can lower its own quality before Android, iOS or macOS starts
-  throttling the device. Settings.OnSettingChanged reports status changes
-  with the key "ThermalStatus". The five functions are also available as
-  Visual Script nodes.
-- Profiler: Core Temp and MSI Afterburner are read as temperature sources on
-  Windows while they run, with nothing to configure.
-- Profiler: hovering a temperature that shows N/A explains why it is
-  unavailable on your platform and, where possible, how to make it available.
-- Plugins: native plugins can extend the engine itself. A plugin can add its
-  own settings to Edit > Preferences > Plugins, saved to Config/Engine.json so
-  they ship with the game; component types for classes, added in the Class
-  Editor under Add Component > Plugins; world asset types, placed from the
-  Content Browser into the Level Outliner and the Viewport like View and
-  Cinema assets; and widget element types, added in the Widget Editor under
-  + Add Element > Plugins.
-- Plugins: everything a plugin adds is described by declared properties -
-  Bool, Int, Float, String, Text, Vec2, Vec3, Color, Enum and Asset. The editor
-  builds the fields from them or shows the plugin's own inspector. The values
-  are saved with classes, levels and widgets, follow inheritance and undo,
-  keep their asset paths when assets are moved or renamed, and stay untouched
-  while the plugin is not loaded.
-- Plugins: plugin components start, update and stop with their entity while
-  the game runs and replicate in multiplayer. Plugin components and world
-  assets draw themselves in the editor viewports and, when their plugin asks
-  for it, in the game; plugin widget elements are drawn on the Widget Editor
-  canvas and in the game, and receive hover, press, release, click and drag
-  events and gamepad navigation.
-- Plugins: plugin API version 2, with the functions behind all of the above.
-  Plugins built for version 1 keep working unchanged.
-- Plugins & Mods panel: a Settings button for every loaded plugin that has
-  settings, opening its section in Edit > Preferences > Plugins.
-- Lua API: the Plugins table - Plugins.IsLoaded, GetSettings, GetSetting,
-  HasComponent, GetComponentCount, AddComponent, RemoveComponent,
-  GetComponentProperties, GetComponentProperty, SetComponentProperty,
-  GetWorldAssets, GetWorldAssetProperties, GetWorldAssetProperty and
-  SetWorldAssetProperty. HasComponent, AddComponent and RemoveComponent also
-  accept the type names of plugin components.
-- Lua API: GetWidgetElementPluginType, GetWidgetElementPluginProperties,
-  GetWidgetElementPluginProperty and SetWidgetElementPluginProperty in entity
-  scripts, and GetElementPluginType, GetElementPluginProperties,
-  GetElementPluginProperty and SetElementPluginProperty in widget scripts.
-  AddWidgetElement, AddSubWidgetElement and CreateElement accept the type
-  names of plugin elements, and GetElementType returns "Plugin" for them.
-  These and the Plugins functions are also available as Visual Script nodes.
-- Python API: project.get_plugin_settings() and project.set_plugin_settings().
-  The editor's component functions accept plugin component types,
-  describe_components() lists them with the kind 'plugin', world assets carry
-  a 'properties' dictionary, and scene.validate() also checks the asset paths
-  stored in plugin properties.
-- Statistics panel: the number of plugin components in the level.
+- Optional world-space pixel lighting: LightingPixelSize and LightingPixelOrigin
+  keep light falloff, soft shadows and indirect lighting on a fixed pixel grid
+  without changing geometry or textures. Project and level defaults, Lua and
+  Python world overrides are supported; size 0 preserves continuous lighting.
+  Project and world settings expose the grid size and origin with labels and
+  tooltips in all 15 editor languages. The new lighting and FogOfWar functions
+  are also included in Visual Script and Lua autocomplete.
+- FogOfWar.SetSurfaceVisibility optionally keeps exposed wall, floor and ceiling
+  faces visible at grazing angles in strict mode. SetEdgeSoftness adds spatial
+  pixel-grid feathering inside visible space without revealing hidden cells.
+- Lua API: optional strict FogOfWar line of sight uses the viewer's actual
+  world position, blocks sealed diagonal corners and leaves the first wall
+  visible. SetStrictLineOfSight and IsStrictLineOfSight select it without
+  changing the existing default. SetHideOutsideGrid and IsHideOutsideGrid
+  optionally cover the area beyond the configured grid with unseen fog.
+- Lua API: Draw.SetLayer("overlay"). Script Draw geometry on this layer is
+  drawn on top of the finished frame - after post-processing and upscaling,
+  together with the widgets that are not post-processed - so a HUD, menus and
+  touch buttons drawn with Draw are no longer touched by bloom, vignette, film
+  grain, colour grading or distortion, and stay sharp at a reduced Render
+  Scale.
+- Lua API: RebuildTilemapPhysicsRect(x, y, w, h [, instance]) rebuilds only
+  the tile colliders a rectangle of cells touches, so carving a crater or
+  chipping a few cells no longer rebuilds the colliders of the whole tilemap.
+- Lua API: Screen.GetSafeArea() returns the part of the game view that no
+  notch, rounded corner or system bar covers - its rectangle in pixels from
+  the bottom-left corner and the margin on each side - so touch controls and
+  the HUD can keep clear of them. In the editor it is the whole game view.
+- Lua API: OnAppBackground and OnAppForeground events for class and level
+  scripts and Visual Script. In Play they are called when the game goes to
+  the background or its window is minimized, and when it comes back, so a
+  game can pause, save or mute itself.
+- Lua API: GetFluidsAt(x, y) lists every fluid at a point with its density
+  and the entity it belongs to, and GetFluidDensityAt(x, y [, fx]) can now be
+  limited to one fluid effect, so water and lava can be told apart. Both are
+  global functions available to modules and widget scripts too.
+- Lua API: OnFXFluidContact reports where two fluids with Fluid Interaction
+  meet - the other effect, its entity, how many particles touch and where -
+  for reactions such as lava turning to stone in water.
+- Lua API: RemoveFXParticlesInCircle(x, y, radius) removes the particles of
+  an emitter inside a circle - water boiling away, lava hardening - without
+  death events.
+- Lua API: GetFXParticleState and SetFXParticleState save and restore the
+  particles of an emitter (position, velocity, age and lifetime), so fluids
+  can be kept in a saved game.
+- Tilesets and animated tiles: Shadow Light Depth - how lit the inside of a
+  solid area of box-shaped tiles is, from 0 to 1: the brightness at the
+  middle of the first tile under every face the light reaches, with deeper
+  tiles fading smoothly (1, the default, keeps the area fully lit, 0 keeps it
+  dark). It is set in the Tileset and Tilemap editors and the Property
+  Matrix, and from Lua with SetTileShadowLightDepth and
+  GetTileShadowLightDepth, which also have Visual Script nodes.
+- Installers: the engine's uninstaller on Windows has a Components page with
+  a User data option, unticked by default, that also deletes your
+  preferences, the launcher's project list, crash reports and the build
+  caches. Removing the Linux package asks the same question. Your projects,
+  your game builds and the license activation are always kept, and an update
+  never deletes anything.
+- Game installers: the uninstaller of a game's .exe installer offers a Player
+  data option, unticked by default, that also deletes the saved games,
+  settings, mods and downloaded content the game wrote, and removing a game's
+  .deb package asks the same question. The .msi, an .AppImage and macOS
+  always keep the player data.
+- Lua API: the Compression table packs and unpacks any string with zstd -
+  Compression.Compress(data [, level]), Compression.Decompress(data
+  [, maxSize]) and Compression.IsCompressed(data) - so large binary saves can
+  be stored several times smaller. Every compressed string carries a
+  checksum, so a save damaged on disk is reported instead of loaded wrong.
+- Lua API: Screen.GetDisplayScale() returns how much the operating system
+  scales the display the game window is on - 1 at 100 %, 1.5 at 150 %, 2 on
+  a Retina screen - so a game that draws its interface with Draw can pick a
+  fitting default size.
+- Lua API: Draw.Text takes a wrapWidth option and Draw.MeasureText a fourth
+  wrapWidth argument. The text is word-wrapped into lines no wider than that,
+  with the same line-break rules as widget text. Draw.WrapText returns those
+  lines as a table of strings, so an interface drawn with Draw can place, clip
+  or scroll the lines of a paragraph one by one.
+- Editor: Preferences > Editor > Panel Layout has Layout AutoSave, on by
+  default. Turned off, the editor still opens with the layout saved in
+  imgui.ini but no longer writes it, so automated runs and a layout you want
+  to keep leave the file untouched. It is stored as Editor.LayoutAutoSave in
+  Config/Engine.json.
+- Python API: editor.get_editor_settings() reports thumbnails_autosave and
+  layout_autosave, and editor.set_editor_settings() switches both for the
+  current session, so a tool that drives the editor can leave the project
+  thumbnails and imgui.ini as they were.
+- Lua API: GetPreciseTime() returns the seconds since the game started from
+  the system's monotonic high-resolution clock, read at the moment of the call,
+  so a script can measure its own work inside a frame and keep to a time
+  budget. Unlike GetUnixTimeMs it never jumps when the system clock changes.
+- Lua API: HitStop(duration [, timeScale]) freezes the game for a moment of
+  real time - the impact freeze of fighting and action games. Physics,
+  animations, particles, widgets, OnUpdate, timers and coroutines stop or
+  slow down while sounds keep playing and OnPause is not sent, and several
+  hit stops can overlap. IsHitStopActive, GetHitStopRemaining and
+  CancelHitStop go with it.
+- Lua API: FloatingText.Spawn(text, x, y [, options]) shows a floating
+  damage number or label that rises, arcs, pops in and fades out by itself,
+  with color, size, font, outline, spread, gravity and layer options. The
+  texts freeze during a pause and a hit stop and are removed when the level
+  changes.
+- Lua API: Json.Encode, Json.Decode, Json.Pretty and Json.IsValid convert
+  between Lua values and JSON text for save files, settings and server data,
+  can indent the text and report an error message instead of failing
+  silently. Network.JsonEncode and Network.JsonDecode use the same converter.
+- Lua API: the Crypto table hashes, signs, encodes and encrypts data with
+  libsodium - SHA-256, SHA-512, BLAKE2b, HMAC-SHA-256 and HMAC-SHA-512,
+  CRC-32, Base64, hexadecimal, secure random bytes, UUIDs, constant-time
+  comparison and authenticated encryption (XChaCha20-Poly1305) that reports a
+  wrong key or an edited save file.
+- Lua API: LocalizePlural(key, count, ...) picks the plural form of a
+  localization key for the current game language by the Unicode CLDR rules,
+  from keys named key#one, key#few, key#many, key#other and so on, and
+  GetPluralCategory tells which form a number takes. FormatNumber writes
+  numbers with the digit grouping and decimal separator of a language, and
+  FormatDuration writes times as m:ss or h:mm:ss.
+- Lua API: Rhythm(config) follows the beat of the music or of any sound - beat
+  and bar callbacks, the position inside the beat, tempo changes, and
+  judgement of the player's timing in perfect, great, good and miss windows
+  with latency calibration - for rhythm games and gameplay in time with the
+  music.
+- Lua API: Abilities(config) runs the abilities of a character: cooldowns
+  with charges, costs paid from a StatBlock, cast times and channels with
+  ticks, interrupts, required and blocking Gameplay Tags, tags held while
+  casting and StatusEffects put on the target.
+- Lua API: Crafting(config) crafts the items of an Inventory by recipes,
+  instantly or over time with a queue, with bonus outputs and locked
+  recipes. A craft whose outputs do not fit changes nothing, so no item is
+  ever lost.
+- Lua API: Deck(config) keeps the draw, hand, discard and exhaust piles of a
+  card game, with seeded shuffles, the discard pile shuffled back when the
+  draw pile runs out, a hand limit, and GetState and SetState for saves.
+- Lua API: Spline.new(points [, options]) builds Catmull-Rom, linear and
+  Bezier paths, open or closed, with even-speed positions by distance,
+  tangents, angles, the nearest point and sampling. PathFollower moves an
+  entity along a spline once, in a loop or back and forth - an entity with a
+  physics body by velocity, so a moving platform carries what stands on it.
+- Lua API: the Steering table has seek, flee, arrive, pursue, evade, wander
+  and obstacle avoidance. Flock moves groups of entities, or of agents a
+  script draws, with separation, alignment and cohesion, a target, obstacles
+  and bounds, and SpatialHash answers fast "what is near here" queries for
+  objects the scripts track themselves.
+- Lua API: Procgen builds levels from rules on a MapBuffer grid - caves,
+  dungeons of rooms and corridors with doors, mazes by five algorithms with
+  loops and rooms, drunkard-walk tunnels and wave function collapse from a
+  sample map, tiles with sockets or explicit rules. Region tools find, keep,
+  remove and connect areas; Poisson scattering spreads objects evenly with
+  density and masks; Delaunay triangulation and minimum spanning networks
+  join points into roads; NameGenerator makes up names in any alphabet. A
+  MapBuffer turns into the navigation grid or the fog of war in one call,
+  and every generator is seeded.
+- Lua API: Effector zones push physics bodies - wind with gusts and
+  turbulence, attractors and repulsors, gravity zones and small planets,
+  vortices, buoyancy with currents and drag. Zones are boxes, circles or
+  polygons, can ride on an entity, filter by collision group or tag and
+  report entities entering and leaving. Effector.SetSurfaceSpeed turns a
+  collider into a conveyor belt and SetRollingResistance slows things
+  rolling on it.
+- Lua API: Rope makes ropes, chains, vines and cables of physics links
+  between entities, bones or points - with stiffness, wind, collisions,
+  reeling in and out, cutting, tension and breaking with an onBreak
+  callback - drawn as a textured strip or link by link. Visual-only ropes
+  sway and follow their ends without colliding.
+- Lua API: physical ropes accept a points polyline for their initial shape
+  and let dynamic bodies grab any distance along them with Rope.Grab.
+  RopeGrip moves the hold, releases it, and follows its piece when a rope
+  is cut. GetPhysicsPoints and GetPoint expose current physical positions
+  and point velocity independently of the interpolated drawing points;
+  GetSegmentLengths exposes material boundaries for link-aware cutting.
+- Lua API: GetActionPrompt returns the label and the icon name of an
+  action's control for the device the player uses - keyboard and mouse, a
+  gamepad of the Xbox, PlayStation or Nintendo family, or touch - so hints
+  switch from E to A to Cross by themselves. GetActiveInputDevice,
+  GetActiveGlyphStyle, GetBindingLabel, GetBindingGlyph, GetKeyLabel (which
+  follows the keyboard layout) and SetGamepadPlayerIndex go with it.
+- Lua API: OnInputDeviceChanged(device, style) and
+  OnWindowFocusChanged(focused) events for class, level and widget scripts,
+  with Visual Script event nodes.
+- Lua API: Settings.GetDisplays, SetDisplay, GetDisplayModes,
+  SetFullscreenMode, GetFullscreenMode and GetRefreshRate, and the
+  "exclusive" window mode that switches the monitor to the chosen video
+  mode. The monitor and the mode are saved with the settings.
+- Lua API: the System table opens web and mail links (System.OpenURL),
+  reads the battery state and the system light or dark theme, tells whether
+  the window has focus, flashes the window in the taskbar and shows a
+  progress bar on its taskbar button.
+- Lua API: Audio.GetSpectrum and Audio.GetSpectrumLevel analyze what any
+  group plays into frequency bands for music visualizers and gameplay that
+  reacts to the music.
+- Lua API: Captions shows subtitles for sounds. A caption registered for a
+  sound appears every time it plays, with the speaker's name and an arrow
+  towards a sound off to the side; texts are localization keys, and the
+  captions can be styled or drawn by the game itself.
+- Lua API: CameraRig drives a camera with a dead zone, look-ahead, several
+  targets with automatic zoom, rooms the view slides between, and a trauma
+  shake that also turns the view - per camera, so every split-screen view
+  can have its own.
+- Lua API: PlatformerController moves a character with tuned jumps, coyote
+  time, a jump buffer, variable jump height, apex hang, fast fall, air
+  jumps, wall slides and wall jumps, dashes, ladders, drops through one-way
+  platforms, slopes and moving platforms, on the character's own physics
+  body.
+- Lua API: Ballistics predicts the flight of a projectile step for step
+  with the physics and where it hits, solves the launch velocity for a
+  target, a flight time or an apex height, and leads moving targets.
+- Lua API: Bullets runs thousands of bullets in native code for shoot 'em
+  ups and bullet hells - bullet types, rings, fans and aimed volleys,
+  acceleration, curving, homing, waves, piercing and wall hits with an
+  onHit callback - and BulletEmitter fires patterns on a timer, spinning
+  into spirals.
+- Lua API: BigNumber counts far past the range of Lua numbers for idle
+  games, with operators, the K, M, B ... aa, ab ... suffixes, scientific and
+  engineering notation, exact text for saves, and the price and
+  "how many can I buy" formulas of growing costs.
+- Lua API: GestureRecognizer recognizes shapes drawn with the mouse, a
+  finger or a pen - ten built-in shapes and your own templates recorded
+  from a drawing, multi-stroke, with a confidence score.
+- Lua API: PixelWorld - a native falling-sand world. Every cell is one
+  pixel of a material, simulated in C++ on all CPU cores: powders, liquids,
+  gases and fire, burning, heat, melting, freezing and boiling, electricity,
+  air pressure and wind, reactions between materials and explosions. Solid
+  cells become physics colliders, the level's bodies float and push the
+  cells aside, pieces of the world break off into pixel bodies that crumble
+  and split, light is computed per cell on the GPU with a light map for
+  gameplay, and worlds are fixed or endless - generated from layers and your
+  own code, streamed around the camera and saved.
+- Visual Script and the Lua script editor: every new function and object
+  method above has its node and its autocomplete entry.
 
 :Improved:
 
-- Temperature sensors: a hardware monitor started while the editor is already
-  open is picked up within seconds, without a restart, and a source that stops
-  answering is dropped.
-- Temperature sensors: the profiler names the source and the exact sensor it
-  reads - for example "LibreHardwareMonitor: CPU Package" or
-  "hwmon: k10temp Tctl" - and shows the hottest one when several qualify. At
-  startup the log names the source of each temperature, or why there is none.
-- Profiler: Chrome-trace exports now carry CPU and GPU temperature tracks, a
-  Thermal Status track on Android, iOS and macOS, and a Thermal Load track on
-  Android.
-- AI Helper plugin: its version numbering starts over at 1.0.0 (it showed 3.1.0
-  before); the plugin itself is unchanged.
-- Plugins & Mods panel: the settings pages of plugins moved from the panel's
-  Settings tab to Edit > Preferences > Plugins, into the section of the plugin
-  that registers them.
-- Class Editor: the Inheritance tab also lists the decals, the replication
-  settings and the plugin components a class inherits.
-- Networking: the host's log shows the address of every player it sees joining
-  its room; the joining player's log shows the moment the host's packets
-  arrive, which time-to-live opened the path and, when the join fails, whether
-  any packet from the host arrived at all; and a router that refuses the port
-  mapping is reported as "refused_by_router" with its UPnP error code instead
-  of "not_supported_by_router".
+- Text: smooth fonts (Antialiased on, Nearest Filter off) drawn at their own
+  pixel size in screen space place every glyph to a third of a pixel, from up
+  to three copies of the glyph shifted by a third of a pixel, so the gaps
+  between letters stay even at small sizes instead of jumping by a whole pixel.
+  Smooth fonts are hinted lightly, vertically only. Pixel fonts, scaled text and
+  world-space text keep whole-pixel positions.
+- FX: particles with the Collision module test only the tilemap cells around
+  them instead of every collider cell of every tilemap in the scene, and skip
+  tilemaps whose tilesets have no colliders. Particle collisions and fluids no
+  longer slow down as a level grows, and the colliders are no longer gathered
+  from every tilemap cell each frame.
+- FX: the Fluid module runs its passes on the worker threads only from 512
+  particles per fluid instead of from 128 and 256, so a fluid of a few
+  hundred particles costs less: waking the worker threads cost more than
+  simulating it. Fluids that do not affect rigid bodies now also move and
+  collide on worker threads, with the same result on any number of threads.
+- FX: a sleeping fluid wakes when a tile under or next to it changes or a
+  collider appears, disappears, enters or leaves the area next to it, and no
+  longer wakes when tiles change or debris, fragments, projectiles and other
+  bodies with colliders are created or destroyed anywhere else in the scene.
+- Tilemaps: the tileset files of a tilemap are found once instead of on every
+  call, so SetTileAt, ExplodeTiles, the tile query functions and particle
+  collisions no longer check the disk for every cell.
+- Rendering: at a Render Scale other than 100 %, with SSAA or with FSR/NIS
+  upscaling, the widgets that are not Post Processed, the cinema overlay and
+  full-screen videos that are not Is Post Processed now stay sharp without
+  post-processing too: they are drawn at full resolution on top of the
+  upscaled scene, as they already were with post-processing on.
+- Shadows: tilemap shadow casters are kept per tilemap instance and rebuilt
+  only when its layers, its tilesets or the tile shadow settings change,
+  instead of merging every cell of every shadow-casting tilemap each frame.
+  Digging or an explosion rebuilds only the edited tilemap.
+- Shadows: solid tiles now cast like solid ground. Box-shaped tiles with the
+  same shadow settings form one solid area - across all visible layers of a
+  tilemap and across tilemap instances placed side by side on the same grid,
+  without seams. Everything behind the rock - background walls and
+  characters - is in shadow, and the rock itself is lit by a light field:
+  light spreads into it from every face it reaches and fades smoothly
+  through the tiles by their Shadow Light Depth, with no streaks or seams at
+  steps, corners and the edges of shadows, and without leaking through walls
+  or into caves. Before, how far light went into the rock depended on how the
+  engine had grouped the tiles internally, so whole rectangles of rock looked
+  lit from the inside. Only the outline of an area becomes shadow edges, so
+  large tile areas also cost less.
+- Shadows: a light inside a shadow caster - a lantern held by a character
+  with a shadow-casting collider, a lamp sprite with its own collider, a light
+  placed in a tile - is no longer blocked by that caster. A light buried in
+  solid tiles lights the rock around it with the same smooth fade (Shadow
+  Light Depth), and the light that comes out of the rock keeps the brightness
+  it had where it left it.
+- Shadows: the GPU and CPU shadow maps, the directional light, ray-traced
+  shadows, the shadow rays inside ray-traced GI, particles, metaball fluids,
+  lit text and custom Lit materials now follow the same rules, so the shadows
+  of a scene do not change between devices or when Shadow rays is switched
+  on. Ray-traced shadows now also stop at colliders that only
+  block shadows (Colliders Block Shadows), as the shadow maps always did.
+- FX: GetFluidDensityAt looks only at the particles near the point instead of
+  every particle of every fluid.
+- Lua API: GetSaveFiles and GetSaveFilesInfo list the files sorted by name,
+  the same on every platform and every run, instead of in the order the file
+  system happened to return them.
+- Lua API: String.Upper, String.Lower, Str.ToUpper and Str.ToLower change the
+  case of Latin letters with accents, Greek, Cyrillic and Armenian letters
+  too, not only of A-Z.
+- Tilemaps: hexagonal maps now address their cells from the bottom-left like
+  orthogonal maps - x to the right, y upward, y = 0 on the bottom row - in
+  every tile function, the bulk operations and the neighbour and distance
+  helpers. Only isometric maps keep their raw diamond coordinates. A script
+  written for the old top-down rows of a hexagonal map turns y into
+  height - 1 - y.
+- Python API: browser.import_file imports a file exactly like + Import in the
+  Content Browser: it adds the T_, S_, F_ or V_ prefix, writes the sidecar and
+  turns a .gif into a flipbook. Before, it only copied the file.
 
 :Fixed:
 
-- Launcher and editor text fields: clicking an item of the right-click menu
-  (Undo, Redo, Cut, Copy, Paste, Delete, Select All) with the mouse did
-  nothing. The item now runs, and the menu closes, when the left or the right
-  mouse button is released over it.
-- Level changes: LoadLevel, ReloadLevel, ApplyAsyncLevel and
-  LoadLevelAsync(path, true) could show the new level for one frame in its raw,
-  as-saved state. The level is now swapped right after the current frame is
-  shown - so a fade to black that ends with LoadLevel really reaches black -
-  and the new level is first drawn only after its first full update, scripts,
-  widgets and camera included, with its World Settings already applied.
-- Level start: the first update of a new level - after a level change or when
-  Play starts in the editor - advanced by the length of the frame that loaded
-  it, so fade-ins and intro animations jumped ahead. It now reuses the delta of
-  the frame before.
-- Camera lag: when a level started, the camera slid in from its previous
-  position. The view now starts exactly at the camera's target, and lag only
-  smooths the movement after that.
-- Adaptive Quality: loading a level could be mistaken for a frame-rate drop and
-  lower the quality. The frame that starts a level and the level's first frame
-  are now ignored.
-- Widgets: a widget that loaded in the middle of a frame - for example one
-  shown from a button callback - could be drawn once in its as-saved state. In
-  Play a widget is now drawn only after OnInit and its first update, and the
-  widgets in its visible SubWidget elements load and update together with it.
-  A cinema's Custom Widget dialogue follows the same rule.
-- Editor: a level change that a script had requested but that had not happened
-  yet (LoadLevel, ReloadLevel, LoadLevelAsync) carried over into the next Play
-  session. Leaving Play now drops it.
-- Touch screens: a UI element stayed hovered after the finger lifted, keeping
-  its hover color, so it looked selected. The hover now ends, with OnUnhover,
-  when the touch ends.
-- Video: picture and sound could drift apart after long frames or loading
-  hitches. The picture now follows the video's own sound, and a sound track
-  that starts later than the picture or has a gap is played at its place. On
-  Web and iOS the browser and AVFoundation keep them in sync, as before.
-- Video: videos kept playing - picture and sound - while the game was paused,
-  stopped at a Lua debugger breakpoint or suspended. Every video channel now
-  pauses with the game and resumes in sync from the same moment.
-- Networking: Connect, JoinOnline, HostOnline or StartServer called while an
-  automatic reconnect was still pending could fail. The pending reconnect is
-  now abandoned and the new session starts.
-- Online rooms without a server: joining by room code could stop at "the room
-  was found" and end with direct_connection_failed, and the internet room list
-  could stay empty, when a router or carrier NAT blocks an address after a
-  single unexpected packet from it - many home routers and carrier-grade NATs
-  do. The player who is found first no longer knocks first: a joining player,
-  and a player browsing the internet room list, opens its own routers from a
-  set of extra UDP sockets whose packets expire after 2 to 16 router hops, so
-  one of them always stops just before the other side's router, and announces
-  those sockets only after that; the host then contacts them, and the socket
-  the host reaches carries the connection.
-- Online rooms without a server: a host contacted a joining player only once,
-  for 15 seconds, so a joiner that found the host later could not connect.
-  The host now keeps contacting a joining player for about a minute and a
-  player browsing the internet room list for about 35 seconds.
-- Online rooms without a server: DHT nodes remembered from earlier sessions
-  were asked before the bootstrap servers even when none of them answered, so
-  stale nodes delayed finding a room by several seconds.
-- Online rooms: the connection that follows a found path now gets at least
-  10 seconds instead of the regular connection timeout.
-- Android: with Is Suspended on, an active network session - hosting,
-  connected, connecting or reconnecting - froze while the app was in the
-  background. It now keeps running, with nothing drawn until the app returns,
-  and Settings.SetIsSuspended takes effect at once instead of on the next
-  launch.
-- Metal and Vulkan (MoltenVK) on macOS and iOS: shadows and light cookies used
-  texture slots beyond the 16 samplers Apple GPUs provide per shader stage, so
-  they could render incorrectly.
-- Windows: without a hardware monitor running, the CPU temperature could be
-  read from a battery, charger or other thermal zone that is not the
-  processor. Such zones are now ignored.
-- Laptops with two GPUs: reading the GPU temperature could wake the sleeping
-  dedicated GPU and report a GPU the editor was not rendering on. Only the GPU
-  the editor renders on is read now.
-- Widget Editor: adding a child from an element's right-click menu changed the
-  element list while the hierarchy was being drawn, which could crash the
-  editor. The child is now added once the hierarchy is drawn.
-- Class Editor: after an undo or a redo, the decals that a class component
-  provides were treated as the class's own, so they could be edited, deleted
-  and saved into the class. Undo and redo now keep track of them.
+- Physics ropes: moving a grip to either attached end now updates both the
+  limiting range and its rest length. Reaching zero distance no longer
+  pulls the body back toward its original grip position or deforms the
+  rope; unchanged limits keep their accumulated solver impulses.
+- Text: glyph batches restore the previous depth-test state, so world
+  geometry no longer cuts through HUD icons or full-screen fades drawn
+  after text. Glyph alpha also survives overlay and render-target blending.
+- Rendering: offscreen clears issued before a frame now work on Direct3D
+  12, Vulkan, Metal and WebGPU. Clears preserve target isolation, selected
+  color attachments, mip levels, depth/stencil and MSAA storage. WebGPU
+  submits ordered GPU work without leaking clear flags into another target.
+  Its scissored clears also support HDR/negative float32 color values without
+  optional blending features, custom depth values and independent depth and
+  stencil flags both inside and outside a frame.
+- Fog of war: world depth, stencil state and clip depth no longer let scene
+  objects show through the fog. Rendering restores the previous state and
+  keeps HUD overlays above it; smooth transitions stay paused at zero time
+  scale. Invalid saved states leave the current grid untouched, and loading
+  explored state for the same grid preserves its opacity blockers.
+- FX: particle collisions sweep the full travel against scene colliders
+  and resolve repeated contacts, preventing fast particles from crossing
+  thin surfaces and moving bodies from pressing fluids into solid tiles.
+  Slide friction acts along the surface; bounce preserves tangential speed.
+  Disabled, query-only and sensor colliders, authored tile collision shapes
+  and transformed tilemaps now follow their scene collision settings.
+
+- FX: metaball surfaces sample density with the framebuffer orientation of
+  the active backend, so water and blood no longer flip vertically or get
+  cut away by their screen bounds on Direct3D 12 and other top-left backends.
+  Lighting reconstructs the original world position independently of texture
+  UVs, and rotated non-square blobs match their culling bounds.
+- Time: SetTimeScale now scales the shared gameplay step, including physics,
+  animation, effects and level callbacks, exactly once alongside Lua clocks.
+  Unscaled time and hit-stop durations continue to use real frame time.
+
+- FX: metaball fluids normalize colour by density and respect particle
+  fading instead of brightening with every overlapping particle. The
+  composed surface keeps its particle plane for depth and lighting;
+  rendering state is restored, and composition is limited to the visible
+  fluid bounds. Emitters larger than the instance buffer render in batches
+  without dropping their remaining particles.
+- Physics ropes: resizing a link refreshes its mass and inertia, and
+  destroying a rope removes its limiting joint even when both ends are
+  attached to external bodies. Very short polyline spans keep their length.
+
+- Accessibility: the Protanopia, Deuteranopia and Tritanopia filters of the
+  game view worked out the colours a colorblind player sees with transposed
+  matrices, so the correction tinted white and grey (white turned pink at full
+  strength) and differed from the editor's own preview. Neutral colours now
+  stay neutral.
+- FX: SpawnFXAtPosition and the Event Handler module started only the first
+  emitter of an effect. Every enabled emitter now starts.
+- FX: an effect started by SpawnFXAtPosition or the Event Handler module with
+  Spawn Per Unit released a burst of particles on its first frame, as if it
+  had travelled to its point from the world origin.
+- FX: removing an effect, or the entity that owns it, from an FX callback
+  (OnFXSpawn, OnFXCollision, OnFXDeath, OnFXSensorOverlap, Custom Script) in
+  the middle of the particle update could crash; the removal now waits for
+  the update to finish. Starting effects from these callbacks (sub-effects,
+  SpawnFXAtPosition) is safe too, and removing a tilemap or one of its layers
+  there no longer leaves particle collisions with stale tiles.
+- Lua API: OverlapBox and OverlapCircle called from a module (a file loaded
+  with require) or a widget script returned tables of entity, tag and sensor
+  and included sensors. They now work as in entity and level scripts: a list
+  of entity IDs, the ignoreSensors argument and the debug outline. Update
+  module code that read the entityId, tag or isSensor fields.
+- Tilemaps: FillRect, SetTilesBulk, BlitFromArray, CopyRect, FloodFill,
+  StampPattern, RotateRect, FlipRect, GetNeighborMask4/8,
+  SetTileColliderProperties, IterateLayer, IterateNonEmpty and FindTile
+  turned the rows upside down on isometric and hexagonal maps. They now
+  address the same cells as SetTileGrid and the other single-cell functions.
+- Shadows: Shadow Origin on tiles moved a whole group of tiles by half of the
+  group's height instead of half a tile, so Bottom and Top could shift large
+  solid areas far away from their art. It is now applied per tile.
+- Shadows: Shadow Edge Fade on tiles shrank whole groups of tiles together
+  instead of every tile on its own.
+- Shadows: circle colliders darkened their own area for receivers below them,
+  unlike boxes and polygons. All casters now behave the same way.
+- Shadows: Directional Shadow Length let shadows run up to about three times
+  the set length when few casters stood on the same line of light. The length
+  is now exact and measured from where the shadow starts.
+- Shadows: box-shaped tiles of a tilemap with a negative scale cast no shadow,
+  and the tiles of mirrored isometric and hexagonal maps darkened their own
+  area.
+- Ray tracing: with Shadow rays on, a pixel inside a caster - such as the
+  tiles of solid ground - was shadowed by the caster around it, unlike the
+  shadow maps.
+- Rendering: the fragments of a destroyed sprite or flipbook were sometimes
+  drawn white, or with the texture of another sprite, instead of their own
+  artwork when other sprites were drawn in the same frame.
+- Editor: the Shadow Origin tooltip named Center as the default; it now lists
+  Bottom, Center and Top without claiming a default.
+- Android: on Vulkan, closing the editor (for example with File > Exit)
+  crashed it and opened the crash report window. The editor now closes
+  normally, and a crash in the editor is reported under the editor's name
+  instead of the launcher's.
+- Python API: lua.eval wrote numbers that are not whole with four decimal
+  places, so 0.0000001 came back as 0.0000, and very large numbers could come
+  back wrong. Every number now comes back exactly. lua.eval also ran in the
+  global environment while lua.exec ran in the level script's one; both now
+  use the same environment, so a value set with lua.exec can be read with
+  lua.eval, and lua.call_level_function calls functions that the level script
+  defines.
+- Editor: when several image, sound, font or video files appeared in Content
+  at once - a folder copied in, a version-control update - only the first got
+  its sidecar and the others kept default settings until saved. Every new file
+  now gets its sidecar.
+- Lua API documentation: the falling-sand example of PixelBuffer moved the
+  sand up instead of down, because row 0 of a texture drawn with Draw is its
+  top row. The example now walks the rows from the bottom and moves the
+  sand down.
+
+:Cleaned:
+
+-
 
 --------------------------------------------------------------------------------
 

@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > **IceBoxEngine** uses **Lua** through **sol2** to script gameplay logic.
 > Scripts can be embedded in `.ice_class` (entity classes), `.icemap` (level scripts),
@@ -42,17 +42,23 @@
    - [Garbage collector](#garbage-collector)
    - [Performance guide (Lua 5.5, no JIT)](#performance-guide-lua-55-no-jit)
    - [Standard libraries](#standard-libraries)
+   - [Deterministic Lua and table traversal](#deterministic-lua-and-table-traversal)
 3. [Script lifecycle](#3-script-lifecycle)
 4. [Transform — Position, Scale, Rotation](#4-transform--position-scale-rotation)
 5. [Physics — Physics (Box2D)](#5-physics--physics-box2d)
 6. [Input — Input (Keyboard, Mouse, Gamepad, Touch)](#6-input--input-keyboard-mouse-gamepad-touch)
+   - [Button prompts — the right key or button on screen](#button-prompts--the-right-key-or-button-on-screen)
+   - [Gesture recognition — shapes drawn by the player](#gesture-recognition--shapes-drawn-by-the-player)
 7. [Entity — Entities](#7-entity--entities)
 8. [Sprite — Sprites](#8-sprite--sprites)
 9. [Flipbook — Frame Animation](#9-flipbook--frame-animation)
 10. [Animation — Animator (State Machine)](#10-animation--animator-state-machine)
    - [Skeleton — Bone Animation and Ragdoll](#105-skeleton--bone-animation-and-ragdoll)
 11. [Camera — Camera](#11-camera--camera)
+   - [Camera rig — dead zone, look-ahead, groups, rooms and shake](#camera-rig--dead-zone-look-ahead-groups-rooms-and-shake)
 12. [Audio — Sound and Music](#12-audio--sound-and-music)
+   - [Spectrum analyzer](#spectrum-analyzer)
+   - [Captions — subtitles for sounds](#captions--subtitles-for-sounds)
 13. [FX — Particle Visual Effects](#13-fx--particle-visual-effects)
    - [Point Light — Point light sources](#131-point-light--point-light-sources)
    - [Spot Light — Directed cone light](#132-spot-light--directed-cone-light)
@@ -61,20 +67,33 @@
 14. [Collision — Collisions (AABB)](#14-collision--collisions-aabb)
 15. [Traces — Tracing (Raycast and Shape Sweep)](#15-traces--tracing-raycast-and-shape-sweep)
 16. [Time — Time and Timers](#16-time--time-and-timers)
+   - [HitStop — freeze frames on impact](#hitstop--freeze-frames-on-impact)
 17. [Tween — Smooth Value Animations](#17-tween--smooth-value-animations)
 18. [Coroutine — Coroutines](#18-coroutine--coroutines)
+   - [Worker — background Lua machines](#worker--background-lua-machines)
 19. [FSM — Finite State Machine](#19-fsm--finite-state-machine)
 20. [Scene — Scenes, Saves, Files](#20-scene--scenes-saves-files)
+   - [JSON](#json)
+   - [Hashing, Base64 and encryption (`Crypto`)](#hashing-base64-and-encryption-crypto)
 21. [Widget — UI widgets](#21-widget--ui-widgets)
 22. [PostProcess — Post-Processing](#22-postprocess--post-processing)
 23. [Cinema — Cinematics](#23-cinema--cinematics)
 24. [Settings — Game Settings](#24-settings--game-settings)
    - [Lua garbage collector](#lua-garbage-collector)
+   - [Displays and video modes](#displays-and-video-modes)
 25. [Math — Math and Noise](#25-math--math-and-noise)
    - [RNG — Deterministic Random Streams (seeded)](#rng--deterministic-random-streams-seeded)
+   - [BigNumber — huge numbers for idle games](#bignumber--huge-numbers-for-idle-games)
 26. [Events — Event System](#26-events--event-system)
 27. [Gameplay — Gameplay Systems](#27-gameplay--gameplay-systems)
+   - [FloatingText — Floating Damage Numbers and Labels](#floatingtext--floating-damage-numbers-and-labels)
+   - [Rhythm — Beat Sync for Music](#rhythm--beat-sync-for-music)
+   - [Abilities — Skills, Spells and Cooldowns](#abilities--skills-spells-and-cooldowns)
+   - [Crafting — Recipes on Top of an Inventory](#crafting--recipes-on-top-of-an-inventory)
+   - [Deck — Card Piles for Card Games](#deck--card-piles-for-card-games)
 28. [Localization — Localization](#28-localization--localization)
+   - [Plural forms](#plural-forms)
+   - [Numbers and durations](#numbers-and-durations)
 29. [Debug — Debugging](#29-debug--debugging)
    - [Lua Script Debugger (Text and Visual)](#lua-script-debugger-text-and-visual)
    - [Debug functions: how to use](#debug-functions-how-to-use)
@@ -88,6 +107,7 @@
 35. [Joint — Physics Joints (Box2D)](#35-joint--physics-joints-box2d)
 36. [PointMarker — Point Markers](#36-pointmarker--point-markers)
 37. [DataUtils — Data Structures and Utilities](#37-datautils--data-structures-and-utilities)
+   - [Data — native binary serialization](#data--native-binary-serialization)
 38. [Material — Materials and Shaders](#38-material--materials-and-shaders)
 39. [Destruction — Destruction](#39-destruction--destruction)
 40. [Practical examples](#40-practical-examples)
@@ -121,6 +141,16 @@
 66. [SystemFont — Font for the Console, Debug Overlays and Font-less Text](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text)
 67. [FileDialog — Open, Save, Import and Export Player Files](#67-filedialog--open-save-import-and-export-player-files)
 68. [Plugins — Plugin Settings, Components and World Assets](#68-plugins--plugin-settings-components-and-world-assets)
+69. [Spline — Curves and Path Following](#69-spline--curves-and-path-following)
+70. [Steering — Steering Behaviours, Flocks and Spatial Hash](#70-steering--steering-behaviours-flocks-and-spatial-hash)
+71. [Procgen — Procedural Generation](#71-procgen--procedural-generation)
+72. [Effector — Force Fields and Moving Surfaces](#72-effector--force-fields-and-moving-surfaces)
+73. [Rope — Ropes and Chains](#73-rope--ropes-and-chains)
+74. [PlatformerController — Platformer Character Controller](#74-platformercontroller--platformer-character-controller)
+75. [Ballistics — Trajectories and Aiming](#75-ballistics--trajectories-and-aiming)
+76. [Bullets — Bullet Patterns and Emitters](#76-bullets--bullet-patterns-and-emitters)
+77. [System — Operating System and Window](#77-system--operating-system-and-window)
+78. [PixelWorld — Cell Simulation, Pixel Bodies and Per-Pixel Light](#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light)
 
 ---
 
@@ -863,7 +893,7 @@ local hasSuffix = Str.EndsWith("hello", "lo")
 local contains = Str.Contains("hello", "ell")
 local replaced = Str.Replace("aabb", "bb", "XX")
 local upper = Str.ToUpper("hi")
-local lower = Str.ToLower("HI")
+local lower = Str.ToLower("HI")                  -- UTF-8 aware, like String.Lower
 local len = Str.Length("hello")
 local sub = Str.Sub("hello", 1, 3)
 local repeated = Str.Repeat("ab", 3)
@@ -924,7 +954,7 @@ the end of it.
 | **Directions from input** | Y+ is up: mouse, touch and swipe deltas, gamepad sticks and the `lefty` / `righty` axes (pushed up = `+1`), virtual stick axes, `GetUniversalMovement`, local-player movement and aim. |
 | **Exception — inside an image** | A rectangle or UV *inside an image* keeps the image's own raster layout, **origin at the top-left**, `v` growing downward: `SetSpriteRegion`, a sprite's `SourceRect`, the `sx, sy` of `Draw.Region` / `Draw.Quad`, the `u, v` of `Draw`, frame-region `x, y`, atlas and slicer rectangles, and material texture coordinates (including the Panner, Rotator and Tiler nodes). |
 | **Exception — UI layout** | Widget element *positions* are layout offsets from the anchor that grow **downward**, like every UI layout tool (a vertical box stacks from the top). Element pivots, rotation and flips follow the rules above. |
-| **Exception — isometric / hexagonal tiles** | Orthogonal tilemaps put `y = 0` on the bottom row. Isometric and hexagonal maps address cells by their raw grid coordinates (see [Projection](#projection-orthogonal--isometric--hexagonal)). |
+| **Exception — isometric tiles** | Orthogonal and hexagonal tilemaps put `y = 0` on the bottom row, so `y` grows upward as everywhere else. Isometric maps address cells by their raw diamond grid coordinates (see [Projection](#projection-orthogonal--isometric--hexagonal)). |
 
 ---
 
@@ -2810,11 +2840,16 @@ allowed or not available. The heavy work — physics, rendering, animation, part
 pathfinding, collision queries — runs in the engine's C++ code; scripts decide *what* happens. Follow
 the rules below and Lua stays a small part of the frame even in a large game.
 
-**1. Measure first.** Open the editor **Profiler** (the **Scripts** tab and the `Lua` group of the
-**Counters** tab) or call `GetScriptProfilerRows()` in a build ([section 29](#29-debug--debugging)).
-`Script Time` is the Lua time of the frame, `Alloc Rate` shows how much garbage scripts produce and
-`GC Step` how long the collector took. Disable breakpoints while you measure — an active debugger
-makes Lua several times slower.
+**1. Measure first.** Open the editor **Profiler** (the **Scripts** and **Lua Functions** tabs and the
+`Lua` group of the **Counters** tab) or call `GetScriptProfilerRows()` and `GetFunctionProfilerRows()`
+in a build ([section 29](#29-debug--debugging)). `Script Time` is the Lua time of the frame;
+`Alloc Rate` and `Frame Alloc` show how much memory scripts allocate — every allocation counts,
+also garbage that is freed again in the same frame — and the per-script rows show which script
+allocates it. The **Lua Functions** tab samples which functions and lines run the most. `GC Step`
+counts only the collector work the engine runs itself (full collections and idle-frame slices): the
+small steps Lua takes while scripts allocate are part of `Script Time`, so judge the collector's
+load by `Alloc Rate`. Disable breakpoints and Lua function sampling while you measure frame times —
+both make Lua slower.
 
 **2. Do less per frame.**
 
@@ -2830,6 +2865,10 @@ makes Lua several times slower.
 **3. Allocate less.** Every `{}`, closure and new string is garbage that the collector has to free later.
 
 - Reuse tables in hot code instead of creating new ones every frame.
+- When the size is known, use Lua 5.5's `table.create(nseq, nrec)` to reserve space for sequence
+  entries and other keys. It creates an empty table: `table.create(100, 10)` still has length `0`.
+- Read individual components with `GetPositionX()`, `GetPositionY()`, `GetMouseX()` and `GetMouseY()`
+  when a hot path only needs those numbers; `GetPosition()` and `GetMousePosition()` create result tables.
 - Build strings with `table.concat` instead of `..` in loops, and avoid `string.format` every frame
   for text that did not change.
 - Don't create closures (`function() … end`) inside `OnUpdate`.
@@ -2852,7 +2891,7 @@ makes Lua several times slower.
 | ------- | ---------- |
 | Occasional `GC Step` spikes during gameplay | Set an **idle-frame GC budget** of 1–2 ms together with an FPS limit — the collector then works in the spare time of the frame. |
 | A spike right after a level change | Keep **Full Collection on Level Load** on (the default). |
-| Memory too high (mobile, Web) | Use the **Low memory** preset (incremental): about a third less peak memory for more CPU time. |
+| Memory too high (mobile, Web) | Compare **Default** with **Low memory** (incremental, pause 150, step multiplier 300) on your workload. Memory use and CPU time can increase or decrease; lower peak memory is not guaranteed. |
 | Too much CPU time in the collector, memory to spare | Use the **Throughput** preset. |
 
 The pooled allocator (on by default) makes allocation-heavy script code 20–30% faster; switch it off
@@ -2924,6 +2963,29 @@ end
 local now = GetUnixTime()
 local today = FormatDate("%Y-%m-%d", now)
 ```
+
+---
+
+### Deterministic Lua and table traversal
+
+**Edit → Preferences → Engine → Scripting → Deterministic Lua** is a project setting, off by default,
+stored as `Engine.DeterministicLua` in `Config/Engine.json`. It uses a fixed Lua hash seed when the
+Game and Widget VMs are created or recreated. Changing it does not reseed a running VM: restart the
+editor or game to apply the setting to both machines.
+
+With the same build and the same history of filling the table, `pairs` repeats the traversal order
+for numeric and string keys. Keys that are tables or functions still depend on object addresses.
+The option does not guarantee full cross-platform determinism or an identical order between different builds.
+For an explicit traversal order, continue to use `Map.SortedKeys` or a sequence with `ipairs`.
+
+The hash seed is separate from the engine's `RandomService`. Seed that generator independently with
+`math.randomseed`, `SetRandomSeed` or `RNG.SetSeed`; the same calls must consume random values in the same order.
+The option also leaves `table.sort` unstable: its randomized pivot selection is independent of the Lua hash seed.
+When the relative order of equal elements must repeat, use the stable [Array.Sort](#array) with the same input order
+and a correct deterministic comparator.
+
+A fixed hash seed weakens protection against deliberately constructed key collisions. Keep the option off unless
+your game needs repeatable hash-table traversal, particularly when tables accept untrusted keys.
 
 ---
 
@@ -3116,6 +3178,32 @@ function OnResume()
 end
 
 -- ═══════════════════════════════════
+-- APP IN THE BACKGROUND
+-- ═══════════════════════════════════
+
+function OnAppBackground()
+    -- The app left the screen (home button, app switcher, a call) or its window was minimized:
+    -- save progress here, a phone may close a background app without warning
+end
+
+function OnAppForeground()
+    -- The app is back on screen
+end
+
+-- ═══════════════════════════════════
+-- INPUT DEVICE AND WINDOW FOCUS
+-- ═══════════════════════════════════
+
+function OnInputDeviceChanged(device, style)
+    -- The player switched devices: device is "keyboard_mouse", "gamepad" or "touch",
+    -- style is "keyboard", "xbox", "playstation", "nintendo" or "touch" - refresh button prompts here
+end
+
+function OnWindowFocusChanged(focused)
+    -- The game window got (true) or lost (false) the keyboard focus
+end
+
+-- ═══════════════════════════════════
 -- LOCALIZATION
 -- ═══════════════════════════════════
 
@@ -3157,6 +3245,58 @@ end
 > them. The full delivery rules are in
 > [Engine → How collision events reach your code](Engine-EN-DOC.md#35-how-collision-events-reach-your-code).
 
+> **App in the background.** `OnAppBackground` and `OnAppForeground` come in Play — in a build and in
+> the editor: on Android and iOS when the app leaves or returns to the screen, on desktop when the game
+> window is minimized or restored. They run on the main thread at the start of a frame, before the engine
+> suspends the game, so a save written in `OnAppBackground` is on disk before the app stops. A phone gives
+> a background app only a few seconds, so keep the handler short. Unlike `OnPause`, they do not pause the
+> game by themselves.
+
+> **Input device and window focus.** `OnInputDeviceChanged(device, style)` comes when the player starts using
+> another kind of device — a key or mouse button after a gamepad, a gamepad button or stick after the keyboard, a
+> finger on the screen — so a hint like "Press A" can turn into "Press E" at once (see
+> [Button prompts](#button-prompts--the-right-key-or-button-on-screen)). `style` names the glyph set that fits: the
+> family of the gamepad in use, or `"keyboard"` and `"touch"`. `OnWindowFocusChanged(focused)` comes when the game
+> window gets or loses the keyboard focus — alt-tab, a click on another window, a system dialog — so a game can
+> pause itself or lower its music; `System.IsWindowFocused()` reads the current state. Both come in Play only, reach
+> widget scripts too and have Visual Script event nodes; neither changes anything by itself.
+
+### Batched class updates
+
+Define `OnUpdateBatch(entities, dt)` in a class script to update its instances with one protected Lua call per
+class per frame. The engine detects this callback after `OnConstruct` and `OnCreate`, and detects it again on
+script reload. For these instances it replaces `OnUpdate(dt)`; classes without it keep their existing update
+behavior. `OnFixedUpdate` and `OnLateUpdate` remain per-instance callbacks. This callback is for class scripts,
+not level or widget scripts, and may be inherited through `OnParent.OnUpdateBatch(entities, dt)`.
+
+`entities` is a new dense, 1-based array of entity IDs. Each actual child class has its own batch; an entity
+with an active Lua script override is isolated from the class batch. Disabled and remotely driven entities
+are excluded. Batches run in the position of their first eligible instance in the usual entity update order;
+the IDs retain that order. The list is checked immediately before the call. Entities spawned during entity
+updates join the next frame. If the callback destroys or disables another member, the array is still a
+snapshot: check `EntityExists(id)` and the relevant enabled state before using it later in the same call.
+
+The callback runs in the environment of the first eligible instance that defines it. `entity`, implicit-target
+functions such as `GetPosition()`, instance globals and captured locals refer to that representative only;
+they do not switch as you iterate the array, and the representative can change between frames. Use APIs with
+an explicit entity ID and keep shared batch state in a module or explicit entity data. The engine preserves
+each instance's own script environment and initialization. A callback error is reported once for the batch;
+there is no second `OnUpdate` pass. The profiler records the call as one `OnUpdateBatch` sample and still counts all
+instances. If all batch callback functions have been removed at runtime, the class falls back to its ordinary
+`OnUpdate` callbacks; enabling batching after initialization requires a script reload.
+
+```lua
+function OnUpdateBatch(entities, dt)
+    for i = 1, #entities do
+        local id = entities[i]
+        if EntityExists(id) then
+            local x, y = GetEntityPositionXY(id)
+            SetEntityPosition(id, x + 60 * dt, y)
+        end
+    end
+end
+```
+
 ### Level script (Level Script)
 
 Written in `.icemap`. Has its own callbacks:
@@ -3189,6 +3329,22 @@ end
 
 function OnResume()
     -- Called when the game resumes: ResumeGame() or a time scale above 0 again
+end
+
+function OnAppBackground()
+    -- The app left the screen or its window was minimized — save here
+end
+
+function OnAppForeground()
+    -- The app is back on screen
+end
+
+function OnInputDeviceChanged(device, style)
+    -- The player switched between keyboard and mouse, a gamepad and touch
+end
+
+function OnWindowFocusChanged(focused)
+    -- The game window got or lost the keyboard focus
 end
 
 function OnLanguageChanged(newLang, oldLang)
@@ -3280,6 +3436,19 @@ end
 ## 4. Transform — Position, Scale, Rotation
 
 > **Type:** Entity-bound (works with the current entity)
+
+### Numeric getters
+
+These forms return multiple numbers without allocating a Lua result table. Arguments, units and coordinate conventions match the corresponding table getter; the original forms remain available.
+
+| Function | Returns |
+|---|---|
+| `GetPositionXY()` / `GetPositionXYZ()` | `x, y` / `x, y, z` |
+| `GetScaleXY()` | `x, y` |
+| `GetForwardVectorXY()` / `GetRightVectorXY()` | `x, y` |
+| `GetMovementDirectionXY()` | `x, y` |
+
+Missing transforms return zero position, unit scale, forward `(1, 0)` and right `(0, 1)`. Missing rigidbodies or negligible velocity return zero movement direction.
 
 ### Position
 
@@ -3606,6 +3775,8 @@ end
 
 > **Type:** Entity-bound. Requires **RigidbodyComponent**.
 
+`GetVelocityXY()` returns `vx, vy` in pixels per second without creating a table. It uses the same body and PPM conversion as `GetVelocity()` and returns `0, 0` when the body is unavailable.
+
 ### Velocity
 
 ```lua
@@ -3828,7 +3999,6 @@ local shapeCount = GetShapeCount()
 SetShapeDensity(1.0, 0)
 SetShapeFriction(0.3, 0)
 SetShapeRestitution(0.2, 0)
-SetShapeSensor(true, 0)
 
 -- Get shape settings (by index)
 local density = GetShapeDensity(0)
@@ -3868,6 +4038,11 @@ TeleportTo(100, 200)
 local physPos = GetPhysicsPosition()  -- → {x, y}
 local physRot = GetPhysicsRotation()
 ```
+
+`SetShapeSensor` is a legacy alias for `SetShapeSensorEvents`: it enables sensor overlap events and does not
+change a solid shape into a sensor. `IsShapeSensor` reads the actual shape type. Configure primitive collider
+sensors in the entity class before spawning; sprite, flipbook and tile collisions have their own
+`SetSpriteCollisionSensor`, `SetFlipbookCollisionSensor` and `SetTileColliderSensor` setters.
 
 ### Collision filters (Box2D)
 
@@ -4022,6 +4197,27 @@ local continuous = IsWorldContinuousEnabled()
 ## 6. Input — Input (Keyboard, Mouse, Gamepad, Touch)
 
 > **Type:** Global functions
+
+### Numeric getters
+
+The following alternatives return `x, y` directly without a result table. Parameters, defaults, input blocking, dead zones and coordinate conversions are identical to their table forms.
+
+| Function | Coordinates / parameters |
+|---|---|
+| `GetAxis2DXY(left, right, down, up)` | Normalized keyboard axes |
+| `GetUniversalMovementXY(left, right, down, up)` | Combined keyboard/gamepad movement |
+| `GetMousePositionXY()` / `GetMouseDeltaXY()` | Screen pixels / per-frame pixel delta |
+| `GetMouseWorldPositionXY()` | World position |
+| `GetTouchPositionXY(fingerIndex?)` | Normalized viewport position |
+| `GetTouchPositionPixelsXY(fingerIndex?)` / `GetTouchDeltaXY(fingerIndex?)` | Screen pixels / pixel delta |
+| `GetGamepadLeftStickXY(index?)` / `GetGamepadRightStickXY(index?)` | Stick axes |
+| `GetActionAxis2DXY(name)` | Bound action axes |
+| `GetVirtualStickAxisXY(name)` / `GetVirtualStickKnobXY(name)` | Stick axes / knob position |
+| `GetGamepadCursorPositionXY()` / `GetGamepadCursorAxisXY()` | Cursor position / axes |
+| `ScreenToWorldXY(x, y)` / `WorldToScreenXY(x, y)` | Coordinate conversion |
+| `GetPointerScreenPositionXY()` / `GetPointerWorldPositionXY()` | `x, y, source`, where source is `"mouse"`, `"touch"` or `"gamepad"` |
+
+The pointer forms preserve device selection even when no world scene is available; world coordinates then return zero. Existing table-returning functions remain available.
 
 ### Keyboard
 
@@ -5357,11 +5553,145 @@ local wptr = GetPointerWorldPosition()
 -- wptr.source      = "mouse" | "touch" | "gamepad"
 ```
 
+### Button prompts — the right key or button on screen
+
+Tutorials, interaction hints and menus have to show the control the player really uses: **E** on a keyboard,
+**A** on an Xbox pad, **✕** on a PlayStation pad, **B** on a Nintendo pad. These functions read the
+[action bindings](#action-system-action-bindings) and return a readable **label** and a **glyph** — a stable name
+for an icon, so you can keep one image per glyph in your project and pick it by name.
+
+```lua
+local function ShowJumpHint()
+    local prompt = GetActionPrompt("Jump")
+    if not prompt then return end
+    -- prompt.label   → "Space", "A", "Cross", "B" … (several keys are joined with "/")
+    -- prompt.glyph   → "key_space", "xbox_a", "ps_cross", "switch_b" …
+    -- prompt.glyphs  → every glyph of the binding, e.g. { "key_w", "key_a", "key_s", "key_d" }
+    -- prompt.device  → "keyboard_mouse", "gamepad" or "touch"
+    -- prompt.binding → the binding the prompt was made from
+    ShowHint("Content/UI/Glyphs/" .. prompt.glyph .. ".png", prompt.label)   -- your HUD function
+end
+
+function OnInputDeviceChanged(device, style)
+    ShowJumpHint()                     -- the player switched devices: swap the icons right away
+end
+```
+
+- The **active device** is the one the player used last: a key, a mouse button or a mouse move make it
+  `"keyboard_mouse"`, a gamepad button or a stick pushed past its dead zone make it `"gamepad"`, a finger on the
+  screen makes it `"touch"`. `OnInputDeviceChanged` reports every change (see [Script lifecycle](#3-script-lifecycle)).
+- `GetActionPrompt(action, device?)` picks the binding of the action that belongs to the device — the active one
+  or the one you pass — and falls back to the first binding. It works for digital actions, 1D axis actions (two keys
+  give `"A/D"` with two glyphs) and 2D axis actions (four keys give four glyphs, a stick gives
+  `"xbox_left_stick"`). An unknown action returns `nil`.
+- Gamepad glyphs follow the family of the pad that is plugged in, so the same binding `"gamepad_a"` shows **A** on
+  an Xbox pad, **Cross** on a PlayStation pad and **B** — the button in that place — on a Nintendo pad. When the
+  pad reports the letter printed on its face buttons, that letter wins.
+
+| Glyph names | Examples |
+| --- | --- |
+| Keys | `key_` + the key: `key_space`, `key_e`, `key_enter`, `key_shift`, `key_ctrl`, `key_escape`, `key_up`, `key_f1` |
+| Mouse | `mouse_left`, `mouse_right`, `mouse_middle`, `mouse_4`, `mouse_5`, `mouse_move`, `mouse_wheel` |
+| Xbox family | `xbox_a`, `xbox_b`, `xbox_x`, `xbox_y`, `xbox_lb`, `xbox_rb`, `xbox_lt`, `xbox_rt`, `xbox_ls`, `xbox_rs`, `xbox_view`, `xbox_menu`, `xbox_guide`, `xbox_share`, `xbox_dpad_up`, `xbox_left_stick`, `xbox_right_stick`, `xbox_paddle1` |
+| PlayStation family | `ps_cross`, `ps_circle`, `ps_square`, `ps_triangle`, `ps_l1`, `ps_r1`, `ps_l2`, `ps_r2`, `ps_l3`, `ps_r3`, `ps_share`, `ps_options`, `ps_home`, `ps_touchpad`, `ps_mute`, `ps_dpad_left`, `ps_left_stick` |
+| Nintendo family | `switch_a`, `switch_b`, `switch_x`, `switch_y`, `switch_l`, `switch_r`, `switch_zl`, `switch_zr`, `switch_minus`, `switch_plus`, `switch_home`, `switch_capture`, `switch_dpad_down`, `switch_right_stick` |
+| Touch | `touch_tap` |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `GetActionPrompt(action, device?)` | table or `nil` | `device`: `"keyboard_mouse"` (also `"keyboard"`, `"mouse"`), `"gamepad"` or `"touch"`. |
+| `GetActiveInputDevice()` | `string` | `"keyboard_mouse"`, `"gamepad"` or `"touch"`. |
+| `GetActiveGamepadIndex()` | `int` | The gamepad used last, `-1` before any. |
+| `GetActiveGlyphStyle()` | `string` | `"keyboard"`, `"xbox"`, `"playstation"`, `"nintendo"` or `"touch"`. |
+| `GetGamepadGlyphStyle(index?)` | `string` | Family of a connected gamepad (0 by default), `""` when nothing is connected there. |
+| `GetBindingLabel(binding, style?)` | `string` | Label of one binding string: `GetBindingLabel("gamepad_y")`. `style` (`"xbox"`, `"playstation"`, `"nintendo"`) forces a family. |
+| `GetBindingGlyph(binding, style?)` | `string` | Glyph of one binding string. |
+| `GetKeyLabel(key)` | `string` | The name the current keyboard layout prints on a key — `GetKeyLabel("q")` is `"A"` on an AZERTY keyboard. |
+| `SetGamepadPlayerIndex(player, index?)` | `bool` | Lights the player number on pads that have one (PlayStation light bar, Nintendo player lights); `-1` clears it. |
+| `GetGamepadPlayerIndex(index?)` | `int` | `-1` when none is set. |
+
+> Bindings are written as in [`BindAction`](#action-system-action-bindings). `GetKeyLabel` follows the keyboard
+> layout, so a game that tells the player "press Q" on an AZERTY keyboard shows the key in the same place.
+
+### Gesture recognition — shapes drawn by the player
+
+`GestureRecognizer` recognizes shapes the player draws with the mouse, a finger or a pen — a circle to cast a
+shield, a zigzag for lightning, a check mark to confirm. It compares the drawing with **templates**: built-in
+shapes and your own, recorded once from a drawing. The drawing may have several strokes (a cross is two lines),
+and it may be drawn in any size, anywhere and in any direction; what matters is the shape.
+
+```lua
+local spells = GestureRecognizer.New({ builtins = { "circle", "zigzag", "check" } })
+local drawing = false
+
+function OnUpdate(dt)
+    local mouse = GetMousePosition()                      -- screen pixels, origin at the bottom-left
+    if IsMouseJustPressed(1) then spells:ClearInput(); drawing = true end
+    if drawing and IsMousePressed(1) then spells:AddPoint(mouse.x, mouse.y) end
+    if drawing and IsMouseJustReleased(1) then
+        drawing = false
+        local name, score = spells:RecognizeInput({ minScore = 0.7 })
+        if name == "circle" then CastShield()
+        elseif name == "zigzag" then CastLightning() end
+    end
+end
+```
+
+- **Built-in shapes:** `circle`, `triangle`, `square`, `star`, `check`, `cross`, `caret` (^), `v`, `zigzag` and
+  `line` (horizontal). `GestureRecognizer.GetBuiltinNames()` lists them.
+- **Your own shapes:** `Add(name, points)` takes a list of points `{ x = …, y = …, stroke = … }` or `{ x, y, stroke }`;
+  points with the same `stroke` form one line. Or let the player draw it: `AddInputAsTemplate(name)` records the
+  current input. Several templates may share a name — add a few drawings of the same shape for more tolerance.
+- **Orientation matters**: a `v` and a `caret` are different shapes, and so are a horizontal and a vertical `line`.
+  Points are in the engine's coordinates with y up — screen pixels from `GetMousePosition`, `GetTouchPositionPixels`
+  or `GetPointerScreenPosition`, or world positions, all work as they are. Only points from a source where y grows
+  **down** (an image editor, a path exported from another tool) need `yDown = true` (or `SetYDown(true)`).
+- **Score:** `Recognize` returns the best template and a score from 0 to 1. A careful drawing scores about 0.85–0.95,
+  a sloppy one about 0.7, a random scribble about 0.5 or less, so `minScore = 0.7` is a good start. Below `minScore`
+  the name is `nil` and the score is still returned.
+- **Saving:** `Save()` returns the templates as text and `Load(text)` adds them back — for gestures the player
+  records in a settings menu.
+
+| GestureRecognizer | Returns | Notes |
+| --- | --- | --- |
+| `GestureRecognizer.New(options?)` | recognizer | `samples` (32, 8–256: points every drawing is reduced to), `yDown` (false), `builtins` (`true` for all of them or a list of names). |
+| `GestureRecognizer.GetBuiltinNames()` | table | |
+| `:Add(name, points)` / `:AddBuiltin(name)` | `bool` | |
+| `:Remove(name)` | `int` | Number of templates removed. |
+| `:Clear()` / `:GetCount()` / `:GetNames()` | | `GetNames` lists each name once. |
+| `:Recognize(points, options?)` | `name, score` | `options.minScore` (0). |
+| `:AddPoint(x, y)` / `:EndStroke()` / `:ClearInput()` | — | Collect a drawing point by point; `EndStroke` starts a new line. Up to 4096 points. |
+| `:GetInputCount()` / `:GetInputPoints()` | `int` / table | The points collected so far, `{ x, y, stroke }` — draw the trail with them. |
+| `:RecognizeInput(options?)` | `name, score` | Recognizes the collected points. |
+| `:AddInputAsTemplate(name)` | `bool` | |
+| `:SetYDown(yDown)` / `:IsYDown()` | | |
+| `:Save()` / `:Load(text)` | `string` / `bool` | `Load` adds to the templates already there. |
+
+> The recognizer works with the shape of the point cloud ($P point-cloud matching), so the order and the direction of
+> the strokes do not matter. Swipes, pinches and taps have their own functions — see [Swipe gestures](#swipe-gestures).
+> A `GestureRecognizer` is a value object: call its methods with `:`. It works in class, level and widget scripts.
+
 ---
 
 ## 7. Entity — Entities
 
 > **Type:** Entity-bound
+
+### Numeric getters
+
+These variants avoid a Lua result table and use the same arguments, units and target entity as their table counterparts.
+
+| Function | Returns |
+|---|---|
+| `GetEntityPositionXY(id)` / `GetEntityPositionXYZ(id)` | `x, y` / `x, y, z` |
+| `GetEntityVelocityXY(id)` | `vx, vy` in pixels per second |
+| `GetEntityScaleXY(id)` | `x, y` |
+| `GetDirectionToEntityXY(id)` / `GetDirectionToXY(x, y)` | Normalized `x, y` |
+| `GetLocalPositionXY()` / `GetLocalPositionXYZ()` | `x, y` / `x, y, z` |
+| `GetWorldPositionXY()` / `GetWorldPositionXYZ()` | `x, y` / `x, y, z` |
+| `GetLocalScaleXY()` / `GetWorldScaleXY()` | `x, y` |
+
+Invalid targets return zero position, velocity or direction, and unit scale. Local getters fall back to the transform when there is no hierarchy component. Original table forms are unchanged.
 
 ### Finding entities
 
@@ -6875,7 +7205,7 @@ local tracks = GetSkeletonActiveLayerTracks()   -- array of active track numbers
 
 Notes:
 
-- A layer only touches the channels its animation actually keys (Spine-style), so an attack that keys just the arms leaves the torso bob of the base run intact even when `rootBone` covers the whole upper body.
+- A layer only touches the channels its animation actually keys, so an attack that keys just the arms leaves the torso bob of the base run intact even when `rootBone` covers the whole upper body.
 - Playing a new animation on an occupied track crossfades inside the track using `fade`; re-playing the same name restarts it with the same smooth blend — safe to spam attack.
 - Slot timelines (colors, attachment swaps, deforms) of a layer apply only to slots whose bone is inside the layer mask; attachment/draw-order switches engage while the layer is dominant (weight ≥ 0.5).
 - Animation **events fire from layers too** — put your `hit` event in the attack animation and read it via `GetSkeletonEvents()` as usual.
@@ -7546,11 +7876,129 @@ local p = GetCameraPrimaryByEntity(otherCameraId)  -- → bool
 
 -- Get all cameras in the scene
 local cameras = GetAllCameras()
--- → array of { entityId, primary, orthoWidth, playerIndex, viewportX, viewportY, viewportW, viewportH }
+-- → array of { entity, primary, orthoWidth, rotation, playerIndex, x, y, viewportX, viewportY, viewportW, viewportH }
 for _, cam in ipairs(cameras) do
-    Print("Entity " .. cam.entityId .. " player=" .. cam.playerIndex)
+    Print("Entity " .. cam.entity .. " player=" .. cam.playerIndex)
 end
 ```
+
+### Camera rig — dead zone, look-ahead, groups, rooms and shake
+
+`CameraRig` drives a camera the way action games do: the target moves inside a **dead zone** before the camera
+follows, the camera looks **ahead** of where the target is going, **several targets** stay on screen with
+automatic zoom (co-op, fighting games), **rooms** keep the view inside the current area and slide to the next
+one, and **trauma** shakes the view harder the more hits pile up. It runs every frame after scripts and physics,
+so it never lags a frame behind the player.
+
+```lua
+local rig
+
+function OnCreate()
+    rig = CameraRig.New({
+        target = GetEntityId(),
+        deadZoneWidth = 0.15, deadZoneHeight = 0.25,   -- fractions of the view
+        damping = 0.2,                                   -- seconds to catch up
+        lookAheadTime = 0.25, lookAheadY = false,        -- look ahead horizontally only
+    })
+    for _, room in ipairs(FindEntitiesByTag("CameraRoom")) do
+        rig:AddRoomFromEntity(room)                      -- a static body with a box collider per room
+    end
+    rig:SetOnRoomChanged(function(room, previous) Print("entered room " .. tostring(room)) end)
+end
+
+local function TakeHit()                                 -- call it from your damage code
+    rig:AddTrauma(0.4)                                   -- several hits add up, then calm down
+end
+```
+
+**Following.** The target point is the target entity, or the group of targets (below). While it stays inside the
+dead zone (a rectangle of `deadZoneWidth × deadZoneHeight` of the view, centred on the camera) the camera stays
+still; past it the camera moves after it with `damping` seconds of lag. The **soft zone** (`softZoneWidth`,
+`softZoneHeight`, 0.9 of the view by default) is a hard limit: the target never leaves it, however fast it moves.
+Make the soft zone as small as the dead zone for a camera that is pushed exactly by the edge of the dead zone, and
+set `damping = 0` for an instant follow. The camera's `Offset` (`SetCameraOffset`) still applies on top, so an
+offset of `(0, 100)` keeps the view a little above the player.
+
+**Look-ahead.** With `lookAheadTime > 0` the camera aims at where the target will be that many seconds later, at
+most `lookAheadMax` world units (and never more than half the view) ahead. `lookAheadSmoothing` (seconds) softens
+direction changes; `lookAheadX` / `lookAheadY` choose the axes — a platformer usually looks ahead horizontally only.
+
+**Groups and zoom.** `AddTarget(entity, weight?, radius?)` adds more targets. With `group = "bounds"` (the
+default) the camera aims at the middle of the box around all targets; with `group = "average"` at their weighted
+average, so a heavier target pulls the camera — give a boss weight 0.5 to keep the arena in view. `radius` is how
+much room around a target must stay visible. With `zoomToFit = true` the camera zooms out so that every target
+fits with `padding` (a fraction of the view) to spare, never closer than `minZoom` (the camera's own zoom by
+default) and never farther than `maxZoom`. Zoom here is the camera's `OrthoWidth`: larger shows more.
+
+**Rooms.** `AddRoom(minX, minY, maxX, maxY, options?)` adds a rectangle the view must stay inside while the target
+point is in it; `AddRoomFromEntity(entity)` takes the rectangle from the colliders of an entity with a physics body.
+Entering another room slides the camera there in `roomTransition` seconds (0.4 by default, 0 snaps).
+`options.zoom` gives a room its own zoom — a wide boss arena — and `options.priority` lets a room inside another
+one win while the target is in it; between rooms of the same priority the current room is kept until the target
+leaves it, so overlapping doorways do not flicker. `SetCameraBounds` still applies on top of the rooms. A room
+smaller than the view keeps the view centred on it.
+
+**Trauma shake.** `AddTrauma(amount)` adds to a trauma level from 0 to 1 that falls by `traumaDecay` per second.
+The shake grows with trauma raised to `traumaPower` (2 by default), so small hits barely move the view and big
+ones shake it hard; it moves the view by up to `shakeOffset` (a fraction of the view height) and turns it by up to
+`shakeAngle` degrees, `shakeFrequency` times per second, smoothly. `AddTrauma(amount, x, y, radius)` scales the
+amount down with the distance of `(x, y)` from the camera, and `CameraRig.AddTraumaAll(...)` shakes every active
+rig — every split-screen view — at once. The shake is only added to the view: it does not move the camera entity
+and does not disturb the camera lag. It works alongside `ShakeCamera` and the cinema shake.
+
+- One rig drives one camera — the primary camera, or the one in `camera = id`. Creating or activating a rig on a
+  camera deactivates the rig that drove it before and continues smoothly from where it was, so switching between
+  a normal rig and a boss-arena rig needs no fade. `SetActive(false)` gives the camera back with its own zoom.
+- In split-screen give each player's camera its own rig (`camera = cameraEntity`); every rig uses the size of its
+  own view.
+- While a rig drives a camera, `SetCameraPosition`, `CameraFollowMe` and `SetCameraOrthoWidth` are overridden
+  next frame — except that a camera moved by another script is taken as the new starting point, and a new
+  `OrthoWidth` becomes the rig's base zoom. `SetCameraLag` still smooths the result.
+- `Snap()` jumps to the target at once — after a respawn or a teleport. A new rig snaps on its first frame
+  (`snap = false` makes it glide in).
+- The rig follows the scaled game time (slow motion slows the camera too); `unscaledTime = true` uses real time.
+  Paused games freeze the camera and the shake.
+- `debugDraw = true` draws the dead zone (yellow), the soft zone (orange), the group box (blue), the aim point
+  (green) and the rooms (white for the current one).
+
+| CameraRig | Returns | Notes |
+| --- | --- | --- |
+| `CameraRig.New(options?)` | rig or `nil` | Options below, plus `camera` (entity id), `target`, `targets` (list of ids or `{ entity, weight, radius }`), `active` (true), `snap` (true), `onRoomChanged`. |
+| `CameraRig.Get(cameraEntity?)` | rig or `nil` | The rig driving that camera, the primary one by default. |
+| `CameraRig.GetCount()` / `CameraRig.DestroyAll()` | `int` / — | |
+| `CameraRig.AddTraumaAll(amount, x?, y?, radius?)` | — | Every active rig. |
+| `:Configure(options)` | — | Any option, `target`/`targets` and `onRoomChanged`. |
+| `:SetActive(active)` / `:IsActive()` / `:IsValid()` / `:Destroy()` | | |
+| `:GetCamera()` / `:SetCamera(cameraEntity?)` | entity / `bool` | `nil` goes back to the primary camera. |
+| `:SetTarget(entity, weight?, radius?)` | `bool` | Replaces all targets. |
+| `:AddTarget(entity, weight?, radius?)` | `bool` | Adds a target or changes its weight and radius. |
+| `:RemoveTarget(entity)` / `:HasTarget(entity)` / `:ClearTargets()` / `:GetTargets()` | | Destroyed entities leave by themselves. |
+| `:Snap()` | — | |
+| `:GetPosition()` / `:GetFocus()` | `x, y` | The camera position the rig set, and the point it aims at (with look-ahead). |
+| `:GetZoom()` | `number` | |
+| `:AddRoom(minX, minY, maxX, maxY, options?)` | `int` or `nil` | Room id. `options`: `zoom`, `priority`. |
+| `:AddRoomFromEntity(entity, options?)` | `int` or `nil` | The box around the entity's colliders. |
+| `:RemoveRoom(id)` / `:ClearRooms()` | | |
+| `:GetRoom()` / `:IsTransitioning()` | `int` or `nil` / `bool` | |
+| `:SetOnRoomChanged(callback)` | — | `callback(room, previous)`; `nil` outside every room. Also called once when the first room is found. |
+| `:AddTrauma(amount, x?, y?, radius?)` / `:SetTrauma(value)` / `:GetTrauma()` | | Trauma is kept between 0 and 1. |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `deadZone`, `deadZoneWidth`, `deadZoneHeight` | 0 | Dead zone, fractions of the view (`deadZone` sets both). |
+| `softZone`, `softZoneWidth`, `softZoneHeight` | 0.9 | Hard limit, fractions of the view; 0 turns it off. |
+| `damping`, `dampingX`, `dampingY` | 0.15 | Seconds to catch up; 0 is instant. |
+| `lookAheadTime` / `lookAheadMax` / `lookAheadSmoothing` | 0 / 0 / 0.3 | Seconds ahead / world units cap (0 = half the view) / seconds. |
+| `lookAheadX`, `lookAheadY` | true | Axes of the look-ahead. |
+| `group` | `"bounds"` | `"bounds"` or `"average"`. |
+| `zoomToFit`, `minZoom`, `maxZoom`, `padding`, `zoomDamping` | false, camera zoom, 0 (no limit), 0.1, 0.4 | Automatic zoom for groups. |
+| `roomTransition` | 0.4 | Seconds to slide into a new room. |
+| `traumaDecay`, `traumaPower` | 1, 2 | Trauma lost per second, shake curve. |
+| `shakeOffset`, `shakeAngle`, `shakeFrequency` | 0.03, 2, 15 | View height fraction, degrees, shakes per second. |
+| `unscaledTime` | false | Follow real time instead of game time. |
+| `debugDraw` | false | |
+
+> `CameraRig` methods are called with `:`. Rigs are cleared when Play stops and when the level changes.
 
 ---
 
@@ -8079,6 +8527,83 @@ local rate = Audio.GetSampleRate()
 The starting values of every global setting come from Preferences > Audio. Changes made from
 scripts last until Play stops (in the editor) or until the game quits.
 
+### Spectrum analyzer
+
+`Audio.GetSpectrum` splits what a group plays into frequency bands — bass on the left, treble on the right — for
+music visualizers, speakers that pump to the beat, lights that flicker with the sound or a level that reacts to the
+music.
+
+```lua
+function OnUpdate(dt)
+    local bands = Audio.GetSpectrum(Audio.GROUP_MUSIC, 32)      -- 32 values from 0 to 1
+    Draw.SetSpace("screen")
+    for i, level in ipairs(bands) do
+        Draw.Rect(100 + i * 14, 80, 10, 4 + level * 200)       -- bars grow upward from y = 80
+    end
+    Draw.SetSpace("world")
+    local bass = Audio.GetSpectrumLevel(Audio.GROUP_MUSIC, 40, 160)
+    SetScale(1 + bass * 0.3, 1 + bass * 0.3)                    -- the speaker pumps with the kick drum
+end
+```
+
+- The bands are spread logarithmically between `minFrequency` (20 Hz) and `maxFrequency` (16000 Hz), the way the ear
+  hears pitch, so every band has music in it. A level of 0 is `minDB` (−70 dB) or quieter, 1 is `maxDB` (−10 dB) or
+  louder.
+- Values rise at once and fall smoothly over `release` seconds (0.12), like a real level meter; `release = 0` shows
+  the raw value of each frame.
+- The analysis follows the group's mix after its bus effects; `Audio.GROUP_MASTER` (the default) analyzes
+  everything. The first call starts listening to the group, `Audio.StopSpectrum(group?)` stops it (every group when
+  no group is given).
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Audio.GetSpectrum(group?, bands?, options?)` | table | `bands` 16 (1–256). `options`: `minFrequency`, `maxFrequency`, `minDB`, `maxDB`, `release`. |
+| `Audio.GetSpectrumLevel(group, minFrequency, maxFrequency, options?)` | `number` | 0–1 for one frequency range; `options`: `minDB`, `maxDB`. |
+| `Audio.StopSpectrum(group?)` | — | |
+
+### Captions — subtitles for sounds
+
+`Captions` shows subtitles for sounds — "[Explosion]", "[Footsteps]", a radio line with the speaker's name — for
+players who cannot hear the game or play muted. Register a caption for a sound once and it appears every time the
+sound plays, with an arrow towards it when it comes from the side.
+
+```lua
+function OnLevelStart()
+    Captions.Register("Content/Audio/S_Explosion.wav", "CAPTION_EXPLOSION")
+    Captions.Register("Content/Audio/S_Steps.wav", "CAPTION_FOOTSTEPS", { priority = -1 })
+    Captions.Register("Content/Audio/S_Radio_01.ogg", "RADIO_LINE_01", { speaker = "NAME_COMMANDER", duration = 4 })
+    Captions.SetEnabled(subtitlesOn)                 -- the player's choice from your options menu
+end
+
+-- A caption without a sound
+Captions.Show("CAPTION_DOOR_LOCKED", { entity = doorId })
+```
+
+- Texts and speaker names are [localization](#28-localization--localization) keys, translated when the caption is
+  drawn, so captions follow `SetGameLanguage`. Plain text works too.
+- A registered caption lasts as long as its sound, between 1.5 and 8 seconds, unless `duration` is given; `Show`
+  lasts 3 seconds by default. A sound that plays again restarts its caption instead of adding a second line.
+- A sound played at a position, or a caption shown with `x`, `y` or `entity`, gets an arrow ◀ ▶ towards its side of
+  the screen when it is off-centre (`directional = false` turns it off).
+- At most `maxLines` captions are shown; when there are more, the lowest `priority` and then the oldest go first.
+- The captions are drawn on top of the game at the bottom (or the top) of the screen in the engine's own font, or a
+  font you set. `SetStyle({ draw = false })` hides them while they keep being tracked — read them with `GetActive()`
+  and draw them in your own widget.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Captions.Register(sound, text, options?)` | `bool` | `options`: `speaker`, `duration` (0 = the sound's length), `priority` (0), `directional` (true), `r`, `g`, `b`, `a`. |
+| `Captions.Unregister(sound)` | `bool` | |
+| `Captions.Show(text, options?)` | `int` | Caption id, 0 when captions are off. `options`: `speaker`, `duration` (3), `priority`, `x`, `y`, `entity`, `directional`, `r`, `g`, `b`, `a`. |
+| `Captions.Hide(id)` / `Captions.Clear()` | `bool` / — | |
+| `Captions.SetEnabled(enabled)` / `Captions.IsEnabled()` | | Turning captions off also clears the shown ones. |
+| `Captions.SetStyle(style)` / `Captions.GetStyle()` | — / table | `size` (28), `maxLines` (3), `margin` (48), `padding` (10), `spacing` (6), `fade` (0.15 s), `position` (`"bottom"` or `"top"`), `font`, `textColor`, `speakerColor`, `background` (`{ r, g, b, a }`), `showSpeaker`, `showDirection`, `draw`. |
+| `Captions.GetActive()` | table | `{ id, text, speaker, remaining, direction }`, oldest first; `text` and `speaker` are already translated, `direction` is `"left"`, `"right"` or `""`. |
+
+> Registrations and shown captions are cleared when Play stops and when the level changes, so register captions in
+> `OnLevelStart`. Captions keep running during a pause only in the sense that they stay on screen; they do not count
+> down while the game is paused.
+
 ---
 
 ## 13. FX — Particle Visual Effects
@@ -8111,6 +8636,10 @@ but the particles it already spawned keep simulating until their lifetime runs o
 then does `IsFXFinished` become true, and only then are non-component effects (those
 started by `SpawnFXAtPosition` and friends) released. Set an emitter's Duration to 0 for
 an effect that should emit forever, such as a standing pool of water.
+
+**Scene lifetime.** Stopping Play mode or leaving a level releases all runtime emitters,
+including particles, fluids and sub-effects started by `SpawnFXAtPosition`. They do not
+carry over into the next level or the editor. FX asset previews remain available.
 
 ### Checks and information
 
@@ -8288,6 +8817,7 @@ OnFXDeath(callback, 0, 1)
 | `OnFXDeath(fn [, index [, emitterIdx]])` | `fn(px, py, vx, vy)` | Fires when a particle dies |
 | `OnFXSpawn(fn [, index [, emitterIdx]])` | `fn(px, py, vx, vy)` | Fires when a particle is spawned |
 | `OnFXSensorOverlap(fn [, index [, emitterIdx]])` | `fn(entityId, count, px, py)` | Fires once per overlapped entity per frame |
+| `OnFXFluidContact(fn [, index [, emitterIdx]])` | `fn(otherFx, otherEntity, count, px, py)` | Fires once per touched fluid per frame (see *Fluid contacts*) |
 
 ### Sensor overlap events — `OnFXSensorOverlap`
 
@@ -8309,15 +8839,30 @@ end)
 Requires the **Collision** module on the emitter (it drives the collider cache).
 The reported entity is the owner of the sensor collider, not the FX itself.
 
-### Fluid queries — `GetFluidDensityAt`
+### Fluid queries — `GetFluidDensityAt` / `GetFluidsAt`
 
 ```lua
-local d = GetFluidDensityAt(x, y)   -- 0 = no fluid, ~1 = inside settled fluid
+local d = GetFluidDensityAt(x, y)                                     -- any fluid: 0 = none, ~1 = inside settled fluid
+local lava = GetFluidDensityAt(x, y, "Content/FX/FX_Lava.ice_fx")     -- one fluid only
+
+for _, fluid in ipairs(GetFluidsAt(x, y)) do
+    -- fluid.fx      — path of the effect, as the FX component or SpawnFXAtPosition loaded it
+    -- fluid.density — normalized density of that fluid at the point
+    -- fluid.entity  — entity that owns the FX component, nil for an effect from SpawnFXAtPosition
+end
 ```
 
-Samples every non-preview fluid emitter in the scene at a world point and returns the highest
-normalized density (local SPH density divided by the emitter's Rest Density). Use it for
-"is this point submerged" checks — drowning timers, swim state, splash triggers.
+`GetFluidDensityAt` samples every non-preview fluid emitter in the scene at a world point and
+returns the highest normalized density (local SPH density divided by the emitter's Rest
+Density). Pass an effect path to ask about one fluid — lava rather than water — and get `0`
+where only other fluids are. `GetFluidsAt` lists every fluid present at the point, one entry
+per effect and owning entity. Use them for "is this point submerged" and "submerged in what"
+checks — drowning timers, swim state, burning, cooling, splash triggers.
+
+Both are global functions: they work in entity scripts, the level script, modules loaded with
+`require` and widget scripts. A query looks only at the particles in the grid cells around the
+point, so hundreds of queries per frame stay cheap; an emitter's grid is rebuilt at most once
+per frame, on the first query after its particles moved.
 
 ```lua
 local underwater = 0.0
@@ -8340,9 +8885,9 @@ sleep only skips the simulation, never the results.
 
 ### Determinism and rollback
 
-`FluidAffectBodies`, `OnFXSensorOverlap`, `OnFXCollision`/`OnFXDeath`/`OnFXSpawn` and
-`GetFluidDensityAt` are the only parts of FX that can influence gameplay state. Everything
-else is purely visual.
+`FluidAffectBodies`, `OnFXSensorOverlap`, `OnFXFluidContact`, `OnFXCollision`/`OnFXDeath`/`OnFXSpawn`,
+`GetFluidDensityAt` and `GetFluidsAt` are the only parts of FX that can influence gameplay state.
+Everything else is purely visual.
 
 Particle randomness is deterministic: each emitter owns its own random stream, seeded from its
 creation index within the scene, and every draw is portable across platforms. Two runs of the
@@ -8350,7 +8895,7 @@ same scene, and two machines running the same build, produce identical particles
 
 FX is nevertheless **not part of rollback state** — `Rollback.*` does not save, restore or
 re-simulate particles, by design (rolling back thousands of particles would cost more than it is
-worth). So if you use deterministic rollback multiplayer, keep the four gameplay-affecting
+worth). So if you use deterministic rollback multiplayer, keep the gameplay-affecting
 features above out of anything that feeds the rollback checksum, or drive that logic from a
 regular Box2D sensor instead. Server-authoritative `NetworkReplication` is unaffected.
 
@@ -8365,15 +8910,19 @@ is faster than a GPU pass would be for the particle counts fluids run at.
 With **Allow Sleep** on (the default), a fluid stops simulating once every particle has been
 slower than **Sleep Speed** for about half a second, and resumes by itself. It wakes when any
 of these happens: a particle is spawned or dies, the emitter moves, its parameters are rebuilt
-or written from Lua, the set of colliders in the scene changes, a moving body's collider comes
+or written from Lua, a collider appears, disappears, enters or leaves the area next to the
+fluid (the bounds of its particles plus twice the **Interaction Radius**), a tile changes under
+or next to the fluid (when the emitter has a Collision module), a moving body's collider comes
 near the fluid, or an awake interacting fluid comes near it. Sleep is disabled automatically
 while a force module is present (Wind, Vortex, Attractor, Curl Noise, Noise, Spring Force,
 Particle Collision, Conditional Module, Custom Script, Size/Color By Speed), because those
 would keep changing the state.
 
-Scenes that constantly create and destroy colliders keep waking every fluid; set
-`SetFXEmitterFlag("FluidAllowSleep", false)` if you would rather pay the simulation cost than
-have sleep toggle every frame.
+Colliders and tile edits are checked locally: debris, fragments, projectiles and creatures
+created or destroyed elsewhere in the scene, and digging or blowing up a tilemap away from the
+fluid, leave it asleep — only the fluids next to them wake. A fluid that bodies keep disturbing
+wakes again and again; set `SetFXEmitterFlag("FluidAllowSleep", false)` if you would rather pay
+the simulation cost than have sleep toggle every frame.
 
 ### Fluid-to-fluid interaction
 
@@ -8388,13 +8937,62 @@ SetFXEmitterParam("FluidInteractStrength", 60.0)
 ```
 
 `WakeFXFluid([index])` forces a sleeping fluid awake. You need it only in one case: a body
-teleported into settled fluid with no velocity, which none of the automatic conditions can
-see. Omit the index to wake every instance on the entity.
+moved with no velocity from one place to another inside the area of a settled fluid, which none
+of the automatic conditions can see — a body teleported into or out of that area wakes the
+fluid by itself. Omit the index to wake every instance on the entity.
 
 ```lua
 SetPosition(poolX, poolY, GetPositionZ())
 WakeFXFluid()          -- on the entity that owns the water FX
 ```
+
+### Fluid contacts — `OnFXFluidContact`
+
+```lua
+-- On the entity that owns the lava FX
+OnFXFluidContact(function(otherFx, otherEntity, count, px, py)
+    if otherFx == "Content/FX/FX_Water.ice_fx" then
+        RemoveFXParticlesInCircle(px, py, 12)                    -- lava sets where the water touches it
+        SpawnFXAtPosition("Content/FX/FX_Steam.ice_fx", px, py)
+    end
+end)
+```
+
+Once per frame the callback receives every other fluid that this emitter's particles touch: the
+other effect's path, the entity that owns it (`0xFFFFFFFF` for an effect started by
+`SpawnFXAtPosition`), how many of this emitter's particles touch it and their average position.
+Both emitters need **Interact With Other Fluids** — fluids that do not interact pass through each
+other and never touch. The optional `index` and `emitterIdx` work as in the other FX callbacks.
+
+### Removing particles — `RemoveFXParticlesInCircle`
+
+```lua
+local taken = RemoveFXParticlesInCircle(x, y, radius)          -- every emitter of instance 0
+local taken = RemoveFXParticlesInCircle(x, y, radius, 1, 0)    -- instance 1, emitter 0 only
+```
+
+Removes the particles of this entity's effect that lie inside the circle and returns how many it
+removed — water that boiled away, lava that set into rock, a sponge soaking up a puddle. The
+particles vanish without `OnFXDeath` or death events of the Event Handler module, and a sleeping
+fluid wakes so the rest can flow into the gap. `ClearFXParticles` still removes everything at once.
+
+### Saving particles — `GetFXParticleState` / `SetFXParticleState`
+
+```lua
+local state = GetFXParticleState()           -- instance 0, emitter 0
+local state = GetFXParticleState(0, 1)       -- instance 0, emitter 1
+-- state = { x1, y1, vx1, vy1, age1, lifetime1, x2, y2, ... } — six numbers per particle
+
+local restored = SetFXParticleState(state)   -- replaces the particles, returns how many it restored
+```
+
+`GetFXParticleState` flattens the live particles of one emitter into an array of six numbers each:
+position, velocity, age and lifetime. Keep it in your save and hand it to `SetFXParticleState` after
+loading: the emitter's particles are replaced by the saved ones, while size, colour and rotation are
+drawn from the emitter's settings as for a newly spawned particle. A restore also counts as the
+emitter's **Pre-fill**, so a pre-filled pool does not add its starting particles on top; the emitter
+keeps spawning by its own settings afterwards. Particles are never saved automatically —
+`SaveSceneState` does not include FX.
 
 ### Emitter parameters — `SetFXEmitterParam` / `GetFXEmitterParam`
 
@@ -8888,6 +9486,34 @@ SetLightingMode("Unlit")                -- Disable
 local mode = GetLightingMode()          -- → "Lit" or "Unlit"
 ```
 
+### Pixel-art lighting
+
+Pixel-art lighting can be enabled independently of scene resolution:
+
+```lua
+SetLightingPixelSize(1)
+local size = GetLightingPixelSize()
+SetLightingPixelOrigin(0, 0)
+local origin = GetLightingPixelOrigin()
+```
+
+The size is in world units; `0` disables the grid (the default). Negative or
+non-finite sizes become `0`; positive sizes below `0.0001` are clamped to that
+minimum. The origin is the lower-left corner of grid cell (0,0), returned as
+`{x, y}`; non-finite origin components become `0`. Lit receivers sample light and
+shadows at world-cell centers, so soft falloff and penumbrae retain discrete
+pixels as the camera moves. Sprite/mesh geometry, texture coordinates and UI are
+unchanged. This covers built-in lit sprites, tiles, materials, FX and fluids,
+as well as ray-traced and radiance-cascade GI composition. Independent screen
+post-effects such as bloom or depth of field keep their own sampling.
+
+Project defaults are `Rendering.LightingPixelSize` and
+`Rendering.LightingPixelOrigin: [x, y]` in `Config/Engine.json`. The equivalent
+world-override fields are `rendering.lighting_pixel_size` and
+`rendering.lighting_pixel_origin`; Lua accepts `{x=0, y=0}` or `{0, 0}`.
+The global setters follow the same runtime override and `Settings.Save()` rules
+as the other lighting setters. Soft shadows still use `SetShadowSoftness`.
+
 ### Ambient (ambient light)
 
 ```lua
@@ -8964,7 +9590,8 @@ local cb = GetCollidersBlockShadows()
 -- Raytracing 1.1, on Metal devices that report supportsRaytracing
 -- (MSL 2.4 ray queries), and on WebGPU builds with compute shaders enabled
 -- (software tracer: same bounced light and AO, more cost per ray, at most
--- 1024 shadow edges per frame, and direct sprite shadows stay analytic);
+-- 1024 casting and 1024 blocking shadow edges per frame, and direct sprite
+-- shadows stay analytic);
 -- on any other backend/device the calls are
 -- remembered but produce no visual effect (the feature behaves as if absent).
 local supported = IsRaytracingSupported()   -- RT-capable Vulkan / D3D12 / Metal, or WebGPU + compute
@@ -9655,6 +10282,7 @@ SetTimeScale(0.5)   -- Half speed
 SetTimeScale(2.0)   -- Double speed
 ResetTimeScale()    -- Back to 1.0
 local ts = GetTimeScale()
+local frameTs = GetFrameTimeScale() -- Scale sampled at the start of this engine frame
 
 -- Pause
 PauseGame()                 -- SetTimeScale(0)
@@ -9662,6 +10290,13 @@ ResumeGame()                -- SetTimeScale(1)
 ResumeGame(0.5)             -- SetTimeScale(0.5)
 local paused = IsPaused()
 ```
+
+`SetTimeScale` affects the scene delta from the next engine frame: physics, update callbacks, animations,
+FX, tweens, coroutines, clocks and timers all use the same scaled time. The scale is applied once, together
+with accessibility speed and hit stop. Fixed callbacks keep their fixed simulation step; fewer steps run
+per real second during slow motion. `GetTimeScale()` returns the requested scale immediately;
+`GetFrameTimeScale()` stays constant throughout the current frame, including all its fixed steps, and
+excludes accessibility speed and hit stop. Use this snapshot when compensating an actor for global slow motion.
 
 ### Per-entity time scale
 
@@ -9677,6 +10312,35 @@ local edt = GetEntityDeltaTime(entityId)  -- dt * entityTimeScale
 local fps = GetFPS()
 local frameTime = GetFrameTime()  -- In milliseconds
 ```
+
+### Precise clock
+
+`GetRealTime()` changes once per frame. To measure how long a piece of your own work takes inside a frame — a work
+budget per frame, a quick measurement — read `GetPreciseTime()` before and after it:
+
+```lua
+local started = GetPreciseTime()
+repeat
+    StepGeneration()
+until GetPreciseTime() - started >= 0.008   -- spend at most 8 ms of this frame
+```
+
+`GetPreciseTime()` returns the seconds since the game started as a fraction with sub-microsecond precision, read from
+the system's monotonic clock at the moment of the call. Unlike `GetUnixTimeMs` it never jumps when the player or the
+system changes the clock, and it keeps counting through pauses, time scale and hit stops. Use it only for durations:
+the starting point is different in every run.
+
+`GetFrameElapsedMs()` returns the elapsed time since the start of the **current engine frame**, in milliseconds as a
+`double`. Its monotonic clock starts before input handling and `Update` in both the native and browser frame loops.
+It is independent of `TimeScale`, pauses and HitStop. `GetFrameTime()` instead describes the previous frame.
+
+```lua
+local elapsedMs = GetFrameElapsedMs()
+local remainingMs = GetProfilerFrameBudgetMs() - elapsedMs
+```
+
+A clock check only limits work between steps: a single long `StepGeneration()` or native call can still overrun the
+budget. For repeated cooperative steps, see [Coroutines](#18-coroutine--coroutines).
 
 ### Real date and time
 
@@ -9782,6 +10446,40 @@ function OnUpdate(dt)
     end
 end
 ```
+
+### HitStop — freeze frames on impact
+
+`HitStop` freezes the game for a moment of real time — the short "impact freeze" that makes a hit feel heavy in
+fighting, action and platformer games. Physics, animations, particles, decals, widget animations, the `dt` of
+`OnUpdate`, timers, tweens and coroutines stop (or crawl, with a time scale above 0), while sounds keep playing,
+`OnPause` is **not** sent and pause menus stay closed. When the freeze is over, the game continues exactly where it
+stopped.
+
+```lua
+function OnHitEnemy(damage)
+    HitStop(0.08)                    -- 80 ms full freeze
+    ShakeCamera(6.0, 0.25)
+end
+
+HitStop(0.4, 0.1)                    -- 0.4 s at 10 % speed: a slow-motion finishing blow
+
+local frozen = IsHitStopActive()
+local left = GetHitStopRemaining()   -- seconds of real time
+CancelHitStop()
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `HitStop(duration, timeScale?)` | — | `duration` in real seconds. `timeScale` 0–1, default `0` (full freeze). Hit stops can overlap: the game runs at the lowest scale among the active ones, and a new hit stop with the same scale extends the running one instead of stacking. |
+| `IsHitStopActive()` | `bool` | A hit stop is running. |
+| `GetHitStopRemaining()` | `number` | Real seconds until the last active hit stop ends. |
+| `CancelHitStop()` | — | Ends every hit stop at once. |
+
+> A hit stop scales the delta the engine hands to the scene — the delta `OnUpdate(dt)`, physics, animations,
+> particles, widgets, `GetDeltaTime()` and timers use —
+> together with the accessibility game speed ([Engine → Time, pause & suspend](Engine-EN-DOC.md#26-time-pause--suspend)).
+> `GetUnscaledDeltaTime()` and `GetRealTime()` keep running, so an effect driven by them animates through the freeze. Hit stops are cleared when a
+> level starts. They count real time, so they are not recorded by replays and rollback.
 
 ---
 
@@ -9979,6 +10677,50 @@ local count = GetCoroutineCount()
 > Functions that a coroutine passes to other APIs — `Delay`, `On`, `Tween`, `Ads.OnRewardEarned` and the like — keep
 > working after the coroutine finishes or is stopped.
 
+### Work budgets and priorities
+
+`StartCoroutine(fn)` and `StartCoroutine(fn, name)` resume once per scheduler update. The options form enables
+multiple steps in the same update when `budgetMs` is explicitly supplied:
+
+```lua
+SetCoroutineBudgetMs(4.0)
+local totalBudgetMs = GetCoroutineBudgetMs()
+
+local id = StartCoroutine(function()
+    for i = 1, 10000 do
+        BuildItem(i)
+        coroutine.yield()
+    end
+end, { name = "buildItems", budgetMs = 1.5, priority = 10 })
+```
+
+| Option | Meaning |
+|---|---|
+| `budgetMs` | Positive finite per-coroutine budget in milliseconds for one scheduler update. Omit it to retain one step per update. |
+| `priority` | Integer, default `0`. Larger values run first among budgeted coroutines. |
+| `name` | Optional string used in error messages. |
+
+`SetCoroutineBudgetMs(ms)` sets the shared budget for **all budgeted coroutines**, including tasks from both Lua
+machines. The default is `4.0` ms; a runtime reset restores it. The value must be positive and finite.
+`GetCoroutineBudgetMs()` returns the current shared limit. Legacy coroutines without a budget still receive one step
+per update and run before budgeted tasks; their execution is outside this shared limit.
+
+Both limits use real monotonic time, independently of `TimeScale`, and include the task's `WaitUntil` condition checks.
+The shared limit also includes scheduling overhead. Tasks with the same priority take turns, with the next update
+continuing after the last serviced task. Higher-priority tasks can use the entire shared budget and defer lower-priority
+ones. A task created while the scheduler is running is queued for the next update.
+
+The scheduler checks budgets **between voluntary yields**. Each step must finish or call `coroutine.yield()`; one long
+Lua step, condition check or native call can exceed either limit. A coroutine's budget is a maximum, not a guarantee
+that this much frame time will be available.
+
+`coroutine.yield(WaitSeconds(seconds))`, `coroutine.yield(WaitFrames(frames))` and
+`coroutine.yield(WaitUntil(condition))` suspend the coroutine until a later scheduler update, including in budgeted
+mode. `WaitSeconds` uses the scaled scene delta supplied by the runtime to the scheduler, including `SetTimeScale`.
+`WaitFrames` counts active runtime updates, independently of their duration and `TimeScale`; values below `1` wait one update. `WaitUntil` is checked at most once per update when the scheduler
+reaches the task. An explicitly paused runtime does not advance its scheduler. Errors in the coroutine or its condition
+are logged and stop that coroutine.
+
 ### Example: dialogue
 
 ```lua
@@ -9996,6 +10738,134 @@ StartCoroutine(function()
     SetWidgetVisible(false)
 end)
 ```
+
+---
+
+### Worker — background Lua machines
+
+`Worker` runs a module in its own Lua machine. Native builds use a separate thread for each running worker;
+Web builds without pthreads run the same API in short steps on the main thread. Use workers for independent
+generation and calculations, then apply their results through the normal game APIs on the main thread.
+Workers never share Lua tables, globals, random state or engine objects with the caller.
+
+| Main-thread API | Result | Meaning |
+|---|---|---|
+| `Worker.Start(module[, data])` | `id, nil` or `nil, error` | Start a module with a snapshot of the input. |
+| `Worker.Send(id, value)` | `true, nil` or `false, error` | Queue one message for the worker. |
+| `Worker.Receive(id)` | `value, hasValue` | Remove one output message; returns `nil, false` when empty or the handle is invalid. |
+| `Worker.GetStatus(id)` | `status, error` | Read the current status and failure message; an invalid handle returns `nil, error`. |
+| `Worker.GetStats(id)` | `table` or `nil` | Read a snapshot of worker statistics; invalid handles return `nil`. |
+| `Worker.Cancel(id)` | `bool` | Request cancellation. |
+| `Worker.Release(id)` | `bool` | Cancel if needed, wait for cleanup and discard the handle and queued messages. |
+
+Handles belong to the calling Game or Widget Lua machine. A handle from another machine is invalid.
+Within an engine script callback, the worker belongs to that callback's environment even when a helper module
+starts it. Nested callbacks use the innermost script environment. Removing the owner releases its workers;
+starting from an environment already removed during its callback returns `nil, error`.
+Release finished workers after draining their output: completion does not discard the handle automatically.
+Statuses are `starting`, `running`, `waiting`, `completed`, `cancelled` and `failed`.
+Errors are also delivered to the engine log from the main thread.
+`waiting` indicates a pending module-source request; polling an empty input queue does not block the worker.
+
+The module name has the same relative form as `require`, for example `Content.Scripts.Workers.Sum` for
+`Content/Scripts/Workers/Sum.lua`. Project content is searched first, followed by the caller's `package.path`
+as captured by `Start`. A worker has a separate module cache; each source file is read through the engine's
+virtual filesystem on the main thread when requested. The module must return a function accepting `data`.
+The first non-`nil` result of that function is automatically queued as its final output message.
+Module names are limited to 512 bytes, `package.path` to 64 KiB and each module source to 8 MiB.
+
+`Content/Scripts/Workers/Sum.lua`:
+
+```lua
+return function(data)
+    local sum = 0
+    for i = 1, data.count do
+        sum = sum + i
+        if i % 10000 == 0 then
+            assert(Worker.Send({ progress = i / data.count }))
+        end
+    end
+    return { total = sum }
+end
+```
+
+Level script:
+
+```lua
+local workerId
+
+function OnLevelStart()
+    local error
+    workerId, error = Worker.Start("Content.Scripts.Workers.Sum", { count = 100000 })
+    assert(workerId, error)
+end
+
+function OnLevelUpdate(dt)
+    if not workerId then return end
+    while true do
+        local message, available = Worker.Receive(workerId)
+        if not available then break end
+        if message.total then Print("Total: " .. message.total) end
+    end
+    local status, error = Worker.GetStatus(workerId)
+    if status == "failed" then Print(error) end
+    if status == "completed" or status == "cancelled" or status == "failed" then
+        Worker.Release(workerId)
+        workerId = nil
+    end
+end
+```
+
+Inside a worker, `Worker.Send(value)` sends to its owner and `Worker.Receive()` returns the next incoming
+`value, hasValue` without blocking. Check the boolean: `nil` is a valid message. `Worker.IsCancelled()` reports
+the cancellation request; `Worker.Yield()` voluntarily returns control to the scheduler. To await input,
+call `Receive` in a loop and yield whenever it returns `false`.
+
+Messages support `nil`, booleans, integers, finite numbers, binary strings and trees of plain tables with
+integer or string keys. Functions, userdata, threads, metatables, cycles, shared table references, NaN and
+infinities are rejected. Tables are copied; later changes to the original do not affect a queued message.
+Large immutable string payloads use shared native storage, without sharing Lua objects between machines.
+Each message is limited to 16 MiB of accounted native storage, 1,048,576 values/keys and 64 nested tables.
+Each queue is bounded to 256 messages and 64 MiB. A full queue makes `Send` fail; drain it or retry after yielding.
+Both caller machines share a limit of 64 retained handles. The active-worker limit is 8 on Web without pthreads;
+native builds use at most 8, capped at one fewer than the hardware thread count, with a minimum of 1.
+
+Worker statistics contain `module`, `status`, `threaded`, `elapsedMs`, `memoryKB`, `allocatedBytes`,
+`allocations`, `instructions`, `pendingInput`, `pendingOutput`, `sentMessages`, `receivedMessages` and `error`.
+They are snapshots, so a running worker may advance immediately after they are read. `elapsedMs` measures
+cumulative time spent executing steps, excluding waits for messages and source loading. `instructions` is
+an estimate sampled by instruction hooks. Allocation fields count cumulative Lua allocation activity, not retained
+memory. `memoryKB` covers the sampled Lua heap, excludes native buffers and retains its last sample after completion.
+
+Workers use their own allocator and a snapshot of the current Lua GC and deterministic-state settings taken
+at startup. Main-thread GC commands do not inspect or collect worker machines. Standard `math.random` and
+`math.randomseed` affect only that worker; seed it explicitly when repeated results are required.
+Available helpers are `Json`, `Compression`, `Data` without `Save`/`Load`, `NumericArray`, worker-local noise functions and
+`NoiseBuffer`, plus `Procgen.Triangulate`. Noise state is local to the worker; it never reseeds the game's noise.
+Use the standard `math` library for calculations. The main machine's global math helpers and `RNG` are not installed.
+To transfer a numeric buffer, send its type, length and `ToString()` bytes, then reconstruct it in the receiving machine;
+the userdata itself is not a supported message value.
+Rendering, entities, scenes, input, audio, plugins, native Lua modules and arbitrary file access are unavailable.
+The editor's Lua debugger and function profiler do not attach to worker machines; use `GetStatus`, `GetStats`
+and messages to inspect their work.
+
+Worker libraries deliberately use a restricted contract so Lua callbacks remain schedulable:
+
+- `coroutine` is unavailable; use `Worker.Yield()`.
+- `load` accepts source strings and text mode only; `require` loads source modules through the engine.
+- `string.gsub` accepts string/numeric replacements; `string.format` accepts scalar arguments.
+- Installing a table metatable copies its current fields. Later changes to the template do not change the installed
+  metatable; `__gc` and `__close` are forbidden. Native metatables are opaque.
+- Table operations and callback-driven helpers execute yieldable Lua implementations. Worker `table.sort` is stable.
+  `table.unpack` accepts at most 1,000,000 results.
+
+Cancellation is checked by the worker scheduler between execution slices. Lua instruction hooks provide
+regular scheduling points, including in long Lua loops. Native operations must finish before cancellation
+or a time budget can take effect. Keep individual native calls finite and reasonably small.
+`Release`, Play/Stop, project module-cache reset and destruction of the owning script environment stop
+and clean up affected workers; cleanup may wait for a currently running native operation.
+Workers continue during an ordinary runtime pause. On Web without pthreads they share a 2 ms update budget;
+the budget is checked between steps and does not cap an indivisible native operation.
 
 ---
 
@@ -10245,6 +11115,12 @@ RemoveSaveTable("inventory")
 
 > Numbers in the table keep their type: integers stay integers (all 64 bits) and fractional numbers keep their
 > fraction.
+> Tables use the same [JSON rules](#json) as `Json.Encode`: exactly `1..n` becomes an array regardless of iteration
+> order, other tables become objects, numeric object keys become strings, and an empty table becomes `{}`.
+>
+> A table that contains itself — directly or through other tables — is saved once: the reference back to it comes
+> back from `LoadTable` as `nil`, and the console shows a warning. Tables nested deeper than 64 levels are cut the
+> same way.
 
 ### Save to disk
 
@@ -10258,7 +11134,21 @@ LoadGameState()
 LoadGameState("slot1.json")
 ```
 
+`LoadGameState` rejects JSON deeper than 66 container levels before parsing or changing the state: 64 levels for
+saved tables plus two for the save-file wrapper. `LoadTable` also checks its 64-level limit before parsing.
+
 ### Working with files
+
+`ReadFile(path)` reads the whole file in one block and returns a string, or `nil` on failure. Large read buffers
+become Lua 5.5 external strings: Lua owns their lifetime, and the bytes are not copied a second time.
+`ReadFileRange(path, offset, size)` reads at most `size` bytes from a zero-based byte offset. Both arguments must
+be nonnegative integers; the result is shorter at the end of the file, and an offset at or beyond the end returns
+`""`. Missing files and invalid paths return `nil`.
+
+`WriteFile(path, bytes)` returns `true` only after writing, flushing and closing a temporary file next to the
+destination and atomically replacing the destination. A failed write leaves the previous file intact. `Data.Save`
+and `SaveGameState` use the same replacement procedure. Successful writes also request writable-storage
+synchronization on the web; browser persistence still completes asynchronously.
 
 > `WriteFile` and `ReadFile` are **byte-exact**: the file is opened in binary mode on every platform, so a Lua string
 > round-trips unchanged, embedded zero bytes and all. That makes them a valid transport for compact binary save formats —
@@ -10272,6 +11162,7 @@ WriteFile("world.chunk", chunkBuffer:ToString())   -- binary is safe
 
 -- Read
 local content = ReadFile("notes.txt")  -- nil if it doesn't exist
+local header = ReadFileRange("world.chunk", 0, 64)
 
 -- Check existence
 local exists = SaveFileExists("notes.txt")
@@ -10280,7 +11171,7 @@ local exists = SaveFileExists("notes.txt")
 DeleteSaveFile("notes.txt")
 
 -- File list
-local files = GetSaveFiles()           -- → table of names
+local files = GetSaveFiles()           -- → table of names, sorted by name
 local files = GetSaveFiles("saves/")   -- In subfolder
 
 -- File metadata (size + modification time, useful for save-slot UI)
@@ -10290,12 +11181,17 @@ local info = GetSaveFileInfo("slot1.json")
 
 local infos = GetSaveFilesInfo()           -- whole save folder
 local infos = GetSaveFilesInfo("slots/")   -- subfolder
--- → { { name=..., size=..., mtime=... }, ... }
+-- → { { name=..., size=..., mtime=... }, ... }, sorted by name
 for _, e in ipairs(infos) do
     Print(e.name .. "  " .. e.size .. " bytes  ts=" .. e.mtime)
 end
 ```
 
+> `GetSaveFiles` and `GetSaveFilesInfo` list the files sorted by name (byte order of the UTF-8 names), so the
+> order is the same on every platform and every run. For a newest-first list of save slots, sort the result by
+> `mtime` yourself. Internal atomic-write scratch files ending in `.icebox-write-<timestamp>-<sequence>.tmp`
+> are omitted from both lists; other temporary files remain visible.
+>
 > These functions only reach the save folder. Paths that contain `..` or a drive letter (`C:`) and
 > paths that start with `/` are refused, so a script — or a mod — cannot write anywhere else on the
 > player's disk. To read or write files the player chooses — a map to import, a level to export —
@@ -10307,14 +11203,186 @@ end
 > its publisher and game name — see
 > [Profiling & Building → Where a shipped game keeps its player data](Profiling-And-Building-EN-DOC.md#75-where-a-shipped-game-keeps-its-player-data).
 
+#### Background file operations
+
+`ReadFileAsync(path, callback[, options])` and `WriteFileAsync(path, bytes, callback[, options])` return
+`requestId, nil`, or `nil, error` if the request cannot be queued. They use the same save-folder restrictions.
+Reading, writing and optional zstd compression run in the engine's worker pool. The write call takes one owned
+snapshot of the Lua string before returning, so later collection of that string is safe. Read results use the
+same external-string ownership as `ReadFile`.
+
+The callback runs once on the main thread during a later update of the owning Lua VM, including while the game
+is paused, and waits while the Lua debugger is stopped. Its arguments are `callback(bytes, error, requestId)`
+for reads and `callback(ok, error, requestId)` for writes. A failed read passes `nil`, a failed write passes
+`false`, and successful callbacks pass `nil` as the error. Callback errors are logged. Requests can complete
+in a different order: start a dependent read or another write to the same file from the previous callback.
+
+```lua
+local requestId, err = WriteFileAsync("world.sav", bytes, function(ok, error, id)
+    if not ok then Print(error) return end
+    local readId, readErr = ReadFileAsync("world.sav", function(data, error, id)
+        if data then loadedBytes = data else Print(error) end
+    end, { decompress = true })
+    if not readId then Print(readErr) end
+end, { compress = true, level = 3 })
+if not requestId then Print(err) end
+```
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `compress` | `false` | `WriteFileAsync`: compress the snapshot with zstd before writing. |
+| `decompress` | `false` | `ReadFileAsync`: require and decompress zstd data after reading. |
+| `level` | `3` | Integer zstd compression level, `1`–`22`. |
+| `maxSize` | `268435456` | Maximum bytes, a nonnegative integer. Reads limit both the file and decompressed data; writes limit both the input and compressed file. |
+
+At most 128 requests can be pending across the Game and Widget VMs. `CancelFileRequest(requestId)` returns
+`true` if it suppresses a pending callback belonging to the calling VM; otherwise it returns `false`. It does
+not undo or interrupt disk operations already queued. Changing levels, stopping Play, clearing widgets or
+reloading their owning script environments also releases their callbacks; queued writes can still finish.
+Successful writes request web storage synchronization even if their callbacks were cancelled. On web builds
+without pthreads the pool performs the work on the calling thread; completion callbacks still wait for an update.
+
+### Compressing data
+
+`Compression` packs a string with zstd and unpacks it again. Any Lua string works — text, JSON or a binary blob
+built with `string.pack` — and the result is a binary string that `WriteFile` stores byte for byte. Large save
+files usually shrink several times, which keeps saving and loading fast and cloud saves small.
+
+```lua
+local packed, err = Compression.Compress(data)          -- level 3 by default
+local smallest = Compression.Compress(data, 19)         -- 1 (fastest) .. 22 (smallest)
+WriteFile("world.sav", packed)
+
+local raw = ReadFile("world.sav")
+if raw and Compression.IsCompressed(raw) then
+    local data, err = Compression.Decompress(raw)       -- nil and a message when the data is damaged
+end
+local data = Compression.Decompress(raw, 64 * 1024 * 1024)   -- refuse more than 64 MB (the default limit is 256 MB)
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Compression.Compress(data, level?)` | `string` or `nil, error` | One zstd frame with a checksum. `level` is 1–22 (default 3); values outside are clamped. |
+| `Compression.Decompress(data, maxSize?)` | `string` or `nil, error` | Fails on damaged, truncated or non-zstd data, and when the result would be larger than `maxSize` bytes (default 256 MB). |
+| `Compression.IsCompressed(data)` | `bool` | The string starts with a zstd frame. |
+
+> The same data and level always give the same bytes with the same engine version, so compressed saves can be
+> compared or hashed. The checksum inside the frame makes `Decompress` refuse a file damaged on disk instead of
+> returning wrong data. `Compression` works on every platform and in class, level and widget scripts.
+
+### JSON
+
+`Json` turns Lua values into JSON text and back — for save files, configuration, data you exchange with a server or
+another program, and anything else that wants a portable text format.
+
+```lua
+local text = Json.Encode({ name = "Ice", level = 7, items = { "sword", "shield" } })
+-- {"items":["sword","shield"],"level":7,"name":"Ice"}
+
+WriteFile("save.json", Json.Encode(save, 2))       -- indented with 2 spaces, easy to read
+
+local data, err = Json.Decode(ReadFile("save.json") or "")
+if not data then Print("Broken save: " .. err) end
+
+local ok = Json.IsValid(text)
+Print(Json.Pretty(reply))                          -- re-indent JSON text for the log
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Json.Encode(value, indent?)` | `string` or `nil, error` | Any Lua value. With `indent` (1–16 spaces) the text is indented; without it, compact. |
+| `Json.Decode(text)` | value or `nil, error` | Objects and arrays become tables, `null` becomes `nil`. |
+| `Json.Pretty(text, indent?)` | `string` or `nil, error` | Re-indents JSON text, 2 spaces by default. |
+| `Json.IsValid(text)` | `bool` | The text is valid JSON. |
+
+How values are written:
+
+- A table whose keys are exactly `1..n` becomes an array; any other table becomes an object. Number keys of an object
+  are written as strings (`{ [10] = "x" }` → `{"10":"x"}`); keys that are neither strings nor numbers are skipped.
+  Fractional keys use up to 17 significant decimal digits, so `[0.1]` becomes the string key `"0.10000000000000001"`.
+- Object keys are written sorted, so the same table always gives the same text — handy for diffs, hashes and
+  signatures.
+- Integers stay integers with all 64 bits and fractional numbers keep their fraction; `nan` and `inf` become `null`.
+  An empty table is written as `{}`.
+- Functions, userdata and coroutines become `null`. Tables nested deeper than 64 levels become `null` at that depth,
+  and `Decode` refuses text nested deeper than 64 levels. A table that contains itself — directly or through other
+  tables — is written once: the reference back to it becomes `null` right there.
+- Strings must be valid UTF-8: `Encode` returns `nil` and an error instead of writing broken JSON. Turn binary data
+  into text with `Crypto.ToBase64` first.
+- A JSON `null` inside an array leaves a hole in the Lua table, and `Decode` of the text `null` returns `nil` without
+  an error.
+
+> `Network.JsonEncode` and `Network.JsonDecode` use the same converter, so text written by one is read by the other.
+> They keep their behaviour: they take only tables and give an empty table for invalid JSON.
+> `SaveTable` and Lua plugin properties also use this converter. Web3 table-valued JSON fields use the same rules,
+> with empty tables written as `[]` recursively to preserve ABI and argument arrays.
+
+### Hashing, Base64 and encryption (`Crypto`)
+
+`Crypto` (libsodium inside) covers what a game needs around saves and online features: checksums and hashes, HMAC
+signatures for requests, Base64 and hexadecimal text, random bytes and UUIDs, and authenticated encryption that stops
+players from editing a save file by hand.
+
+```lua
+-- An encrypted save: a wrong key or an edited file is detected when loading
+WriteFile("slot1.sav", Crypto.Encrypt(Json.Encode(save), "my-game-secret"))
+
+local text, err = Crypto.Decrypt(ReadFile("slot1.sav") or "", "my-game-secret")
+if text then save = Json.Decode(text) else Print("Save rejected: " .. err) end
+
+-- Hashes and signatures
+local id = Crypto.Sha256(playerName)                -- 64 hex characters
+local signature = Crypto.HmacSha256(apiKey, body)   -- sign a request body
+local valid = Crypto.Equals(signature, received)    -- constant-time comparison
+
+-- Text encodings
+local b64 = Crypto.ToBase64(Compression.Compress(data))
+local bytes = Crypto.FromBase64(b64)
+
+local token = Crypto.Uuid()                         -- "3f1c2b7e-9a4d-4c1e-8b6f-0d2a5e7c9b13"
+local salt = Crypto.RandomBytes(16)
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Crypto.Sha256(data, raw?)` | `string` | SHA-256 as 64 lowercase hex characters, or the 32 raw bytes with `raw = true`. |
+| `Crypto.Sha512(data, raw?)` | `string` | SHA-512: 128 hex characters or 64 bytes. |
+| `Crypto.Blake2b(data, size?, raw?)` | `string` | BLAKE2b of `size` bytes, 16–64 (default 32). Faster than SHA-2. |
+| `Crypto.HmacSha256(key, data, raw?)` | `string` | HMAC-SHA-256 signature; the key can be any length. |
+| `Crypto.HmacSha512(key, data, raw?)` | `string` | HMAC-SHA-512. |
+| `Crypto.Crc32(data)` | `integer` | CRC-32 as used by ZIP and PNG, `0`–`4294967295`. A quick checksum, not a security hash. |
+| `Crypto.ToBase64(data, urlSafe?)` | `string` | Standard Base64 with padding; `urlSafe = true` gives URL-safe Base64 without padding. |
+| `Crypto.FromBase64(text, urlSafe?)` | `string` or `nil, error` | Accepts text with or without padding; spaces and line breaks are ignored. |
+| `Crypto.ToHex(data)` | `string` | Lowercase hexadecimal. |
+| `Crypto.FromHex(text)` | `string` or `nil, error` | Upper or lower case; spaces, line breaks and `:` between bytes are ignored. |
+| `Crypto.RandomBytes(count)` | `string` | Cryptographically secure random bytes, `count` 0–16 777 216. |
+| `Crypto.Uuid()` | `string` | A random version-4 UUID. |
+| `Crypto.Equals(a, b)` | `bool` | Compares two strings in constant time — use it to check signatures and tokens. |
+| `Crypto.Encrypt(data, key)` | `string` or `nil, error` | Authenticated encryption (XChaCha20-Poly1305). The result is binary: store it with `WriteFile` or turn it into text with `ToBase64`. |
+| `Crypto.Decrypt(data, key)` | `string` or `nil, error` | Fails for a wrong key, for damaged or edited data and for data that `Encrypt` did not make. |
+| `Crypto.IsEncrypted(data)` | `bool` | The data was made by `Crypto.Encrypt`. |
+
+> **Keys.** `Encrypt` and `Decrypt` take any non-empty string as the key and derive a 256-bit key from it. Every call
+> uses a new random nonce, so encrypting the same data twice gives different bytes. A key written in the game's
+> scripts protects saves from casual editing and reports damage, but anyone who reads the scripts can find it — keep
+> the key on your server for anything that must stay secret from the players.
+
+> Everything works on raw bytes: Lua strings round-trip unchanged, embedded zero bytes and all. `Crypto` works on
+> every platform and in class, level and widget scripts.
+
 ### World and FX
 
 ```lua
--- FX
+-- FX: every enabled emitter of the effect starts at the point and plays once
 SpawnFXAtPosition("Content/FX/Explosion.ice_fx", 100, 200)
 SpawnFXAtPosition("Content/FX/Explosion.ice_fx", 100, 200, 10)
 SetFXTimeScale(0.5)
 local fxScale = GetFXTimeScale()
+
+-- Fluids at a point (see FX → Fluid queries)
+local density = GetFluidDensityAt(x, y)                              -- any fluid
+local lava = GetFluidDensityAt(x, y, "Content/FX/FX_Lava.ice_fx")    -- one fluid
+local fluids = GetFluidsAt(x, y)                                     -- { {fx, density, entity}, ... }
 
 -- Physics world parameters
 SetWorldGravity(0, -9.81)
@@ -10372,23 +11440,21 @@ local hit = Raycast(originX, originY, dirX, dirY, 500)     -- custom maxDist
 -- hit.tag         = entity tag (or nil)
 -- hit.isSensor    = is the hit shape a sensor
 
--- OverlapCircle — find all entities inside a circle
+-- OverlapCircle — find all entities inside a circle (a list of entity IDs)
 local entities = OverlapCircle(cx, cy, radius)
-for _, e in ipairs(entities) do
-    Print(e.entityId .. " tag=" .. (e.tag or "") .. " sensor=" .. tostring(e.isSensor))
+for _, id in ipairs(entities) do
+    Print(id .. " tag=" .. GetEntityTag(id))
 end
 
--- OverlapBox — find all entities inside an axis-aligned box
+-- OverlapBox — find all entities inside an axis-aligned box (a list of entity IDs)
 local entities = OverlapBox(cx, cy, halfW, halfH)
-for _, e in ipairs(entities) do
-    Print(e.entityId .. " tag=" .. (e.tag or ""))
-end
+local withSensors = OverlapBox(cx, cy, halfW, halfH, false)   -- include sensor shapes
 ```
 
-> **Note:** Entity-bound `OverlapBox(cx, cy, halfW, halfH, ignoreSensors)` and
-> `OverlapCircle(cx, cy, radius, ignoreSensors)` in entity scripts (Section 15)
-> have an extra `ignoreSensors` parameter and return a richer result set.
-> The global versions above are lighter and available in level scripts.
+> **Note:** `OverlapBox` and `OverlapCircle` are the same functions everywhere — entity scripts, the
+> level script, modules loaded with `require`, mods and widget scripts: they return a list of entity IDs
+> and take the optional `ignoreSensors` (default `true`), `debugDraw` and `debugDuration` arguments
+> described in [Section 15](#overlapbox--overlapcircle--overlaps-by-area).
 
 ### Async Level Loading
 
@@ -12588,7 +13654,7 @@ local maxBlur = PP.GetMotionBlurMaxBlur()
 
 ### CAS (Contrast Adaptive Sharpening)
 
-> AMD-style contrast adaptive sharpening pass over the final image.
+> Contrast adaptive sharpening pass over the final image.
 
 ```lua
 PP.SetCASEnabled(true)                      -- or PP_SetCASEnabled(true)
@@ -13170,7 +14236,7 @@ local res = Settings.GetResolution()  -- → {width, height}
 Settings.SetFullscreen(true)
 local fs = Settings.IsFullscreen()
 
-Settings.SetWindowMode("windowed")    -- "windowed", "fullscreen", "borderless"
+Settings.SetWindowMode("windowed")    -- "windowed", "fullscreen", "borderless", "exclusive"
 local mode = Settings.GetWindowMode()
 
 Settings.SetVSync(true)
@@ -13381,7 +14447,7 @@ local dvb = Settings.GetDebugVertexBufferSize()
 
 ```lua
 -- Presets: "default"    generational mode with the Lua 5.5 defaults (best for most games)
---          "low_memory" incremental mode with a short pause: about 1/3 less peak memory, more CPU time
+--          "low_memory" incremental mode, pause 150, step multiplier 300; memory and CPU effects depend on the workload
 --          "throughput" generational mode with fewer collections: less GC time, more memory
 --          "custom"     keeps the current values and lets you change them one by one
 Settings.SetLuaGCPreset(Settings.LUA_GC_PRESET_LOW_MEMORY)  -- → true (false + warning for an unknown name)
@@ -13428,7 +14494,9 @@ local s = Settings.GetLuaGCStats()
 -- s.lastIdleMs       -- duration of the last idle-frame GC slice
 -- s.game, s.ui       -- per VM (s.ui is nil while the UI VM is not running):
 --   .memoryKB, .mode, .running (false after collectgarbage("stop")),
---   .pooling, .poolReservedKB, .poolUsedKB
+--   .pooling, .poolReservedKB, .poolUsedKB,
+--   .allocatedKB, .allocations  -- everything the VM allocated since it started (only grows):
+--                                  compare two readings to get the allocation rate of either VM
 ```
 
 | Parameter | Used by | Lua default | Meaning |
@@ -14389,9 +15457,44 @@ Settings.ClearChangeListeners()
 > **Notes**
 > - All volume setters (`SetMasterVolume`, `SetMusicVolume`, `SetSFXVolume`,
 >   `SetVoiceVolume`, `SetAmbientVolume`, `SetUIVolume`) clamp the value to `[0..1]`.
-> - `SetWindowMode(mode)` accepts only `"windowed"`, `"fullscreen"`, `"borderless"`;
+> - `SetWindowMode(mode)` accepts only `"windowed"`, `"fullscreen"`, `"borderless"` and `"exclusive"`;
 >   any other value is rejected with a warning.
 > - HDR10 is automatically disabled on GLES backends regardless of the requested value.
+
+### Displays and video modes
+
+For a display options menu: which monitors there are, which resolutions and refresh rates the monitor supports,
+and true exclusive fullscreen.
+
+```lua
+for _, display in ipairs(Settings.GetDisplays()) do
+    Print(display.index .. ": " .. display.name .. " " .. display.width .. "x" .. display.height ..
+          " @" .. display.refreshRate .. " Hz" .. (display.current and " (game)" or ""))
+end
+Settings.SetDisplay(1)                                 -- move the game to the second monitor
+
+local modes = Settings.GetDisplayModes()               -- modes of the game's monitor, largest first
+Settings.SetFullscreenMode(modes[1].width, modes[1].height, modes[1].refreshRate)
+Settings.SetWindowMode("exclusive")
+```
+
+- `"fullscreen"` and `"borderless"` cover the monitor at its desktop resolution. `"exclusive"` switches the monitor
+  itself to the mode chosen with `SetFullscreenMode` — a lower resolution for a weak GPU, a higher refresh rate for
+  a fast monitor. Without a chosen mode it uses the desktop mode.
+- `SetFullscreenMode` takes the closest mode the monitor really has; a mode that does not exist is rejected with a
+  warning. It applies at once in exclusive mode and is kept for the next switch otherwise.
+- The monitor and the fullscreen mode are saved with the other settings and restored at the next start; a monitor
+  that is gone falls back to the main one.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Settings.GetDisplays()` | table | `{ index, name, width, height, refreshRate, scale, primary, current }`; `index` counts from 0. |
+| `Settings.GetDisplay()` | `int` | Index of the monitor the game window is on. |
+| `Settings.SetDisplay(index)` | `bool` | Moves the window, fullscreen or not, to that monitor. |
+| `Settings.GetDisplayModes(index?)` | table | `{ width, height, refreshRate }` of a monitor (the game's by default), each mode once. |
+| `Settings.SetFullscreenMode(width, height, refreshRate?)` | `bool` | Mode used by `"exclusive"`. |
+| `Settings.GetFullscreenMode()` | table | `{ width, height, refreshRate }` — the desktop mode until one is chosen. |
+| `Settings.GetRefreshRate()` | `number` | Refresh rate of the game's monitor right now. |
 
 ---
 
@@ -14934,6 +16037,75 @@ function GenerateFloor(depth)
 end
 ```
 
+### BigNumber — huge numbers for idle games
+
+Idle and incremental games count far past what a Lua number can hold — a Lua number stops at about `1.8e308` and
+keeps only 15–16 digits. `BigNumber` keeps a mantissa and a 64-bit exponent, so it counts to `1e1000000000000000`,
+and prints numbers the way such games do: `1.5K`, `23.4M`, `7.2Qa`, then `aa`, `ab` … `zz`.
+
+```lua
+local gold = BigNumber.New(0)
+local perSecond = BigNumber.New("2.5e40")
+
+function OnUpdate(dt)
+    gold = gold + perSecond * dt                     -- operators mix BigNumbers and plain numbers
+    SetWidgetText("Gold", gold:Format())             -- "25.42Dc"
+end
+
+-- Shop: price of the next item grows by 15 %
+local base, owned = BigNumber.New(10), 42
+local price = BigNumber.CostOf(base, 1.15, owned, 1)
+local canBuy = BigNumber.MaxAffordable(gold, base, 1.15, owned)
+if gold >= price then gold = gold - price; owned = owned + 1 end
+
+WriteFile("gold.txt", gold:Serialize())               -- exact text for the save
+gold = BigNumber.New(ReadFile("gold.txt") or "0")     -- and back
+```
+
+- `+ - * /`, `^` (with a number exponent), unary `-`, `<`, `<=`, `>`, `>=` work with a `BigNumber` on either side and
+  a plain number on the other. `==` needs two BigNumbers (a Lua rule) — use `a:Equals(5)` to compare with a number.
+  `tostring(a)` and `..` use the short format.
+- Every operator also has a method — `Add`, `Sub`, `Mul`, `Div`, `Pow`, `Compare`, `Equals` — whose argument may be
+  a BigNumber, a number or a numeric string. Visual Script uses these.
+- Results are new numbers; a BigNumber never changes after it is made.
+- Precision is that of a Lua number (about 16 significant digits): adding 1 to `1e30` changes nothing, as in any
+  idle game.
+- Division by zero and a negative number raised to a fraction give 0 with a warning instead of an error.
+
+| Format option | Default | Meaning |
+| --- | --- | --- |
+| `notation` | `"short"` | `"short"` (`1.5M`, `2.3aa`), `"scientific"` (`1.5e6`), `"engineering"` (`1.5e6`, `15e6`, `150e6` — exponents in steps of 3) or `"full"` (`1,500,000`; numbers from `1e21` fall back to scientific). |
+| `decimals` | 2 | Digits after the point, 0–15. |
+| `trimZeros` | true | `1.50K` → `1.5K`. |
+| `separator` | `""` (`","` for `"full"`) | Thousands separator of the plain part. |
+| `plainBelow` | 1000 | Numbers below it are written in full: set `1e6` to show `123,456` before `1.23M`. |
+
+The suffixes after `K` are `M`, `B`, `T`, `Qa`, `Qi`, `Sx`, `Sp`, `Oc`, `No`, `Dc`, `Ud`, `Dd`, `Td`, `Qad`, `Qid`,
+`Sxd`, `Spd`, `Ocd`, `Nod`, `Vg` (up to `1e63`), then two letters `aa` … `zz` (up to `1e2091`), then scientific.
+`BigNumber.SetSuffixes({ "k", "m", "b" })` sets your own list — localized names, for example — and
+`ResetSuffixes()` brings the default back.
+
+| BigNumber | Returns | Notes |
+| --- | --- | --- |
+| `BigNumber.New(value?, exponent?)` | number | `value`: a number, a string (`"1.5e400"`, `"123456789012345678901234"`) or a BigNumber; `New(2.5, 300)` is `2.5e300`. |
+| `BigNumber.Parse(text)` | number or `nil` | `nil` for text that is not a number (`New` warns and gives 0). |
+| `BigNumber.Min(a, b)` / `BigNumber.Max(a, b)` | number | |
+| `BigNumber.CostOf(base, ratio, owned, count)` | number | Total price of `count` more items when each costs `ratio` times the previous one and `owned` are bought already. |
+| `BigNumber.MaxAffordable(budget, base, ratio, owned)` | `number` | How many can be bought; `inf` when the price shrinks (`ratio < 1`) and the budget covers the whole series. |
+| `BigNumber.SetSuffixes(list)` / `BigNumber.ResetSuffixes()` | — | |
+| `:Add(x)` / `:Sub(x)` / `:Mul(x)` / `:Div(x)` / `:Pow(power)` / `:Sqrt()` | number | |
+| `:Abs()` / `:Neg()` / `:Floor()` / `:Ceil()` / `:Round()` | number | |
+| `:Log10()` | `number` | `-inf` for 0. |
+| `:Compare(x)` / `:Equals(x)` | `-1, 0, 1` / `bool` | |
+| `:IsZero()` / `:IsNegative()` | `bool` | |
+| `:GetMantissa()` / `:GetExponent()` | `number` / `int` | `value = mantissa · 10^exponent`, mantissa from 1 to 10. |
+| `:ToNumber()` | `number` | `inf` past the Lua range. |
+| `:Format(options?)` | `string` | Options above. |
+| `:Serialize()` | `string` | Exact text such as `"2.5e40"` for saves. |
+
+> BigNumbers are values: keep them in variables and tables like numbers. They work in class, level and widget
+> scripts; between the game and a widget, pass `Serialize()` text.
+
 ---
 
 ## 26. Events — Event System
@@ -15405,6 +16577,405 @@ stats.Clear()                                  -- clear all data
 > keeps an integer an integer while both the value and the amount are integers, and `GetMax` / `GetMin` compare
 > integers exactly, however large they are.
 
+### FloatingText — Floating Damage Numbers and Labels
+
+`FloatingText.Spawn` puts a short-lived text into the world — damage numbers, "+50 XP", "Critical!", "Miss" — that
+rises, can arc under gravity, pops in, fades out and disappears by itself. The engine moves and draws it every frame,
+so there is nothing to update. The texts freeze while the game is paused or in a [hit stop](#hitstop--freeze-frames-on-impact)
+and are removed when the level changes.
+
+```lua
+function OnDamaged(amount, critical)
+    local pos = GetPosition()
+    FloatingText.Spawn(tostring(amount), pos.x, pos.y + 40, {
+        r = 1, g = critical and 0.2 or 1, b = 0.2,
+        size = critical and 40 or 28,
+        duration = 0.9,
+        velocityY = 120,          -- units per second, Y+ is up
+        gravity = 260,            -- pulls it back down: an arc
+        spread = 60,              -- random sideways speed, -60..60
+        pop = critical and 1.8 or 1.3,
+        outline = { r = 0, g = 0, b = 0, a = 1, width = 2 },
+        layer = "overlay",        -- drawn after post-processing, stays crisp
+    })
+end
+```
+
+One label that keeps counting while the hits keep coming:
+
+```lua
+local comboLabel
+
+function OnComboHit(total)
+    if comboLabel and FloatingText.IsAlive(comboLabel) then
+        FloatingText.SetText(comboLabel, tostring(total), true)   -- true: start its life again and pop
+    else
+        local pos = GetPosition()
+        comboLabel = FloatingText.Spawn(tostring(total), pos.x, pos.y + 60, { velocityY = 20 })
+    end
+end
+```
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `r`, `g`, `b`, `a` | `1` | Text color. |
+| `size` | `24` | Font size in pixels. |
+| `font` | default font | Path to a `.ice_font` asset. |
+| `duration` | `1` | Lifetime in seconds of game time. |
+| `velocityX`, `velocityY` | `0`, `80` | Start speed in world units per second. |
+| `gravity` | `0` | Downward acceleration; positive values bend the path down. |
+| `spread` | `0` | Adds a random sideways speed between `-spread` and `spread`. |
+| `fadeIn`, `fadeOut` | `0`, `0.35` | Seconds of fading at the start and at the end. |
+| `pop`, `popTime` | `1`, `0.15` | Start scale and the seconds it takes to ease back to the normal size. |
+| `outline` | none | `{ r, g, b, a, width }`, as in `Draw.Text`. |
+| `align` | `"center"` | `"left"`, `"center"` or `"right"`. |
+| `z` | `0` | Depth, as in `Draw.SetZ`. |
+| `space` | `"world"` | `"world"`, or `"screen"` for pixels from the bottom-left corner of the game view. |
+| `layer` | `"scene"` | `"scene"`, `"background"` or `"overlay"`, as in `Draw.SetLayer`. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `FloatingText.Spawn(text, x, y, options?)` | `id` | `0` when the text is empty or the limit is 0. |
+| `FloatingText.SetText(id, text, restart?)` | `bool` | Changes the text; `restart = true` starts its life and pop again. |
+| `FloatingText.Remove(id)` | `bool` | Removes one text at once. |
+| `FloatingText.IsAlive(id)` | `bool` | The text is still shown. |
+| `FloatingText.Clear()` | — | Removes every text. |
+| `FloatingText.GetCount()` | `int` | Texts shown now. |
+| `FloatingText.SetMaxCount(count)` / `FloatingText.GetMaxCount()` | — / `int` | At most this many texts at once — 256 by default, up to 4096. The oldest make room for new ones. |
+
+> The texts are ordinary [`Draw`](#61-draw--immediate-mode-rendering-draw--texture--rendertarget) text: they leave the
+> current `Draw` state alone, count towards the `Draw` text budget, are unlit and receive no shadows. The random
+> sideways speed of `spread` comes from a generator of its own, so damage numbers never shift the game's seeded random
+> streams. `FloatingText` works in class, level and widget scripts.
+
+### Rhythm — Beat Sync for Music
+
+`Rhythm` follows the tempo of a song and tells the game where the beat is: callbacks on every beat and bar, the
+position inside the beat for anything that should pulse with the music, and judgement of the player's timing — the
+core of rhythm games, and of any game that moves with its soundtrack.
+
+```lua
+local beat
+
+function OnCreate()
+    Audio.PlayMusic("Content/Audio/track.ogg")
+    beat = Rhythm({
+        bpm = 128,
+        offset = 0.12,                       -- seconds from the start of the file to the first beat
+        beatsPerBar = 4,
+        onBeat = function(index, bar, beatInBar)
+            if beatInBar == 1 then ShakeCamera(2.0, 0.1) end
+        end,
+        onBar = function(bar) Print("Bar " .. bar) end,
+    })
+end
+
+function OnUpdate(dt)
+    beat.Update()                            -- once per frame
+
+    local pulse = 1 + 0.15 * (1 - beat.GetPhase())
+    SetScale(pulse, pulse)
+
+    if IsKeyJustPressed("space") then
+        local grade, offset = beat.Judge()   -- "perfect", "great", "good" or "miss"
+        Print(grade .. string.format(" (%+.0f ms)", offset * 1000))
+    end
+end
+```
+
+**Where the time comes from.** By default `Rhythm` follows the music track (`Audio.GetMusicCurrentTime`).
+`source = voiceId` follows a sound started with `Audio.PlaySound` instead, and `source = "manual"` makes it a
+metronome you drive yourself: `beat.Update(dt)` advances it by `dt`, or by `GetDeltaTime()` when you pass nothing.
+The playback position of a sound only changes when the audio device asks for more samples, so between those moments
+`Rhythm` advances with real time and never runs backwards; a seek, a loop or a restart of the music is followed at
+once.
+
+**Tempo changes.** `tempoChanges = { { beat = 64, bpm = 140 }, { beat = 128, bpm = 128 } }` switches the tempo at
+those beats (beats count from the first beat, `0`). `TimeToBeat` and `BeatToTime` convert between seconds of the song
+and beats across every change.
+
+**Judging input.** `Judge()` compares the song time minus `latency` with the nearest beat of the grid —
+`subdivision = 2` makes the grid eighth notes, `4` sixteenths. `Judge(targetBeat)` judges against a given beat
+instead, for the notes of a chart. The windows are 0.05 s for `perfect`, 0.1 s for `great` and 0.15 s for `good` on
+each side; change them with `windows = { perfect = 0.04, great = 0.08, good = 0.12 }` or `SetWindows`. Let the player
+calibrate `latency` — seconds, positive when they hear the beat late — in the options menu.
+
+| Config / method | Returns | Notes |
+| --- | --- | --- |
+| `Rhythm(config?)` | object | Config: `bpm` (120), `offset` (0), `beatsPerBar` (4), `subdivision` (1), `latency` (0), `windows`, `tempoChanges`, `source` (`"music"`, a voice id or `"manual"`), `onBeat`, `onBar`. |
+| `.Update(dt?)` | — | Call once per frame. Calls `onBeat(beat, bar, beatInBar)` for every beat passed — `beat` and `bar` count from 0, `beatInBar` from 1 — and `onBar(bar)` on the first beat of a bar. |
+| `.GetTime()` | `number` | Song time in seconds. |
+| `.GetBeat()` | `number` | Position in beats, with the fraction. |
+| `.GetBeatIndex()` / `.GetBar()` / `.GetBeatInBar()` | `int` | Current beat (from 0), bar (from 0) and beat inside the bar (from 1). |
+| `.GetPhase()` | `number` | 0 → 1 across the current beat. |
+| `.GetBPM()` / `.GetSecondsPerBeat()` | `number` | Tempo at the current time. |
+| `.TimeToBeat(seconds)` / `.BeatToTime(beat)` | `number` | Conversions through the tempo changes. |
+| `.Judge(targetBeat?)` | `grade, offset, beat` | `offset` in seconds, negative when early. |
+| `.IsOnBeat(window?)` | `bool` | Within `window` seconds of the nearest grid beat; the `good` window by default. |
+| `.SetBPM(bpm)` / `.SetOffset(seconds)` / `.SetTempoChanges(list)` | — | Rebuild the tempo map. |
+| `.SetLatency(seconds)` / `.GetLatency()` / `.GetOffset()` | — / `number` | |
+| `.SetWindows(windows)` / `.SetBeatsPerBar(n)` / `.SetSubdivision(n)` | — | |
+| `.SetSource(source)` | — | Switches the source and re-syncs on the next `Update`. |
+| `.SetCallbacks({ onBeat, onBar })` | — | Replaces both callbacks. |
+| `.Reset()` | — | Re-syncs; a manual metronome goes back to 0. |
+
+> Beats before `offset` (a count-in) are not reported to `onBeat`. When one frame passes several beats — a long
+> hitch — they are all reported in order, at most 32 per update. Call the methods with a dot: `beat.Update()`.
+
+### Abilities — Skills, Spells and Cooldowns
+
+`Abilities` runs the abilities of one character: cooldowns with charges, costs paid from a [`StatBlock`](#statblock--stat-block),
+cast times and channels, interrupts, requirements and blockers from [Gameplay Tags](#gameplay-tags), and
+[status effects](#statuseffects--status-effects) put on the target — for RPGs, MOBAs, action games and anything with a
+skill bar.
+
+```lua
+local stats = StatBlock({ mana = 100, stamina = 50 })
+local abilities = Abilities({
+    owner = GetEntityId(),                       -- tags are checked on and granted to this entity
+    stats = stats,                               -- costs are paid from these stats
+    onCooldownReady = function(name) Print(name .. " is ready") end,
+    onFailed = function(name, reason) Print(name .. ": " .. reason) end,
+})
+
+abilities.Add({
+    name = "fireball",
+    cooldown = 4,
+    cost = { mana = 25 },
+    castTime = 0.8,
+    blockedByTags = { "State.Stunned", "State.Silenced" },
+    activationTags = { "State.Casting" },        -- held by the owner while casting
+    onCastStart = function(target) Print("casting...") end,
+    onActivate = function(target)
+        local pos = GetPosition()
+        SpawnEntity("Content/Classes/CL_Fireball.ice_class", pos.x, pos.y)
+    end,
+    onEnd = function(target, reason) Print("fireball " .. reason) end,
+})
+
+abilities.Add({
+    name = "dash",
+    cooldown = 3,
+    charges = 2,                                 -- two dashes, recharged one after another
+    cost = { stamina = 10 },
+    usableWhileBusy = true,                      -- may be used in the middle of a cast
+    onActivate = function() AddImpulse(600, 0) end,
+})
+
+abilities.Add({
+    name = "drain",
+    cooldown = 10,
+    channelTime = 3, tickInterval = 0.5,         -- 6 ticks over 3 seconds
+    applyEffects = { { name = "drained", duration = 3 } },
+    onTick = function(target, tick) Print("tick " .. tick) end,
+})
+
+function OnUpdate(dt)
+    abilities.Update(dt)
+    if IsKeyJustPressed("1") then abilities.Activate("fireball", targetId) end
+    if IsKeyJustPressed("2") then abilities.Activate("dash") end
+    if IsKeyJustPressed("3") then abilities.Activate("drain", targetId, targetEffects) end
+end
+```
+
+How an activation runs:
+
+1. `Activate(name, target?, effects?)` checks, in this order: a charge is available (`"cooldown"`), the owner is not
+   busy with a cast or channel (`"busy"`), no blocking tag (`"blocked"`), every required tag (`"missingTags"`),
+   enough of every cost (`"cost"`) and the ability's own `canActivate(target)` (`"condition"`). An unknown name fails
+   with `"unknown"`. A failure returns `false` and the reason, and calls `onFailed(name, reason)`.
+2. With a `castTime`, the cast starts: `onCastStart(target)` is called, the `activationTags` are added to the owner,
+   and the ability takes effect when the cast ends. Without one, it takes effect at once.
+3. Taking effect: the cost is paid and a charge is used — both are checked again at the end of a cast — the
+   `applyEffects` are added to `effects` (the target's [`StatusEffects`](#statuseffects--status-effects)), and
+   `onActivate(target)` is called.
+4. With a `channelTime`, the channel follows and calls `onTick(target, tick)` every `tickInterval` seconds.
+5. `onEnd(target, reason)` closes every activation with `"completed"`, `"cancelled"` (`Cancel`, or `Remove` / `Add`
+   of the same name) or `"interrupted"` (`Interrupt`, a blocking tag that appears on the owner, or a cost that can no
+   longer be paid when a cast ends). The granted tags are removed.
+
+| Ability field | Default | Notes |
+| --- | --- | --- |
+| `name` | — | Required and unique. |
+| `cooldown` | `0` | Seconds to recharge one charge. |
+| `charges` | `1` | Charges recharge one after another. |
+| `cost` | none | `{ statName = amount, … }` paid from the `stats` StatBlock: its `Get` must reach the amount, and the amount is taken from its base value. |
+| `castTime` | `0` | Seconds before the ability takes effect. |
+| `channelTime`, `tickInterval` | `0`, `0` | Length of the channel and the seconds between `onTick` calls. |
+| `interruptible` | `true` | `Interrupt` and blocking tags may stop the cast or channel. |
+| `usableWhileBusy` | `false` | An instant ability (no cast, no channel) may be used during another cast. |
+| `blockedByTags`, `requiredTags` | none | Tags of the owner; a tag also matches its children (`State` matches `State.Stunned`). |
+| `activationTags` | none | Added to the owner during the cast or channel; a tag the owner already had is left alone. |
+| `applyEffects` | none | Status effect definitions passed to `effects.Add` when the ability takes effect. |
+| `canActivate(target)` | none | Return `false` to refuse the activation. |
+| `onCastStart`, `onActivate`, `onTick`, `onEnd` | none | See above. |
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `Abilities(config?)` | object | Config: `owner` (entity id), `stats` (StatBlock), `onCooldownReady(name)`, `onFailed(name, reason)`. |
+| `.Add(def)` / `.Remove(name)` / `.Has(name)` | `bool` | `Add` replaces an ability with the same name and refills its charges. |
+| `.Get(name)` / `.GetAll()` | table | The definition / the names in the order they were added. |
+| `.Activate(name, target?, effects?)` | `success, reason` | `reason` is `nil` on success. |
+| `.CanActivate(name, target?)` | `success, reason` | The same checks, without activating. |
+| `.Cancel()` / `.Interrupt()` | `bool` | Stop the current cast or channel; `Interrupt` refuses abilities with `interruptible = false`. |
+| `.Update(dt)` | — | Call every frame: recharges charges and runs casts and channels. |
+| `.IsBusy()` / `.IsCasting()` / `.IsChanneling()` | `bool` | |
+| `.GetCurrent()` | `string` or `nil` | The ability being cast or channelled. |
+| `.GetCastProgress()` | `number` | 0 → 1 over the current cast or channel. |
+| `.GetCharges(name)` / `.GetMaxCharges(name)` | `int` | |
+| `.GetCooldownRemaining(name)` | `number` | Seconds until the next charge; 0 when all charges are ready. |
+| `.GetCooldownProgress(name)` | `number` | 0 → 1 of the charge being recharged; 1 when all are ready. |
+| `.ResetCooldown(name)` / `.ResetAllCooldowns()` | — | Refill the charges. |
+| `.SetCooldownRate(rate)` / `.GetCooldownRate()` | — / `number` | `1.25` recharges 25 % faster. |
+| `.SetCastSpeed(speed)` / `.GetCastSpeed()` | — / `number` | `1.5` casts 50 % faster, from the next cast on. |
+| `.SetOwner(entityId or nil)` / `.GetOwner()` | — / `int` or `nil` | Without an owner, abilities with `requiredTags` cannot be activated and `blockedByTags` never block. |
+| `.SetStats(statBlock)` | — | Without a StatBlock, abilities with a `cost` cannot be activated. |
+| `.SetCallbacks({ onCooldownReady, onFailed })` | — | |
+
+> A blocking tag that appears on the owner during an interruptible cast or channel interrupts it on the next
+> `Update`, so a stun stops a cast without extra code. Call the methods with a dot: `abilities.Activate("dash")`.
+
+### Crafting — Recipes on Top of an Inventory
+
+`Crafting` turns items of an [`Inventory`](#inventory--inventory) into other items: recipes with inputs and outputs,
+instant or timed crafting with a queue, bonus outputs with a chance, and recipes unlocked as the player progresses —
+for survival, sandbox and RPG games.
+
+```lua
+local bag = Inventory(30)
+local crafting = Crafting({
+    inventory = bag,
+    recipes = {
+        { id = "plank", inputs = { log = 1 }, outputs = { plank = 4 } },
+        { id = "sword", inputs = { iron = 3, plank = 1 }, outputs = { sword = 1 }, time = 2.5,
+          bonus = { { item = "gem", count = 1, chance = 0.05 } } },
+        { id = "bow", inputs = { plank = 3, string = 2 }, outputs = { bow = 1 }, locked = true },
+    },
+    onCraftComplete = function(id, times) Print("Crafted " .. id .. " x" .. times) end,
+    onCraftFailed = function(id, reason) Print(id .. ": " .. reason) end,
+    onUnlocked = function(id) Print("New recipe: " .. id) end,
+})
+
+bag.AddItem("log", 2)
+crafting.Craft("plank", 2)                  -- instant: 2 logs become 8 planks
+
+local ok, why = crafting.CanCraft("sword")
+for _, m in ipairs(crafting.GetMissing("sword")) do
+    Print(m.item .. ": " .. m.have .. "/" .. m.need)
+end
+
+crafting.Unlock("bow")
+
+function OnUpdate(dt)
+    crafting.Update(dt)                     -- runs the timed queue
+    local progress = crafting.GetProgress()
+end
+```
+
+How crafting works:
+
+- `Craft(id, times?)` checks that the recipe exists (`"unknown"`), is unlocked (`"locked"`), that there is an
+  inventory (`"noInventory"`) and that it holds every input `times` over (`"missing"`). Then the inputs are taken.
+- An instant recipe (`time` 0) adds the outputs at once. When the inventory cannot take all of them — no free slot or
+  a full stack — nothing changes: the outputs are taken back, the inputs returned, and the craft fails with `"full"`.
+- A timed recipe adds one job per craft to the queue (at most 10 000 jobs, else `"queueFull"`), and `Update` runs the
+  jobs one after another. A finished job whose outputs do not fit waits at the head of the queue — `onCraftBlocked(id)`
+  is called once — and is delivered as soon as there is room.
+- Every craft rolls its `bonus` entries with the game's seeded random generator. A bonus item that does not fit is
+  lost.
+- Inputs and outputs are handled in alphabetical order of their ids, so the same crafts give the same result every
+  run.
+
+| Recipe field | Default | Notes |
+| --- | --- | --- |
+| `id` | — | Required and unique. |
+| `inputs`, `outputs` | none | `{ itemId = count, … }`. A recipe without inputs is free. |
+| `time` | `0` | Seconds per craft; 0 is instant. |
+| `locked` | `false` | A locked recipe cannot be crafted until `Unlock`. |
+| `bonus` | none | `{ { item, count = 1, chance = 1 }, … }` — extra outputs. |
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `Crafting(config?)` | object | Config: `inventory`, `recipes`, `onCraftStart(id, times)`, `onCraftComplete(id, times)`, `onCraftFailed(id, reason)`, `onCraftBlocked(id)`, `onUnlocked(id)`. |
+| `.AddRecipe(def)` / `.RemoveRecipe(id)` / `.HasRecipe(id)` | `bool` | `AddRecipe` replaces a recipe with the same id. |
+| `.GetRecipe(id)` / `.GetRecipes()` | table | The definition / the ids in the order they were added. |
+| `.Unlock(id)` / `.Lock(id)` / `.IsUnlocked(id)` | `bool` | `Unlock` calls `onUnlocked` when the recipe was locked. |
+| `.CanCraft(id, times?)` | `success, reason` | The checks of `Craft`, without crafting. |
+| `.Craft(id, times?)` | `success, reason` | `reason` is `nil` on success. |
+| `.GetMissing(id, times?)` | table | `{ { item, need, have }, … }` for every input that falls short. |
+| `.GetMaxCraftable(id)` | `int` | How many times the inputs allow; `-1` for a recipe without inputs, `0` when it is locked. |
+| `.GetCraftable()` | table | Ids of the unlocked recipes that can be crafted now. |
+| `.Update(dt)` | — | Runs the queue; call it every frame when you use timed recipes. |
+| `.GetQueue()` | table | `{ { id, remaining, total, blocked }, … }`, starting with the job that runs now. |
+| `.CancelQueued(index)` / `.ClearQueue()` | `bool` / `int` | Cancel one job (from 1) or all of them; their inputs are returned. |
+| `.IsCrafting()` / `.GetProgress()` | `bool` / `number` | The queue is not empty / 0 → 1 of the current job. |
+| `.SetInventory(inventory)` | — | |
+| `.SetCallbacks({ … })` | — | Replaces all five callbacks. |
+
+> `onCraftStart(id, times)` is called once when a craft is accepted; `onCraftComplete` is called with `times` for an
+> instant craft and with `1` for every finished job of a timed one. Call the methods with a dot:
+> `crafting.Craft("sword")`.
+
+### Deck — Card Piles for Card Games
+
+`Deck` keeps the cards of a card game in four piles — **draw**, **hand**, **discard** and **exhaust** — and moves
+them with deterministic shuffles: draw, discard, exhaust, shuffle the discard pile back when the draw pile runs out,
+add and remove cards, save and restore everything. It is made for card battlers, deckbuilders and board games.
+
+```lua
+local deck = Deck({
+    cards = { "strike", "strike", "strike", "defend", "defend", "bash" },
+    seed = runSeed,                         -- the same seed deals the same cards
+    handSize = 10,                          -- 0 = no limit
+    onDraw = function(card) Print("Drew " .. tostring(card)) end,
+    onShuffle = function(pile) PlaySound("shuffle") end,
+})
+
+local drawn = deck.Draw(5)                  -- the cards drawn, in order
+deck.Discard(1)                             -- discard the first card of the hand
+deck.Exhaust(2)                             -- remove a card for the rest of the fight
+deck.DiscardHand()                          -- end of the turn
+
+deck.AddCard("anger", "discard")            -- a card gained in battle
+deck.AddCard("wound", "draw", "random")
+
+local top3 = deck.Peek(3)
+WriteFile("run.json", Json.Encode(deck.GetState()))
+```
+
+- Cards can be any non-`nil` Lua values — strings, numbers or tables with your card data. For `Find`, two cards are
+  the same when Lua's `==` says so.
+- The top of the draw pile is the end of its array: `Draw` takes from there, the position `"top"` puts cards there and
+  `"bottom"` at index 1. `GetPile` lists the cards from the bottom up, `Peek` from the top down.
+- When the draw pile is empty, `Draw` shuffles the discard pile into it (`autoReshuffle`, on by default) and calls
+  `onShuffle("draw")`. `Draw` stops early when the hand is full or no card is left.
+- Shuffles use the algorithm of `RNG.Shuffle` with the deck's own random stream: `seed` (a number or a string) gives a
+  private stream, `stream = "name"` uses a named [RNG stream](#rng--deterministic-random-streams-seeded), and without
+  both the deck is seeded from the game's default stream — so a seeded game deals the same cards every run.
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `Deck(config?)` | object | Config: `cards`, `seed`, `stream`, `handSize` (0), `autoReshuffle` (true), `shuffle` (true: shuffle the starting cards), `onDraw(card)`, `onDiscard(card)`, `onExhaust(card)`, `onShuffle(pile)`. |
+| `.Draw(count?)` | table | Draws `count` cards (1 by default) into the hand. |
+| `.Discard(handIndex)` / `.Exhaust(handIndex)` | card or `nil` | Moves a card of the hand. |
+| `.DiscardHand()` | `int` | Discards the whole hand, first card first. |
+| `.Move(fromPile, index, toPile, position?)` | card or `nil` | Any pile to any pile, without callbacks. |
+| `.AddCard(card, pile?, position?)` | `bool` | `pile` is `"draw"` by default; `position` `"top"` (default), `"bottom"` or `"random"`. |
+| `.RemoveCard(pile, index)` | card or `nil` | Takes a card out of the deck. |
+| `.Peek(count?)` | table | Top cards of the draw pile, without drawing them. |
+| `.GetPile(pile)` / `.GetHand()` | table | Copies. |
+| `.GetCount(pile?)` | `int` | `"draw"` by default. |
+| `.Find(pile, card)` | `int` or `nil` | Index of the first match. |
+| `.Shuffle(pile?)` / `.ReshuffleDiscard()` | `bool` / — | `Shuffle` shuffles the draw pile by default. |
+| `.Reset()` | — | Every card back into the draw pile, shuffled. |
+| `.SetHandSize(n)` / `.GetHandSize()` / `.SetAutoReshuffle(enabled)` | | |
+| `.SetSeed(seed)` / `.SetStream(name)` / `.GetSeed()` | | |
+| `.GetState()` / `.SetState(state)` | table / `bool` | All four piles and the state of the private random stream — for saves and undo. |
+| `.SetCallbacks({ onDraw, onDiscard, onExhaust, onShuffle })` | — | |
+
+> The piles are `"draw"`, `"hand"`, `"discard"` and `"exhaust"`, and indexes count from 1. Call the methods with a
+> dot: `deck.Draw(5)`.
+
 ---
 
 ## 28. Localization — Localization
@@ -15462,6 +17033,67 @@ local picked = UseSystemLanguage()     -- → "ru", or nil (the language stays a
 > the system names no country. On a platform that reports nothing they return `""` and an empty table. Each call
 > asks the operating system, so call them once rather than every frame. Windows, macOS, Linux, Android, iOS and
 > the web build report the player's languages.
+
+### Plural forms
+
+Languages count in different ways: English has "1 coin / 5 coins", Russian "1 монета / 2 монеты / 5 монет", Arabic six
+forms. `LocalizePlural` picks the right form of a key for the current game language by the Unicode CLDR rules. Give
+the key one entry per form in the localization table, named `key#form`:
+
+```json
+"coins#one":   { "en": "{0} coin",  "ru": "{0} монета" },
+"coins#few":   {                    "ru": "{0} монеты" },
+"coins#many":  {                    "ru": "{0} монет"  },
+"coins#other": { "en": "{0} coins", "ru": "{0} монеты" }
+```
+
+```lua
+LocalizePlural("coins", 1)        -- en "1 coin",     ru "1 монета"
+LocalizePlural("coins", 3)        -- en "3 coins",    ru "3 монеты"
+LocalizePlural("coins", 25)       -- en "25 coins",   ru "25 монет"
+LocalizePlural("coins", 1.5)      -- en "1.5 coins",  ru "1,5 монеты"
+LocalizePlural("found", 3, "Mira")  -- "{0}" is the count, "{1}" and on are the extra arguments
+
+local form = GetPluralCategory(21)          -- "one" in Russian, "other" in English
+local german = GetPluralCategory(2, "de")   -- for a given language
+```
+
+- The forms are `zero`, `one`, `two`, `few`, `many` and `other`, and every language uses only some of them: English
+  `one` and `other`; Russian, Ukrainian and Polish `one`, `few`, `many` and `other`; Arabic all six; Japanese,
+  Chinese and Korean only `other`. When the form a number needs is missing for the current language, `key#other` is
+  used, then the plain `key`.
+- `{0}` becomes the count written as `FormatNumber` writes it — with the digit grouping and decimal separator of the
+  language — and the form is chosen for the number as it is written: `1.0` is written `1` and counts as one. The other
+  placeholders work as in `LocalizeFmt`.
+- The language codes of your table are read as they are — `en`, `pt-BR`, `zh-Hant`. Portuguese of Portugal and of the
+  other regions except Brazil follows the rules of Portugal; the codes `ua` and `kr` that the editor's own languages use
+  are read as Ukrainian and Korean. A language without rules counts like English.
+
+### Numbers and durations
+
+```lua
+FormatNumber(1234567.891)          -- en "1,234,567.891"   de "1.234.567,891"   ru "1 234 567,891"
+FormatNumber(1234.5, 2)            -- en "1,234.50"        fr "1 234,50"
+FormatNumber(1250000, 0, "hi")     -- "12,50,000" (Indian grouping)
+FormatNumber(-0.004, 2)            -- "0.00", never "-0.00"
+
+FormatDuration(65)                 -- "1:05"
+FormatDuration(3725.4)             -- "1:02:05"
+FormatDuration(83.25, 2)           -- en "1:23.25"   ru "1:23,25"
+FormatDuration(42, 0, true)        -- "0:00:42"
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `LocalizePlural(key, count, ...)` | `string` | The plural form of `key` for `count`, see above. |
+| `GetPluralCategory(count, language?)` | `string` | `"zero"`, `"one"`, `"two"`, `"few"`, `"many"` or `"other"`; the current game language by default. |
+| `FormatNumber(value, decimals?, language?)` | `string` | Digit grouping and decimal separator of the language (the current game language by default). Without `decimals`, whole numbers get no fraction and others up to 3 digits, trailing zeros dropped; with `decimals` (0–15), exactly that many. |
+| `FormatDuration(seconds, decimals?, alwaysHours?)` | `string` | `m:ss`, or `h:mm:ss` from one hour on — always with `alwaysHours`. `decimals` (0–3) adds fractions of a second with the decimal separator of the game language. |
+
+> Russian, French, Polish, Swedish and similar languages separate the digit groups with a no-break space, so a number
+> never breaks across two lines — nearly every font has this character (U+00A0). Spanish and Polish start grouping at
+> five digits, as CLDR says (Spanish `1000` but `10.000`). Swiss German and Swiss Italian (`de-CH`, `it-CH`) use `’`;
+> Latin American Spanish (`es-419`, `es-MX`, `es-US` and others) writes `1,234.5`.
 
 ---
 
@@ -15930,7 +17562,7 @@ local budgetMs = GetProfilerFrameBudgetMs()
 
 #### Lua API — Script Profiler
 
-The engine measures every Lua callback it invokes, per script and per callback type (`OnUpdate`, `OnLateUpdate`, `OnFixedUpdate`, collision, sensor, hit, joint-break, lifecycle, behavior-tree, level and mod callbacks, plus widget scripts). These functions read and control that data from gameplay code — useful for shipping builds where the editor panel is not available.
+The engine measures every Lua callback it invokes, per script and per callback type (`OnUpdate`, `OnUpdateBatch`, `OnLateUpdate`, `OnFixedUpdate`, collision, sensor, hit, joint-break, lifecycle, behavior-tree, level and mod callbacks, plus widget scripts). These functions read and control that data from gameplay code — useful for shipping builds where the editor panel is not available.
 
 ```lua
 if GetScriptProfilerTimeMs() > GetProfilerFrameBudgetMs() * 0.3 then
@@ -15950,8 +17582,41 @@ end
 | `GetScriptProfilerTimeMs` | `GetScriptProfilerTimeMs()` → `number` | Total Lua time spent in engine-invoked callbacks during the last frame. |
 | `GetScriptProfilerCalls` | `GetScriptProfilerCalls()` → `number` | Number of measured Lua callback invocations during the last frame. |
 | `GetLuaMemoryKB` | `GetLuaMemoryKB()` → `number` | Current heap size of the game Lua VM in KB (both VMs: `Settings.GetLuaGCStats()`). |
-| `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Smoothed Lua allocation rate in KB/s — a growing value means script memory churn. |
-| `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Array of per-script rows, sorted by last-frame cost. Each entry has `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`. |
+| `GetLuaAllocRateKBps` | `GetLuaAllocRateKBps()` → `number` | Memory the game Lua VM allocates per second in KB/s, smoothed over about ten frames. Every allocation counts, also memory freed again in the same frame, so a high value means a lot of garbage for the collector. |
+| `GetScriptProfilerRows` | `GetScriptProfilerRows()` → `table` | Array of per-script rows, sorted by last-frame cost. Each entry has `script`, `path`, `frameMs`, `avgMs`, `maxMs`, `totalMs`, `calls`, `instances`, `errors`, `frameAllocKB` and `frameAllocs` (memory the script's callbacks allocated in the last frame) and `totalAllocKB` (since the start or the last reset). |
+
+#### Lua API — Function Profiler
+
+The script profiler measures whole callbacks; the function profiler shows which Lua functions and
+lines run the most inside them. While it is on, a Lua hook takes a sample of the running Lua call
+stack every *N* VM instructions, in both script VMs and in coroutines. Time spent inside engine
+functions called from Lua runs no Lua instructions and is not sampled, and the hook makes Lua
+noticeably slower, so the profiler is off by default — switch it on only while you look for hot
+code. The editor shows the same data in the **Lua Functions** tab of the Profiler
+([Profiling & Building → 4.13](Profiling-And-Building-EN-DOC.md#413-lua-functions-tab--sampling-function-profiler)).
+
+```lua
+SetFunctionProfilerEnabled(true)
+
+-- ... a few seconds later, e.g. from a debug key:
+for _, row in ipairs(GetFunctionProfilerRows(5)) do
+    Print(string.format("%5.1f%%  %s  (%s:%d, hot line %d)",
+        row.selfPercent, row.name, row.source, row.line, row.hotLine))
+end
+SaveFunctionProfile()            -- timeline for chrome://tracing / ui.perfetto.dev
+SetFunctionProfilerEnabled(false)
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `SetFunctionProfilerEnabled` | `SetFunctionProfilerEnabled(enabled)` | Turns sampling on or off. Collected samples stay until `ResetFunctionProfiler()`; in the editor they are also cleared when a play session starts. |
+| `IsFunctionProfilerEnabled` | `IsFunctionProfilerEnabled()` → `bool` | Whether sampling is on. |
+| `SetFunctionProfilerInterval` | `SetFunctionProfilerInterval(instructions)` | Lua VM instructions between two samples, clamped to 1000 – 1000000 (default 10000). Smaller values give more samples and cost more. |
+| `GetFunctionProfilerInterval` | `GetFunctionProfilerInterval()` → `number` | The current interval. |
+| `ResetFunctionProfiler` | `ResetFunctionProfiler()` | Drops every sample. |
+| `GetFunctionProfilerSamples` | `GetFunctionProfilerSamples()` → `number` | How many samples were taken since the last reset. |
+| `GetFunctionProfilerRows` | `GetFunctionProfilerRows([limit])` → `table` | The busiest functions, sorted by self samples; `limit` is 1 – 100000 (default 50). Each entry has `name` (functions without a name — such as engine callbacks, which are called from C++ — show as `<source:line>`, native functions as `[C]` or their name at the call site), `source`, `line` (where the function starts), `native`, `selfSamples` (samples in the function itself), `totalSamples` (samples with the function anywhere on the stack), `selfPercent`, `totalPercent`, `allocKB` (an estimate: memory allocated since the previous sample is charged to the function the sample lands in) and `hotLine` (the line with the most self samples). |
+| `SaveFunctionProfile` | `SaveFunctionProfile([filename])` → `bool` | Writes the last 262 144 samples as a Chrome Trace timeline of Lua functions and frames. Without `filename` the file goes to the profiler folder as `LuaFunctions_<date>_<time>_chrome.json`; a `filename` must stay inside the project folder or the game's data folders. Returns `false` when there are no samples or the file cannot be written. |
 
 #### Lua API — Hitch Detection
 
@@ -16064,7 +17729,14 @@ local fade = GetTileShadowEdgeFade(tile)           -- → float
 SetTileShadowZOrder(tile, 1)
 local zo = GetTileShadowZOrder(tile)               -- → float
 
--- Whether the tile lets light pass through instead of blocking it
+-- How lit the inside of a solid area of box-shaped tiles is [0..1], default 1:
+-- the brightness at the middle of the first tile under a lit face, deeper tiles
+-- fade smoothly (1 = fully lit, 0 = the area stays dark)
+SetTileShadowLightDepth(tile, 0.5)
+local depth = GetTileShadowLightDepth(tile)        -- → float
+
+-- Whether shadows cast by other objects pass through the tile instead of being
+-- stopped by it (with Colliders Block Shadows on)
 SetTileDontBlockShadows(tile, true)
 local dontBlock = GetTileDontBlockShadows(tile)    -- → bool
 
@@ -16148,7 +17820,7 @@ local world = TileToWorld(tileX, tileY)  -- → {x, y}
 ### Projection (orthogonal / isometric / hexagonal)
 
 > Projection is a **map-level** property set in the Tilemap editor. Tilesets stay regular square sheets.
-> **Coordinate convention:** for **orthogonal** maps tile coordinates use the classic layout (`y = 0` at the bottom). For **isometric** and **hexagonal** maps tile coordinates are the **raw grid coordinates** `(x, y)` — `(0, 0)` is the top cell, `x` grows toward the lower-right, `y` toward the lower-left. All tile functions (`GetTileAt`, `SetTileAt`, `WorldToTile`, `TileToWorld`, `IsTileSolid`, …) respect the active projection automatically.
+> **Coordinate convention:** for **orthogonal** and **hexagonal** maps tile coordinates start at the bottom-left: `x` grows to the right and `y` upward, and `(0, 0)` is the left cell of the bottom row. A hexagonal map is laid out in offset rows (offset columns when its stagger axis is X): every other row is shifted by half a cell, so take neighbours and distances from `GetTileNeighbors` and `TileDistance` instead of fixed offsets. For **isometric** maps tile coordinates are the **raw grid coordinates** `(x, y)` — `(0, 0)` is the top cell, `x` grows toward the lower-right, `y` toward the lower-left. All tile functions (`GetTileAt`, `SetTileAt`, `WorldToTile`, `TileToWorld`, `IsTileSolid`, …) respect the active projection automatically.
 
 ```lua
 -- Active projection → "orthogonal" | "isometric" | "hexagonal"
@@ -16338,8 +18010,8 @@ end
 ### Bulk tile editing
 
 ```lua
--- All bulk ops use Lua-Y coordinates (y=0 is the top row), respect layers
--- and rebuild chunk emptiness when chunking is enabled.
+-- All bulk ops use Lua-Y coordinates (y=0 is the bottom row; isometric maps use raw
+-- grid rows), respect layers and rebuild chunk emptiness when chunking is enabled.
 
 -- 2D table → whole layer. tbl[1..H][1..W], row 1 = bottom (y=0), row H = top, column 1 = left.
 -- Cells that aren't a number are skipped (kept as-is).
@@ -16628,7 +18300,20 @@ SetTileColliderSensor(tileX, tileY, true, 0)             -- instance 0
 
 -- Full tilemap physics rebuild (colliders)
 RebuildTilemapPhysics()
+RebuildTilemapPhysics(0)                                  -- instance 0
+
+-- Rebuild only the colliders a rectangle of cells touches (Lua-Y: y = 0 is the bottom row)
+RebuildTilemapPhysicsRect(x, y, w, h)
+RebuildTilemapPhysicsRect(x, y, w, h, 0)                  -- instance 0
 ```
+
+`SetTileGrid`, `BlitFromArray`, `SetTilesBulk` and the other bulk edits change only the grid; the colliders follow after
+a rebuild. `RebuildTilemapPhysics` rebuilds the whole instance, so its cost grows with the size of the map.
+`RebuildTilemapPhysicsRect` rebuilds only what the rectangle touches: the colliders of its cells, every merged collider
+rectangle, chain outline and multi-cell tile that reaches into it, and the single-cell colliders right next to it. Those
+cells are merged again among themselves, so a small edit costs a small rebuild however large the map is — the usual
+call after carving a crater or chipping a few cells. The merged rectangles it produces can differ from the ones a full
+rebuild would choose; the solid area is always the same. An instance that has no physics body yet is built whole.
 
 ### Tile collider events and properties
 
@@ -17777,6 +19462,9 @@ local json = Network.JsonEncode({ key = "value" })
 local tbl = Network.JsonDecode(json)
 ```
 
+> For JSON outside networking — save files, settings, data from a server — use the [`Json`](#json) module: it
+> encodes any value, can indent the text and reports errors. Both use the same converter.
+
 Client-side `BroadcastData`/`BroadcastTable`/`BroadcastDataExcept`/`BroadcastTableExcept`,
 as well as targeted `SendData`/`SendTable`, are automatically relayed through the host:
 receivers get the real sender `playerId` in `OnDataReceived`/`OnTableReceived`.
@@ -17788,7 +19476,8 @@ the reliable messages sent after it.
 Tables travel as JSON. Integers stay 64-bit integers and other numbers keep full precision;
 `nan` and `inf` become `nil`. A table is sent as an array only when its keys are exactly `1..n`;
 otherwise it becomes an object and numeric keys arrive as strings (`{[5] = "a"}` arrives as
-`{["5"] = "a"}`). Nesting deeper than 64 levels is not transmitted.
+`{["5"] = "a"}`). Nesting deeper than 64 levels is not transmitted, and a reference back to a table
+that is already being sent arrives as `nil`.
 
 ### Callbacks (events)
 
@@ -18971,7 +20660,7 @@ On("match_ended",   function() print("trace:", NetworkProfiler.StopTrace()) end)
 
 > **Type:** Global (`Rollback` table).
 >
-> GGPO-style **rollback netcode** for frame-perfect online games (fighting games, 1v1/2v2 action, lockstep). It runs on top of the authoritative `Network` transport (ENet) and the deterministic `Random` service.
+> **Rollback netcode** for frame-perfect online games (fighting games, 1v1/2v2 action, lockstep). It runs on top of the authoritative `Network` transport (ENet) and the deterministic `Random` service.
 
 ### When to use this instead of `Network`
 
@@ -19470,7 +21159,7 @@ end
 
 > **Type:** Global module `FogOfWar.*`
 
-A grid-based **field-of-view / fog-of-war** system built on symmetric recursive shadowcasting —
+A grid-based **field-of-view / fog-of-war** system with classic recursive shadowcasting by default —
 the classic roguelike vision model (top-down dungeon crawlers). It tracks three
 states per cell — **unseen**, **explored** (seen before, remembered, dimmed) and **visible**
 (currently in view) — and serves both gameplay queries (stealth, line-of-sight, "can the monster
@@ -19508,7 +21197,39 @@ FogOfWar.SetOpacityFromNavGrid()              -- pull walls from the NavGrid aut
 
 FogOfWar.IsConfigured()                       -- bool
 FogOfWar.GetWidth(); FogOfWar.GetHeight(); FogOfWar.GetCellSize()
+FogOfWar.SetStrictLineOfSight(true)
+FogOfWar.IsStrictLineOfSight()
 ```
+
+**Strict line of sight** is optional and defaults to `false`, preserving the classic
+shadowcasting model. When enabled, each candidate cell center is tested against the
+actual world-space viewer position by traversing the opacity grid. Two opaque cells
+meeting at a diagonal corner block the ray through that corner; one opaque neighbour
+does not. The first opaque destination cell remains visible, but cells behind it do
+not. A viewer inside an opaque cell reveals only that cell. The viewer cell is always
+visible; other cell centers must fall within the requested radius. Multiple viewers
+still add to the same visible and explored sets.
+
+```lua
+FogOfWar.SetSurfaceVisibility(true)
+local surfaces = FogOfWar.IsSurfaceVisibility()
+```
+
+Surface visibility defaults to `false` and supplements strict line of sight.
+For an opaque destination whose center is occluded, the engine also checks the
+midpoint of each exposed face facing the viewer and each corner facing an empty
+diagonal neighbour, stopping exactly at that surface. This also reveals the
+solid corner where a floor and wall meet, even when both adjacent faces adjoin
+solid cells. This keeps a flat floor, ceiling or wall visible at grazing angles without
+revealing empty cells behind it. The destination center must still lie within
+the radius. Empty cells, sealed diagonal corners and opaque viewer cells retain
+the strict rules above. This tests face midpoints and corners, not every possible subpixel
+sliver of a partially obstructed face; classic shadowcasting is unchanged.
+
+Opacity is explicit sight-blocking data, independent of lighting. Update it when doors,
+terrain or other obstacles change. `SetOpacityFromNavGrid()` copies the navigation solids
+once; it does not subscribe to later changes. Add only viewers whose vision should be
+shared: adding a lamp as a viewer reveals its room even if the player cannot see it.
 
 #### Per-frame visibility loop
 
@@ -19554,8 +21275,38 @@ FogOfWar.SetRevealExplored(true)         -- false = explored-but-not-visible cel
                                          --         again (no map memory — blind / amnesia runs)
 FogOfWar.SetRenderEnabled(true)          -- draw the overlay (FOV is still computed if false)
 FogOfWar.IsRenderEnabled()               -- bool — is the overlay currently being drawn?
-FogOfWar.SetRenderZ(5000.0)              -- draw order (above the world, below the UI)
+FogOfWar.SetRenderZ(5000.0)
+FogOfWar.SetHideOutsideGrid(true)
+FogOfWar.IsHideOutsideGrid()
 ```
+
+`SetHideOutsideGrid` defaults to `false`. When enabled, the area outside the configured
+grid is covered with the fog color and the unseen alpha, matching out-of-bounds visibility
+queries. The overlay renders after the world and before foreground UI; world depth,
+stencil masks and camera near/far clipping cannot expose hidden objects. Depth/stencil
+enable states are restored afterwards. `SetRenderZ` remains available for compatibility;
+its plane does not change this overlay order or make world depth punch through the fog.
+Smooth fades pause at zero delta time, including additional split-screen views.
+
+For immediate hiding without map memory, use `SetAlphas(1, 1, 0)`,
+`SetRevealExplored(false)` and `SetSmoothFade(false)`.
+
+```lua
+FogOfWar.SetEdgeSoftness(2)
+local cells = FogOfWar.GetEdgeSoftness()
+```
+
+Edge softness is a spatial inward feather measured in fog cells, independent
+of temporal `SetSmoothFade`. Its default is `0`; negative/non-finite values
+disable it. Alpha stays constant inside each cell, preserving a pixel grid.
+Only currently visible cells are darkened near hidden open space; no hidden
+cell is revealed and gameplay visibility queries remain binary. Distance does
+not propagate through opaque cells or sealed diagonal corners. Visible opaque
+faces inherit the brightest adjacent visible open cell rather than darkening
+because of the hidden wall thickness. The nearest visible band retains at
+least 25% of the fully-visible-to-unseen contrast so thin passages remain
+readable. Values at or below half a cell have no visible feather. Combine it
+with `SetSmoothFade(false)` for immediate occlusion when a door closes.
 
 #### Map control & persistence
 
@@ -19568,6 +21319,13 @@ FogOfWar.HideAll()        -- hide everything again
 local blob = FogOfWar.SaveState()   -- serialize the explored map (compact, bit-packed)
 FogOfWar.LoadState(blob)            -- restore on load (re-applies size / cell / origin)
 ```
+
+`LoadState` returns `false` for malformed dimensions, non-finite or non-positive cell
+size, non-finite origin, or an invalid/truncated explored bitset, without changing the
+current state. A valid state with the same dimensions, cell size and origin preserves
+opacity. Different grid metadata creates a new empty opacity grid: rebuild sight
+blockers before the next FOV computation. Visibility is recomputed rather than saved;
+configuration flags and appearance settings are not part of the serialized map.
 
 ---
 
@@ -20184,6 +21942,160 @@ SetPointMarkerPosition(10, 5, 1)  -- Second marker
 > Utilities for data handling: arrays (Array), maps (Map), sets (Set),
 > enums (Enum), structs (Struct), data tables (DataTable).
 
+### Data — native binary serialization
+
+`Data` serializes a tree of Lua values without an intermediate JSON tree. It is available in class, level and
+widget scripts on every platform. Nil, booleans, signed 64-bit integers, finite double-precision numbers, binary
+strings and tables keep their types. Keys must be integers or strings: integers are written first in ascending
+order, then strings in unsigned byte order, independently of locale and `pairs`. The same immutable value gives
+the same **uncompressed** bytes across supported platforms and engine versions.
+
+| Function | Returns | Description |
+| --- | --- | --- |
+| `Data.Encode(value, options?)` | `bytes, nil` or `nil, error` | Encode synchronously. |
+| `Data.Decode(bytes, options?)` | `value, nil` or `nil, error` | Decode raw or zstd-compressed bytes synchronously. |
+| `Data.BeginEncode(value, options?)` | `job, nil` or `nil, error` | Create a cooperative encoding job. |
+| `Data.BeginDecode(bytes, options?)` | `job, nil` or `nil, error` | Create a cooperative decoding job. |
+| `job:Step(budgetMs?)` | `done, result, error` | Continue on the calling thread, with a 1 ms default budget. The budget must be finite and positive. |
+| `job:Cancel()` | — | Release unfinished work. Subsequent `Step` returns `true, nil, error`; completed jobs keep their result. |
+| `Data.Save(path, value, options?)` | `true, nil` or `nil, error` | Encode and write a binary file synchronously under `Saves/`. |
+| `Data.Load(path, options?)` | `value, nil` or `nil, error` | Read a binary file under `Saves/` and decode synchronously. |
+| `Data.FormatVersion` | `1` | Version of the binary format written by this API. |
+
+Check the error result, not the truth value of the value: a successfully decoded root may itself be nil or false.
+No partial table is returned on failure. Encoder errors include a path from `$`; binary key names are escaped,
+and names longer than 80 bytes are abbreviated with their full byte length shown. Cycles, a table appearing
+twice, real metatables (including protected ones), functions/userdata/threads, noninteger numeric keys, NaN and
+infinity are errors. Access is raw, without invoking metamethods.
+
+Optional fields of the options table:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `compress` | `false` | Encode/Save into one zstd frame with a checksum. Decode detects compression automatically. |
+| `level` | `3` | Integer zstd compression level from 1 to 22. |
+| `maxSize` | `268435456` (256 MiB) | Maximum raw encoded size including the header; also the decompression limit. Integer from 1 to 1073741824 (1 GiB). |
+| `maxItems` | `4194304` | Maximum value-tag count, including the root and all table keys/values. Integer from 1 to 1073741824. |
+| `maxDepth` | `64` | Maximum nested table count, including a table root. Integer from 1 to 256. |
+
+Limits apply to synchronous calls and jobs. Packed input/output is also limited to
+`maxSize + floor(maxSize / 128) + 1024` bytes. Invalid options return an error. Decode rejects truncation, unknown
+tags/versions/flags, bad string references, duplicate or unsorted keys, nil table values, nonfinite numbers,
+oversized counts, noncanonical varuints and trailing bytes. Compressed input must contain exactly one complete
+zstd frame: concatenated frames and trailing bytes are rejected. Compression bytes can change when zstd changes;
+the decoded version-1 format remains compatible.
+
+```lua
+local ok, err = Data.Save("slot1.ibd", save, { compress = true })
+if err ~= nil then Print(err) end
+local loaded, loadError = Data.Load("slot1.ibd")
+if loadError == nil then save = loaded end
+
+local job, beginError = Data.BeginEncode(save, { compress = true })
+if beginError ~= nil then
+    Print(beginError)
+else
+    StartCoroutine(function()
+        while true do
+            local done, bytes, stepError = job:Step(1)
+            if stepError ~= nil then Print(stepError); break end
+            if done then
+                if not WriteFile("slot2.ibd", bytes) then Print("Write failed") end
+                break
+            end
+            coroutine.yield()
+        end
+    end)
+end
+```
+
+Keep the entire source tree unchanged until encoding finishes or is cancelled, including between `Step` calls.
+Jobs retain their input and belong to their original Lua VM. Abandoned jobs release resources when collected;
+use `Cancel` for immediate release. Reentrant `Step` calls return an error; cancellation from a Lua finalizer
+takes effect after the current operation finishes. Key enumeration/sorting is incremental; long strings are
+hashed, compared and copied in chunks, and zstd streams chunks of up to 64 KiB. The budget is checked between
+operations: allocation, Lua string creation/hash-table insertion, one zstd call and final transfer of the complete
+result to Lua are indivisible and can exceed it. This is a cooperative budget, not a hard deadline.
+`Save`, `Load`, `ReadFile` and `WriteFile` remain synchronous. File writes use the same path restrictions,
+atomic replacement and writable-storage synchronization as `WriteFile`. For background file I/O and optional
+compression, pass encoded bytes to `WriteFileAsync`, or read them with `ReadFileAsync` before decoding.
+
+#### Data binary format, version 1
+
+The format is fixed independently of the engine release. A raw stream starts with the eight bytes
+`49 42 44 41 54 41 01 00` (`IBDATA`, version `01`, reserved flags `00`), then exactly one value:
+
+| Tag byte | Following bytes |
+| --- | --- |
+| `00` | None: nil. |
+| `01`, `02` | None: false, true respectively. |
+| `03` | Signed two's-complement integer, exactly 8 bytes, least significant byte first. |
+| `04` | Finite IEEE-754 binary64, exactly 8 bytes, least significant byte first; preserves floating subtype and signed zero. |
+| `05` | Varuint byte length, then that many binary string bytes. Assigns the next string ID, starting at zero. |
+| `06` | Varuint ID of an already defined string. |
+| `07` | Varuint pair count, then that many key/value pairs recursively encoded with these tags. |
+
+A varuint uses unsigned base-128 groups, least significant group first. The high bit means continuation; it is
+clear in the last byte. The representation is shortest and fits in 64 bits. Keys use tag `03`, `05` or `06`:
+integers strictly increase, then strings strictly increase in unsigned byte order (a prefix precedes a longer
+string). Table values cannot be nil. The encoder reuses a string ID for every repeated byte sequence across
+keys and values in canonical depth-first traversal order. Tables form a tree and have no reference IDs.
+A compressed stream is one standard zstd frame containing the complete raw stream above.
+
+### NumericArray — typed numeric buffers
+
+`NumericArray` stores a fixed-size native array for batch calculations. It is available in class, level,
+widget and worker scripts. It is an additional API: existing Lua tables, `Array`, `Data` and `NoiseBuffer`
+keep their behavior. Using individual `Get`/`Set` calls is not a replacement for a fast Lua table loop;
+the useful operations process the whole buffer in one native call.
+
+| Function or method | Returns | Description |
+| --- | --- | --- |
+| `NumericArray.new(type, count, value?)` | `NumericArray` | Create `count` elements, filled with `value` or zero. `type` is `"float32"`, `"float64"`, `"int32"` or `"uint32"`. |
+| `array:Length()` | integer | Fixed element count. |
+| `array:Type()` | string | Element type name. |
+| `array:Get(index)` | number | Read an element; indices start at **1**. |
+| `array:Set(index, value)` | — | Write one element. |
+| `array:Fill(value)` | — | Fill with a number, or copy an array of the same type and length. |
+| `array:Add(value)` | — | Add a number or matching array element by element, in place. |
+| `array:Multiply(value)` | — | Multiply by a number or matching array element by element, in place. |
+| `array:Sum()` | number | Integer arrays return an exact signed 64-bit sum; floating arrays accumulate in float64, in index order. An empty array returns zero. |
+| `array:Min()`, `array:Max()` | number or nil | Smallest/largest value; nil when empty. |
+| `array:Clone()` | `NumericArray` | Independent copy. |
+| `array:CopyFrom(source)` | — | Copy a buffer of the same type and length. |
+| `array:SortIndices(descending?)` | `NumericArray` | New `uint32` buffer of **1-based** indices, sorted by their source values. Default ascending; `descending` must be a boolean when provided. Equal values keep their original order. The source is unchanged. |
+| `array:ToString()` | binary string | Raw elements in little-endian order, without a header. |
+| `array:FromString(bytes)` | — | Replace elements from bytes of exactly `Length() * elementSize` bytes. |
+
+The count and indices must be Lua integers; zero-length buffers are supported. A buffer is limited to
+16,777,216 elements and 128 MiB of element storage. Element storage is included in Lua GC memory accounting.
+Float32/int32/uint32 elements take four bytes; float64 takes eight. Int32 accepts whole
+numbers from -2,147,483,648 through 2,147,483,647; uint32 from zero through
+4,294,967,295. Numeric strings, fractional integer elements, values outside the element range, NaN and
+infinity raise Lua errors. Floating values round to their element precision; underflow to zero is allowed.
+
+All failed mutations leave the buffer unchanged. Integer arithmetic checks overflow instead of wrapping;
+floating arithmetic and floating `Sum` reject a nonfinite result. Buffer operands require exactly the same
+type and length. No operation calls a Lua callback. Buffers belong to their Lua VM: pass their binary strings
+through `Worker` messages and reconstruct them in the receiving VM.
+
+The binary representation uses IEEE-754 binary32/binary64 and signed two's-complement int32/unsigned uint32,
+with the least significant byte first. It preserves floating signed zero. `FromString` rejects nonfinite
+floating encodings and any missing or extra byte. Store the type and count separately; the bytes contain
+neither. For structured serialization, store `{ type = array:Type(), count = array:Length(), bytes = array:ToString() }`
+with `Data`, rather than passing the userdata itself.
+
+```lua
+local heights = NumericArray.new("float32", 4096, 0.5)
+heights:Multiply(2)
+heights:Add(0.25)
+heights:Set(1, 3)
+local order = heights:SortIndices(true)
+local highest = heights:Get(order:Get(1))
+local copy = NumericArray.new(heights:Type(), heights:Length())
+copy:FromString(heights:ToString())
+```
+
 ### Enum
 
 ```lua
@@ -20266,6 +22178,42 @@ Array.Shuffle(arr)
 local unique = Array.Unique(arr)          -- Unique
 local flat = Array.Flatten({{1,2},{3,4}}) -- → {1,2,3,4}
 ```
+
+`Array.Sort(arr[, comp])`, `Array.SortBy(arr, key)`, `Array.SortNumbers(arr)` and
+`Array.SortStrings(arr)` sort the array in place and return nothing. All four are stable:
+elements with equal keys keep their original relative order. Pass a dense array without holes;
+sorting reads and writes the stored entries `1..rawlen(arr)` directly, preserving other fields
+and the array's metatable.
+
+Without a comparator, `Array.Sort` accepts either numbers or strings. Numbers may mix integers
+and floats; integer comparisons preserve the full Lua integer range, including values above
+2^53. `Array.SortNumbers` requires numbers, and `Array.SortStrings` requires strings. Strings
+use unsigned byte order, including embedded zero bytes, independently of locale. Mixing
+numbers and strings, unsupported keys, missing keys and NaN elements or keys raises a Lua error.
+
+`Array.SortBy` sorts ascending by a string field name or by `key(value, index)`. On a successful
+call, each field or function key is read exactly once per element. Field access follows normal
+Lua indexing. All keys must be numbers, or all must be strings. For descending order, pass
+a comparator to `Array.Sort`:
+
+```lua
+local scores = { { name = "A", score = 10 }, { name = "B", score = 10 }, { name = "C", score = 5 } }
+Array.SortBy(scores, "score")
+Array.SortBy(scores, function(value, index) return value.score end)
+Array.Sort(scores, function(a, b) return a.score > b.score end)
+local names = { "beta", "Alpha", "alpha" }
+Array.SortStrings(names)
+local values = { 9007199254740993, 9007199254740992, 1.5 }
+Array.SortNumbers(values)
+```
+
+A custom comparator must return a boolean and define a deterministic strict order:
+`comp(a, a)` must be false, and `comp(a, b)` and `comp(b, a)` cannot both be true. Use `<` or `>`
+instead of `<=` or `>=`. Callback errors and detected invalid ordering become Lua errors;
+the bounded sorting algorithm remains safe even for an invalid comparator, but cannot detect
+every violation of transitivity. Do not yield or mutate the array, comparison data or keys
+inside callbacks. The final order is written only after sorting succeeds; callback side
+effects are not undone if an error occurs.
 
 ### Map
 
@@ -20505,6 +22453,8 @@ String.ReplaceFirst("aabbaabb", "bb", "XX")   -- → "aaXXaabb"
 -- Case
 String.Upper("hello")  -- → "HELLO"
 String.Lower("HELLO")  -- → "hello"
+String.Lower("ÉCOLE ΑΒΓ ПРИВЕТ")  -- → "école αβγ привет": Latin with accents, Greek, Cyrillic and
+                                  --   Armenian change case too (string.lower changes only A-Z)
 
 -- Padding
 String.PadLeft("42", 5, "0")   -- → "00042"
@@ -21979,8 +23929,8 @@ print("Mods refreshed. Found: " .. Mods.GetCount())
 
 Registers an **extra directory to scan for mods**, in addition to `Mods/`. The directory is scanned exactly like
 `Mods/`: every immediate subfolder that contains a `mod.json` becomes a mod, with `MOD_DIR` and `ModRequire()`
-resolving against wherever it actually lives. A directory that holds a `mod.json` itself is that one mod instead —
-the shape of a Steam Workshop item folder, so each subscribed item can be registered on its own. Returns `false`
+resolving against wherever it actually lives. A directory that holds a `mod.json` itself is that one mod instead,
+so a mod that a store or a launcher downloads into a folder of its own can be registered directly. Returns `false`
 if the path is empty or is not an existing directory.
 
 Search paths are **per session** — they are not written to `Config/Mods.json` and must be re-registered every
@@ -23930,7 +25880,7 @@ SavedGames.Load("save_main")
 
 SavedGames.OnLoaded(function(slotName, data)
     Print("Loaded from " .. slotName .. ": " .. data)
-    local save = ParseJson(data)
+    local save = Network.JsonDecode(data)
     RestoreGameState(save)
 end)
 ```
@@ -24031,7 +25981,7 @@ function OnCreate()
     SavedGames.Init()
 
     SavedGames.OnLoaded(function(slot, data)
-        local save = ParseJson(data)
+        local save = Network.JsonDecode(data)
         playerLevel = save.level or 1
         playerCoins = save.coins or 0
         Print("Cloud save loaded: Level " .. playerLevel)
@@ -25741,6 +27691,10 @@ Table parameters accept Lua **numbers** as well as strings (`tokenId = 42` and `
 
 ### Smart Contracts
 
+JSON fields such as `abi`, `args`, `owners` and `tokenIds` accept JSON strings or Lua tables. In table form, empty
+tables become `[]`, including nested ABI `inputs`/`outputs` and empty array arguments. Other conversions follow the
+[JSON rules](#json), with a 64-level table limit.
+
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `Web3.CallContract(params, callback?, onError?)` | `requestId` | Read-only call. `params = { address, abi, method, args? }`. `abi` and `args` are JSON strings |
@@ -26361,7 +28315,7 @@ StopPlayerRumble(0)
 
 -- Controller name and type
 local name = GetPlayerGamepadName(1)   -- → "Xbox Controller" or "Keyboard & Mouse"
-local type = GetPlayerGamepadType(1)   -- → "xbox", "ps", "switch", "keyboard_mouse", "none"
+local type = GetPlayerGamepadType(1)   -- → "xboxone", "ps5", "switch_pro", … (as GetGamepadType), "keyboard_mouse" or "none"
 ```
 
 ### Split-screen layout
@@ -26821,12 +28775,15 @@ values to the videos already playing (their script overrides stay).
 
 Good to know:
 
-- **Is Post Processed** only makes a difference in frames where post-processing is actually active (a post-process
-  volume, HDR10 output, FXAA or an accessibility colour filter). Without it there is nothing to apply and both values
-  look the same.
+- **Is Post Processed** only changes the colours in frames where post-processing is actually active (a post-process
+  volume, HDR10 output, FXAA or an accessibility colour filter). Without it there is nothing to apply; when the scene
+  renders at its own internal resolution (a **Render Scale** other than 100 %, SSAA or FSR/NIS upscaling) the only
+  difference left is sharpness: a video that is not post-processed is drawn at full resolution, a post-processed one at
+  the scene's resolution.
 - A full-screen video covers the scene, `Draw` geometry and post-processed widgets. Widgets that are **not**
-  post-processed are composited last while post-processing is active, so they stay above the video; in frames without
-  post-processing the video covers every widget. A `Cinema` fade is always drawn over the video.
+  post-processed are composited last while post-processing is active or the scene renders at its own internal
+  resolution, so they stay above the video; at full resolution without post-processing the video covers every widget.
+  A `Cinema` fade is always drawn over the video.
 - **Is Lit** needs the scene lighting mode to be `Lit`; with `SetLightingMode("Unlit")` the video is shown unlit.
 - Every full-screen channel fills the whole screen (with black bars), so show one at a time. When several are full
   screen, non-post-processed channels are drawn above post-processed ones, otherwise in the order the channels were
@@ -28076,7 +30033,8 @@ local space = Draw.GetSpace()
 ```
 
 `world` geometry is rendered together with the scene (on the default layer: after particles, before fog of war and
-widgets — see *Layers*), so it is affected by post-processing and participates in the depth buffer.
+widgets — see *Layers*), so it is affected by post-processing and participates in the depth buffer. Geometry on the
+`overlay` layer is the exception: it is drawn after post-processing.
 `screen` geometry ignores the camera and is drawn in submission order.
 
 **Depth in screen space.** By default `world` geometry is depth-tested and `screen` geometry is not — that is what
@@ -28095,6 +30053,7 @@ The setting is part of the draw state, so `Draw.Push` / `Draw.Pop` / `Draw.Reset
 ```lua
 Draw.SetLayer("scene")        -- default: drawn after the scene's tilemaps, sprites, decals and particles
 Draw.SetLayer("background")   -- drawn before all of them, right after the frame is cleared
+Draw.SetLayer("overlay")      -- drawn on top of the finished frame, after post-processing
 local layer = Draw.GetLayer()
 ```
 
@@ -28108,6 +30067,19 @@ where it is further back. Put floors, skies, parallax backdrops and anything els
   background widgets — a sky or a gradient that never hides anything.
 - The layer is part of the draw state (`Push` / `Pop` / `Reset`). Geometry drawn into a render target ignores it.
 - Background geometry is post-processed like the rest of the scene and takes lighting when its shading is `lit`.
+
+The `overlay` layer is for a HUD, menus, touch buttons, subtitles — anything that has to stay exactly as drawn while
+post-processing changes the scene. With post-processing on, and whenever the scene renders at its own internal
+resolution (a **Render Scale** other than 100 %, SSAA or FSR/NIS upscaling), overlay geometry goes into the same
+full-resolution overlay as the widgets that are not post-processed: it is drawn after the post-process stack and the
+upscale, under those widgets, so bloom, vignette, film grain, colour grading and distortion never touch it, and it stays
+sharp at a reduced **Render Scale**. At full resolution without post-processing it is drawn after fog of war, right
+before the widgets.
+
+- Overlay geometry is drawn in submission order on top of the frame in both spaces: the automatic depth test is off on
+  this layer (`Draw.SetDepthTest(true)` still turns it on).
+- `RenderTarget.CaptureScene` captures the frame before the overlay is drawn, so overlay geometry never appears in the
+  captured image.
 
 ### Draw state
 
@@ -28124,7 +30096,7 @@ Draw.SetAlphaClip(0.5)                        -- alpha cutout threshold used by 
 Draw.SetTarget(nil)                           -- nil = screen, or a RenderTarget name
 Draw.SetDepthTest("auto")                     -- "auto" (default) | true / "on" | false / "off"
 Draw.SetMaterial(nil)                         -- nil = none, or a material asset / dynamic instance name
-Draw.SetLayer("scene")                        -- "scene" (default) | "background" — see Layers above
+Draw.SetLayer("scene")                        -- "scene" (default) | "background" | "overlay" — see Layers above
 Draw.SetReceiveShadows(true)                  -- lit geometry receives 2D shadows (default true)
 Draw.SetClip(x, y, w, h)                      -- clip to a rectangle; Draw.ClearClip() removes it
 Draw.SetTransform(x, y, rot, sx, sy)          -- local coordinate system; Draw.ResetTransform() removes it
@@ -28145,6 +30117,11 @@ a render target, clip or transform switched on for the rest of the game.
 
 The whole state is reset to its defaults whenever a level starts or stops, so a texture, render target or material name
 from the previous level never carries over into the next one.
+
+The allocation-free state getters return separate values: `Draw.GetColorRGBA()` → `r, g, b, a`,
+`Draw.GetPivotXY()` → `x, y`, `Draw.GetViewportSizeXY()` → `width, height`,
+`Draw.GetClipValues()` → `enabled, x, y, w, h`, and
+`Draw.GetTransformValues()` → `x, y, rotation, scaleX, scaleY, identity`. The table-returning forms remain available.
 
 > **Lighting immediate-mode geometry.** `Draw.SetShading("lit")` runs your quads and meshes through the same lighting
 > the scene uses — point and spot lights, the directional light, 2D shadows and the ray tracer all apply, because
@@ -28285,6 +30262,43 @@ state is left cleared, so a typo degrades to the default shader instead of drawi
 > batch all refract the scene behind the batch rather than each other. Split them into separate batches if you need one
 > to refract another.
 
+### Recorded draw lists
+
+Record unchanged geometry once, then replay it each frame without running its drawing code again.
+
+```lua
+if Draw.BeginRecord(1) then
+    Draw.SetSpace("screen")
+    Draw.SetLayer("overlay")
+    Draw.SetClip(0, 0, 240, 80)
+    Draw.Rect(0, 0, 240, 80, 0.1, 0.1, 0.1, 0.9)
+    Draw.Text("Inventory", 12, 48, 24)
+    assert(Draw.EndRecord())
+end
+
+Draw.Replay(1, 40, 60)
+```
+
+- `Draw.BeginRecord(id)` starts a recording; `id` is a positive integer local to the Lua VM. It returns `false`
+  for an invalid ID or while another recording is open. Nested recordings are rejected without changing the open one.
+- Commands between `BeginRecord` and `EndRecord` are captured instead of being submitted to the frame.
+  `Draw.EndRecord()` publishes the recording and restores the draw state and its stack from before `BeginRecord`.
+  Re-recording replaces the old list only after success; an overflow discards the new list and returns `false`.
+- `Draw.Replay(id[, x, y])` appends the stored quads, meshes and text in their original order. It keeps the recorded
+  space, target, layer, Z, blend, lighting, material, clip and transformed geometry. Optional `x, y` add a translation
+  to positions and clips; the current draw state and transform do not alter the replay and are not changed by it.
+- `Replay` returns `false` for a missing list, a non-finite offset or insufficient frame budgets. A budget failure
+  submits none of the list and sets `Draw.DidOverflow()`. A replay inside a recording copies the existing list into it.
+- `Draw.Forget(id)` releases a list and returns whether it existed. It cannot remove the list currently being recorded.
+  `Draw.Clear()` clears only submitted frame commands, or the commands in an open recording; stored lists remain.
+- Finish recording within the same engine callback, without yielding. Returning from the callback, an error or a
+  coroutine yield discards an unfinished recording and restores its saved state. A frame boundary also cancels any
+  leftover recording. Level start/stop and resource-cache clearing release recorded lists. Destroying a referenced
+  texture, render target or material, including retiring an atlas page, invalidates the affected lists: record them again.
+- Text and font paths are owned by the list. Resource contents and dynamic material parameters remain live; the list
+  stores drawing commands, not a copy of texture pixels or material parameters. Re-record after changing the layout,
+  viewport-dependent coordinates, font metrics or wrap width. Recording performs no render-target clears or uploads.
+
 ### Text
 
 `Draw.Text` puts a string through the engine's own font stack — the same glyph atlas, shaping and bidirectional layout
@@ -28296,18 +30310,21 @@ Draw.Text("Score: 1200", x, y, 24)              -- text, position, pixel size
 Draw.Text("HP", x, y, 18, {
     r = 1, g = 0.3, b = 0.3, a = 1,             -- colour (defaults to the draw-state colour)
     align = "center",                            -- "left" (default) | "center" | "right"
-    font = "Content/Fonts/Pixel.ttf",            -- the system font (SystemFont) when omitted
+    font = "Content/Fonts/Pixel.ttf",            -- overrides Draw.SetFont; empty string selects SystemFont
     z = 10,
     rtl = false,                                 -- force right-to-left layout
     lit = false,                                 -- take scene lighting
     receiveShadows = false,                      -- lit text also darkens inside 2D shadows
     outline = { r = 0, g = 0, b = 0, a = 0.6, width = 1 },  -- halo under the glyphs
+    wrapWidth = 300,                             -- word-wrap into lines no wider than this
 })
 
 -- Measure before you place. Returns the width of the widest line, the height, the font's
 -- line height, the number of lines and their total height, all scaled to the pixel size you pass in.
 local m = Draw.MeasureText("Score: 1200", 24)   -- { width, height, lineHeight, lines, totalHeight }
 Draw.Text("Score: 1200", (Draw.GetViewportSize().width - m.width) * 0.5, y, 24)
+local box = Draw.MeasureText(story, 18, "Content/Fonts/Body.ttf", 300)  -- optional font and wrap width
+local lines = Draw.WrapText(story, 18, "Content/Fonts/Body.ttf", 300)  -- the same lines as a table of strings
 
 Draw.GetTextCount()          -- strings submitted this frame
 Draw.SetMaxTexts(20000)      -- per-frame budget (default 20000)
@@ -28315,20 +30332,36 @@ Draw.GetMaxTexts()
 ```
 
 - `font` is the font asset's full content path — the `.ttf` / `.otf` itself or its `.ice_font`
-  sidecar. Without `font`, or when that font cannot be loaded, the text uses the
+  sidecar. Without `font`, `Draw.Text`, `Draw.MeasureText`, `Draw.MeasureTextXY` and `Draw.WrapText` use the font
+  set by `Draw.SetFont(path)`; `Draw.SetFont(nil)` resets it. An empty path or a font that cannot be loaded uses the
   [system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text) — the
   operating-system UI font, or the font asset assigned with `SystemFont.Set` (the only option on Web).
 - `x, y` is the **baseline** of the first line, in the current space (`Draw.SetSpace`).
 - In `world` space the text rolls and scales with the camera; in `screen` space it is fixed to the viewport.
 - Text is drawn in submission order and is **not** depth-tested, so it always lands on top of the geometry submitted
-  before it in the same space.
+  before it in the same space. Text restores the previous depth-test state, so later geometry keeps its own
+  `Draw.SetDepthTest` setting. Glyph alpha is preserved when text is composited through an overlay or render target.
 - `\n` starts a new line one `lineHeight` below the previous one, and `align` is applied to each line separately, so a
   whole paragraph is one call. `MeasureText` reports the widest line as `width` and the block as `lines` / `totalHeight`.
+- `wrapWidth` (in the units of the current space) breaks the text into lines no wider than that, between words, and
+  inside a word only when the word alone is wider — the same line-break rules as widget text, so Chinese, Japanese,
+  Thai and other scripts wrap correctly. Pass the same width to `MeasureText` as its fourth argument (after `font`)
+  to get the size of the wrapped block. The wrap is worked out at the size you pass, before the transform scales the
+  text, and a repeated string is wrapped once and then taken from a cache.
+- `Draw.WrapText(text, size, font, wrapWidth)` returns those lines as a table of strings, one per line, broken by the
+  same rules and taken from the same cache, so an interface that places, clips or scrolls the lines of a paragraph one
+  by one lays them out exactly as `Draw.Text` would draw them. Without `wrapWidth` (or with 0) it only splits the text
+  at `\n`.
 - Text honours the clip and moves with the transform (see *Clipping* and *Transform stack*).
 - The first time a font appears at a given pixel size the engine opens the face and starts an empty glyph atlas for
   it (about a millisecond); glyphs are rasterized the first time a string uses them, so new sizes and new characters
   mid-game do not stall the frame. Every distinct size is its own atlas, so snap animated sizes to a few steps rather
   than a new integer every frame.
+- In `screen` space at a whole pixel size and a Render Scale of 100 %, smooth fonts (antialiased and not nearest-filtered)
+  place every glyph to a third of a pixel: the engine keeps up to three copies of a glyph shifted by a third of a pixel
+  and draws the nearest one, so the gaps between letters stay even at small sizes instead of jumping by a whole pixel.
+  Smooth fonts are hinted lightly, vertically only, so the shifted copies keep one shape. Pixel fonts (not antialiased
+  or nearest-filtered), scaled text and text in `world` space keep whole-pixel positions.
 - `outline` draws an outline around the glyphs: each glyph's own shape grown by `width` (in the units of the text
   size, 0–16, default 1; `r`, `g`, `b` default to 0 and `a` to 1), drawn in the outline colour under the whole
   string and in the same batch. It keeps a label readable over a busy or changing background, from a thin halo to a
@@ -28357,7 +30390,36 @@ end
 > For tens of thousands of individually coloured glyphs, a `Draw.QuadsPacked` call over a font-atlas texture is still
 > faster — one Lua call for the whole screen. `Draw.Text` is the convenient path; the packed-quad path is the extreme one.
 
+`Draw.SetFont(path)` / `Draw.GetFont()` and `Draw.SetTextAlign("left" | "center" | "right")` /
+`Draw.GetTextAlign()` set defaults without constructing an options table per label. Font and alignment are part of
+`Push` / `Pop` / `Reset`; defaults are the system font and left alignment. Per-call options override them.
+
+`Draw.MeasureTextXY(text[, size, font, wrapWidth])` returns `width, height, lineHeight, lines, totalHeight`
+as separate values, with the same measurement as `Draw.MeasureText` and no result table.
+
+`Draw.Texts(data[, size, options])` submits a flat array of triples `{ text1, x1, y1, text2, x2, y2, ... }`
+in one call and returns the number of strings accepted. `size` defaults to 24; the shared options have the same
+fields as `Draw.Text` and are read once. Reuse the array between frames. Non-string texts or non-numeric positions
+are skipped; an incomplete final triple is ignored. Strings remain in array order and use the existing consecutive
+glyph batches. Text is never moved across intervening quads: it has no depth test, so Z alone cannot preserve that order.
+
 ### Drawing primitives
+
+For a quad without an options table, resolve its texture once and keep the numeric ID:
+
+```lua
+local wallTexture = Draw.GetTextureId("Content/Textures/wall.png")
+if wallTexture ~= 0 then
+    Draw.Quad(wallTexture, 100, 200, 64, 64, 0, 0, 0, 0, 1, 1, 1, 0.8, 0.6, 1)
+end
+```
+
+The positional form is `Draw.Quad(textureId, x, y, w, h[, z, rotation, u, v, uw, vh, r, g, b, a, px, py])`.
+It returns whether the quad was accepted. Optional depth, colour and pivot inherit the draw state; rotation defaults
+to 0 and UVs to the whole image. UVs start at the image's top-left. ID 0 uses the current default texture; an unknown
+nonzero ID returns `false`. `GetTextureId(path)` returns 0 on failure, so check it before drawing. IDs survive resource
+reloads through their stored names, but level start/stop resets them; obtain new IDs for the new level.
+The table form below remains supported.
 
 ```lua
 -- One quad, fully specified. Any field may be omitted.
@@ -28814,15 +30876,15 @@ local EMPTY = 0
 Texture.Create("sandCanvas", W, H, { filter = "nearest" })
 
 function OnUpdate(dt)
-    for y = 1, H - 1 do                          -- bottom-up so a grain moves one cell per step
+    for y = H - 2, 0, -1 do                      -- row 0 is the top of the image: walk up from the bottom
         for x = 0, W - 1 do
             if sand:GetValue(x, y) ~= EMPTY then
-                if sand:GetValue(x, y - 1) == EMPTY then
-                    sand:Swap(x, y, x, y - 1)
-                elseif sand:GetValue(x - 1, y - 1) == EMPTY then
-                    sand:Swap(x, y, x - 1, y - 1)
-                elseif sand:GetValue(x + 1, y - 1) == EMPTY then
-                    sand:Swap(x, y, x + 1, y - 1)
+                if sand:GetValue(x, y + 1) == EMPTY then
+                    sand:Swap(x, y, x, y + 1)
+                elseif x > 0 and sand:GetValue(x - 1, y + 1) == EMPTY then
+                    sand:Swap(x, y, x - 1, y + 1)
+                elseif x < W - 1 and sand:GetValue(x + 1, y + 1) == EMPTY then
+                    sand:Swap(x, y, x + 1, y + 1)
                 end
             end
         end
@@ -28838,7 +30900,9 @@ end
 
 > A full-screen cellular automaton is still Lua work: budget roughly a few hundred thousand cell updates per frame at
 > 60 FPS and simulate only the active region (dirty rectangles / chunks that contain moving cells), which is what
-> pixel-simulation games do anyway.
+> pixel-simulation games do anyway. For a whole simulated world use the native
+> [PixelWorld](#78-pixelworld--cell-simulation-pixel-bodies-and-per-pixel-light): it runs the simulation in C++ on every core,
+> with materials, heat, physics and per-pixel light.
 
 ### RenderTarget — offscreen rendering
 
@@ -28870,6 +30934,12 @@ sampled by sprites and materials in the same frame. In screen space the target's
 
 The depth buffer of a render target is **not** cleared automatically — call `RenderTarget.Clear` each frame if you draw
 depth-tested world-space geometry into it.
+
+`Clear` also works from `OnUpdate` before rendering begins. Direct3D 12, Vulkan and native Metal flush pending uploads and
+submit outside-frame offscreen clears synchronously, including resolved and multisample attachments; an immediately
+following `ReadPixels` sees the cleared color. These synchronous calls can stall the CPU and GPU. WebGPU submits a separate
+command buffer to its queue without waiting for completion: later texture reads and draws on that queue see the clear,
+and clearing one target cannot leave a pending clear on another. WebGPU pixel readback remains unsupported as described above.
 
 ### Complete example — raycast textured columns
 
@@ -30127,8 +32197,9 @@ end
 
 > **Type:** Global functions. `Screen` table.
 >
-> The pixel size of what the game is being drawn into, and — on Android — control
-> over which way the device is allowed to turn.
+> The pixel size of what the game is being drawn into, the part of it that notches and
+> rounded corners leave free, and — on Android — control over which way the device is
+> allowed to turn.
 >
 > Use it to lay a game out for both a wide screen and a tall one, and to let the
 > player choose landscape or portrait from an options menu instead of being locked
@@ -30140,6 +32211,7 @@ end
 local w = Screen.GetWidth()      -- width of the game area in pixels
 local h = Screen.GetHeight()     -- height of the game area in pixels
 local a = Screen.GetAspect()     -- w / h, 0 when there is no window yet
+local s = Screen.GetDisplayScale()   -- 1 at 100 %, 1.5 at 150 % Windows scaling, 2 on a Retina screen
 
 if Screen.IsPortrait() then
     LayoutTall()
@@ -30157,6 +32229,26 @@ the viewport rather than the whole window, so there `Screen` reports the viewpor
 size — the same one screen-space widgets are laid out against and
 `Draw.GetViewportSize()` returns. A layout driven by these functions looks the same
 in the editor as it does in a build.
+
+### Safe area
+
+```lua
+local safe = Screen.GetSafeArea()
+-- safe.x, safe.y, safe.width, safe.height — the safe rectangle in pixels, origin at the bottom-left
+-- safe.left, safe.right, safe.top, safe.bottom — how far it is inset from each edge, in pixels
+
+DrawPauseButton(Screen.GetWidth() - safe.right - 64, Screen.GetHeight() - safe.top - 64)
+```
+
+The safe area is the part of the game area that no notch, punch-hole camera, rounded
+corner or system gesture strip covers. Keep buttons and the important part of a HUD
+inside it; the world itself can still fill the whole screen. Android builds draw under
+the display cutout in landscape, so on such a phone the safe rectangle is narrower than
+the window.
+
+The values come from the operating system and change when the device turns, so read
+them every frame or after a rotation rather than once at launch. On desktop, and in
+the editor viewport, the safe area is the whole game area and every inset is `0`.
 
 ### Orientation
 
@@ -30233,6 +32325,8 @@ end
 | `Screen.GetAspect()` | `float` | Width divided by height, `0` when height is `0`. |
 | `Screen.IsLandscape()` | `bool` | Width >= height. |
 | `Screen.IsPortrait()` | `bool` | Height > width. |
+| `Screen.GetDisplayScale()` | `float` | How much the operating system scales the display the game window is on: `1` at 100 %, `1.5` at 150 %, `2` on a Retina or 200 % screen, the device pixel ratio on Web; `1` when there is no window. Use it to pick a default size for an interface drawn with `Draw`. |
+| `Screen.GetSafeArea()` | `table` | `x`, `y`, `width`, `height` of the safe rectangle in pixels from the bottom-left, and the insets `left`, `right`, `top`, `bottom`. The whole game area on desktop and in the editor. |
 | `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` only if the platform acted. |
 | `Screen.GetOrientation()` | `string` | The last mode requested, `unspecified` if never set. |
 | `Screen.CanSetOrientation()` | `bool` | Whether this platform rotates on request. True on Android and iOS. |
@@ -30384,7 +32478,7 @@ platform that has one it costs one font load.
 | `PrintScreen` / `DrawWorldText` (game builds) | Always. |
 | Runtime profiler and network profiler overlays (Debug game builds) | Always. |
 | Widget elements that show text, their tooltips and dropdown lists | When the element has no font (for a tooltip: no tooltip font of its own), or the font cannot be loaded. |
-| `Draw.Text` / `Draw.MeasureText` | When `font` is omitted, or it cannot be loaded. |
+| `Draw.Text` / `Draw.MeasureText` / `Draw.WrapText` | When `font` is omitted, or it cannot be loaded. |
 | Widget Editor preview (editor) | For elements with no font. |
 | Text with a font of its own | Never — that font is used. |
 
@@ -30894,5 +32988,1264 @@ removes it. A changed value reaches the plugin in its next callback.
 | `Plugins.GetWorldAssetProperties(index)` | `table` or `nil` | All values of an entry. |
 | `Plugins.GetWorldAssetProperty(index, key)` | value or `nil` | One value. |
 | `Plugins.SetWorldAssetProperty(index, key, value)` | `bool` | Changes one value. |
+
+---
+
+## 69. Spline — Curves and Path Following
+
+> **Type:** Global object `Spline` (methods with `:`) and the `PathFollower` object (methods with `.`).
+
+A **spline** is a smooth path through a list of points. It moves things along a curve at an even speed — enemy routes
+in shoot 'em ups, moving platforms, patrols, tower-defense lanes, camera rails — and answers questions about the
+curve: its length, the direction at any point, the point nearest to a position. `PathFollower` moves an entity along a
+spline for you.
+
+```lua
+local path = Spline.new({ { x = 0, y = 0 }, { x = 300, y = 200 }, { x = 600, y = 0 }, { x = 900, y = 200 } })
+
+local length = path:GetLength()
+local x, y = path:EvaluateAtDistance(length * 0.5)     -- halfway along the curve
+local angle = path:GetAngleAtDistance(120)              -- engine degrees: 0 is right, 90 is down
+local pos = GetPosition()
+local cx, cy, along = path:GetClosestPoint(pos.x, pos.y)
+path:DrawDebug()                                        -- show the curve this frame
+```
+
+### Spline types
+
+| Type | Points | Shape |
+| --- | --- | --- |
+| `"catmull"` (default) | 2 or more | Passes through every point — Catmull-Rom, the curve of `CatmullRom`. |
+| `"linear"` | 2 or more | Straight lines between the points. |
+| `"bezier"` | `3·k + 1`, or `3·k` when closed | Cubic Bézier curves in a chain: point, control, control, point, control, control, point… Extra points are ignored. |
+
+`Spline.new(points, { type = "bezier", closed = true })` — a **closed** spline joins its last point back to the first
+one, and distances along it wrap around. A point is `{ x = …, y = … }` or `{ x, y }`.
+
+### Parameters and distances
+
+- `t` runs from 0 at the start to 1 at the end, and every segment between two points gets an equal share of it, so
+  equal steps of `t` are not equal distances.
+- A **distance** is measured along the curve in world units, from 0 to `GetLength()`. `EvaluateAtDistance` moves at an
+  even speed — use it for anything that travels along the path. On an open spline distances stop at the ends; on a
+  closed one they wrap around.
+
+### PathFollower
+
+```lua
+local platformPath = Spline.new({ { x = 0, y = 0 }, { x = 0, y = 300 } }, { type = "linear" })
+local mover
+
+function OnCreate()
+    mover = PathFollower({
+        spline = platformPath,
+        entity = GetEntityId(),
+        speed = 120,                     -- world units per second
+        mode = "pingpong",               -- "once", "loop" or "pingpong"
+        onTurn = function(direction) PlaySound("clank") end,
+    })
+end
+
+function OnUpdate(dt)
+    mover.Update(dt)
+end
+```
+
+- A follower with an `entity` moves it on every `Update`. An entity with a **physics body** is moved by velocity, the
+  way kinematic bodies are meant to move, so a moving platform carries whatever stands on it and pushes what is in its
+  way; a static body is moved by placing it. An entity without a body gets its position set. On the first update,
+  after `Restart`, `SetDistance`, `SetProgress`, `SetSpline` or `SetEntity`, and when a loop jumps from the end of an
+  open spline back to its start, the entity is placed exactly on the path.
+- `rotate = true` turns the entity to face along the path, plus `rotationOffset` degrees (for example `-90` for art that
+  faces up). Moving backwards faces backwards.
+- `mode = "once"` stops at the end — or at the start with `reverse = true` — and calls `onEnd()`; `"loop"` starts over
+  and calls `onLoop(loops)`; `"pingpong"` turns around at both ends and calls `onTurn(direction)`.
+- Without an `entity`, `Update` only returns the position, for anything you move yourself:
+  `local x, y = follower.Update(dt)`.
+- `Pause` stops the follower and the velocity it gave to its body; `Resume` continues.
+
+| Spline method | Returns | Notes |
+| --- | --- | --- |
+| `Spline.new(points?, options?)` | spline | `options`: `type`, `closed`. |
+| `:GetPointCount()` / `:GetPoint(i)` | `int` / `x, y` | `i` counts from 1; `0, 0` outside the range. |
+| `:SetPoint(i, x, y)` / `:AddPoint(x, y)` / `:InsertPoint(i, x, y)` / `:RemovePoint(i)` | `bool` | |
+| `:SetPoints(points)` / `:Clear()` | — | |
+| `:SetClosed(closed)` / `:IsClosed()` / `:SetType(type)` / `:GetType()` | | |
+| `:GetLength()` / `:GetSegmentCount()` | `number` / `int` | |
+| `:Evaluate(t)` / `:EvaluateAtDistance(distance)` | `x, y` | |
+| `:GetTangent(t)` / `:GetTangentAtDistance(distance)` | `x, y` | Unit direction of travel. |
+| `:GetNormalAtDistance(distance)` | `x, y` | The tangent turned 90° counter-clockwise, like `Perpendicular`. |
+| `:GetAngle(t)` / `:GetAngleAtDistance(distance)` | `number` | Degrees, clockwise positive, 0 is right — ready for `SetRotation`. |
+| `:GetDistanceAtT(t)` / `:GetTAtDistance(distance)` | `number` | |
+| `:GetClosestPoint(x, y)` | `x, y, distance, t` | The nearest point of the curve. |
+| `:Sample(count)` | table | `count` points `{ x, y }` evenly spaced along the curve, 2–100 000. |
+| `:DrawDebug(r?, g?, b?, duration?)` | — | Draws the curve with the [debug lines](#debug-draw--debug-primitives), cyan by default. |
+
+| PathFollower | Returns | Notes |
+| --- | --- | --- |
+| `PathFollower(config)` | object | Config: `spline` (required), `entity`, `speed` (100), `mode` (`"once"`), `rotate` (false), `rotationOffset` (0), `reverse` (false), `startDistance` (0, or the end with `reverse`), `onEnd`, `onLoop`, `onTurn`. |
+| `.Update(dt)` | `x, y` | Moves along the path. |
+| `.GetPosition()` / `.GetAngle()` | `x, y` / `number` | |
+| `.SetSpeed(speed)` / `.GetSpeed()` | — / `number` | |
+| `.SetDistance(distance)` / `.GetDistance()` / `.SetProgress(p)` / `.GetProgress()` | | `p` from 0 to 1. |
+| `.Pause()` / `.Resume()` / `.IsPaused()` / `.IsFinished()` | | |
+| `.Reverse()` / `.GetDirection()` | — / `1` or `-1` | |
+| `.GetLoops()` | `int` | |
+| `.Restart()` | — | Back to the start distance and direction. |
+| `.SetMode(mode)` / `.GetMode()` / `.SetRotate(rotate, offset?)` | | |
+| `.SetSpline(spline)` / `.SetEntity(entityId or nil)` | — | |
+| `.SetCallbacks({ onEnd, onLoop, onTurn })` | — | |
+
+> A `Spline` is a value object like `NoiseBuffer`: call its methods with `:`. Call `PathFollower` methods with a dot.
+> Splines work in class, level and widget scripts; a `PathFollower` moves entities of the running level.
+
+---
+
+## 70. Steering — Steering Behaviours, Flocks and Spatial Hash
+
+> **Type:** Global module `Steering`, the `Flock` object (methods with `.`) and the `SpatialHash` object (methods with `:`).
+
+### Steering behaviours
+
+`Steering` holds the classic steering behaviours — small functions that tell an agent which velocity it wants: chase,
+run away, arrive and stop, intercept, wander, avoid obstacles. They return the desired velocity `vx, vy`; add several
+of them together and turn the sum into motion with `Steering.Steer` for smooth movement with inertia.
+
+```lua
+local vx, vy = 0, 0
+local maxSpeed, maxAcceleration = 220, 600
+local rocks = { { x = 400, y = 300, radius = 60 }, { x = 700, y = 120, radius = 40 } }
+
+function OnUpdate(dt)
+    local p = GetPosition()
+    local t = GetEntityPosition(playerId)
+    local tv = GetEntityVelocity(playerId)
+
+    local dx, dy = Steering.Pursue(p.x, p.y, t.x, t.y, tv.x, tv.y, maxSpeed)
+    local ax, ay = Steering.AvoidObstacles(p.x, p.y, vx, vy, rocks, 90, 16)
+    vx, vy = Steering.Steer(vx, vy, dx + ax, dy + ay, maxAcceleration, dt)
+
+    SetPosition(p.x + vx * dt, p.y + vy * dt)
+    if vx ~= 0 or vy ~= 0 then SetRotation(DirectionToAngle(vx, vy)) end
+end
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Steering.Seek(px, py, tx, ty, maxSpeed)` | `vx, vy` | Full speed towards the target. |
+| `Steering.Flee(px, py, tx, ty, maxSpeed, panicDistance?)` | `vx, vy` | Away from the threat; zero beyond `panicDistance`. |
+| `Steering.Arrive(px, py, tx, ty, maxSpeed, slowRadius, stopRadius?)` | `vx, vy` | Slows down inside `slowRadius` and stops at `stopRadius`. |
+| `Steering.Pursue(px, py, tx, ty, tvx, tvy, maxSpeed, maxPrediction?)` | `vx, vy` | Heads for where a moving target will be, looking up to `maxPrediction` seconds ahead (1 by default). |
+| `Steering.Evade(px, py, tx, ty, tvx, tvy, maxSpeed, maxPrediction?)` | `vx, vy` | Runs from where the target will be. |
+| `Steering.Wander(vx, vy, angle, maxSpeed, jitter?)` | `vx, vy, angle` | A meandering walk: keep the returned `angle` and pass it back next frame. `jitter` (degrees, 30 by default) is how much it turns per call. |
+| `Steering.AvoidObstacles(px, py, vx, vy, obstacles, lookAhead, radius?)` | `vx, vy` | A push away from the circles `{ { x, y, radius }, … }` in the way within `lookAhead`; `radius` is the agent's own. Add it to the desired velocity. |
+| `Steering.Steer(vx, vy, desiredX, desiredY, maxAcceleration, dt)` | `vx, vy` | The new velocity: the current one turned towards the desired one by at most `maxAcceleration · dt`. |
+| `Steering.Truncate(x, y, maxLength)` | `x, y` | Shortens a vector to `maxLength`. |
+
+> `Wander` takes its randomness from the game's seeded random generator, so a seeded game wanders the same way every
+> run. The other functions are plain math.
+
+### Flock
+
+`Flock` moves a group the way birds, fish, bats, drone swarms or crowds move: every member keeps apart from its
+neighbours (**separation**), heads where they head (**alignment**) and stays with the group (**cohesion**), while the
+group follows a target, avoids obstacles and stays inside bounds. The neighbour search runs in native code on a grid,
+so hundreds of members are cheap.
+
+```lua
+local flock = Flock({
+    neighborRadius = 90, separationRadius = 28,
+    maxSpeed = 180, maxForce = 500,
+    separation = 1.6, alignment = 1.0, cohesion = 0.9,
+    rotate = true,                                  -- members face where they fly
+    bounds = { x = 0, y = 0, width = 1920, height = 1080, margin = 60 },
+})
+
+for i = 1, 60 do
+    local id = SpawnEntity("Content/Classes/CL_Bird.ice_class", RandomRange(200, 1700), RandomRange(200, 900))
+    flock.AddEntity(id, RandomRange(-50, 50), RandomRange(-50, 50))
+end
+flock.AddObstacle(960, 540, 120)
+
+function OnUpdate(dt)
+    local mouse = GetMouseWorldPosition()
+    flock.SetTarget(mouse.x, mouse.y, 0.6)
+    flock.Update(dt)
+end
+```
+
+- `AddEntity(entityId, vx?, vy?)` adds an entity. Every `Update` reads its position — and the velocity of its physics
+  body — and moves it: a body by velocity, so it still collides, any other entity by setting its position. An entity
+  that no longer exists leaves the flock by itself.
+- `AddAgent(id, x, y, vx?, vy?)` adds a member without an entity; draw such members yourself from `GetAgents()` — with
+  `Draw`, a `QuadBuffer` or particles — for flocks of thousands.
+- The weights are `separation` (1.5), `alignment` (1), `cohesion` (1), `target` (1), `avoid` (2) and `bounds` (2);
+  `SetWeights` changes any of them.
+
+| Flock | Returns | Notes |
+| --- | --- | --- |
+| `Flock(config?)` | object | Config: `neighborRadius` (80), `separationRadius` (30), `maxSpeed` (150), `maxForce` (400), `lookAhead` (60), `agentRadius` (8), the weights above, `obstacles` (`{ { x, y, radius }, … }`), `bounds` (`{ x, y, width, height, margin }`), `rotate`, `rotationOffset`. |
+| `.AddEntity(entityId, vx?, vy?)` / `.AddAgent(id, x, y, vx?, vy?)` | `bool` | `false` for an id that is already in the flock or an entity that does not exist. |
+| `.Remove(id)` / `.Has(id)` / `.Clear()` / `.GetCount()` | | |
+| `.Update(dt)` | — | One step of the whole flock. |
+| `.SetTarget(x, y, weight?)` / `.ClearTarget()` | — | |
+| `.SetWeights(weights)` / `.SetRadius(neighborRadius, separationRadius?)` | — | |
+| `.SetMaxSpeed(speed)` / `.GetMaxSpeed()` / `.SetMaxForce(force)` | | |
+| `.AddObstacle(x, y, radius)` / `.ClearObstacles()` | `int` / — | `AddObstacle` returns the number of obstacles. |
+| `.SetBounds(x, y, width, height, margin?)` / `.ClearBounds()` | — | `x, y` is the bottom-left corner. |
+| `.SetRotate(rotate, offset?)` | — | |
+| `.GetAgent(id)` | `x, y, vx, vy` | `nil` for an unknown id. |
+| `.GetAgents()` | table | `{ { id, x, y, vx, vy }, … }`. |
+| `.GetCenter()` | `x, y` | Average position of the members. |
+
+### SpatialHash
+
+`SpatialHash` answers "what is near here?" quickly for things your scripts keep track of themselves — the bullets of a
+bullet hell, pickups, units of a strategy game, particles simulated in Lua. Space is cut into square cells, and a query
+looks only at the cells it touches instead of at every object.
+
+```lua
+local grid = SpatialHash.new(64)                -- cell size in world units, about the size of a typical query
+
+for id, bullet in pairs(bullets) do
+    grid:Insert(id, bullet.x, bullet.y, 4)      -- adds the id, or moves it when it is already there
+end
+
+for _, id in ipairs(grid:QueryRadius(player.x, player.y, 24)) do
+    OnBulletHit(id)
+end
+
+local mouse = GetMouseWorldPosition()
+local nearestId, distance = grid:Nearest(mouse.x, mouse.y, 300)
+if nearestId then grid:Remove(nearestId) end
+```
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `SpatialHash.new(cellSize?)` | hash | 64 by default. |
+| `:Insert(id, x, y, radius?)` | `bool` | An integer `id`; entity ids work. Moving within the same cells costs almost nothing. |
+| `:Remove(id)` / `:Has(id)` | `bool` | |
+| `:GetPosition(id)` | `x, y, radius` | `nil` for an unknown id. |
+| `:QueryRadius(x, y, radius)` | table | Ids whose circle touches the query circle. |
+| `:QueryRect(x, y, width, height)` | table | Ids whose circle touches the rectangle; `x, y` is its bottom-left corner. |
+| `:Nearest(x, y, maxDistance?)` | `id, distance` | Nearest center, or `nil` when nothing is in range. With `maxDistance` only the nearby cells are searched. |
+| `:GetCount()` / `:Clear()` / `:GetCellSize()` | | |
+
+> For entities with colliders, the physics queries (`GetEntitiesInRadius`, `OverlapCircle` and others) are the right
+> tool; `SpatialHash` is for objects without a physics shape. The same sequence of calls always returns the ids in the
+> same order. `SpatialHash` is a value object: call its methods with `:`.
+
+---
+
+## 71. Procgen — Procedural Generation
+
+> **Type:** Global module `Procgen`, the `MapBuffer` object and the `NameGenerator` object (methods with `:`).
+
+`Procgen` builds levels and worlds from rules instead of by hand: caves, dungeons of rooms and corridors, mazes,
+winding tunnels, evenly scattered objects, road networks, tile maps that follow your tile rules, and names for
+towns, planets and characters. Everything runs in native code on a `MapBuffer` — a grid of integers you then turn
+into tiles, navigation, fog of war or entities.
+
+```lua
+local map = MapBuffer.new(80, 50)                         -- 80 × 50 cells, all 0
+local caves = Procgen.Caves(map, { seed = "level-3", keepLargest = true })
+
+for y = 0, map:Height() - 1 do
+    for x = 0, map:Width() - 1 do
+        if map:Get(x, y) == 1 then SetTileGrid(x, y, 1) end     -- tile 1 of the tilemap's tileset
+    end
+end
+map:ToNavGrid(64)                                         -- walls block pathfinding, cells are 64 units
+local px, py = map:RandomCell(0)                          -- a floor cell for the player start
+```
+
+### MapBuffer
+
+A `MapBuffer` is a grid of 32-bit integers — 0 and 1 for floor and wall, or your own tile kinds. Cells are
+addressed from the **bottom-left** like everything in the engine: `x` from 0 to `Width() - 1` to the right, `y` from
+0 to `Height() - 1` upward. A map holds up to 16 000 000 cells.
+
+| MapBuffer | Returns | Notes |
+| --- | --- | --- |
+| `MapBuffer.new(width?, height?, fill?)` | map | `fill` 0 by default. |
+| `:Width()` / `:Height()` / `:IsInside(x, y)` | | |
+| `:Get(x, y)` / `:Set(x, y, value)` | `int` or `nil` / — | `nil` outside the map; `Set` outside does nothing. |
+| `:Fill(value)` / `:FillRect(x, y, width, height, value)` | — | |
+| `:Replace(from, to)` / `:Count(value)` | `int` | Cells replaced / counted. |
+| `:CountNeighbors(x, y, value, diagonal?)` | `int` | 8 neighbours, or 4 with `diagonal = false`. |
+| `:Find(value)` | table | Every cell `{ x, y }` holding the value. |
+| `:RandomCell(value, stream?)` | `x, y` | A random cell with the value, `nil` when there is none. |
+| `:Paste(source, x, y, skip?)` | — | Copies another map onto this one; cells equal to `skip` are not copied — for prefabricated rooms. |
+| `:Clone()` | map | |
+| `:FromNoise(noise, threshold, above, below)` | — | From a [`NoiseBuffer`](#25-math--math-and-noise): `above` where the noise is at least `threshold`, `below` elsewhere. Sizes may differ. |
+| `:FromTable(rows)` / `:ToTable(mapping?)` | `int` / table | Rows of numbers, row 1 is `y = 0`. `mapping` turns values into others on the way out, e.g. `{ [1] = 7 }`. |
+| `:ToNavGrid(cellSize, originX?, originY?, blocked?)` | `bool` | Sets the [navigation](#33-navigation--navigation-and-pathfinding) grid: cells with `blocked` (1, or a list) cannot be walked. |
+| `:ToFogOfWar(cellSize, originX?, originY?, opaque?)` | `bool` | Sets up the [fog of war](#335-fog-of-war--vision-and-visibility) grid: cells with `opaque` (1, or a list) block vision. |
+
+### Generators
+
+Every generator fills a map in place, writes `wall` and `floor` values (1 and 0 by default) and takes a `seed`
+(a number or a text) or a `stream` (the name of a [random stream](#rng--deterministic-random-streams-seeded)).
+The same seed gives the same result on every platform; without either, the game's default random stream is used.
+
+```lua
+local dungeon = MapBuffer.new(96, 64)
+local result = Procgen.Dungeon(dungeon, { roomCount = 14, minRoom = 5, maxRoom = 12, loops = 0.2, door = 2 })
+for _, room in ipairs(result.rooms) do
+    SpawnEntity("Content/Classes/CL_Torch.ice_class", room.centerX * 64, room.centerY * 64)
+end
+
+local maze = MapBuffer.new(41, 31)                       -- odd sizes: corridors on odd cells
+Procgen.Maze(maze, { algorithm = "wilson", braid = 0.3, rooms = 3 })
+```
+
+| Function | Returns | Options |
+| --- | --- | --- |
+| `Procgen.Caves(map, options?)` | number of caves | Cellular automaton: `fill` (0.45 — share of walls at the start), `iterations` (5), `birth` (5) and `survival` (4) neighbour counts, `border` (true — a wall around the map), `minRegion` (0 — fill caves smaller than this), `minWallRegion` (0 — open wall pillars smaller than this), `keepLargest` (false), `connect` (false — dig tunnels between the caves), `tunnelWidth` (1). |
+| `Procgen.Dungeon(map, options?)` | table | `method` (`"bsp"` — rooms in a split grid, or `"scatter"`), `roomCount` (12), `minRoom` (4), `maxRoom` (10), `padding` (1), `corridorWidth` (1), `loops` (0.15 — share of extra corridors that make circuits), `attempts` (500), `door` (a value for door cells; none when not set). Returns `{ rooms = { { id, x, y, width, height, centerX, centerY } }, connections = { { a, b } }, doors = { { x, y } } }`. |
+| `Procgen.Maze(map, options?)` | number of dead ends | `algorithm`: `"backtracker"` (long winding corridors), `"prim"` and `"kruskal"` (many short branches), `"wilson"` (no bias at all), `"growingTree"` with `bias` (0.5: 1 behaves like the backtracker, 0 like Prim). `braid` (0 — share of dead ends opened into loops), `rooms` (0), `roomMin` (3), `roomMax` (7). Corridors run through the odd cells, so odd sizes have a closed border. |
+| `Procgen.Walkers(map, options?)` | number of floor cells | Drunkard walks that carve tunnels: `walkers` (1), `maxWalkers` (8), `coverage` (0.35 — share of floor to reach), `maxSteps` (0 = automatic), `turnChance` (0.3), `spawnChance` (0 — chance per step to split into a new walker), `brush` (1 — tunnel width), `border` (true), `clear` (true — start from solid wall), `startX`, `startY` (the centre by default). |
+| `Procgen.WFC(map, options)` | `ok, attempts` | Wave function collapse: fills the map with tile ids so that every neighbour pair is allowed. The rules come from a `sample` map (`sampleWrap`, `ignore` — a value to skip), from `tiles` (ids, or `{ id, weight, sockets = { right, up, left, down } }` — two sides fit when their socket names are equal), or from `rules` (`{ a, b, side }`: tile `b` may be on `side` of tile `a`; `side` is `"right"`, `"up"`, `"left"` or `"down"`). `keep` (false — cells that already hold one of the tiles stay and the rest is built around them), `periodic` (false — wrap around the edges), `attempts` (10). |
+
+### Regions and connectivity
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Procgen.Regions(map, value, options?)` | table | Connected areas of `value`, largest first: `{ id, size, minX, minY, maxX, maxY, centerX, centerY, x, y, touchesEdge }` — `x, y` is a cell inside the region. `options`: `diagonal` (false), `labels` (a MapBuffer of the same size that receives the region id of every cell, 0 elsewhere). |
+| `Procgen.IsConnected(map, value, diagonal?)` | `bool` | One single area. |
+| `Procgen.KeepLargest(map, value, replacement, diagonal?)` | `int` | Turns every area but the largest into `replacement`; cells changed. |
+| `Procgen.RemoveSmallRegions(map, value, minSize, replacement, diagonal?)` | `int` | Areas removed. |
+| `Procgen.Connect(map, options?)` | `int` | Digs the shortest tunnels that join every `floor` area: `floor` (0), `width` (1), `diagonal` (false), `border` (true — leave the outer border alone). Tunnels dug. |
+
+### Points: scattering, triangulation and networks
+
+```lua
+local trees = Procgen.Poisson({ x = 0, y = 0, width = 4000, height = 3000, radius = 120, seed = 7 })
+for _, p in ipairs(trees) do SpawnEntity("Content/Classes/CL_Tree.ice_class", p.x, p.y) end
+
+local towns = Procgen.Poisson({ x = 0, y = 0, width = 8000, height = 8000, radius = 900 })
+for _, road in ipairs(Procgen.ConnectPoints(towns, { loops = 0.15 })) do
+    BuildRoad(towns[road.a], towns[road.b])               -- your function
+end
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Procgen.Poisson(options)` | table | Points `{ x, y }` at least `radius` apart and evenly spread over the rectangle `x, y, width, height` — trees, rocks, enemies, stars without clumps or gaps. `maxRadius` with `density` (a `NoiseBuffer` over the rectangle) varies the spacing: dense (`radius`) where the noise is 1, sparse (`maxRadius`) where it is 0. `mask` (a `MapBuffer` stretched over the rectangle) and `maskValue` (0) keep points only on matching cells. `attempts` (30), `maxPoints` (100 000), `startX`, `startY`, `seed`, `stream`. |
+| `Procgen.Triangulate(points)` | table | Delaunay triangulation: `{ triangles = { { a, b, c } }, edges = { { a, b } } }` with indexes into `points`. Up to 10 000 points. |
+| `Procgen.ConnectPoints(points, options?)` | table | Edges `{ a, b }` that join every point with the shortest total length (a minimum spanning tree over the triangulation), plus `loops` (0) — a share of the remaining short edges for circuits. `seed`, `stream`. |
+
+### NameGenerator
+
+`NameGenerator` learns how letters follow each other in a list of sample names and makes up new names that sound
+the same — towns from a list of real towns, alien species, spells. It works with any alphabet, Cyrillic and CJK
+included.
+
+```lua
+local towns = Procgen.NameGenerator({ "Ashford", "Bramley", "Crowhurst", "Dunmore", "Elmstead", "Fairholt" },
+                                    { order = 3, minLength = 5, maxLength = 10, seed = 42 })
+Print(towns:Generate())                 -- "Bramhurst"
+local names = towns:GenerateMany(20)    -- 20 different names
+```
+
+| NameGenerator | Returns | Notes |
+| --- | --- | --- |
+| `Procgen.NameGenerator(samples, options?)` | generator | `order` (3, 1–6 — letters of context: higher copies the samples more closely), `minLength` (3), `maxLength` (12), `attempts` (100), `allowSamples` (false — names from the list itself are skipped), `seed`, `stream`. |
+| `:Generate()` | `string` or `nil` | `nil` when no name fits the lengths in `attempts` tries. |
+| `:GenerateMany(count)` | table | Up to `count` different names (at most 10 000 per call). |
+| `:SetSeed(seed)` / `:SetStream(name)` / `:SetLength(min, max)` | — | |
+| `:GetSampleCount()` / `:GetOrder()` | `int` | |
+
+> `MapBuffer` and `NameGenerator` are value objects: call their methods with `:`. Procgen works in class, level and
+> widget scripts; `ToNavGrid` and `ToFogOfWar` change the running level.
+
+---
+
+## 72. Effector — Force Fields and Moving Surfaces
+
+> **Type:** Global object `Effector` (zones, methods with `:`).
+
+An **effector** is an area that pushes the physics bodies inside it: wind that rises in gusts, a magnet or a black
+hole, a gravity zone or a small planet, a whirlpool, water that makes things float, thick air that slows
+everything. It works with physics bodies of any shape, every physics step, in native code.
+
+```lua
+local fan = Effector.Wind({ x = 800, y = 200, width = 300, height = 600, velocityY = 900, gust = 0.4 })
+local water = Effector.Buoyancy({ x = 2000, y = 150, width = 1200, height = 300, density = 1.5, drag = 2 })
+local hole = Effector.Point({ x = 3000, y = 600, radius = 400, strength = 2500, debug = true,
+    onEnter = function(entity, x, y, vx, vy) Print("caught " .. entity) end })
+
+Effector.SetSurfaceSpeed(beltId, 150)    -- a conveyor belt: things on it move at 150 units per second
+```
+
+| Zone | Pushes | Parameters (defaults) |
+| --- | --- | --- |
+| `Effector.Wind(config)` | Towards the air velocity, harder on bigger bodies | `velocityX`, `velocityY` (air speed), `drag` (1 — how strongly bodies are dragged along), `gust` (0–4 — gust strength), `gustFrequency` (1), `turbulence` (0–4 — sideways swirl), `globalWind` (0 — share of the [global wind](#global-wind) added on top). |
+| `Effector.Point(config)` | Towards the centre (`strength` > 0) or away (`strength` < 0) | `strength` (600), `falloff` (`"linear"`), `mode` (`"acceleration"`). |
+| `Effector.Gravity(config)` | Replaces the world gravity inside the zone | `gravityX`, `gravityY`; or `radial = true` with `strength` (980) — towards the centre, a small planet. |
+| `Effector.Vortex(config)` | Around the centre, clockwise for a positive `strength` | `strength` (400), `pull` (0 — towards the centre), `falloff` (`"linear"`), `mode`. |
+| `Effector.Buoyancy(config)` | Up by the submerged area — water, lava, quicksand | `density` (1 — bodies whose own density is lower float), `drag` (1.5), `angularDrag` (1.5), `flowX`, `flowY` (current), `surface` (a y level; the top of the zone by default). |
+| `Effector.Drag(config)` | Against the motion | `drag` (3), `angularDrag` (3). |
+
+- **Shape:** a box (`width`, `height`, 128 by default, centred on `x, y`), a circle (`radius`) or a polygon
+  (`points = { { x, y }, … }` relative to `x, y`). `rotation` turns it (degrees, clockwise).
+- **Falloff:** `"none"`, `"linear"`, `"quadratic"` or `"inverseSquare"`, over the radius of the zone. `mode =
+  "acceleration"` pushes every body equally whatever its mass; `"force"` pushes light bodies more.
+- **Filters:** `groups` (a collision group name or index, or a list of them) and `tag` (only entities with that tag).
+- **Attached zones:** `attach = entityId` (with `offsetX`, `offsetY`, `followRotation` (true)) makes the zone move
+  with an entity — a fan carried by a robot, the pull of a magnet gun.
+- **Events:** `onEnter(entity, x, y, vx, vy)` and `onExit(...)` are called after the physics step when an entity's
+  body enters or leaves the zone; `GetEntities()` lists the entities inside.
+- **Surfaces:** `Effector.SetSurfaceSpeed(entity, speed, collider?)` makes a collider a conveyor belt or an
+  escalator: bodies touching it move along it at `speed` (clockwise when positive). `SetRollingResistance` slows
+  wheels and balls rolling on it (grass, sand).
+
+| Effector | Returns | Notes |
+| --- | --- | --- |
+| `Effector.Wind/Point/Gravity/Vortex/Buoyancy/Drag(config)` | zone or `nil` | Config: the shape, `x`, `y`, `rotation`, `enabled` (true), `debug` (false), `groups`, `tag`, `attach`, `offsetX`, `offsetY`, `followRotation`, `onEnter`, `onExit` and the parameters above. |
+| `Effector.DestroyAll()` / `Effector.GetCount()` | | |
+| `Effector.SetSurfaceSpeed(entity, speed, collider?)` / `Effector.GetSurfaceSpeed(entity, collider?)` | `bool` / `number` | `collider` is the collider's name; every collider of the entity by default. |
+| `Effector.SetRollingResistance(entity, resistance, collider?)` / `Effector.GetRollingResistance(entity, collider?)` | `bool` / `number` | |
+| `:IsValid()` / `:Destroy()` / `:GetType()` | | `GetType` is `"wind"`, `"point"`, `"gravity"`, `"vortex"`, `"buoyancy"` or `"drag"`. |
+| `:SetEnabled(enabled)` / `:IsEnabled()` | | |
+| `:SetPosition(x, y)` / `:GetPosition()` / `:SetRotation(degrees)` / `:GetRotation()` | | `SetPosition` detaches an attached zone. |
+| `:SetSize(width, height)` / `:SetRadius(radius)` | — | Turns the zone into a box or a circle. |
+| `:Attach(entity, offsetX?, offsetY?, followRotation?)` / `:Detach()` | `bool` / — | |
+| `:Set(params)` | — | Changes any parameter of the zone type, e.g. `fan:Set({ velocityY = 0 })`. |
+| `:SetCallbacks({ onEnter, onExit })` | — | |
+| `:IsPointInside(x, y)` / `:GetEntities()` | `bool` / table | |
+| `:SetDebugDraw(enabled)` | — | Outline of the zone; the water line of a buoyancy zone. |
+
+> Zones are removed when Play stops and when the level changes. Static bodies are not pushed, and sensors do not
+> count for buoyancy and wind.
+
+---
+
+## 73. Rope — Ropes and Chains
+
+> **Type:** Global object `Rope` (methods with `:`).
+
+`Rope` makes ropes, chains, vines, cables and bridges out of physics segments: swinging on a rope, a chain that
+holds a cage, a wrecking ball, a bridge that sags under the player, a grappling hook that reels in. A rope can also
+be **visual only** — a cable or a vine that sways and follows its ends without colliding.
+
+```lua
+local rope = Rope.New({
+    from = { entity = ceilingId, x = 0, y = -10 },     -- attached to an entity, with an offset
+    to = lanternId,                                    -- the lantern hangs on the other end
+    length = 300, thickness = 6,
+    texture = "Content/Textures/T_Rope.png",
+    breakForce = 4000,
+    onBreak = function(rope, piece, x, y) SpawnFXAtPosition("Content/FX/FX_Snap.ice_fx", x, y) end,
+})
+
+rope:SetLength(rope:GetLength() - 100 * dt)            -- reel in
+local cut = rope:Cut(150)                              -- cut 150 units from the start: returns the other piece
+```
+
+- **Ends:** `from` and `to` are an entity id (its body), `{ entity = id, x, y, part }` (a point on the entity,
+  relative to its position; `part` is the name of a collider with its own body or a skeleton bone), or
+  `{ x, y }` (a fixed point in the world). `from` is required; without `to` the rope hangs free in the `directionX`,
+  `directionY` direction (straight down by default).
+- **Length and segments:** `length` defaults to the distance between the ends; `segments` (0 = automatic, up to 256)
+  sets how many links it has — more links bend more smoothly. `limit` (true) keeps the rope from stretching past its
+  length even under a heavy load.
+- **Initial path:** optional `points = { { x = 100, y = 200 }, { x = 120, y = 200 }, { x = 120, y = 40 } }`
+  lays out the rope along a world-space polyline, preserving every corner before the first physics step. It accepts
+  2–257 finite positions; consecutive duplicate positions are skipped. The first point must match `from`, and the
+  last must match `to` if attached. The path sets the material length; an explicit `length` must match it within
+  0.01 world units. `segments` is raised to at least the number of nonzero spans, with at most 256 links. The path
+  is only the initial shape: its corners are free to move unless attached or supported by collisions.
+- **Physics:** `thickness` (6), `density` (1), `friction` (0.6), `restitution` (0), `damping` (0.1),
+  `angularDamping` (0.5), `bend` (0 — stiffness, for cables and chains that keep their shape) and `bendDamping`
+  (0.7), `gravityScale` (1), `windScale` (1 — how much the global wind sways it), `collide` (true) and `group`
+  (a collision group name or index), `iterations` (12 — for visual ropes).
+- **Breaking:** with `breakForce` the rope snaps where a link is pulled harder than that; `onBreak(rope, piece, x, y)`
+  gets the rope, the new piece (or `nil`) and the point where it broke. `Cut` breaks it on purpose.
+- **Look:** `texture` (stretched along the rope, repeating every `tile` units; white by default), `r`, `g`, `b`, `a`,
+  `width` (the thickness by default), `z`, `visible`, and `mode = "segments"` to draw every link as its own sprite —
+  a chain — instead of one smooth strip.
+
+| Rope | Returns | Notes |
+| --- | --- | --- |
+| `Rope.New(config)` | rope or `nil` | Config above, plus `physics` (true — false makes a visual rope). |
+| `Rope.DestroyAll()` / `Rope.GetCount()` | | |
+| `:GetId()` | `int` | Stable identity of this rope handle; useful for tracking pieces returned by `Cut`. |
+| `:IsValid()` / `:Destroy()` / `:IsPhysical()` | `bool` | |
+| `:GetPoints()` | table | `{ x, y }` along the rope, smoothed between physics steps. |
+| `:GetPhysicsPoints()` | table | Current unsmoothed `{ x, y }` positions; use for physics queries. Visual ropes return their current simulated positions. |
+| `:GetSegmentLengths()` | table | Material length of each link, in order from start to end. Pair with `GetPhysicsPoints()` to cut at link boundaries without assuming equal lengths. |
+| `:GetPoint(distance)` | `x, y, vx, vy` | Current position and point velocity on a physical rope, in world units and world units/s. Distance is clamped from 0 to the material length measured from the start. Returns four zeros for an invalid or visual rope. |
+| `:Grab(entity, distance, offsetX?, offsetY?)` | `RopeGrip` or `nil` | Physically joins a dynamic entity body to the rope at a material distance from its start. Offsets default to 0 and are local body coordinates in world units. Requires a physical rope and an enabled dynamic body. |
+| `:GetLength()` / `:SetLength(length)` | `number` / `bool` | Reels in or out, adding and removing links as needed. |
+| `:GetSegmentCount()` / `:GetTension()` | `int` / `number` | Tension: the strongest pull on a link. |
+| `:Cut(distance)` | rope or `nil` | Splits the rope `distance` units from the start; returns the piece after the cut. |
+| `:Attach(which, entity, offsetX?, offsetY?, part?)` / `:AttachPoint(which, x, y)` / `:Detach(which)` | `bool` | `which` is `"start"` or `"end"`. |
+| `:IsAttached(which)` / `:GetEndPoint(which)` | `bool` / `x, y` | |
+| `:SetStyle(style)` | — | `texture`, `r`, `g`, `b`, `a`, `width`, `tile`, `z`, `visible`, `mode`. |
+| `:SetOnBreak(callback)` | — | `nil` removes it. |
+
+### Physical grips
+
+A grip transfers the character's weight and impulses to the rope through a Box2D joint. It does not change gravity,
+teleport the body, replace its velocity, or animate climbing. Move the grip distance to climb and apply forces to the
+character to swing. Release the grip before switching to another movement mode; releasing preserves body velocity.
+With `limit = true`, maximum-distance constraints to attached ends also prevent the loaded rope from stretching.
+
+```lua
+local grip = rope:Grab(playerId, 80, 0, 10)
+if grip and grip:IsValid() then
+    grip:SetDistance(grip:GetDistance() - 48 * dt)
+    local currentRope = grip:GetRope()
+    local x, y, vx, vy = currentRope:GetPoint(grip:GetDistance())
+end
+if grip then grip:Release() end
+```
+
+| RopeGrip | Returns | Notes |
+| --- | --- | --- |
+| `:IsValid()` | `bool` | False after release, removal of its rope, or removal, replacement or disabling of its entity body. |
+| `:GetDistance()` / `:SetDistance(distance)` | `number` / `bool` | Material distance from the current rope's start. Setting it clamps to the rope's length; nonfinite input or an invalid grip fails. Both endpoints are valid: attached-end limits follow the new distance, including 0 and the full rope length, within physics solver precision. |
+| `:GetRope()` | rope or `nil` | Current piece carrying the grip. Compare its `GetId()` when following cuts. |
+| `:Release()` | `bool` | Removes the joints; repeated release returns false. |
+
+`Cut` preserves grips on their physical pieces and updates their material distances. `SetLength` adds or removes
+material at the start: existing grips follow that material, and grips on removed material are released. A grip
+handle remains the same when transferred to a cut piece. Destroying a rope releases all its grips. Stop and level
+changes remove ropes and grips. The game must release a grip explicitly on death, teleport, or a change of movement
+mode when the character body still exists. Render with `GetPoints()` and use `GetPhysicsPoints()` / `GetPoint()` for
+physics decisions; visual interpolation must not drive a physical constraint.
+
+> Ropes are removed when Play stops and when the level changes. A rope whose end entity is destroyed hangs free.
+
+---
+
+## 74. PlatformerController — Platformer Character Controller
+
+> **Type:** Global object `PlatformerController` (methods with `:`).
+
+`PlatformerController` moves a character the way good platformers feel: quick acceleration, a jump whose height
+depends on how long the button is held, a short **coyote time** after running off a ledge, a **jump buffer** that
+remembers a press made just before landing, a moment of hang time at the top, faster falling, wall slides and wall
+jumps, a dash, ladders, dropping through one-way platforms, slopes and moving platforms. It runs inside the physics
+step on the entity's own Box2D body, so the character still collides, is pushed and stands on platforms as usual.
+
+```lua
+local controller
+
+function OnCreate()
+    controller = PlatformerController.New(GetEntityId(), {
+        maxSpeed = 420, jumpHeight = 200, timeToApex = 0.38,
+        airJumps = 1, wallSlide = true, wallJump = true,
+        dashSpeed = 1100, ladderGroup = "Ladder",
+        onEvent = function(event, value)
+            if event == "jump" or event == "airJump" then PlaySound("jump") end
+            if event == "land" and value > 900 then ShakeCamera(4, 0.15) end
+        end,
+    })
+end
+
+function OnUpdate(dt)
+    controller:SetInput(GetAxis("a", "d"), GetAxis("s", "w"), IsActionPressed("Jump"))
+    if IsActionJustPressed("Dash") then controller:Dash(GetAxis("a", "d"), GetAxis("s", "w")) end
+    SetAnimBool("onWall", controller:GetState() == "wall")   -- "ground", "air", "wall", "dash" or "climb"
+    SetAnimFloat("speedX", math.abs(controller:GetVelocity()))
+end
+```
+
+**Setup.** The entity needs a **Dynamic** Rigidbody with colliders. While the controller is attached it turns the
+body's rotation off, sets the friction of its colliders to 0 (so it does not stick to walls) and handles gravity
+itself; `Destroy` and `SetEnabled(false)` put all three back. The body's gravity scale multiplies the controller's
+gravity, so a low-gravity zone still works.
+
+**Input.** Call `SetInput(moveX, moveY, jumpHeld)` every frame (values from -1 to 1). A press of the jump button is
+remembered for `jumpBuffer` seconds; releasing it early makes the jump lower. `Jump(holdTime?)` presses the jump
+for an AI or a cutscene. `moveY` pushed down drops through one-way platforms together with a jump
+(`dropWithJump`), climbs down ladders and falls faster (`fastFallSpeed`).
+
+**Jumps.** `jumpHeight` and `timeToApex` set the jump — the controller works out the gravity and the jump speed from
+them. Releasing the jump early multiplies gravity by `jumpCutGravity`, falling by `fallGravity`, and near the top of a
+held jump (while the vertical speed is below `apexThreshold`) by `apexGravity`, for a short floaty moment.
+`airJumps` adds double jumps (`airJumpHeight` each), `coyoteTime` lets a jump start a little after leaving a ledge.
+
+**Walls, dashes, ladders.** With `wallSlide`, pressing towards a wall in the air slows the fall to `wallSlideSpeed`;
+with `wallJump`, jumping from a wall throws the character away from it (`wallJumpSpeed`, `wallJumpHeight`) and
+ignores the stick for `wallJumpLock` seconds. A dash flies at `dashSpeed` for `dashTime` in the given direction (or
+the facing one), ignores gravity, has a `dashCooldown` and `airDashes` per jump; landing refills both. Ladders are
+sensors in the collision group named by `ladderGroup`: pushing up or down on them starts climbing at `climbSpeed`.
+
+**Ground.** The ground is probed under the body every step: slopes up to `maxSlope` degrees count as ground, the
+character walks along them without sliding or bouncing and stays glued to steps down up to `groundSnap` units.
+Standing on a moving body carries the character with it, and a dynamic body under it feels its weight.
+
+| Event (`onEvent(event, value)`) | When | `value` |
+| --- | --- | --- |
+| `"jump"` / `"airJump"` / `"wallJump"` | A jump starts | Air jumps: the number of air jumps used |
+| `"land"` | The character lands | The speed of the fall |
+| `"leaveGround"` | Walks off a ledge (not a jump) | |
+| `"drop"` | Drops through a one-way platform | |
+| `"dash"` / `"dashEnd"` | A dash starts / ends | |
+| `"wallSlide"` | Starts sliding down a wall | |
+| `"climb"` | Starts climbing a ladder | |
+
+| PlatformerController | Returns | Notes |
+| --- | --- | --- |
+| `PlatformerController.New(entity, options?)` | controller or `nil` | Replaces a controller the entity already has. |
+| `PlatformerController.Get(entity)` / `GetCount()` / `DestroyAll()` | | |
+| `:Configure(options)` / `:Destroy()` / `:IsValid()` / `:GetEntity()` | | |
+| `:SetEnabled(enabled)` / `:IsEnabled()` | | Disabled: the body behaves like any other physics body. |
+| `:SetInput(moveX, moveY?, jumpHeld?)` | — | Every frame. |
+| `:Jump(holdTime?)` / `:ReleaseJump()` | — | `holdTime` defaults to a full jump. |
+| `:Dash(directionX?, directionY?)` / `:CanDash()` | — / `bool` | |
+| `:DropThrough()` | — | Drops through the one-way platform under the character. |
+| `:Launch(velocityX, velocityY, lockTime?)` | — | Springs, knockback: sets the velocity and ignores the stick for `lockTime` seconds. |
+| `:Refill()` | — | Gives back air jumps and dashes — a pickup. |
+| `:IsGrounded()` / `:IsJumping()` / `:IsFalling()` | `bool` | |
+| `:GetWallSide()` | `int` | `-1` wall on the left, `1` on the right, `0` none. |
+| `:IsWallSliding()` / `:IsDashing()` / `:IsClimbing()` / `:IsOnLadder()` / `:IsDropping()` | `bool` | |
+| `:GetState()` | `string` | `"ground"`, `"air"`, `"wall"`, `"dash"` or `"climb"`. |
+| `:GetFacing()` / `:SetFacing(direction)` | `1` or `-1` | |
+| `:GetVelocity()` / `:GetGroundNormal()` | `x, y` | |
+| `:GetGroundEntity()` | entity or `nil` | |
+| `:GetAirJumpsLeft()` / `:GetDashesLeft()` | `int` | |
+| `:SetOnEvent(callback)` | — | |
+
+| Option | Default | Option | Default |
+| --- | --- | --- | --- |
+| `maxSpeed` | 400 | `wallSlide` / `wallSlideSpeed` | false / 180 |
+| `acceleration` / `deceleration` | 4000 / 5000 | `wallJump` / `wallJumpSpeed` / `wallJumpHeight` / `wallJumpLock` | false / 380 / 160 / 0.15 |
+| `airControl` | 0.65 | `dashSpeed` (0 = no dash) / `dashTime` / `dashCooldown` / `airDashes` | 0 / 0.15 / 0.25 / 1 |
+| `jumpHeight` / `timeToApex` | 192 / 0.4 | `ladderGroup` / `climbSpeed` | none / 200 |
+| `airJumps` / `airJumpHeight` | 0 / jump height | `dropTime` / `dropWithJump` | 0.2 / true |
+| `jumpCutGravity` / `fallGravity` | 2.5 / 1.6 | `maxSlope` (degrees) / `groundSnap` | 50 / 8 |
+| `apexThreshold` / `apexGravity` | 60 / 0.5 | `coyoteTime` / `jumpBuffer` | 0.1 / 0.12 |
+| `maxFallSpeed` / `fastFallSpeed` | 1100 / 1600 | `inputDeadZone` | 0.2 |
+
+> Speeds are world units per second, times are seconds; the defaults suit a character about one 64-unit tile tall.
+> Controllers are removed when Play stops, when the level changes and when their entity is destroyed. The older
+> jump helpers (`Jump`, `JumpForce`, `StopJump`) keep working for simple characters without a controller.
+
+---
+
+## 75. Ballistics — Trajectories and Aiming
+
+> **Type:** Global module `Ballistics`.
+
+`Ballistics` answers the questions of anything thrown or fired: where it will fly (a dotted aiming arc that stops
+where it hits), how fast or at what angle to throw to hit a target (artillery, grenades, AI throwing at the
+player), the velocity for a jump pad that lands on a spot, and where to aim to hit a moving target.
+
+```lua
+-- Aiming arc for a grenade, stopping at the first wall
+local points, hit = Ballistics.Predict(hand.x, hand.y, vx, vy, { collide = true, radius = 6, ignore = GetEntityId() })
+for i = 2, #points do DrawDebugLine(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y) end
+if hit then DrawDebugCircle(hit.x, hit.y, 10) end
+
+-- Artillery: velocity that lands on the target at this speed (the high arc)
+local target = GetEntityPosition(targetId)
+local svx, svy = Ballistics.SolveVelocity(gun.x, gun.y, target.x, target.y, 900, { high = true })
+if svx then SetEntityVelocity(shellId, svx, svy) end
+
+-- A turret leading a moving target with a straight bullet
+local tv = GetEntityVelocity(targetId)
+local aimX, aimY = Ballistics.Lead(gun.x, gun.y, target.x, target.y, tv.x, tv.y, 1500)
+```
+
+- Gravity is the physics world's gravity in world units (`gravityScale` multiplies it); `gravityX`, `gravityY`
+  replace it. `drag` is the linear damping of the body (Rigidbody **Linear Damping**).
+- `Predict` steps exactly like the physics engine — the same time step and sub-steps — so the drawn arc matches the
+  real flight of a body launched with the same velocity. The other functions use the exact formulas.
+- Solutions follow the engine's coordinates: y up, gravity usually pointing down; any direction of gravity works.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Ballistics.Predict(x, y, vx, vy, options?)` | `points, hit` | `points` is `{ { x, y }, … }` from the start. `options`: `time` (3 s), `step` (time between points, the physics step by default), `maxPoints` (512), `gravityScale`, `gravityX`, `gravityY`, `drag`, `collide` (false), `radius` (0 = a ray; more for a thick projectile), `ignore` (an entity), `sensors` (false), `group` (collision group of the projectile), `debugDraw`. `hit` is `nil` or `{ hit, x, y, normalX, normalY, entityId, tag, time }`. |
+| `Ballistics.PositionAt(x, y, vx, vy, time, options?)` | `x, y, vx, vy` | Position and velocity after `time` seconds. |
+| `Ballistics.GetApex(x, y, vx, vy, options?)` | `x, y, time` | The highest point (against gravity); the start point when it never rises. |
+| `Ballistics.SolveVelocity(x, y, targetX, targetY, speed, options?)` | `vx, vy, time` or `nil` | Launch velocity of the given speed that hits the target: the low arc, or the high one with `high = true`. `targetVX`, `targetVY` lead a moving target. `nil` when the target is out of reach. |
+| `Ballistics.SolveVelocityForTime(x, y, targetX, targetY, time, options?)` | `vx, vy` | Velocity that reaches the target in exactly `time` seconds — always possible. |
+| `Ballistics.SolveVelocityForApex(x, y, targetX, targetY, apexHeight, options?)` | `vx, vy, time` or `nil` | Velocity whose arc rises `apexHeight` above the higher end — jump pads, AI jumps. |
+| `Ballistics.Lead(x, y, targetX, targetY, targetVX, targetVY, speed)` | `aimX, aimY, time` or `nil` | Where to aim a straight projectile to hit a moving target. |
+| `Ballistics.MaxRange(speed, options?)` | `number` | Farthest distance on flat ground (at 45°); `inf` without gravity. |
+
+> The solvers ignore `drag`; `Predict` and `PositionAt` take it into account. Ballistics works in class, level and
+> widget scripts; collisions in `Predict` need a running level.
+
+---
+
+## 76. Bullets — Bullet Patterns and Emitters
+
+> **Type:** Global module `Bullets` and the `BulletEmitter` object (methods with `:`).
+
+`Bullets` runs thousands of bullets in native code — for shoot 'em ups, bullet hells, twin-stick shooters and
+tower defense — without an entity or a physics body per bullet. You define **bullet types** (look, size, what they
+hit), fire **patterns** (rings, fans, lines, aimed volleys) and let **emitters** fire them on a timer, spinning into
+spirals. Bullets curve, accelerate, home in, wave, pierce and hit walls; you get a callback for every hit.
+
+```lua
+Bullets.DefineType("orb", {
+    texture = "Content/Textures/T_Orb.png", radius = 6, size = 16,
+    blend = "additive", lifetime = 6, group = "EnemyBullet",
+    onHit = function(hit)
+        if hit.entity then OnBulletHit(hit.entity, hit.damage) end     -- your damage code
+    end,
+})
+
+-- A ring of 24 bullets
+Bullets.Fire(boss.x, boss.y, { type = "orb", shape = "ring", count = 24, speed = 220 })
+
+-- A spinning flower pattern from the boss, five arms, a volley every 0.08 s
+local spiral = BulletEmitter.New({
+    entity = bossId, interval = 0.08, spin = 120,
+    pattern = { type = "orb", shape = "ring", count = 5, speed = 180, acceleration = 40, maxSpeed = 320 },
+})
+
+-- An aimed fan of three at the player, every 1.5 s, five times
+BulletEmitter.New({ entity = turretId, interval = 1.5, volleys = 5,
+    pattern = { type = "orb", shape = "spread", count = 3, arc = 30, speed = 400, aim = playerId } })
+```
+
+**Types.** A type is defined once per level and referenced by name. Without a `texture`, bullets are smooth white
+circles tinted by `r`, `g`, `b`, `a`. `orient = true` turns the sprite along the flight (the right side of the texture
+forward); `orient = false` spins it at `spin` degrees per second. Bullets fade out over their last `fade` seconds.
+
+**What bullets hit.** A bullet touches the physics shapes its collision `group` collides with (every group of the
+default filter when not set). A **static** body is a wall: the bullet is destroyed (`destroyOnWall`, true) and the hit
+is reported with `wall = true`. Any other body is a target: the bullet is destroyed, or passes through up to `pierce`
+targets, and never hits the same entity twice. The entity that fired (`owner`, the emitter's entity by default) is
+never hit. Sensors are ignored unless `sensors = true` — use it when hurt boxes are sensors.
+
+**Angles** follow the engine: degrees, 0 is right, 90 is down, clockwise positive (the same as `GetAngleTo` and
+`AngleToDirection`).
+
+| Pattern field | Default | Meaning |
+| --- | --- | --- |
+| `type` | required | A defined bullet type. |
+| `shape` / `count` | `"single"` / 1 | `"single"`, `"ring"` (evenly around a circle) or `"spread"` (a fan over `arc` degrees). |
+| `angle` / `arc` | 0 / 60 | Direction of the pattern; with `aim` it is added to the aimed direction. |
+| `aim` or `aimX`, `aimY` | none | Point the pattern at an entity or a position. |
+| `offset` | 0 | Bullets start this far from the centre in their direction. |
+| `layers` / `layerSpeed` | 1 / 0 | Several bullets per direction, each `layerSpeed` faster — lines of bullets. |
+| `angleJitter` / `speedJitter` | 0 | Random spread, ± degrees and ± speed (from the game's seeded random). |
+| `speed`, `acceleration`, `minSpeed`, `maxSpeed` | 300, 0, 0, 0 (no limit) | Speed in world units per second; negative `minSpeed` lets a bullet slow down and come back. |
+| `turn` | 0 | Degrees per second the bullet curves (clockwise when positive). |
+| `homing` / `target` | 0 / none | Degrees per second it turns towards an entity. |
+| `waveAmplitude` / `waveFrequency` | 0 / 0 | Snakes sideways around its path. |
+| `lifetime` | the type's | Seconds. |
+| `owner` | none | Entity never hit by these bullets. |
+
+| Bullets | Returns | Notes |
+| --- | --- | --- |
+| `Bullets.DefineType(name, options?)` | `bool` | `texture`, `radius` (6), `size` (2 × radius) or `width`/`height`, `r`, `g`, `b`, `a`, `lifetime` (5), `orient` (true), `spin`, `z`, `blend` (`"translucent"`, `"additive"`, `"masked"`, `"opaque"`), `fade` (0.1), `collide` (true), `group`, `sensors` (false), `destroyOnWall` (true), `pierce` (0), `damage` (1), `onHit`. Defining a name again changes the type of every live bullet. |
+| `Bullets.HasType(name)` | `bool` | |
+| `Bullets.Fire(x, y, pattern)` | `int` | Number of bullets fired. |
+| `Bullets.Spawn(type, x, y, angle, speed, options?)` | `int` | One bullet; its id (0 on failure). `options`: the motion fields and `owner`. |
+| `Bullets.Destroy(id)` / `Bullets.IsAlive(id)` | `bool` | |
+| `Bullets.GetPosition(id)` / `Bullets.GetVelocity(id)` | `x, y` / `vx, vy` | `nil` for a bullet that is gone. |
+| `Bullets.SetVelocity(id, vx, vy)` | `bool` | |
+| `Bullets.Clear(type?)` / `Bullets.ClearArea(x, y, radius, type?)` | `int` | Removes bullets — a bomb, the end of a phase. |
+| `Bullets.GetCount(type?)` | `int` | |
+| `Bullets.SetMaxBullets(count)` / `Bullets.GetMaxBullets()` | | 4096 by default; past it new bullets are not fired. |
+| `Bullets.SetBounds(minX, minY, maxX, maxY)` / `Bullets.ClearBounds()` | — | Bullets leaving the rectangle disappear. |
+
+`onHit(hit)` gets `{ bullet, type, x, y, wall, damage, entity }` (`entity` is missing for a wall without an entity).
+It is called after all bullets have moved, so it may fire new bullets or destroy entities.
+
+| BulletEmitter | Returns | Notes |
+| --- | --- | --- |
+| `BulletEmitter.New(options)` | emitter or `nil` | `pattern` (required), `entity` (follow an entity) or `x`, `y`, `offsetX`, `offsetY`, `useRotation` (add the entity's rotation to the angle and the offset), `interval` (0.1 s), `volleys` (0 = forever), `delay` (0), `spin` (degrees per second — spirals), `angleStep` (degrees added every volley), `running` (true). |
+| `BulletEmitter.DestroyAll()` / `BulletEmitter.GetCount()` | | |
+| `:Start()` / `:Stop()` / `:IsRunning()` | | `Start` begins again from the first volley. |
+| `:Fire()` | — | One volley now. |
+| `:SetPattern(pattern)` / `:Configure(options)` | `bool` / — | |
+| `:SetPosition(x, y)` / `:Attach(entity, offsetX?, offsetY?)` | — / `bool` | |
+| `:GetFiredCount()` / `:IsValid()` / `:Destroy()` | | |
+
+> Bullets move on the game clock: they slow down with the time scale and freeze in a pause and a hit stop. Emitters
+> fire on time even when a frame is long, placing each volley where it should be. Bullets, types and emitters are
+> cleared when Play stops and when the level changes; an emitter whose entity is destroyed disappears with it.
+
+---
+
+## 77. System — Operating System and Window
+
+> **Type:** Global module `System`.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `System.OpenURL(url)` | `bool` | Opens a web page or a mail draft in the player's browser or mail app — store pages, an invite to the game's community, a feedback form. Only `http://`, `https://` and `mailto:` links without spaces. |
+| `System.GetPowerInfo()` | `state, percent, seconds` | `state` is `"battery"`, `"charging"`, `"charged"`, `"no_battery"` or `"unknown"`; `percent` and `seconds` of battery left are `-1` when unknown. A laptop or phone game can offer a battery saver. |
+| `System.GetTheme()` | `string` | `"light"`, `"dark"` or `"unknown"` — the system colour theme, for a matching menu. |
+| `System.IsWindowFocused()` | `bool` | Whether the game window has the keyboard focus; `OnWindowFocusChanged` reports changes. |
+| `System.FlashWindow(mode?)` | `bool` | Draws attention to the window in the taskbar: `"briefly"` (default), `"until_focused"` or `"cancel"` — a match was found, a long load finished. |
+| `System.SetTaskbarProgress(value, state?)` | `bool` | Progress bar on the game's taskbar button (Windows) or dock icon: `value` 0–1, `state` `"normal"`, `"paused"`, `"error"` or `"indeterminate"`. |
+| `System.ClearTaskbarProgress()` | `bool` | |
+
+```lua
+function OnWindowFocusChanged(focused)
+    if not focused and not IsPaused() then PauseGame() end
+end
+
+local state, percent = System.GetPowerInfo()
+if state == "battery" and percent >= 0 and percent < 20 then Settings.SetFPSLimit(30) end
+```
+
+> Functions that need a window return `false` before it exists and on platforms that do not support them.
+
+---
+
+## 78. PixelWorld — Cell Simulation, Pixel Bodies and Per-Pixel Light
+
+> **Type:** Global module `PixelWorld`.
+
+`PixelWorld` is a native falling-sand world: a grid of cells where every cell is one pixel of a material — sand,
+water, lava, smoke, fire, wood, metal — simulated in C++ on every CPU core. Powders pile up, liquids flow and find
+their level, gases rise, fire spreads and burns materials to ash, heat melts and boils, sparks run along wires and air
+pressure shatters glass. Solid cells become physics colliders for the level, bodies float in liquids and push sand
+aside, and pieces of the world break off into **pixel bodies** that fall, crumble and split. Light is
+computed per cell: lava and fire glow, light passes through water and glass and stops at stone. Lua describes the
+materials and reacts to events — the engine does the work.
+
+```lua
+function OnCreate()
+    PixelWorld.LoadDefaultMaterials()
+    PixelWorld.Create({ width = 640, height = 360, cellSize = 2, heat = true, air = true })
+    PixelWorld.FillRect(0, 0, 1280, 60, "stone")                       -- the floor
+    PixelWorld.FillCircle(400, 400, 80, "sand")
+    PixelWorld.DrawLine(700, 120, 1100, 260, 6, "wood")
+    PixelWorld.SetLighting({ enabled = true, ambient = 0.08, sky = { 0.55, 0.6, 0.7 } })
+end
+
+function OnUpdate(dt)
+    local mouse = GetMouseWorldPosition()
+    if IsMousePressed(1) then
+        PixelWorld.FillCircle(mouse.x, mouse.y, 10, "water", { replace = "empty" })
+    elseif IsMouseJustPressed(3) then
+        PixelWorld.Explode(mouse.x, mouse.y, 40)
+    end
+end
+```
+
+**Coordinates.** Every function takes world positions and world sizes (Y up, origin at the bottom-left, like the rest
+of the engine); one cell is `cellSize` world units. The world starts at `x`, `y` — its bottom-left corner — and grows
+right and up. `WorldToCell` and `CellToWorld` convert when you need cell indices. Angles are degrees, 0 is right,
+clockwise positive.
+
+**Ticks.** The simulation runs at a fixed `tickRate` (60 ticks per second) on the game clock: it slows down with the
+time scale and stops in a pause. Only the parts of the world where something moves are simulated, so a large settled
+world costs almost nothing.
+
+### 78.1 The World
+
+| `PixelWorld.Create` option | Default | Meaning |
+| --- | --- | --- |
+| `mode` | `"fixed"` | `"fixed"` — a `width` × `height` world; `"streaming"` — an endless world loaded in 64 × 64-cell chunks around the camera and the anchors ([78.8](#788-endless-worlds-and-saving)). |
+| `width`, `height` | 512, 256 | Size in cells (fixed mode), up to 8192 per side and 33 554 432 cells. |
+| `cellSize` | 1 | World units per cell. 2–4 gives chunky pixels with a normal camera. |
+| `x`, `y` | 0, 0 | World position of the bottom-left corner. |
+| `border` | `"wall"` | Fixed mode: `"wall"` — cells stop at the edges and a static collider frames the world; `"void"` — cells, particles and pixel bodies that leave the world disappear. |
+| `tickRate` / `maxSteps` | 60 / 3 | Ticks per second (1–240) and the most ticks one frame runs to catch up. |
+| `seed` | 1 | Seed of the generator and of every random choice of the simulation. |
+| `temperature` | 20 | Ambient temperature. |
+| `heat` | false | Simulate temperature: heat spreads, and materials melt, freeze, boil, condense and ignite by temperature. |
+| `air` | false | Simulate air pressure and wind on a grid of 4 × 4-cell blocks: explosions push particles, wind blows powders and gases, pressure breaks brittle materials. |
+| `electricity` | true | Sparks travel through conductors. |
+| `gravity` | the level's | Gravity of flying particles in world units per second² (the level's physics gravity when not set). |
+| `particleDrag` | 0.4 | Air drag of flying particles. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.Create(options?)` | `bool` | Creates the world in the running level and replaces the previous one. Materials and everything set with `SetPhysics`, `SetLighting`, `SetRender`, `SetStreaming` and `SetGenerator` are kept. |
+| `PixelWorld.Destroy()` / `PixelWorld.Exists()` | — / `bool` | |
+| `PixelWorld.Clear()` | — | Empties every cell and removes the pixel bodies and particles. |
+| `PixelWorld.GetBounds()` | `minX, minY, maxX, maxY` | The world rectangle (the loaded chunks in streaming mode); `nil` without a world. |
+| `PixelWorld.GetCellSize()` | `number` | |
+| `PixelWorld.WorldToCell(x, y)` / `PixelWorld.CellToWorld(cx, cy)` | `cx, cy` / `x, y` | `CellToWorld` returns the centre of the cell. |
+| `PixelWorld.SetPaused(paused)` / `PixelWorld.IsPaused()` | — / `bool` | A paused world is drawn and keeps streaming chunks, but nothing moves. |
+| `PixelWorld.Step(ticks?)` | — | Runs ticks right now, also when paused (1 by default, up to 1000). |
+| `PixelWorld.SetTickRate(hz)` / `PixelWorld.GetTick()` | — / `int` | |
+| `PixelWorld.SetSeed(seed)` | — | Used by `Regenerate`, newly generated chunks and the random choices from now on. |
+| `PixelWorld.GetStats()` | `table` | `chunks`, `activeChunks`, `updatedCells`, `particles`, `bodies`, `colliders`, `tickMs`, `tick`. |
+
+### 78.2 Materials
+
+Materials belong to the running game: define them before or after `Create` — they survive `Create` and `Destroy` and
+are cleared when Play stops. Up to 4096 materials. `LoadDefaultMaterials()` defines a ready set; change it with
+`SetMaterialValue` or define a material again under the same name.
+
+| Kind | Default materials |
+| --- | --- |
+| solid | `stone`, `dirt`, `wood`, `coal`, `ice`, `glass`, `metal`, `battery`, `lamp`, `heater`, `obsidian` |
+| powder | `sand`, `gravel`, `snow`, `ash`, `gunpowder` |
+| liquid | `water`, `oil`, `lava`, `acid` |
+| gas | `steam`, `smoke` |
+| fire | `fire` |
+
+They come with reactions: water and lava make steam and obsidian, fire touching water turns into steam, acid eats
+`#corrodible` materials, ice and snow melt next to `#hot` ones. With `heat = true` sand melts into glass, stone and
+metal into lava, lava freezes into obsidian, water boils and freezes, steam condenses, and wood, oil and coal catch fire
+when they get hot. A `battery` sparks the `metal` it touches, a `lamp` glows while a spark passes, a `heater` warms up.
+`glass` shatters under air pressure, `gunpowder` explodes when it burns out. Burning cells throw `fire` and `smoke`
+cells around when those materials exist.
+
+**Kinds.** A `"solid"` cell stays where it is, a `"powder"` falls and piles up, a `"liquid"` falls and spreads, a
+`"gas"` rises and spreads, a `"fire"` cell rises like a gas and sets fire to flammable neighbours. Lighter liquids and
+gases float on heavier ones (`density`), and powders sink into lighter liquids.
+
+**Names and tags.** Where a function takes a set of materials — `replace`, `Count`, `FindNearest`, reactions,
+`Raycast` — it also accepts `"#tag"` (every material with that tag), `"*"` (any material) and lists such as
+`{ "water", "#acid" }`.
+
+```lua
+PixelWorld.DefineMaterial("slime", {
+    kind = "liquid", color = "#5FD35A", variance = 0.1, density = 1.3, viscosity = 0.6, dispersion = 2,
+    emission = { 0.1, 0.5, 0.1 }, tags = { "acid" },
+})
+PixelWorld.DefineMaterial("crystal", {                   -- glows, lets light through, slippery
+    kind = "solid", colors = { "#7FD8FF", "#B6F0FF" }, opacity = 0.2, emission = 0.6, hardness = 2, friction = 0.05,
+})
+PixelWorld.DefineMaterial("tnt", { base = "gunpowder", color = "#C0392B", explosive = 14, explosivePower = 2 })
+PixelWorld.DefineReaction({ a = "slime", b = "#organic", chance = 0.02, intoB = "slime" })   -- slime spreads over wood and dirt
+```
+
+| `DefineMaterial` option | Default | Meaning |
+| --- | --- | --- |
+| `kind` | `"solid"` | `"solid"`, `"powder"`, `"liquid"`, `"gas"` or `"fire"`. The other defaults depend on it (the table below). |
+| `base` | none | Copy an existing material first, then apply the other options. |
+| `tags` | none | A tag or a list of tags. |
+| `color` | white | `"#RRGGBB"`, `"#RRGGBBAA"`, `{ r, g, b, a }` or `{ r = , g = , b = , a = }`, components 0–1. |
+| `colors` | none | A list of colors; every cell picks one — natural-looking speckles. |
+| `variance` | 0 | 0–1, random brightness of each cell around `color`. |
+| `texture` | none | An image tiled over the world: each cell takes the pixel under it, so bricks and veins line up. |
+| `emission` | 0 | Light the cell gives off: a color `{ r, g, b }` or a number, up to 8. |
+| `opacity` | per kind | 0–1, how much light a cell stops. 0.5 and more also casts engine shadows (`castShadows`). |
+| `density` | per kind | Heavier fluids sink under lighter ones; a powder sinks into a liquid lighter than itself. The mass of pixel bodies. |
+| `dispersion` | per kind | 0–16, how many cells per tick a liquid or a gas spreads sideways. |
+| `viscosity` | 0 | 0–1, chance that a liquid skips a tick — honey, lava. |
+| `inertia` | per kind | 0–1, chance that a powder does not slide down a slope — steeper piles. |
+| `gravity` | 1 | −8–8, how fast falling cells and flying particles of the material speed up; 0 or less keeps a powder in place. |
+| `lifetime` / `decayInto` | none / `"empty"` | Ticks (a number or `{ min, max }`) after which a cell turns into `decayInto` — smoke clearing, steam raining back. |
+| `flammable` | 0 | 0–1, chance per tick to catch fire next to fire, a burning cell or a hot material. |
+| `burnTime` / `burnInto` / `burnHeat` | 60 / `"empty"` / 0 | How many ticks a cell burns, what is left (`"ash"`), heat added per tick while burning. |
+| `ignite` | 0 | With `heat`: the temperature at which the material catches fire by itself (0 — only from fire). |
+| `explosive` / `explosivePower` | 0 / 1 | Radius in cells and power of the explosion when the cell burns out. |
+| `conductivity` | per kind | 0–1, how well heat passes through. |
+| `temperature` | ambient | Temperature of a new cell; `false` removes it. |
+| `heatSource` | none | The cell keeps pulling its temperature to this value — lava, fire, a stove. `false` removes it. |
+| `melt`, `freeze`, `boil`, `condense` | none | `{ at = temperature, into = "material" }` — a phase change with `heat` on: melt and boil when the temperature rises to `at`, freeze and condense when it falls to `at`. `false` removes it. |
+| `electric` | `"none"` | `"conductor"` carries sparks, `"source"` sparks the conductors next to it every tick. |
+| `sparkLife` / `sparkCooldown` | 4 / 6 | Ticks a spark stays in a conductor cell, and ticks before the cell conducts again. |
+| `sparkInto` / `sparkHeat` / `sparkEmission` | none / 0 / 0 | What the cell becomes when its spark ends, heat per tick and light while sparked. |
+| `breakPressure` / `breakInto` | 0 / `"empty"` | With `air`: the pressure that breaks the cell, and what it breaks into. |
+| `collider` | per kind | Whether the cells are part of the physics colliders. |
+| `hardness` | per kind | Resistance to explosions: an explosion of power 1 destroys hardness up to 1 at its centre and less towards the edge. |
+| `friction` / `restitution` | 0.6 / 0 | Friction and bounciness of the colliders made of the material and of pixel bodies — ice can be slippery. |
+
+| Kind | `density` | `opacity` | `dispersion` | `inertia` | `conductivity` | `collider` | `hardness` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| solid | 3 | 1 | 0 | 0 | 0.25 | yes | 0.6 |
+| powder | 1.6 | 1 | 0 | 0.2 | 0.2 | yes | 0.15 |
+| liquid | 1 | 0.3 | 4 | 0 | 0.5 | no | 0.02 |
+| gas | 0.05 | 0.08 | 3 | 0 | 0.05 | no | 0 |
+| fire | 0.01 | 0 | 1 | 0 | 0.1 | no | 0 |
+
+> A `"fire"` material without a `lifetime` burns forever — the default `fire` lives 15–40 ticks.
+
+| Reaction option | Default | Meaning |
+| --- | --- | --- |
+| `a`, `b` | required | Materials, `#tags` or `"*"`. The reaction works both ways round: `a` next to `b` and `b` next to `a`. |
+| `chance` | 1 | Chance per tick for every touching pair. |
+| `intoA` / `intoB` | unchanged | What `a` and `b` become (`"empty"` removes the cell). |
+| `minTemperature` / `maxTemperature` | none | The reaction only happens in this temperature range (of the `a` cell). |
+| `spark` | false | Only when one of the two cells is sparked. |
+| `heat` | 0 | Added to the temperature of both cells. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.LoadDefaultMaterials()` | `int` | Defines the default materials and reactions; returns how many materials were defined. |
+| `PixelWorld.DefineMaterial(name, options?)` | `bool` | Defines or redefines a material (every cell of it changes at once). |
+| `PixelWorld.HasMaterial(name)` | `bool` | |
+| `PixelWorld.GetMaterialInfo(name)` | `table` or `nil` | `name`, `id`, `kind`, `color`, `emission`, `opacity`, `density`, `dispersion`, `viscosity`, `inertia`, `gravity`, `flammable`, `burnTime`, `explosive`, `conductivity`, `temperature`, `heatSource`, `electric`, `collider`, `hardness`, `friction`, `restitution`, `tags`. |
+| `PixelWorld.SetMaterialValue(name, key, value)` | `bool` | Changes one option of a defined material: `SetMaterialValue("water", "color", "#3060FF")`. |
+| `PixelWorld.GetMaterials()` | `table` | Names of all materials. |
+| `PixelWorld.DefineReaction(options)` | `bool` | |
+| `PixelWorld.ClearReactions()` | — | Removes every reaction, the default ones too. |
+
+### 78.3 Cells and Brushes
+
+Brushes paint materials: `"empty"` erases. Their `options` are `replace` — which cells may be overwritten (a material,
+`#tag`, `"*"` or a list; every cell by default, `"empty"` fills only empty space) — and `chance`, 0–1 of the cells to
+paint, for scattered ore and grass.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SetCell(x, y, material)` | `bool` | |
+| `PixelWorld.GetMaterialAt(x, y)` | `string` | `"empty"` for empty space and outside the world. |
+| `PixelWorld.IsEmpty(x, y)` | `bool` | `false` outside the world and in cells covered by a physics body. |
+| `PixelWorld.IsSolid` / `IsPowder` / `IsLiquid` / `IsGas(x, y)` | `bool` | The kind of material in the cell. |
+| `PixelWorld.IsBurning(x, y)` | `bool` | A burning cell or a fire cell. |
+| `PixelWorld.FillRect(x1, y1, x2, y2, material, options?)` | `int` | Number of cells painted. |
+| `PixelWorld.FillCircle(x, y, radius, material, options?)` | `int` | |
+| `PixelWorld.FillPolygon(points, material, options?)` | `int` | `points`: `{ x1, y1, x2, y2, ... }` or `{ { x = , y = }, ... }`. |
+| `PixelWorld.DrawLine(x1, y1, x2, y2, thickness, material, options?)` | `int` | |
+| `PixelWorld.Replace(x1, y1, x2, y2, from, to)` | `int` | Turns `from` (a material, `#tag` or `"*"`) into `to` inside the rectangle. |
+| `PixelWorld.Count(x1, y1, x2, y2, material?)` | `int` | Cells of a material, `#tag` or `"*"`; any non-empty cell without `material`. |
+| `PixelWorld.FindNearest(x, y, radius, material?)` | `x, y` or `nil` | Centre of the nearest such cell within the radius. |
+| `PixelWorld.Raycast(x1, y1, x2, y2, options?)` | `hit, x, y, material` | Walks the cells from the first point to the second. `options.stop`: `"any"` (default — the first non-empty cell), `"solid"` (the first cell with a collider or of a pixel body) or a material, `#tag` or list. Without a hit returns `false`, the end point and `"empty"`. |
+| `PixelWorld.StampImage(path, x, y, options)` | `int` | Paints an image with its bottom-left corner at `x`, `y` — level design in any paint program. |
+| `PixelWorld.StampBuffer(buffer, x, y, options)` | `int` | The same from a [`PixelBuffer`](#pixelbuffer--native-rgba8-canvas). |
+| `PixelWorld.CopyToBuffer(x, y, buffer)` | `bool` | Copies the colors of `buffer:Width()` × `buffer:Height()` cells starting at `x`, `y` (bottom-left) into the buffer, row 0 at the top — a minimap, a photo mode, a cell editor. |
+
+Image options: `colors` (required) maps colors to materials — `{ ["#808080"] = "stone", ["#3070FF"] = "water" }`, keys
+may also be numbers `0xRRGGBB`; pixels of other colors take the nearest listed color, or are skipped with
+`exact = true`; transparent pixels are skipped. `scale` (1–16) paints every pixel as a `scale` × `scale` block of
+cells, `replace` works like for brushes. One cell per pixel; the top of the image is the top of the painted area.
+
+### 78.4 Heat, Air and Electricity
+
+**Heat** (`heat = true`). Every cell has a temperature; heat flows between neighbours by their `conductivity`, empty
+space slowly returns to the ambient temperature, `heatSource` materials keep their own. Phase changes (`melt`,
+`freeze`, `boil`, `condense`) and `ignite` happen when the temperature crosses their value. Without `heat` cells keep
+the temperature of their material and nothing changes phase.
+
+**Air** (`air = true`). Pressure and wind live on blocks of 4 × 4 cells, flow around solid cells and fade with time.
+Explosions push air out, wind carries particles, powders, liquids and gases, and cells with `breakPressure` break
+when the pressure goes over it.
+
+**Electricity** (`electricity = true`, the default). `Spark` puts a spark into a conductor; a `"source"` material sparks
+its conductors every tick. A spark jumps to touching conductors, stays `sparkLife` ticks and leaves the cell resting
+for `sparkCooldown` ticks, so pulses travel along wires. Reactions with `spark = true` need a spark — detonators,
+electrolysis.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.GetTemperature(x, y)` | `number` | Without `heat` — the material's temperature. |
+| `PixelWorld.SetTemperature(x, y, temperature)` | `bool` | Needs `heat`. |
+| `PixelWorld.AddHeat(x, y, radius, amount)` | `int` | Adds heat, fading to the edge (negative cools). Needs `heat`; returns the cells touched. |
+| `PixelWorld.GetPressure(x, y)` | `number` | 0 without `air`. |
+| `PixelWorld.AddPressure(x, y, radius, amount)` | `int` | Needs `air`. |
+| `PixelWorld.GetAirVelocity(x, y)` | `vx, vy` | Wind in world units per second. |
+| `PixelWorld.AddWind(x, y, radius, vx, vy)` | `int` | Needs `air` — fans, wind zones, a gust from a spell. |
+| `PixelWorld.Spark(x, y)` | `bool` | `false` if the cell is not a resting conductor. |
+| `PixelWorld.IsSparked(x, y)` | `bool` | |
+
+### 78.5 Particles and Explosions
+
+Particles are cells in flight — thrown by explosions, pushed out by bodies, spawned by you. They fly with gravity, air
+drag and wind, and when they hit something they settle back into the grid as ordinary cells (up to 50 000 at once).
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SpawnParticle(x, y, vx, vy, material, life?)` | `bool` | Velocity in world units per second; `life` in seconds removes the particle in flight (sparks, blood). |
+| `PixelWorld.SpawnParticles(x, y, count, material, options?)` | `int` | `speed` (50), `angle` (−90 — up), `spread` (360 degrees), `jitter` (0.5 — speed variation), `radius` (0 — spawn area), `life` (0). Up to 10 000 per call. |
+| `PixelWorld.GetParticleCount()` / `PixelWorld.ClearParticles()` | `int` / — | |
+| `PixelWorld.Explode(x, y, radius, options?)` | `int` | Destroys cells softer than the blast, throws some of them as particles, leaves fire, heats and pushes. Returns the cells destroyed. |
+
+| `Explode` option | Default | Meaning |
+| --- | --- | --- |
+| `power` | 1 | Strength against `hardness`. |
+| `particles` | 0.4 | Part of the destroyed cells thrown as particles. |
+| `fire` | 0.15 | Chance to leave `fire` near the centre. |
+| `heat` | 400 | Heat added (with `heat`). |
+| `pressure` | 6 | Air pushed out (with `air`). |
+| `push` | 1 | Strength of the push on dynamic physics bodies around — crates, ragdolls, pixel bodies. |
+| `bodies` | true | Whether the blast also destroys cells of pixel bodies. |
+| `engine` | true | Whether the blast pushes physics bodies at all. |
+
+### 78.6 Physics and Pixel Bodies
+
+**Colliders.** Cells whose material has `collider = true` (solids and powders by default) become static colliders of
+the level's physics world. They follow the world as it changes — digging, burning, explosions — rebuilding only the
+chunks that changed. Characters ([PlatformerController](#74-platformercontroller--platformer-character-controller)),
+rigid bodies, ragdolls and raycasts work on them with no extra code; every collider segment takes the `friction` and
+`restitution` of its material.
+
+**Engine bodies in the world.** Dynamic and kinematic bodies of the level take up the cells under them: they push sand,
+water and gas aside, rest on powders, float in liquids — the buoyancy follows the density of the liquid — and slow
+down in them, more in viscous ones.
+
+**Pixel bodies** are rigid bodies made of cells: boulders, crates, chunks of the level. Their cells stay part of the world:
+fire burns them, acid eats them, explosions, brushes and `SetCell` damage them. A damaged body is rebuilt, parts that
+are no longer connected break off into new bodies (`OnBodySplit`), crumbs of fewer than 4 cells fall as particles, and a
+body with nothing left is destroyed (`OnBodyDestroyed`). The mass comes from the `density` of the materials. Pixel
+bodies collide with the world, each other and the level's bodies.
+
+```lua
+-- A boulder made of stone, thrown to the right
+local rock = PixelWorld.CreateBodyCircle(300, 500, 24, "stone", { vx = 200, spin = 90 })
+
+-- Cut a hanging block out of the ceiling and let it fall
+local block = PixelWorld.CutBody(600, 300, 660, 340)
+
+-- After an explosion, everything in the area that no longer touches the rest falls down
+PixelWorld.Explode(800, 200, 30)
+PixelWorld.DetachIslands(700, 100, 900, 300, { minSize = 6 })
+
+PixelWorld.OnBodySplit(function(body, parts)
+    for _, part in ipairs(parts) do PixelWorld.ApplyBodyImpulse(part, 0, 400) end
+end)
+```
+
+| `SetPhysics` option | Default | Meaning |
+| --- | --- | --- |
+| `colliders` | true | Build colliders from the cells. |
+| `rebuildInterval` | 2 | Ticks between collider updates (1–120). |
+| `simplify` | 0.75 | How much the outlines are simplified, in cells (0–8). More — fewer segments, rougher edges. |
+| `friction` / `restitution` | 0.6 / 0 | Used for the wall around a fixed world and where a segment's material cannot be found. |
+| `group` | default filter | Collision group (name or index) of the colliders and, by default, of pixel bodies. |
+| `bodies` | true | Engine bodies take up cells. |
+| `displace` | true | They push powder, liquid and gas cells aside; when false such cells block them. |
+| `buoyancy` / `drag` | 1 / 1 | Multipliers of the liquid's lift and drag on bodies. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SetPhysics(options)` | — | Changes only the given options. |
+| `PixelWorld.CreateBody(x, y, width, height, material, options?)` | `int` | A rectangle of a material; `x`, `y` — bottom-left corner. Returns the body id (0 on failure). |
+| `PixelWorld.CreateBodyCircle(x, y, radius, material, options?)` | `int` | A disc around `x`, `y`. |
+| `PixelWorld.CreateBodyFromImage(path, x, y, options)` | `int` | The image's pixels become cells (the image options of [78.3](#783-cells-and-brushes)); transparent pixels are empty. |
+| `PixelWorld.CreateBodyFromBuffer(buffer, x, y, options)` | `int` | The same from a `PixelBuffer`. |
+| `PixelWorld.CutBody(x1, y1, x2, y2, options?)` | `int` | Takes the solid and powder cells of the rectangle out of the world as one body. |
+| `PixelWorld.CutBodyCircle(x, y, radius, options?)` | `int` | The same for a circle. |
+| `PixelWorld.DetachIslands(x1, y1, x2, y2, options?)` | `table` | Solid areas inside the rectangle that do not touch its border become bodies; `minSize` (4), `maxSize` (0 — any) in cells. Returns their ids. |
+| `PixelWorld.DestroyBody(id, mode?)` | `bool` | `"remove"` (default), `"shatter"` — the cells fly apart as particles, `"settle"` — the cells drop back into the world where they are. |
+| `PixelWorld.IsBodyValid(id)` / `PixelWorld.GetBodies()` | `bool` / `table` | |
+| `PixelWorld.GetBodyPosition(id)` / `PixelWorld.GetBodyAngle(id)` | `x, y` / `number` | Centre of mass; angle in degrees, clockwise. `nil` for a body that is gone. |
+| `PixelWorld.GetBodyVelocity(id)` / `PixelWorld.SetBodyVelocity(id, vx, vy)` | `vx, vy` / `bool` | World units per second. |
+| `PixelWorld.ApplyBodyImpulse(id, ix, iy, px?, py?)` | `bool` | At the point `px`, `py`, or at the centre of mass. |
+| `PixelWorld.GetBodyCellCount(id)` | `int` | How many cells are left. |
+| `PixelWorld.OnBodySplit(function(id, parts))` | — | `parts` — ids of the new bodies broken off `id`. `nil` removes the handler. |
+| `PixelWorld.OnBodyDestroyed(function(id))` | — | A body the simulation destroyed: nothing left of it, or it left a `"void"` world. Not called for `DestroyBody`. |
+
+Body options: `angle` (degrees, clockwise, around the centre), `vx`, `vy`, `spin` (degrees per second, clockwise),
+`friction` and `restitution` (the average of the body's materials by default), `group`. `CutBody` and
+`DetachIslands` keep the cells where they are, so `angle` does not apply to them. A body is at most 512 × 512 cells.
+
+### 78.7 Light
+
+`SetLighting({ enabled = true })` turns on per-pixel light. Every cell that has `emission` is a light; light travels
+cell by cell, lights up the surfaces it reaches, is dimmed by semi-transparent cells (water, glass, smoke) and stopped
+by opaque ones, so caves are dark and a lava lake lights the walls around it. It is computed on the GPU every frame
+(radiance cascades over a distance field of the cells) for the camera and a `margin` around it, and multiplies
+everything drawn in the world before it — the pixel world, sprites, tilemaps, particles; the UI is not affected. The
+level's point and spot lights are small light sources in the pixel world (`engineLights`; their color × intensity, and
+a spot light shines all around here), the directional light is the sun (`sun`), and `sky` lights everything open to the
+top of the lit area.
+
+For gameplay — a stealth meter, plants that need light, monsters that avoid it — the CPU keeps a coarse light map of
+the same area several times a second: `GetLight` and `IsLit` read it.
+
+| `SetLighting` option | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | false | |
+| `ambient` | 0.03, 0.03, 0.04 | Light everywhere: a color or a number. |
+| `intensity` | 1 | Multiplier of the computed light. |
+| `quality` | 1 | Cells per light texel: 0 — 4 × 4, 1 — 2 × 2, 2 — every cell. A big view lowers it by itself (at most 1024 texels per side and 655 360 in total). |
+| `smooth` | false | Smooth the light between texels instead of crisp pixel steps. |
+| `sky` / `skyLevel` | 0 / none | Light from above; only rays that leave the lit area above `skyLevel` (world Y) get it — set it to the surface height and caves stay dark. |
+| `sun` | true | The level's directional light shines in from its direction. |
+| `engineLights` | true | Point and spot lights are light sources in the pixel world. |
+| `emission` | 1 | Multiplier of every material's `emission`. |
+| `margin` | 48 | Cells lit around the view, so lights just off screen still shine in. |
+| `cpu` / `cpuInterval` / `cpuScale` | true / 6 / 2 | The gameplay light map: on or off, ticks between updates, cells per texel (1–8). |
+| `falloff` | 40 | Cells over which light fades in the gameplay light map. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SetLighting(options)` | — | Changes only the given options. |
+| `PixelWorld.GetLight(x, y)` | `r, g, b` | From the gameplay light map: `ambient` plus the light at that point; `ambient` outside the lit area, 0 while the map is off. |
+| `PixelWorld.IsLit(x, y, threshold?)` | `bool` | Whether the brightest channel is at least `threshold` (0.2). |
+
+> On devices without float render targets (some WebGL and mobile GPUs) the light uses 8-bit targets with a smaller
+> range; it still works the same way.
+
+### 78.8 Endless Worlds and Saving
+
+In `"streaming"` mode the world has no edges. Chunks of 64 × 64 cells are loaded around the camera
+(`followCamera`) and around **anchors** — points you keep where something must stay alive, such as a second player or
+a moving boss. Chunks within `simulateRadius` are simulated, chunks within `keepRadius` stay loaded but frozen, the rest
+are unloaded — saved to disk first when `persist` is on, generated anew otherwise. Pixel bodies in frozen chunks wait
+until their area is simulated again.
+
+New chunks are filled by the **generator**: a list of layers applied in order, then your `OnChunkGenerated` callback,
+which can paint anything with the brushes. A fixed world uses the same layers with `Regenerate()`.
+
+```lua
+PixelWorld.Create({ mode = "streaming", cellSize = 2, seed = 42 })
+PixelWorld.SetGenerator({
+    { type = "fill", material = "stone", maxY = 0 },                                   -- solid ground below Y = 0
+    { type = "noise", material = "dirt", maxY = 0, minY = -200, scale = 40, threshold = -0.1, replace = "stone" },
+    { type = "noise", material = "empty", maxY = -40, scale = 90, threshold = 0.2, replace = "*" },   -- caves
+    { type = "noise", material = "water", maxY = -60, scale = 30, threshold = 0.55 },                  -- pools in caves
+    { type = "noise", material = "coal", maxY = -100, scale = 12, threshold = 0.6, replace = "stone", chance = 0.8 },
+})
+PixelWorld.OnChunkGenerated(function(cx, cy, minX, minY, maxX, maxY)
+    if cx % 7 == 0 and minY < -300 then
+        PixelWorld.FillCircle((minX + maxX) / 2, (minY + maxY) / 2, 30, "lava", { replace = "empty" })
+    end
+end)
+PixelWorld.SetStreaming({ simulateRadius = 3, keepRadius = 5, persist = true, folder = "World1" })
+PixelWorld.SetAnchor("boss", boss.x, boss.y)                 -- keep the boss's area alive off screen
+```
+
+| Layer option | Default | Meaning |
+| --- | --- | --- |
+| `type` | `"fill"` | `"fill"` — every cell, `"noise"` — cells where fractal noise passes the threshold, `"image"` — an image placed in the world. |
+| `material` | required | What the layer paints (`"empty"` carves); not used by `"image"`. |
+| `replace` | `"empty"` | Which cells the layer may change: a material, `#tag`, `"*"` or a list. By default only empty cells. |
+| `minX`, `maxX`, `minY`, `maxY` | unlimited | World area of the layer. |
+| `chance` | 1 | Part of the matching cells painted. |
+| `scale` | 64 | Noise: size of the features in cells. |
+| `octaves` / `lacunarity` / `gain` | 4 / 2 / 0.5 | Noise: detail. |
+| `threshold` / `invert` / `ridged` | 0 / false / false | Noise: cells where the noise (−1–1) is above `threshold` (below with `invert`); `ridged` makes veins and tunnels. |
+| `offsetX`, `offsetY` | 0 | Noise: shift, to make layers with the same settings differ. |
+| `image` or `buffer`, `x`, `y`, `colors`, `exact`, `scale` | — | Image: like `StampImage`, placed at `x`, `y`; `scale` here is the pixel size in cells. |
+
+`OnChunkGenerated(cx, cy, minX, minY, maxX, maxY)` gets the chunk index and its world rectangle. It runs for each new
+chunk, a few per frame (`budget`), and must not create, destroy, clear, regenerate, load or step the world.
+
+| `SetStreaming` option | Default | Meaning |
+| --- | --- | --- |
+| `followCamera` | true | Load chunks around the camera. |
+| `simulateRadius` / `keepRadius` | 3 / 5 | In chunks around the camera and each anchor (1–32 / up to 48). |
+| `budget` | 4 | Chunks generated or loaded per frame (1–64). |
+| `persist` / `folder` | false / none | Save changed chunks into this folder inside the game's save folder when they unload, and load them back. |
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SetStreaming(options)` | — | Changes only the given options. |
+| `PixelWorld.SetAnchor(id, x, y)` / `PixelWorld.RemoveAnchor(id)` | — / `bool` | Call `SetAnchor` again to move it. |
+| `PixelWorld.SetGenerator(layers)` | `bool` | `false` (and the generator is unchanged) if a layer is invalid. |
+| `PixelWorld.Regenerate()` | — | Clears every loaded chunk and generates it again. |
+| `PixelWorld.OnChunkGenerated(function)` | — | `nil` removes the handler. |
+| `PixelWorld.SaveChunks()` | `bool` | Saves the changed loaded chunks of a `persist` world now — call it before quitting. |
+| `PixelWorld.SaveToFile(path)` / `PixelWorld.LoadFromFile(path)` | `bool` | The whole world — cells, temperatures, pixel bodies — in a compressed file inside the save folder. Loading needs a world of the same mode (and size, for fixed worlds). |
+| `PixelWorld.Serialize()` / `PixelWorld.Deserialize(data)` | `string` / `bool` | The same as a binary string, for your own save format or the network. |
+
+### 78.9 Drawing and Debugging
+
+The world draws itself every frame: the cells of each 64 × 64 chunk are one texture, uploaded only where something
+changed, and chunks outside the view are skipped. Pixel bodies and particles are drawn the same way.
+
+| `SetRender` option | Default | Meaning |
+| --- | --- | --- |
+| `visible` | true | |
+| `z` | 0 | Depth among the other world drawings, like `z` of `Draw`. |
+| `background` | false | Draw behind the level (the background layer). |
+| `lit` | false | Let the engine's 2D lights and shadows shade the cells, like sprites. Not needed with `SetLighting`. |
+| `blend` | `"translucent"` | `"translucent"`, `"opaque"`, `"additive"` or `"masked"`. |
+| `castShadows` / `shadowZ` | false / 0 | Opaque cells (`opacity` 0.5 and more) cast shadows from the engine's lights. |
+| `particleSize` | 1 | Size of flying particles in cells. |
+
+`SetDebug({ chunks, dirty, colliders, temperature, pressure, light })` draws chunk borders (green — moving, grey —
+asleep, red — frozen), the rectangles being simulated, collider outlines, a heat map (red — hotter, blue — colder than
+the ambient temperature), a pressure map and the gameplay light map.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `PixelWorld.SetRender(options)` / `PixelWorld.SetDebug(options)` | — | Change only the given options. |
+
+> The pixel world, its materials, callbacks and settings are cleared when Play stops and when the level changes. The
+> simulation is spread over the engine's worker threads inside each tick; every `PixelWorld` call runs on the game
+> thread between ticks, so it is always safe, and the random choices of the simulation come from `seed`.
 
 ---

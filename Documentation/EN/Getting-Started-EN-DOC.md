@@ -2,7 +2,7 @@
 
 ## Full documentation in English
 
-### Actual for R-1.0.2 Version
+### Actual for R-1.0.3 Version
 
 > This is the **first stop** for anyone who has just installed **IceBoxEngine**.
 > Before you ever open the editor you meet two small companion applications, and
@@ -131,14 +131,14 @@ Engine installers are named after the version, configuration, OS and CPU
 architecture they were built for:
 
 ```
-IceBoxEngine-1.0.2-Release-Windows-x64-Setup.exe
-IceBoxEngine-1.0.2-Release-Windows-x86-Setup.exe
-IceBoxEngine-1.0.2-Release-Windows-arm64-Setup.exe
-IceBoxEngine-1.0.2-Release-Linux-x64-Setup.deb
-IceBoxEngine-1.0.2-Release-Linux-x86-Setup.deb
-IceBoxEngine-1.0.2-Release-Linux-arm64-Setup.deb
-IceBoxEngine-1.0.2-Release-macOS-arm64-Setup.pkg
-IceBoxEngine-1.0.2-Release-macOS-x64-Setup.pkg
+IceBoxEngine-1.0.3-Release-Windows-x64-Setup.exe
+IceBoxEngine-1.0.3-Release-Windows-x86-Setup.exe
+IceBoxEngine-1.0.3-Release-Windows-arm64-Setup.exe
+IceBoxEngine-1.0.3-Release-Linux-x64-Setup.deb
+IceBoxEngine-1.0.3-Release-Linux-x86-Setup.deb
+IceBoxEngine-1.0.3-Release-Linux-arm64-Setup.deb
+IceBoxEngine-1.0.3-Release-macOS-arm64-Setup.pkg
+IceBoxEngine-1.0.3-Release-macOS-x64-Setup.pkg
 ```
 
 **Windows.** The `…-Setup.exe` is an **NSIS** installer and requires
@@ -171,6 +171,26 @@ Windows installs also write a small amount of registry state:
 `HKLM\…\CurrentVersion\Uninstall\IceBoxEngine`. Uninstalling removes the install
 folder, both shortcut sets, the file association and all of that state.
 
+The uninstaller — *Uninstall* in the Start Menu group, `Uninstall.exe` in the install
+folder, or *Add or Remove Programs* — has a **Components** page of its own, just like the
+installer:
+
+| Component | What it does |
+| --------- | ------------ |
+| **IceBoxEngine (required)** | Removes the install folder, both shortcut sets, the file association and the registry state above. Cannot be unticked. |
+| **User data** | Unticked by default. Also deletes your personal engine data: `%APPDATA%\IceBoxEngine` (your preferences, the launcher's project list, the updater's settings, crash reports of the launcher and the updater) and `%LOCALAPPDATA%\IceBoxEngine` (the per-user game build cache and the WiX toolset the build fetched). |
+
+**User data** never touches your projects, your game builds or the activation: the
+activation record in `%APPDATA%\IceBoxEngine` stays there with its other copies
+([2.6](#26-activating-the-engine)), and so do the saves that games built with older engine
+versions keep in `%APPDATA%\IceBoxEngine\game`
+([Profiling & Building, 7.5](Profiling-And-Building-EN-DOC.md#75-where-a-shipped-game-keeps-its-player-data)).
+A link inside these folders (a junction or a symbolic link) is removed as a link, without
+touching what it points to, and a data folder that is itself a link is left alone. A
+silent uninstall (`Uninstall.exe /S`), which every update runs, never deletes user data,
+and installing over an existing version by hand runs the previous version's uninstaller,
+which keeps it too unless you tick **User data** there.
+
 **Linux.** Install the `.deb` with your package manager or `sudo apt install
 ./IceBoxEngine-…-Setup.deb`. The package first asks you to accept the
 **IceBoxEngine License Agreement** (a short summary followed by the question
@@ -191,6 +211,17 @@ It depends on `libgl1`, `libx11-6` and `zenity`, and recommends
 runtime). Removing the package deletes `/opt/iceboxengine` and refreshes the
 desktop and MIME databases.
 
+Removing it (`sudo apt remove iceboxengine`) also asks, the same way the license is asked
+at install time: **Also delete your IceBoxEngine user data?** The answer starts at *No*.
+*Yes* deletes `~/.config/IceBoxEngine`, `~/.local/share/IceBoxEngine` and
+`~/.cache/IceBoxEngine` of the user who runs the removal — with `sudo`, that is you — and
+keeps exactly what the Windows **User data** option keeps: your projects, your game builds,
+the activation and the saves of games built with older engine versions, and it treats
+links the same way. Only these default locations are cleared, so if you moved them with
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME` or `XDG_CACHE_HOME`, delete those copies by hand. A
+removal that cannot show the question — from a software center, or with
+`DEBIAN_FRONTEND=noninteractive` — keeps the data, and an update never asks.
+
 **macOS.** The `.pkg` is a `productbuild` package that shows the license agreement,
 then installs system-wide into
 `/Applications/IceBoxEngine`, where the three programs live as `.app` bundles
@@ -198,16 +229,23 @@ then installs system-wide into
 script places an **IceBoxEngineLauncher** alias on the desktop of the logged-in user and
 re-registers the bundles with LaunchServices.
 
+macOS has no uninstaller for `.pkg` packages, so there is no uninstall step that could ask
+anything: to remove the engine, move `/Applications/IceBoxEngine` and the desktop alias to
+the Trash. Your user data stays where it is — `~/.config/IceBoxEngine`,
+`~/Library/Application Support/IceBoxEngine` and `~/.cache/IceBoxEngine` — until you delete
+those folders yourself. `~/Library/Application Support/IceBoxEngine` also holds one copy of
+the activation; the others keep the engine activated ([2.6](#26-activating-the-engine)).
+
 **Android.** The engine also ships as an `.apk` that carries the launcher, the editor and the
 game runtime in one app. There are four of them, one per CPU architecture, and you download the
 one that matches your device:
 
 | File | For |
 | ---- | --- |
-| `IceBoxEngine-1.0.2-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
-| `IceBoxEngine-1.0.2-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
-| `IceBoxEngine-1.0.2-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
-| `IceBoxEngine-1.0.2-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
+| `IceBoxEngine-1.0.3-Release-Android-arm64-v8a.apk` | Every phone and tablet made in roughly the last eight years. **Take this one if you are not sure.** |
+| `IceBoxEngine-1.0.3-Release-Android-armeabi-v7a.apk` | Older 32-bit ARM devices |
+| `IceBoxEngine-1.0.3-Release-Android-x86_64.apk` | Android emulators on a PC, Chromebooks, x86 tablets |
+| `IceBoxEngine-1.0.3-Release-Android-x86.apk` | 32-bit x86 emulators and very old x86 tablets |
 
 Each file holds one architecture only, which is what keeps it small; the wrong one simply
 refuses to install with `INSTALL_FAILED_NO_MATCHING_ABIS`, so nothing breaks if you guess wrong
@@ -454,8 +492,9 @@ them does not cost you the activation:
 | macOS | `/Users/Shared/IceBoxCrew/IceBoxEngine/`, `~/Library/Application Support/IceBoxEngine/`, `~/Library/Preferences/IceBoxCrew/`, `~/.config/IceBoxEngine/`, `~/.iceboxengine/` |
 | Android | `/storage/emulated/0/IceBoxEngine/UserData/` and `/storage/emulated/0/.iceboxengine/` (both need All Files Access), plus the app's own `Android/data/com.iceboxengine.editor/files/UserData/`, `.iceboxengine/` and `.local/share/IceBoxCrew/IceBoxEngine/` |
 
-None of these live inside the install folder, so **uninstalling and reinstalling
-the engine — or updating it — keeps the activation**. Wiping the machine (a fresh
+None of these live inside the install folder, and deleting your user data while
+uninstalling ([2.2](#22-running-the-installer)) leaves them alone too, so **uninstalling and
+reinstalling the engine — or updating it — keeps the activation**. Wiping the machine (a fresh
 OS install, a reformat or a phone's factory reset) removes them all; ask support for
 a replacement key in that case.
 
@@ -513,7 +552,7 @@ The launcher is a project hub: a fixed **sidebar** of tabs on the left and a wid
 ┌───────────────────┬──────────────────────────────────────────────┐
 │   🧊 logo          │                                              │
 │ IceBoxEngine™     │            Active tab content                │
-│ Release 1.0.2     │   (My Projects / New Project / Plugins &     │
+│ Release 1.0.3     │   (My Projects / New Project / Plugins &     │
 │ ───────────────── │    Mods / Settings / About)                  │
 │ My Projects       │                                              │
 │ New Project       │                                              │
@@ -845,7 +884,7 @@ The manifest the launcher writes looks like this:
 ```json
 {
     "Name": "MyNewGame",
-    "EngineVersion": "1.0.2",
+    "EngineVersion": "1.0.3",
     "StartScene": "Content/Levels/L_Frost_Title.icemap",
     "UseCurrentLevelAsStartScene": false,
     "ScriptingMode": "Code",
@@ -1379,13 +1418,23 @@ and `~/.local/share/IceBoxEngine/game/Saved/CrashReports` on Linux. The editor w
 own reports into the open project's `Saved/CrashReports/`. Each folder keeps the newest 15
 reports.
 
+**In your per-user cache** — Windows: `%LOCALAPPDATA%\IceBoxEngine` · Linux/macOS:
+`~/.cache/IceBoxEngine`. It holds the game build trees when the engine folder is read-only
+([Profiling & Building, 13](Profiling-And-Building-EN-DOC.md#13-build-output-locations)) and
+the tools a build downloads once (WiX, `appimagetool`, and on a Mac with a read-only engine
+folder the MoltenVK and Google Mobile Ads frameworks). Anything missing there is rebuilt or
+downloaded again.
+
+Uninstalling keeps your user-data folder and your per-user cache unless you choose to delete
+your user data ([2.2](#22-running-the-installer)).
+
 **In a project folder**
 
 | Path | What it holds |
 | ---- | ------------- |
 | `<Name>.iceproject` | The project manifest — name, engine version, start level, scripting mode, description, license, plugin and mod lists. |
 | `Config/Engine.json` | Per-project editor and rendering settings, seeded from your preferences and from the renderer probe at creation. |
-| `Config/Editor.json`, `Config/CollisionGroups.json`, `imgui.ini` | The editor's other per-project state — open panels and asset editors, Build Game settings, collision groups, the dock layout ([Editor 2.3](Editor-EN-DOC.md#23-panel-persistence)). |
+| `Config/Editor.json`, `Config/CollisionGroups.json`, `imgui.ini` | The editor's other per-project state — open panels and asset editors, Build Game settings, collision groups, the dock layout ([Editor 2.3](Editor-EN-DOC.md#23-panel-persistence)), written while **Layout AutoSave** is on ([Editor 10.4](Editor-EN-DOC.md#104-editor)). |
 | `Content/` | Project content, including the files of the starter example the project was made from. |
 | `Plugins/`, `Mods/` | Packages copied in by the launcher. |
 | `LICENSE.txt` | Written at creation for every license except *None*. |
@@ -1487,6 +1536,14 @@ folder** yourself — an example in `Content/Examples/`, a package dropped into 
 engine's own `Plugins/` or `Mods/`: on Windows the old installation is removed as a whole
 before the new one goes in. Keep such files outside the install folder and copy them back
 afterwards.
+
+**How do I remove IceBoxEngine together with everything it stored?**
+Uninstall it with **User data** ticked on Windows, or answer *Yes* to the user-data question
+when you remove the Linux package ([2.2](#22-running-the-installer)); on macOS delete the
+folders listed there by hand. Your projects and game builds are never removed with the
+engine — delete their folders yourself if you no longer need them. The activation is kept
+on purpose, so that installing again never asks for the key; [2.6](#26-activating-the-engine)
+lists where it lives.
 
 **Can I just run the editor directly?**
 Yes — double-clicking a `.iceproject` opens it in the editor. But going through the
