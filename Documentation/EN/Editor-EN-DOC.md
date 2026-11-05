@@ -120,6 +120,8 @@ materials, classes, widgets — come from the **Content Browser**.
 While a project opens, the editor shows a start-up splash with a progress bar and its
 loading stages, and ignores input until the workspace is ready — see
 [Getting Started → Opening a project](Getting-Started-EN-DOC.md#37-opening-a-project-the-hand-off-to-the-editor).
+When you are done, **File → Exit** closes the project and brings the launcher back
+([3.1](#31-file)).
 
 > The editor's own language and theme are configurable (see
 > [Preferences → Editor](#104-editor)); this document uses the default English
@@ -333,7 +335,7 @@ The menu bar runs across the very top of the window.
 | **Level Script Editor** | — | Toggles the **Level Script** window — a Lua (or Visual Script) editor for the level's own `OnLevelStart` / `OnLevelUpdate(dt)` / `OnLevelEnd` callbacks. See [Section 14](#14-levels-dialogs--scripts). |
 | **Update All Assets** | — | Saves the level and every dirty asset editor (including pending **Property Matrix** edits), refreshes all assets, **compiles all class scripts**, rebuilds the post-process volumes and reloads every class instance in the level. This is the manual "make everything current" button. |
 | **Update All Assets on Play** | (toggle) | When **on** (default), pressing **PLAY** runs the same save-and-refresh pass first, so Play mode always reflects your latest edits. Turn it off for faster Play starts when you know nothing changed. |
-| **Exit** | `Alt+F4` | Quits the editor. If the level has unsaved changes, the **Unsaved Changes** dialog appears first (Save / Don't Save / Cancel). |
+| **Exit** | — | Closes the project and opens the launcher, so you can go straight on to another project. If the level has unsaved changes, the **Unsaved Changes** dialog appears first (Save / Don't Save / Cancel); **Cancel** keeps the editor open. Closing the editor any other way — the window's close button, `Alt+F4`, `Cmd+Q` on macOS — quits it without opening the launcher. Details in [Getting Started → Back to the launcher](Getting-Started-EN-DOC.md#37-opening-a-project-the-hand-off-to-the-editor). |
 
 A separator sits between **Save Level** and **Level Script Editor**.
 
@@ -431,9 +433,10 @@ adjusted for a touch screen and for what a phone can actually do:
   suggestions, so it does not learn them. Hold a finger on an active field for **Cut**, **Copy**,
   **Paste** and **Select All**; dragging across its text or double-tapping a word selects it and
   shows the same menu, and the keyboard's own clipboard and text-editing panels work as well.
-  Sliding a finger over the keyboard's space bar moves the caret inside the field, and automatic
-  capital letters follow the text before the caret, so a tap into the middle of a sentence does
-  not start a capital by mistake.
+  Sliding a finger over the keyboard's space bar moves the caret inside the field, and the
+  keyboard sees the text before the caret: automatic capital letters follow it, so a tap into
+  the middle of a sentence does not start a capital by mistake, and word suggestions take it
+  into account too.
 * **Right click without a mouse.** Hold one finger where you want the menu and tap with a second
   finger — the tap has to land and lift within half a second, and neither finger may slide. That
   is a right click at the first finger's position, which puts every context menu within reach:
@@ -533,6 +536,9 @@ adjusted for a touch screen and for what a phone can actually do:
 * **Launcher and editor in one process.** The launcher screen opens first; picking a project
   hands it straight to the editor. There is no second executable to start. If the editor cannot
   open a project, the app returns to the launcher with the reason instead of closing.
+  **File → Exit** closes the project and restarts the app on the launcher screen. While **All
+  Files Access** is still missing, that restart does not ask for it again — the launcher's
+  **Allow All Files Access…** button is there for that.
 * **Leaving the app writes your preferences out.** Android can end a backgrounded app at any
   time, so switching away flushes the editor preferences and the panel layout to disk right then.
   Level content still follows the usual rule — you save it yourself.
@@ -2095,7 +2101,7 @@ Cut / Paste / Select All (see [Assets](Assets-EN-DOC.md)).
 | Shortcut | Action |
 | -------- | ------ |
 | `Ctrl+S` | Save level (or hot-reload the level script during Play, when its window is focused) |
-| `Alt+F4` | Exit |
+| `Alt+F4` | Quit the editor without opening the launcher (**File → Exit** opens it) |
 | `Ctrl+Z` | Undo (scene, Content Browser files, or the focused asset editor) |
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+R` | Compile scripts + refresh assets |

@@ -4446,6 +4446,7 @@ editor.set_outliner_filter('')        # clear
 #### `editor.quit(save=False)` → `bool`
 
 Closes the editor. `save=True` writes the current level first; otherwise unsaved changes are dropped without a dialog.
+The launcher is not opened afterwards — only **File → Exit** does that.
 This is what makes unattended runs possible — see [17. Command line & automation](#17-command-line--automation).
 
 ```python

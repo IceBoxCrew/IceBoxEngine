@@ -558,7 +558,7 @@ New assets get a **type prefix and a unique default name** (`SP_NewSprite`,
 | **Import Aseprite Spritesheet** | an Aseprite `.json` in the project | Build sprites/flipbook from Aseprite data — see [5.1](#51-aseprite-importer). |
 | **Create Tilemap (.ice_tm)** | tilesets | Make a `.ice_tm` (`TM_<name>`) that already uses this tileset in its first layer. |
 | **Create Child Class** | classes | Make a subclass that inherits the parent class (and a stub script that calls back into it). |
-| **Create Child Widget** | widgets | Make a widget that inherits the parent's canvas settings and elements. |
+| **Create Child Widget** | widgets | Make a widget that inherits the parent's canvas settings, **Pauses With Game** and elements. |
 | **Create Material Instance (.ice_matinst)** | materials | Make a `.ice_matinst` parented to the material. |
 | **Create Decal (.ice_decal)** | textures | Make a `.ice_decal` (`DC_<name>`) that already uses the image as its first texture variant. |
 | **Create Flipbook from Sprite(s)** | one or more sprites selected | Build a `.ice_flipbook` from the selected sprites, ordered by file name. |
@@ -825,7 +825,7 @@ selections:
 | **Tilesets** | Tile size, shading/blend/alpha clip, and the settings of every tile that has tile data: shadows, collider, destructible fragments, sensor, one-way, collision events, physics material, collider mode, collision group and mode. |
 | **Tilemaps** | Tile size, coordinates display, chunking and chunk size, and the animated tiles: playback speed plus the same shadow/collision/physics settings as tileset tiles. |
 | **Classes** | Every component by type: Transform, Stencil, Replication, Rigidbody, Camera, Animator, Skeleton, Destructible and AI, plus all instances of Sprite, Flipbook, Tilemap, Audio, FX, Widget, Point Marker, Decal, Joint and Class Component, box/sphere/capsule colliders, point and spot lights. In child classes, components show their effective (inherited) values and an edit is stored as an override, exactly like in the Class Editor; inherited instances are edited in the parent class. |
-| **Widgets** | Canvas settings (size, desired size, scale with screen, stretch mode, safe area) and every element grouped by type: transform, appearance and lighting, text, value and fill, check/toggle state, 9-slice, layout, scroll view, size box, throbber, switcher, tooltip, interaction and state colors. In child widgets, inherited elements are included where the child already overrides them. |
+| **Widgets** | Canvas settings (size, desired size, scale with screen, stretch mode, safe area, pausing with the game) and every element grouped by type: transform, appearance and lighting, text, value and fill, check/toggle state, 9-slice, layout, scroll view, size box, throbber, switcher, tooltip, interaction and state colors. In child widgets, inherited elements are included where the child already overrides them. |
 | **FX** | Emitter settings (enabled, duration, loop, start delay, max particles, warm-up, simulation stages and mode, transform) and every module grouped by type with all of its parameters — spawning, initial values, forces, orbit, noise, attractor, collision, light, fluid, renderers, stretch, kill conditions, events, curl noise, vortex, wind, speed-based size/color, density, springs, particle collision, conditional and sub-FX. |
 | **Decals** | Appearance, rotation, lifetime and placement of the selected decal assets, plus the weight and source rect of every texture variant inside them. |
 | **Fonts** | The `.ice_font` switches: **Antialiased**, **Nearest Filter**, **Bold**, **Italic** and **Keep Ranges in Auto-subset**. Default size, character ranges and atlas size stay per font — they depend on the font and the languages it covers, so change them in the Font Editor. |
@@ -2426,6 +2426,7 @@ rotation of the elements and of their parents into account.
 | **Scale With Screen** | Scale the whole widget with the viewport instead of using raw pixels. |
 | **Stretch Mode** | `Stretch`, `Letterbox`, `MatchWidth`, `MatchHeight`. |
 | **Safe Area** + **Insets (L,T,R,B)** | Keep content clear of notches and rounded corners. |
+| **Pauses With Game** | Off by default. While the game is paused (`PauseGame()`, a time scale of 0 or the editor's Pause button), the widget's animations, flipbooks, throbbers and plugin elements hold and its `OnUpdate` gets `dt = 0`; everything continues where it stopped when the game resumes, and clicks, hover and focus keep working. Turn it on for a HUD or a world-space widget that should freeze with the game and leave it off for pause menus, which have to keep running. Each widget has its own setting, including the widgets embedded through `SubWidget`; Lua: `SetPauseWithGame` / `SetWidgetPauseWithGame`. |
 | **Parent Widget** | Inherit another widget's canvas settings and elements. **Reparent** changes it with cycle detection; inherited elements are marked in the hierarchy and can be overridden per field. |
 | **Is Element** | Marks the document as a reusable building block meant to be embedded through `SubWidget` rather than shown on its own. Only widgets with this flag can be picked by a SubWidget element. |
 | **Script** | A Lua text script or a Visual Script graph, chosen per widget. |
@@ -2464,8 +2465,10 @@ rotation of the elements and of their parents into account.
 > Japanese text can also break between any two characters, but closing punctuation
 > (`。`, `、`, `」`, `）`, `!`, `?` …) never starts a line and an opening bracket never ends
 > one; Korean, like European languages, breaks at spaces. A line can also break after a
-> hyphen or a slash inside a word, a word longer than the whole line is split between
-> characters, and line breaks typed into the text — blank lines included — are kept.
+> hyphen or a slash inside a word — after a hyphen only when at least three letters or
+> digits stand on each side of it, so «кого-то», «из-за» or «e-mail» stay whole — a word
+> longer than the whole line is split between characters, and line breaks typed into the
+> text — blank lines included — are kept.
 
 > **Slider and Progress Bar fill.** The filled part covers the share of the element's width
 > that **Value** takes between **Min** and **Max**, starting from the left edge. Without a
@@ -2589,8 +2592,10 @@ The canvas always shows the selected animation at the playhead exactly as the ga
 * **Events** fire in time order — in reverse order while playing backwards — and again on every
   loop. The function receives the event's parameter, or the animation name when the parameter
   is empty.
-* Widget animations advance with the game time (including the accessibility game speed) and
-  keep playing while the game is paused, so pause menus can animate.
+* Widget animations advance with real time scaled by the accessibility game speed and a hit
+  stop. The time scale (`SetTimeScale`, `PauseGame()`) doesn't affect them, so they keep
+  playing while the game is paused or in slow motion, and pause menus can animate. A widget
+  with **Pauses With Game** on holds its animations during a pause instead.
 
 **Who plays an animation.** One widget asset can be shown by many entities at once. An
 animation started from the widget's own script (`PlayAnimation`) or by **Auto Play** runs on

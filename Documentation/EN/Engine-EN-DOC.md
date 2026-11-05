@@ -181,8 +181,11 @@ One iteration of the main loop, in order:
 `Update()` in Play mode does, in order:
 
 1. **Resolve the game delta** — the real frame delta is multiplied by the accessibility
-   **Game Speed** ([2.6](#26-time-pause--suspend)). The unscaled delta is kept separately
-   for UI, debug text and timers that must ignore slow-motion.
+   **Game Speed**, the script **Time Scale** and an active **hit stop**
+   ([2.6](#26-time-pause--suspend)). Widgets get their own delta — the same one without the
+   Time Scale — so pause menus keep running in a pause and the HUD keeps its pace in slow
+   motion; a widget with **Pauses With Game** on stops during a pause instead. The unscaled
+   delta is kept separately for debug text and timers that must ignore slow-motion.
 2. **Pause requests** — a pause requested from script or by `F5` in the editor is
    consumed, and the resulting state is published so every subsystem sees the same flag.
 3. **Scene simulation** — run on the game delta; detailed below.
@@ -207,7 +210,10 @@ One iteration of the main loop, in order:
    weight, zoom and roll included — and `Cinema.ShakeCamera` is added. The resulting frame is
    what is rendered, what `Cinema.GetCameraPosition`, the screen ↔ world conversions and the
    cinema audio listener use. Finally camera shake is decayed for the primary and every
-   split-screen camera.
+   split-screen camera. While the game is paused (`PauseGame()`, a time scale of 0 or the
+   editor's Pause button), neither `ShakeCamera` nor `Cinema.ShakeCamera` runs down or moves
+   the camera, so the view behind a pause menu stays still; both continue when the game
+   resumes.
 
    While the editor camera is [ejected](Editor-EN-DOC.md#45-play-pause--eject), the free
    camera is the frame as it is: no cinema is blended over it and no shake is added. The
@@ -307,10 +313,10 @@ Four independent multipliers sit between the wall clock and gameplay:
 
 | Layer | Set by | Affects |
 | ----- | ------ | ------- |
-| **Real frame delta** | The frame loop | The editor, UI, debug overlays, network timing. Never scaled. |
-| **Game Speed** | [Preferences → Accessibility](Editor-EN-DOC.md#108-accessibility) (0.25×–2×) | The delta handed to the scene simulation in Play mode. A player-facing accessibility setting. |
-| **Time Scale** | Gameplay script | Multiplies the scene delta once, together with Game Speed and Hit stop, for slow motion and pause. Physics, scripts, animations, FX and game clocks share this delta. |
-| **Hit stop** | Gameplay script (`HitStop`) | Multiplies the delta handed to the scene simulation for a moment of real time — a freeze or a slow-down on impact. |
+| **Real frame delta** | The frame loop | The editor, debug overlays, the developer console, network timing. Never scaled. |
+| **Game Speed** | [Preferences → Accessibility](Editor-EN-DOC.md#108-accessibility) (0.25×–2×) | The delta handed to the scene simulation and to widgets in Play mode. A player-facing accessibility setting. |
+| **Time Scale** | Gameplay script | Multiplies the scene delta once, together with Game Speed and Hit stop, for slow motion and pause. Physics, scripts, animations, FX and game clocks share this delta. Widgets ignore it, so a pause menu keeps working and animating after `PauseGame()` and the HUD keeps its pace in slow motion. A widget with **Pauses With Game** on stops during a pause instead: its animations, flipbooks and throbbers hold and its `OnUpdate` gets `dt = 0`. |
+| **Hit stop** | Gameplay script (`HitStop`) | Multiplies the delta handed to the scene simulation and to widgets for a moment of real time — a freeze or a slow-down on impact. While the game is paused (`PauseGame()`, a time scale of 0 or the editor's Pause button) it leaves widgets alone, so a pause menu opened during the freeze works at once. |
 
 When the effective scale reaches zero the engine broadcasts **`OnPause`** to scripts, and
 **`OnResume`** when it leaves zero — so systems can stop and restart cleanly instead of

@@ -337,9 +337,10 @@ There is no wrong way to start them:
 
 * **Launcher** — the desktop shortcut/alias, the Start-Menu or application-menu
   entry, or `IceBoxEngineLauncher` in the install folder. The finish page of the Windows
-  installer can also launch it for you. On **Android** the launcher is simply the app's first
-  screen: tap the IceBoxEngine icon and it opens, and picking a project hands it straight to
-  the editor in the same app.
+  installer can also launch it for you. **File → Exit** in the editor opens it too
+  ([3.7](#37-opening-a-project-the-hand-off-to-the-editor)). On **Android** the launcher is
+  simply the app's first screen: tap the IceBoxEngine icon and it opens, and picking a project
+  hands it straight to the editor in the same app.
 * **Updater** — the *IceBoxEngineUpdater* Start-Menu entry, `IceBoxEngineUpdater` in the
   install folder, or the **Updater** button in the launcher's sidebar
   ([3.1](#31-the-window-at-a-glance)).
@@ -1003,8 +1004,10 @@ variable jump height), crystals, spikes, lantern checkpoints, slimes you stomp, 
 planks, a moving platform and a lift, a spring, falling icicles, breakable ice, a key
 with its locked door and the summit flag. Around the level are a HUD, pause, settings
 (music, effects and language, saved to disk) and victory screens, parallax mountains,
-snow and particle effects, music and sound. All logic is commented Lua: one class per
-object under `Content/Classes/`, the widget scripts under `Content/UI/`, and
+snow and particle effects, music and sound. The HUD widget has
+[**Pauses With Game**](Assets-EN-DOC.md#4131-shared-element-properties) on, so it freezes
+with the game under the pause menu while the menus keep running. All logic is commented
+Lua: one class per object under `Content/Classes/`, the widget scripts under `Content/UI/`, and
 `Content/Scripts/LU_Frost_Game.lua`, the shared module that holds the game-state keys,
 events and helpers. Its catalog entry declares the **PlatformerTimeAttack** mod, so
 picking the example also ticks that mod, and the new project starts with it switched on
@@ -1018,15 +1021,19 @@ Scripting). A project made from it opens on `Content/Levels/L_Crypt.icemap`: pre
 Nothing in it is hand-written Lua: all the logic of its classes, of the five widgets and
 of the level script lives in node graphs split into numbered comment boxes, so it is the
 place to start reading if you picked Visual Scripting. The level renders **Lit** (see
-its World Settings): torches and braziers are point lights that a graph makes flicker
-and the walls cast real shadows, while the floor and the walls sit on two tilemap layers
-so the lit wall faces read in front of the darker floor. Along the way the graphs show a
+its World Settings): torches and braziers are point lights that a graph makes flicker,
+the walls cast real shadows and the barrels and pillars cast them from their own artwork
+([**Cast Shadow Mode**](Graphics-EN-DOC.md#72-shadow-casters) **Contour**, **Shadow
+Origin** **Center**), while the floor and the walls sit on two tilemap layers so the lit
+wall faces read in front of the darker floor. Along the way the graphs show a
 2D input action for walking, a sword swing that calls `TakeHit` through the
 `CryptHittable` interface, slimes that chase or wander, chests whose **Reward** is an
 instance-editable variable picked apart by a **Switch on String**, one door class
 configured per instance (`RequiredKey`, `Tint`), braziers that **Emit** an event the
 gate listens to with **On**, Y-sorting, a pixel-perfect camera, and title, pause,
-game-over and victory screens.
+game-over and victory screens. As in Frost Peaks, the HUD widget has
+[**Pauses With Game**](Assets-EN-DOC.md#4131-shared-element-properties) on and freezes
+with the game under the pause menu.
 
 A project made from either example has its title level (`L_Frost_Title.icemap` or
 `L_Crypt.icemap`) fixed as the start level, so every build starts on it whatever level
@@ -1157,6 +1164,18 @@ level you had open last time, or the fixed one picked in
 pen input is ignored until the splash fades into the editor, so nothing you press while it
 loads lands in a half-built workspace. On Android, where the launcher and the editor are
 one app, the hand-off happens inside that app and the splash simply continues.
+
+**Back to the launcher.** **File → Exit** in the editor is the way back. If the level has
+unsaved changes, the **Unsaved Changes** dialog comes first, and **Cancel** keeps you in the
+editor. Then the editor closes as usual — it saves its layout and, with **Thumbnails
+AutoSave** on, the project's thumbnails — and starts the launcher, found **next to itself**
+in the install folder, just before its window goes away. The launcher opens in front with
+your project list up to date, ready for the next project, and it does so even when the
+editor was started without it — by double-clicking a `.iceproject`, for example.
+Closing the editor any other way — the window's close button, `Alt+F4`, `Cmd+Q` on macOS, or
+a Python script calling `editor.quit()` — quits it without opening the launcher. If the
+launcher is missing from the installation, the editor just closes and notes that in its log.
+On Android **File → Exit** restarts the app on the launcher screen.
 
 ---
 
@@ -1337,9 +1356,10 @@ folder**, and your projects, settings and language are untouched.
    projects you already have, and double-click one to open it.
 
 **Day-to-day.**
-Open the launcher, double-click the project you want, work in the editor. Pin your
-active projects to the top, set a **Sort by** that suits you, and use `Ctrl` + `F`
-when the list grows.
+Open the launcher, double-click the project you want, work in the editor. When you are
+done, **File → Exit** brings the launcher back for the next project
+([3.7](#37-opening-a-project-the-hand-off-to-the-editor)). Pin your active projects to the
+top, set a **Sort by** that suits you, and use `Ctrl` + `F` when the list grows.
 
 **Adding a package to an existing project.**
 Right-click the project → **Manage Plugins & Mods…**, tick or untick packages, press

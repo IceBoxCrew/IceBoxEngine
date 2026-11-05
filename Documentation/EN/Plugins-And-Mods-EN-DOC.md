@@ -178,8 +178,8 @@ Through the editor host API a plugin can, among other things:
   or remove components, instantiate classes, import/export entity JSON.
 * **Control the editor** — selection, camera/viewport, undo/redo, play/stop, save/load
   scenes, open assets, show/hide panels, log and notify.
-* **Bind scripting** — register functions into every Lua state and/or the editor's
-  Python module.
+* **Bind scripting** — register functions into the game and widget Lua states and/or
+  the editor's Python module.
 * **React to events** — receive editor/engine events, and run logic every runtime frame
   and on play start/stop.
 * **Ship data** — bundle its own content folders, a `VisualScriptAPI.json` that adds
@@ -295,7 +295,7 @@ first three are required.
 | `void OnEditorShutdown()` | The editor is shutting the plugin's editor side down (also called just before unload). |
 | `void OnEditorToolsMenu()` | Add items to the editor's **Tools** menu (draw `ImGui::MenuItem`s). |
 | `void OnEditorUI(float dt)` | Draw your own ImGui every editor frame (panels, windows). |
-| `void OnRegisterLua(void* L)` / `OnUnregisterLua(void* L)` | A Lua state was created/destroyed — bind/unbind your Lua functions. |
+| `void OnRegisterLua(void* L)` / `OnUnregisterLua(void* L)` | The game or widget Lua state was created/destroyed — bind/unbind your Lua functions. |
 | `void OnEngineInit(const PluginRuntimeContext&)` | Right after `OnLoad`, handing you the `RuntimeHostAPI`. Dispatched in **both** the editor and the standalone runtime — it is not a game-process-only hook. |
 | `void OnRegisterPython(void* module)` | The editor's Python bridge is up — register bindings into the editor's Python module. A plugin loaded later gets it right after `OnLoad`. |
 | `void OnEditorEvent(const char* name, const char* payload)` | An editor event was dispatched. |
@@ -304,13 +304,16 @@ first three are required.
 A plugin can be **editor-only** (implement only the `OnEditor*` hooks), **runtime-only**
 (implement `OnEngineInit`/`OnUpdate`/`OnRuntime*`), or both.
 
-**Which Lua states you get.** `OnRegisterLua` is called for every Lua state the engine
-creates, and for every state that already exists when your plugin loads: the main
-gameplay/script state and the separate **widget runtime** state used by `.ice_widget`
-UIs. Register your functions into each `L` you are handed, and undo that in
-`OnUnregisterLua`. The two states are independent: never hand a Lua value (a string, table,
-function or userdata from the stack or a stored reference) from one of them to the other —
-keep plain C/C++ data on your side and push it into the state you are calling.
+**Which Lua states you get.** `OnRegisterLua` is called for each of the two Lua states that
+run scripts — when the engine creates it, or right after your `OnLoad` if it already
+exists: the main gameplay/script state and the separate **widget runtime** state used by
+`.ice_widget` UIs. A module started with `Worker.Start` runs in a Lua state of its own that
+is never handed to plugins, so your functions do not exist there
+([LuaAPI → Worker](LuaAPI-EN-DOC.md#worker--background-lua-machines)). Register your
+functions into each `L` you are handed, and undo that in `OnUnregisterLua`. The two states
+are independent: never hand a Lua value (a string, table, function or userdata from the
+stack or a stored reference) from one of them to the other — keep plain C/C++ data on your
+side and push it into the state you are calling.
 
 **Which Python module you get.** `OnRegisterPython` receives a `pybind11::module_*`
 pointing at the editor's `__main__` module — the same module that carries the built-in
@@ -1100,7 +1103,8 @@ coordinates to the screen:
   unrotated, unscaled space.
 * `Width` and `Height` are the size of the box you draw into — a world asset's `Size`, a widget
   element's size — and `0` for components.
-* `Time` is a clock in seconds for animations.
+* `Time` is a clock in seconds for animations. A widget element's clock holds while the game is
+  paused if its widget has **Pauses With Game** on, and continues from there afterwards.
 
 | Function | Draws |
 | -------- | ----- |

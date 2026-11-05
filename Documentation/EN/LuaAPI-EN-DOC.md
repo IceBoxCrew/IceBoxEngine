@@ -4810,7 +4810,10 @@ How the soft keyboard behaves on Android and iOS:
   breaks become spaces, and **Max Length** is respected. Paste from the keyboard also reaches the buffer of
   your own `StartTextInput()`.
 * **Capital letters follow the text.** Automatic capitalization looks at the text before the caret, so the
-  keyboard capitalizes the start of a sentence — and only there — wherever the caret is moved.
+  keyboard capitalizes the start of a sentence — and only there — wherever the caret is moved. On Android the
+  keyboard sees that text itself, so its word suggestions take it into account too; the text after the caret
+  stays hidden from it, so with the caret inside a word the suggestions are for the part of the word before
+  the caret.
 * **The field stays visible.** When the keyboard would cover an **InputField** the player tapped, the game
   view is shifted up while the keyboard is open. If your UI already moves itself out of the keyboard's way
   (for example, on `IsScreenKeyboardShown()`), call `SetScreenKeyboardAvoidance(false)` so the two do not
@@ -7703,6 +7706,10 @@ StopCameraShake()
 local shaking = IsCameraShaking()
 ```
 
+The shake runs on game time, so slow motion stretches it. While the game is paused (`PauseGame()`, a time scale of 0
+or the editor's Pause button) it neither runs down nor moves the camera — the view behind a pause menu stays still —
+and it continues when the game resumes. `Cinema.ShakeCamera` holds during a pause the same way.
+
 ### Camera roll (rotation)
 
 The camera can roll around the centre of its view. Degrees, **clockwise positive** — the same convention as
@@ -10298,6 +10305,38 @@ per real second during slow motion. `GetTimeScale()` returns the requested scale
 `GetFrameTimeScale()` stays constant throughout the current frame, including all its fixed steps, and
 excludes accessibility speed and hit stop. Use this snapshot when compensating an actor for global slow motion.
 
+Widgets are the exception: their animations, flipbooks and the `dt` of a widget script's `OnUpdate` ignore the time
+scale and follow real time with accessibility speed and hit stop. A pause menu shown after `PauseGame()` keeps
+animating, its buttons and gamepad navigation keep working, and the HUD keeps its pace in slow motion. A widget with
+**Pauses With Game** on (the checkbox in the Widget Editor, or `SetPauseWithGame(true)`) stops during a pause instead:
+its animations, flipbooks and throbbers hold and `OnUpdate` gets `dt = 0`, so a HUD freezes with the game while the
+pause menu keeps running. A widget that should slow down with the game multiplies `dt` by `GetFrameTimeScale()`.
+`Delay`, `SetInterval`, tweens and coroutines follow the scene time even when a widget script starts them, so a delay
+in a pause menu counts `dt` down in `OnUpdate`:
+
+```lua
+local pendingAction = nil
+local pendingTime = 0
+
+function OnMainMenuClicked()
+    pendingAction = function()
+        ResumeGame()
+        LoadLevel("Content/Levels/MainMenu.icemap")
+    end
+    pendingTime = 0.15
+end
+
+function OnUpdate(dt)
+    if not pendingAction then return end
+    pendingTime = pendingTime - dt
+    if pendingTime <= 0 then
+        local action = pendingAction
+        pendingAction = nil
+        action()
+    end
+end
+```
+
 ### Per-entity time scale
 
 ```lua
@@ -10478,6 +10517,8 @@ CancelHitStop()
 > A hit stop scales the delta the engine hands to the scene — the delta `OnUpdate(dt)`, physics, animations,
 > particles, widgets, `GetDeltaTime()` and timers use —
 > together with the accessibility game speed ([Engine → Time, pause & suspend](Engine-EN-DOC.md#26-time-pause--suspend)).
+> While the game is paused (`PauseGame()`, a time scale of 0 or the editor's Pause button), widgets are not held by
+> a hit stop, so a pause menu opened during the freeze works at once.
 > `GetUnscaledDeltaTime()` and `GetRealTime()` keep running, so an effect driven by them animates through the freeze. Hit stops are cleared when a
 > level starts. They count real time, so they are not recorded by replays and rollback.
 
@@ -12198,6 +12239,11 @@ local sws = GetWidgetScaleWithScreen()
 
 -- Read back the safe-area config (setter is SetWidgetSafeArea)
 local sa = GetWidgetSafeArea()                   -- → {enabled, left, top, right, bottom}
+
+-- Pauses With Game: hold the widget's animations, flipbooks, throbbers and OnUpdate dt
+-- while the game is paused. A setting of the widget asset: every instance of it follows.
+SetWidgetPauseWithGame(true)
+local pwg = GetWidgetPauseWithGame()
 ```
 
 ### Element reordering & rename (entity-bound)
@@ -12703,7 +12749,9 @@ function OnInit()
 end
 
 function OnUpdate(dt)
-    -- Every frame while the widget is loaded.
+    -- Every frame while the widget is loaded. dt is real time with the accessibility
+    -- game speed and hit stop: the time scale and PauseGame() don't stop it, unless the
+    -- widget has Pauses With Game on (then dt is 0 while the game is paused).
 end
 
 function OnLanguageChanged(newLang, oldLang)
@@ -13209,6 +13257,7 @@ local canvasDesired = GetCanvasDesiredSize()                        -- → {x, y
 SetScaleWithScreen(true);      local sws = GetScaleWithScreen()
 SetStretchMode("Letterbox");   local sm = GetStretchMode()          -- "Stretch"|"Letterbox"|"MatchWidth"|"MatchHeight"
 SetSafeArea(true, 10, 20, 10, 20); local sa = GetSafeArea()         -- → {enabled, left, top, right, bottom}
+SetPauseWithGame(true);        local pwg = GetPauseWithGame()       -- stop with the game pause (Pauses With Game)
 ```
 
 #### Element reordering & rename (short names)
@@ -14209,7 +14258,7 @@ end
 | `Cinema.IsFading()` | A script fade is active or the screen is still covered |
 | `Cinema.GetFadeAlpha()` | Script fade opacity `0.0`–`1.0` |
 | `Cinema.GetFadeColor()` | Script fade color `{r, g, b, a}` |
-| `Cinema.ShakeCamera(intensity, frequency, duration)` | Shake the camera (screen pixels, Hz, seconds) |
+| `Cinema.ShakeCamera(intensity, frequency, duration)` | Shake the camera (screen pixels, Hz, seconds); holds while the game is paused |
 | `Cinema.OnFinished(path, fn)` | `fn(path, reason)` when it finishes or is skipped |
 | `Cinema.ClearOnFinished(path)` | Remove the `OnFinished` callback |
 | `Cinema.OnEvent(path, fn)` | `fn(eventName, ...)` for every event key |
@@ -32902,9 +32951,10 @@ end
 >
 > Native plugins can add engine settings, class components, world asset types and widget
 > elements ([Plugins & Mods → Extending the engine](Plugins-And-Mods-EN-DOC.md#314-extending-the-engine--settings-components-world-assets--widget-elements)).
-> The `Plugins` table lets scripts read and change their values. It exists in every Lua state —
-> entity and level scripts, widget scripts and mods. Plugin widget elements have their own
-> functions in the [Widget section](#plugin-elements).
+> The `Plugins` table lets scripts read and change their values. It exists in entity and level
+> scripts, widget scripts and mods; [`Worker`](#worker--background-lua-machines) modules run
+> without plugins and have no `Plugins` table. Plugin widget elements have their own functions
+> in the [Widget section](#plugin-elements).
 
 ### Plugins and their settings
 
