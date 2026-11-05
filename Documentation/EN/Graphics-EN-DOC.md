@@ -572,7 +572,7 @@ post-process graph takes over:
 | ----- | ----- | ----- | ------------- |
 | 1 | `Widgets.GlobalZBackground` | Geometry pass | UI widgets that opted into world-Z ordering behind the scene. |
 | 2 | *(editor only)* Grid | Geometry pass | The editor world grid, drawn through a dedicated grid shader. |
-| 3 | `Render.Tilemaps` | Geometry pass | Tilemap layers, merged and cached per tilemap; animated tiles are resolved once per frame. |
+| 3 | `Render.Tilemaps` | Geometry pass | Tilemap layers, merged and cached per tilemap instance, so entities that use the same map keep their own cache; animated tiles are resolved once per frame. |
 | 4 | `Render.Flipbooks` | Geometry pass | Flipbook (frame-animation) instances. |
 | 5 | `Render.Skeletons` | Geometry pass | Skeletal meshes and their attachments, drawn as meshes rather than quads — including hair strands and simulated cloth. Skeletons entirely outside the view are skipped. |
 | 6 | `Render.Sprites` | Geometry pass | Sprite instances — the bulk of a typical scene. |
@@ -1144,7 +1144,7 @@ settings:
 | Setting | Effect |
 | ------- | ------ |
 | **Cast Shadow** | Whether this instance contributes to the shadow maps at all. |
-| **Cast Shadow Mode** | **Colliders** — use the attached collider shapes as the silhouette (cheap, predictable). **Contour** — trace the texture's alpha contour so the shadow matches the artwork exactly (the traced contour is cached per texture). Available where there is artwork to trace: sprites, flipbooks, skeletons, tilemaps and tilesets. Collider shapes and FX always cast from their own shape. |
+| **Cast Shadow Mode** | **Colliders** — use the attached collider shapes as the silhouette (cheap, predictable). **Contour** — trace the texture's alpha contour so the shadow matches the artwork exactly (the traced contour is cached per texture). A texture made in code is traced too, and again each time a script draws into it; a render target casts its whole rectangle. Available where there is artwork to trace: sprites, flipbooks, skeletons, tilemaps and tilesets. Collider shapes and FX always cast from their own shape. |
 | **Shadow Origin** | Where the caster's height is anchored: **Bottom**, **Center** or **Top**. For tiles it is applied per tile with the height of that one tile (the whole block for a tile with a span), so a solid area behaves exactly like the same tiles placed one by one. **Center** keeps the caster on the tile itself — the usual choice for side-view terrain. |
 | **Shadow Z Order** | The caster's height, which drives the height-aware occlusion described above. For side-view terrain set it above the Z of everything the terrain should hide (characters, pickups, decoration layers drawn over the terrain). |
 | **Shadow Edge Fade** | Shrinks/feathers the caster's edges so hard silhouettes soften at their extremities. On tiles every tile shrinks on its own, so tiles with an edge fade are kept as separate casters instead of joining a solid area. |
@@ -1169,7 +1169,8 @@ span or an edge fade as boxes of their own, plus polygon and contour tiles. The 
 is rebuilt only when something it depends on changes — the cells, tile spans,
 visibility or tileset of a layer, the tilesets, the instance's flip, the animated-tile
 settings, **Colliders Block Shadows**, the tile shadow settings (`SetTileCastShadow` and
-the other tile-shadow setters, or a reloaded tileset or texture), or the frame of an
+the other tile-shadow setters, a reloaded tileset or texture, or a tileset made in code
+by `Tileset.Create`, `Tileset.SetTile` or `Tileset.Destroy`), or the frame of an
 animated tile whose collider differs per frame. On every other frame only the cached
 casters near the view are emitted, so a large static map no longer re-merges its cells
 each frame, and digging or an explosion rebuilds just the edited instance. Solid areas
@@ -1626,7 +1627,7 @@ checkboxes) and are readable/writable from script by name:
 | Overlay | Shows |
 | ------- | ----- |
 | **Colliders** | Every collider shape, sensor and one-way platform. |
-| **Nav grid** / **Nav-grid heatmap** | The AI nav-grid built from view volumes, and its cost heatmap. |
+| **Nav grid** / **Nav-grid heatmap** | The AI nav-grid built from view volumes, and its cost heatmap. Outside Play, a level without volumes shows the grid `Nav.RebuildGrid` would build for it. |
 | **Entity markers** | Origins/markers for entities. |
 | **Light radius** | Each light's reach circle (and spot cone). |
 | **Audio range** | Attenuation distances of 3D audio sources (the effective min/max circles) and the edges of their cones. |

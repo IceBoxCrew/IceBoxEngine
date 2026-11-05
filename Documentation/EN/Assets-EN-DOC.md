@@ -1228,6 +1228,12 @@ pixel-font console, for example). Without it those systems use the operating-sys
 which does not exist on Web and Xbox. See
 [Lua API → SystemFont](LuaAPI-EN-DOC.md#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text).
 
+**Fonts without a file.** A script can also make a font from pixels it draws itself, with
+`Font.Create` or `Font.CreateGrid`, and use its name wherever a font path goes, the system
+font included. Such a font has no sidecar: its size, line height and filtering are passed
+when it is made, and it is complete from that moment, so `Prewarm.Font` counts it as loaded
+straight away. See [Lua API → Font](LuaAPI-EN-DOC.md#font--fonts-made-in-code).
+
 #### 4.1.4 Video and the `.ice_video` sidecar
 
 **Source:** `.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`  **Sidecar:** `.ice_video`  **Editor:** Video Player
@@ -1652,6 +1658,9 @@ A **tileset** slices a texture into a grid of tiles and stores per-tile data use
 painting tilemaps.
 
 * `TexturePath`, `TileSize`, optional custom material + shared render attributes.
+* Tiles are numbered from `0` at the top-left of the texture, left to right and then row by
+  row. A tilemap cell whose number is past the last tile — after the map switched to a
+  smaller tileset or texture, for example — draws nothing and casts no Contour shadow.
 * Per-tile **`TileData`** (keyed by tile index):
   * **Collider** — on/off, **collider points** in **Polygon** or **Chain** mode.
   * **Flags** — sensor, destructible, one-way (with direction).
@@ -1685,6 +1694,11 @@ tile's properties on the right, under a block of tileset settings; dividers resi
 * The remaining property groups match the `TileData` list above; hints explain when a
   setting has no effect (a shadow needs a collider, a sensor ignores physics response, and
   chain colliders are open lines rather than solid shapes).
+
+**Tilesets without a file.** A script can also make a tileset while the game runs, from a
+texture it draws itself or from any image in Content, with the same per-tile data, and give a
+tilemap its name instead of a `.ice_ts` path: see
+[Lua API → Tilesets made in code](LuaAPI-EN-DOC.md#tilesets-made-in-code--tileset).
 
 ### 4.7 Tilemap (`.ice_tm`)
 
@@ -1783,6 +1797,12 @@ several projections.
   palette more room. The divider between the sidebar and the canvas sets the sidebar width,
   and the palette wraps its tiles to that width, so a wider sidebar shows more tiles per
   row.
+
+**Tilemaps without a file.** A script can also make a whole tilemap while the game runs —
+size, projection, tilesets and layers with their tiles — and give its name to a tilemap
+instance instead of an `.ice_tm` path; the map of an instance, with everything changed in it,
+can be read back as a string in the `.ice_tm` format and restored from it: see
+[Lua API → Tilemaps made in code](LuaAPI-EN-DOC.md#tilemaps-made-in-code--tilemap).
 
 ### 4.8 Material (`.ice_material`)
 
@@ -2282,6 +2302,10 @@ renderer.
 | ------ | ---------- |
 | **Sprite Renderer** | **Sprite Path** — the `.ice_sprite` drawn per particle; **Use Custom Material** + **Material Path** (`.ice_material` / `.ice_matinst`, `Surface` domain); **Blend Mode** — `Alpha`, `Additive` (glow), `Multiply`; **Sub-Images H** / **Sub-Images V** — sprite-sheet grid; **Animate Sprite** + **Animation Speed** (FPS) — play the sheet as an animation; **Shading Mode** — `Unlit` or `Lit` (affected by scene lights). Assigning a custom material takes over blend and shading. |
 | **Ribbon Renderer** | Draws trails behind particles. **Sprite Path**; **Texture Mode** — `Stretch`, `Tile`, `Distance Based`; **Use Custom Material** + **Material Path**; **Blend Mode**; **Ribbon Width**; **Max Segments** — points kept in the trail; **Min Vertex Distance** — distance before a new point is added (smooths trails); **Width Over Life** curve; **Color Over Life** gradient. |
+
+While the game runs, a script can draw either renderer's particles with another texture,
+one made in code included, instead of the **Sprite Path**: see
+[Lua API → `SetFXTexture`](LuaAPI-EN-DOC.md#particle-textures-from-code--setfxtexture--getfxtexture).
 
 ##### Curves and gradients
 

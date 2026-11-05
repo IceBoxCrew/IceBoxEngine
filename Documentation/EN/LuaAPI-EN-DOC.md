@@ -57,6 +57,7 @@
 11. [Camera — Camera](#11-camera--camera)
    - [Camera rig — dead zone, look-ahead, groups, rooms and shake](#camera-rig--dead-zone-look-ahead-groups-rooms-and-shake)
 12. [Audio — Sound and Music](#12-audio--sound-and-music)
+   - [Sounds made in code](#sounds-made-in-code)
    - [Spectrum analyzer](#spectrum-analyzer)
    - [Captions — subtitles for sounds](#captions--subtitles-for-sounds)
 13. [FX — Particle Visual Effects](#13-fx--particle-visual-effects)
@@ -98,6 +99,8 @@
    - [Lua Script Debugger (Text and Visual)](#lua-script-debugger-text-and-visual)
    - [Debug functions: how to use](#debug-functions-how-to-use)
 30. [Tilemap — Tile Maps](#30-tilemap--tile-maps)
+   - [Tilesets made in code](#tilesets-made-in-code--tileset)
+   - [Tilemaps made in code](#tilemaps-made-in-code--tilemap)
 31. [Component — Component Checks and Management](#31-component--component-checks-and-management)
 32. [Network — Multiplayer (Network)](#32-network--multiplayer-network)
    - [Rollback — Deterministic Rollback Netcode (Rollback)](#325-rollback--deterministic-rollback-netcode-rollback)
@@ -134,6 +137,7 @@
 59. [Matchmaking — Player Matchmaking](#59-matchmaking--player-matchmaking)
 60. [Console — Developer Console & Command System](#60-console--developer-console--command-system)
 61. [Draw — Immediate-Mode Rendering (Draw / Texture / RenderTarget)](#61-draw--immediate-mode-rendering-draw--texture--rendertarget)
+   - [Font — fonts made in code](#font--fonts-made-in-code)
 62. [Decal — Bullet Holes, Blood Splatter, Scorch Marks](#62-decal--bullet-holes-blood-splatter-scorch-marks)
 63. [Xbox — Microsoft Ecosystem (Xbox network and Microsoft Store)](#63-xbox--microsoft-ecosystem-xbox-network-and-microsoft-store)
 64. [Screenshot — Capturing the Screen from a Game](#64-screenshot--capturing-the-screen-from-a-game)
@@ -4311,13 +4315,14 @@ SetRelativeMouseMode(false)              -- disable
 local relative = GetRelativeMouseMode()  -- is enabled?
 
 -- Cursor
--- Cursor (.ice_sprite and .ice_flipbook assets only)
+-- Cursor (.ice_sprite and .ice_flipbook assets, or a PixelBuffer drawn in code)
 ShowCursor()
 HideCursor()
 local visible = IsCursorVisible()
 SetCursor("Content/Sprites/cursor.ice_sprite", 0, 0, 1.0)              -- Auto-detect by extension
 SetCursorSprite("Content/Sprites/cursor.ice_sprite", 0, 0, 1.0)        -- From sprite asset
 SetCursorFlipbook("Content/Flipbooks/cursor.ice_flipbook", 0, 0, 1.0)  -- Animated
+SetCursorPixels(arrow, 0, 0, 2.0)   -- From a PixelBuffer made in code
 SetCursorHotspot(8, 8)              -- Change hotspot (pivot)
 SetCursorScale(2.0)                 -- Change scale
 local hx, hy = GetCursorHotspot()
@@ -4326,9 +4331,16 @@ ResetCursor()
 local hasCursor = HasCustomCursor()
 local cursorPath = GetCustomCursorPath()
 local animated = IsCursorAnimated()
-local cursorType = GetCursorType()  -- "None" | "Sprite" | "Flipbook"
+local cursorType = GetCursorType()  -- "None" | "Sprite" | "Flipbook" | "Pixels"
 SetCursorPosition(400, 300)         -- warp the OS cursor; screen pixels, origin bottom-left
 ```
+
+`SetCursorPixels(buffer, hotX, hotY, scale)` makes the operating-system cursor from the pixels of a
+[`PixelBuffer`](#pixelbuffer--native-rgba8-canvas), so a game needs no image file for its cursor. The image is read like
+the buffer itself — row `0` is the top — and the hotspot counts from its top-left pixel, exactly as for a sprite cursor.
+The pixels are copied, so the buffer can be changed or reused afterwards; `SetCursorHotspot` and `SetCursorScale` work
+on this cursor too, `GetCursorType()` returns `"Pixels"` and `GetCustomCursorPath()` returns `""`. It returns `false`
+for an empty buffer.
 
 > **Game cursor vs editor cursor.** Everything above drives the **game** cursor and
 > nothing else: the editor never changes it, and in a shipped build there is nothing
@@ -8089,6 +8101,7 @@ optional table. Every field is optional:
 | `pitch` | Pitch multiplier for this play, `0.05..8`. Default `1` |
 | `pan` | Pan `-1..1` for this play (replaces the asset pan and pan variation) |
 | `delay` | Seconds to wait before the sound starts. The play counts as *waiting* until then |
+| `at` | Start at this time of the audio clock (`Audio.GetTime()`), exact to the sample. See [Exact timing](#exact-timing--audiogettime-and-at) |
 | `fadeIn` | Fade-in seconds for this play. Default = the asset **Fade In** |
 | `startTime` | Start position in seconds of the source file. Default = the asset **Start Time** |
 | `loop` | `true`/`false` — loop only this play |
@@ -8133,6 +8146,207 @@ Every play gets a new id and ids are never reused, so a stored id can never cont
 different play. `IsVoiceValid` stays `true` until the engine reuses that voice for another play
 of the same sound or the sound is unloaded; `IsVoicePlaying` tells whether the play is still
 audible. Calls with an old id are ignored.
+
+### Sounds made in code
+
+A game can make every sound effect and every piece of music in Lua, without a single audio
+file. Four pieces work together:
+
+* **`SoundBuffer`** — a native sample buffer with a synthesizer: tones, noise, envelopes, glides,
+  vibrato, filters and mixing are computed in C++, Lua only says what to play.
+* **`Audio.CreateSound`** — turns samples into a regular named sound. Everything on this page
+  works with it: `PlaySound`, voices, groups, effects, snapshots, the spectrum and captions.
+* **`Audio.GetTime` and the `at` play option** — start notes exactly on the audio clock, no
+  matter how fast or unevenly the game runs.
+* **Streams** — a sound that plays whatever Lua keeps pushing into it, for endless generative
+  music.
+
+Nothing here touches the disk or the asset cooker, so it works the same in the editor and in
+built games on every platform.
+
+#### SoundBuffer — a synthesizer in native code
+
+```lua
+local buf = SoundBuffer.new(1.5)                 -- 1.5 s, 44100 Hz, mono, silent
+local wide = SoundBuffer.new(2.0, 48000, 2)      -- 2 s, 48000 Hz, stereo
+buf:Duration(); buf:Frames(); buf:SampleRate(); buf:Channels()
+
+buf:Tone("square", 440, 0.0, 0.25)               -- wave, frequency Hz, start s, length s
+buf:Tone("saw", 220, 0.25, 0.5, 0.4, { attack = 0.01, decay = 0.1, sustain = 0.6, release = 0.2 })
+buf:Tone("sine", 880, 0.0, 0.4, 0.5, { slide = 440 })                 -- glide down to 440 Hz
+buf:Tone("triangle", 330, 0.5, 1.0, 0.5, { vibrato = 0.3, vibratoRate = 6 })
+buf:Noise(0.0, 0.3, 0.6, { color = "brown", release = 0.25 })
+buf:Noise(0.0, 0.2, 0.5, { frequency = 3000 })   -- retro sample-and-hold noise
+
+buf:Mix(other, 0.5, 0.8)        -- add another buffer at 0.5 s with volume 0.8
+buf:Gain(0.5)                   -- whole buffer; Gain(volume, start, duration) for a part
+buf:FadeIn(0.05)
+buf:FadeOut(0.3)
+buf:LowPass(1200)               -- cutoff Hz, resonance, start, duration
+buf:HighPass(80, 0.7)
+buf:Normalize(0.9)              -- the loudest sample becomes 0.9
+local loudest = buf:Peak()
+
+buf:Set(100, 0.25)              -- frame, value, channel (0 = left or mono, 1 = right)
+local v = buf:Get(100)
+buf:Clear()
+
+local bytes = buf:ToString()    -- float32, little-endian, channels interleaved
+buf:FromString(bytes)           -- exactly Frames() * Channels() * 4 bytes
+```
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `SoundBuffer.new(seconds, sampleRate?, channels?)` | `SoundBuffer` | Silent buffer. `sampleRate` `8000..192000`, default `44100`; `channels` `1` or `2`, default `1`. |
+| `Duration()`, `Frames()`, `SampleRate()`, `Channels()` | number | Length in seconds, length in frames, sample rate, channel count. |
+| `Tone(wave, frequency, start, duration, volume?, options?)` | bool | Adds a note. `wave` is `"sine"`, `"square"`, `"triangle"` or `"saw"`. `false` for an unknown wave or a frequency that is not positive. |
+| `Noise(start, duration, volume?, options?)` | bool | Adds noise. `false` for an unknown `color`. |
+| `Mix(other, start?, volume?)` | bool | Adds another buffer at `start` seconds. Both must have the same sample rate (`false` otherwise). |
+| `Gain(volume, start?, duration?)` | — | Multiplies a part of the buffer (the whole buffer by default). `volume` `0..8`. |
+| `FadeIn(duration)`, `FadeOut(duration)` | — | Linear fade from silence at the start, to silence at the end. |
+| `Normalize(peak?)` | — | Scales the buffer so its loudest sample is `peak` (`0..1`, default `1`). |
+| `LowPass(cutoff, resonance?, start?, duration?)`, `HighPass(...)` | — | 12 dB per octave filter. `cutoff` `10` Hz up to just below half the sample rate; `resonance` `0.1..20`, default `0.7071`. |
+| `Peak()` | number | The loudest absolute sample value. |
+| `Get(frame, channel?)`, `Set(frame, value, channel?)` | number / — | One sample. Frames start at `0`; channel `0` (default) is left or mono, `1` is right. Out of range reads `0` and writes nothing. |
+| `Clear()` | — | Silence. |
+| `ToString()`, `FromString(bytes)` | string / bool | Raw float32 samples for `Worker` messages and saving. `FromString` needs exactly the buffer's size and finite values, otherwise it returns `false` and leaves the buffer unchanged. |
+
+`Tone` and `Noise` **add** to what is already in the buffer, so a chord, a melody or a whole
+arrangement builds up in one buffer. Times and lengths are seconds; a part that falls outside
+the buffer is cut off. `volume` is `1` by default and accepts up to `8`; several layers can add
+up above `1`, so finish with `Normalize`.
+
+**Tone options** (all optional):
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `attack` | `0.005` | Seconds to rise from silence |
+| `decay` | `0` | Seconds to fall from full level to `sustain` |
+| `sustain` | `1` | Level `0..1` held until the release. With `decay = 0` the attack rises straight to it |
+| `release` | `0.01` | Seconds of fading out that end exactly at the end of the note |
+| `slide` | — | Frequency at the end of the note; the pitch glides there smoothly |
+| `vibrato` | `0` | Vibrato depth in semitones |
+| `vibratoRate` | `5` | Vibrato speed in Hz |
+| `duty` | `0.5` | Pulse width of `"square"`, `0.01..0.99` (`0.125` and `0.25` give the classic thin console tones) |
+| `pan` | `0` | `-1..1`, left to right, in stereo buffers (equal-power) |
+| `phase` | `0` | Start phase `0..1` |
+
+The default attack and release are short enough to sound instant but still prevent clicks.
+`square` and `saw` are band-limited, so high notes stay clean instead of whistling.
+
+**Noise options:** `color` — `"white"` (default), `"pink"` (softer, like rain) or `"brown"`
+(deep rumble); `seed` — an integer, the same seed gives the same noise (default `1`);
+`frequency` — when above `0`, the noise holds each value for `1 / frequency` seconds, the gritty
+noise of old consoles (low values rumble, high values hiss); plus the envelope fields and `pan`
+from the table above.
+
+The buffer is limited to 16,777,216 samples — about 6.3 minutes of mono or 3.2 minutes of
+stereo at 44100 Hz; a bigger request creates an empty buffer and writes a warning to the log.
+`SoundBuffer` is also available in [Worker](#worker--background-lua-machines) machines: render a
+long track in the background, send its `ToString()` bytes together with the sample rate and the
+channel count, and create the sound on the main thread.
+
+#### Audio.CreateSound — sounds without audio files
+
+```lua
+local note = SoundBuffer.new(0.6)
+note:Tone("square", 440, 0, 0.6, 0.5, { duty = 0.25, release = 0.3 })
+Audio.CreateSound("S_Note", note, { maxInstances = 8 })
+
+Audio.PlaySound("S_Note")                          -- A4
+Audio.PlaySound("S_Note", { pitch = 2 ^ (7 / 12) }) -- a fifth higher
+```
+
+`Audio.CreateSound(name, samples, options?)` returns `true` when the sound is ready. `samples`
+can be:
+
+* a `SoundBuffer` — its sample rate and channel count are used;
+* a `NumericArray` of type `float32` or `float64`;
+* a byte string of float32 values, as `SoundBuffer:ToString()` and `NumericArray:ToString()` write them;
+* a table of numbers.
+
+For everything except a `SoundBuffer` the options `sampleRate` (`8000..192000`, default `44100`)
+and `channels` (`1` or `2`, stereo samples interleaved left, right) describe the samples. Values
+are normally between `-1` and `1`; values that are not finite numbers become silence.
+
+The other options are the same settings a sound asset has, all optional:
+
+| Field | Meaning |
+|-------|---------|
+| `volume`, `pitch`, `pan` | Base volume `0..1`, pitch and pan of the sound |
+| `loop`, `loopStart`, `loopEnd` | Loop the sound; the loop region in seconds turns everything before it into an intro |
+| `group` | `Audio.GROUP_*`, default `Audio.GROUP_SFX` |
+| `spatial`, `minDistance`, `maxDistance`, `rolloff` | 3D sound |
+| `maxInstances` | How many copies can play at once. Default `1`, like a sound asset: a new play restarts the sound. Give an instrument the polyphony of its part |
+| `priority`, `retriggerCooldown` | Voice priority and the minimum time between plays |
+| `fadeIn`, `fadeOut` | Default fade-in and fade-out seconds |
+| `effects` | The effect chain, the same table as [`SetSoundEffects`](#audio-processing-effects) |
+
+Calling `CreateSound` again with the same name replaces the sound; copies that are still playing
+fade out, exactly as with `LoadSound`. The samples are copied, so the buffer can be changed or
+reused right away. The sound is converted to the output sample rate once, when it is created,
+and rebuilt automatically when the output device or the audio quality changes. It uses up to
+256 MiB of memory at the output rate. It stays until `Audio.UnloadSound`, also when another
+level is loaded: a level change stops every sound and unloads the ones loaded from files, while
+sounds and streams made in code only stop. In the editor every sound is released when Play stops.
+
+#### Exact timing — Audio.GetTime and `at`
+
+```lua
+local step = 60 / 120 / 2                          -- eighth notes at 120 BPM
+local start = Audio.GetTime() + 0.1
+for i, semitones in ipairs({ 0, 4, 7, 12, 7, 4 }) do
+    Audio.PlaySound("S_Note", { at = start + (i - 1) * step, pitch = 2 ^ (semitones / 12) })
+end
+```
+
+`Audio.GetTime()` returns the audio clock in seconds. It is counted in output samples, so it never
+drifts from what you hear: it moves in steps of one output block (about 10–20 ms on desktop,
+85 ms on Web), stops while the application is suspended and keeps counting after the output
+device is reopened. Without an audio device it returns `0`.
+
+The `at` play option starts a play exactly at that clock time, to the sample. `delay` is counted
+in game frames and can be late by up to a frame, so `at` is the one for rhythm and music. Give
+the scheduler a little head start — 50–100 ms on desktop, more on Web — and keep scheduling a
+short window ahead from `OnUpdate`. A time that has already passed starts the play at once; a
+`delay` given together with `at` is added to it.
+
+A play waiting for its time counts in `delayedVoices` of `Audio.GetStats()` and takes one of the
+sound's `maxInstances`; with `maxInstances = 1` a new play replaces the waiting one. `StopSound`,
+`StopVoice` and `UnloadSound` cancel a waiting play silently. Pausing — a game pause,
+`PauseSound`, `PauseVoice`, `PauseAllSounds` — keeps the remaining wait and resumes it exactly,
+so notes scheduled together stay in rhythm after a pause. Plays that are still waiting when the
+output device is reopened are dropped.
+
+#### Streams — audio fed from Lua
+
+```lua
+Audio.CreateStream("M_Endless", { sampleRate = 44100, channels = 2, buffer = 2.0, group = Audio.GROUP_MUSIC })
+Audio.PlaySound("M_Endless")
+
+function OnUpdate(dt)
+    while Audio.GetStreamQueued("M_Endless") < 0.5 do
+        local chunk = SoundBuffer.new(0.25, 44100, 2)
+        ComposeNextQuarterSecond(chunk)            -- your generator
+        Audio.PushStream("M_Endless", chunk)
+    end
+end
+```
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `Audio.CreateStream(name, options?)` | bool | Creates a stream sound. Options: `sampleRate` (default `44100`), `channels` (`1` or `2`), `buffer` — seconds of audio it can hold, `0.05..60`, default `2`; plus `volume`, `pitch`, `pan`, `group`, `spatial`, `minDistance`, `maxDistance`, `rolloff`, `priority`, `fadeIn`, `fadeOut` and `effects` as in `CreateSound`. |
+| `Audio.PushStream(name, samples)` | integer | Appends samples and returns how many frames were taken. Accepts the same kinds of samples as `CreateSound`; a `SoundBuffer` must have the stream's sample rate and channel count, other samples are read in the stream's layout. When the buffer is full the rest is not taken — push it again later. |
+| `Audio.GetStreamQueued(name)` | number | Seconds pushed but not played yet. |
+| `Audio.GetStreamInfo(name)` | table or nil | `queued`, `capacity` and `played` in seconds, `underruns`, `sampleRate`, `channels`. `nil` if `name` is not a stream. |
+| `Audio.ClearStream(name)` | bool | Drops everything pushed so far. |
+
+Start, stop, fade and shape a stream with the usual functions — `PlaySound`, `StopSound`,
+`SetSoundVolume`, `SetSoundEffects`. A stream is one voice: `PlaySound` on a stream that is
+already playing only applies the new play options. When the stream runs dry it plays silence,
+`underruns` grows by one, and it carries on as soon as new samples arrive. The stream can use
+any sample rate; the engine converts it to the output rate on the fly, and its buffer survives an
+output device change.
 
 ### Music
 
@@ -8391,8 +8605,8 @@ local limit = Audio.GetMaxVoices()
 
 local s = Audio.GetStats()
 -- s.activeVoices   playing or fading out
--- s.delayedVoices  waiting for their delay
--- s.streams        streamed from disk
+-- s.delayedVoices  waiting for their delay or their at time
+-- s.streams        streamed from disk or fed from Lua
 -- s.listeners, s.maxListeners
 -- s.stolenVoices   stopped to make room for more important sounds (since start; per Play session in the editor)
 -- s.rejectedVoices not started because of a limit (since start; per Play session in the editor)
@@ -9000,6 +9214,37 @@ drawn from the emitter's settings as for a newly spawned particle. A restore als
 emitter's **Pre-fill**, so a pre-filled pool does not add its starting particles on top; the emitter
 keeps spawning by its own settings afterwards. Particles are never saved automatically —
 `SaveSceneState` does not include FX.
+
+### Particle textures from code — `SetFXTexture` / `GetFXTexture`
+
+```lua
+local spark = PixelBuffer.new(8, 8)
+spark:FillCircle(3, 3, 3, 255, 220, 120)
+Texture.Create("spark", 8, 8, { filter = "nearest" })
+Texture.SetPixelBuffer("spark", 0, 0, spark)
+
+SetFXTexture("spark")            -- every emitter of the first FX instance
+SetFXTexture("spark", 0, 1)      -- only emitter 1 of instance 0
+local name = GetFXTexture()      -- "spark"; "" while the sprite of the FX asset is used
+SetFXTexture("")                 -- back to the sprites of the FX asset
+```
+
+`SetFXTexture(texture, index, emitter)` draws the particles of an FX instance (`index`, default 0) with another
+texture: the name of a [script texture or render target](#texture--script-created-textures), drawn or rendered in code
+so the effect needs no image file, or an `.ice_sprite`, `.png` or `.jpg` path. Without `emitter` it applies to every
+emitter of the instance and replaces the textures chosen per emitter; with `emitter` (0-based, as in
+`GetFXParticleState`) it applies to that one, ahead of the instance-wide choice. An empty `texture` removes the choice,
+and the emitters go back to the sprite of the FX asset.
+
+The choice belongs to the entity's FX instance until Play stops: it holds while the effect stops and plays again, it is
+kept by `SetFXAsset`, and it reaches emitters that do not exist yet, so it can be made before `PlayFX`. Creating the
+script texture again under the same name switches the particles to the new one, and `Texture.Destroy` leaves them
+without a texture.
+
+It returns `true` when every running emitter it touched found its texture, and `false` when the entity has no such
+FX instance, `emitter` is negative, or a texture cannot be loaded (the log names it). `GetFXTexture(index, emitter)`
+returns the texture chosen for that emitter (default 0), the instance-wide one when the emitter has none of its own,
+or `""` when the sprite of the FX asset is used.
 
 ### Emitter parameters — `SetFXEmitterParam` / `GetFXEmitterParam`
 
@@ -10881,8 +11126,8 @@ memory. `memoryKB` covers the sampled Lua heap, excludes native buffers and reta
 Workers use their own allocator and a snapshot of the current Lua GC and deterministic-state settings taken
 at startup. Main-thread GC commands do not inspect or collect worker machines. Standard `math.random` and
 `math.randomseed` affect only that worker; seed it explicitly when repeated results are required.
-Available helpers are `Json`, `Compression`, `Data` without `Save`/`Load`, `NumericArray`, worker-local noise functions and
-`NoiseBuffer`, plus `Procgen.Triangulate`. Noise state is local to the worker; it never reseeds the game's noise.
+Available helpers are `Json`, `Compression`, `Data` without `Save`/`Load`, `NumericArray`, `SoundBuffer`, worker-local noise
+functions and `NoiseBuffer`, plus `Procgen.Triangulate`. Noise state is local to the worker; it never reseeds the game's noise.
 Use the standard `math` library for calculations. The main machine's global math helpers and `RNG` are not installed.
 To transfer a numeric buffer, send its type, length and `ToString()` bytes, then reconstruct it in the receiving machine;
 the userdata itself is not a supported message value.
@@ -17819,9 +18064,14 @@ local tws = GetTilemapWorldScale(0)         -- → {x, y}, read-only
 
 -- Swap the tilemap asset. Call RebuildTilemapPhysics afterwards so the
 -- collision chains match the new grid.
-local ok = SetTilemapAsset("Content/Levels/Cave.ice_tilemap", 0)
+local ok = SetTilemapAsset("Content/Levels/Cave.ice_tm", 0)
 RebuildTilemapPhysics(0)
-local tmPath = GetTilemapFilePath(0)        -- → current .ice_tilemap path
+local tmPath = GetTilemapFilePath(0)        -- → current .ice_tm path
+
+-- The name of a tilemap made in code works too, and every call gives a fresh copy of it
+-- (see "Tilemaps made in code" below).
+SetTilemapAsset("level1")
+local data = GetTilemapData(0)              -- → the map with all its changes, as a string in the .ice_tm format
 
 -- Render order (Z-depth)
 SetTilemapOrder(5)                          -- Set render order for entity
@@ -17982,24 +18232,28 @@ local isEncoded = IsEncodedTile(value)  -- true/false
 
 ```lua
 -- Primary tileset
-SetPrimaryTilesetPath("Content/Tilesets/Stone.ice_tileset")
+SetPrimaryTilesetPath("Content/Tilesets/Stone.ice_ts")
 local primary = GetPrimaryTilesetPath()
 
 -- Additional tilesets (returned index is for use with EncodeTile/DecodeTile,
 -- where tilesetIndex 0 = primary, 1+ = additional)
-local idx = AddAdditionalTileset("Content/Tilesets/Wood.ice_tileset")  -- → new index (0-based among additional)
+local idx = AddAdditionalTileset("Content/Tilesets/Wood.ice_ts")  -- → new index (0-based among additional)
 local count = GetAdditionalTilesetCount()
 local p = GetAdditionalTilesetPath(0)
-SetAdditionalTilesetPath(0, "Content/Tilesets/Sand.ice_tileset")
+SetAdditionalTilesetPath(0, "Content/Tilesets/Sand.ice_ts")
 RemoveAdditionalTileset(0)
 
 -- Per-layer tileset override (overrides primary tileset for tiles on this layer)
-SetLayerTilesetPath(1, "Content/Tilesets/Foreground.ice_tileset")
+SetLayerTilesetPath(1, "Content/Tilesets/Foreground.ice_ts")
 local layerTs = GetLayerTilesetPath(1)
 
 -- All functions accept an optional last instance index argument
 SetPrimaryTilesetPath("...", 0)
 ```
+
+A new tileset path shows the next time the tilemap is drawn; its collision shapes are built when the level starts and
+by `RebuildTilemapPhysics`, so call that after changing the tilesets of a map that has colliders. A path can also be the
+name of a [tileset made in code](#tilesets-made-in-code--tileset).
 
 ### Tileset introspection
 
@@ -18013,7 +18267,7 @@ local texPath   = GetTilesetTexturePath(tilesetIdx)
 
 -- Everything Draw needs to render a single tile yourself (minimaps, previews, level editors)
 local r = GetTileRegion(GetTileGrid(tx, ty, layer), layer)   -- tile value, optional layer, optional instance
--- r.valid              -- false for an empty cell (-1) or a tileset that is not loaded
+-- r.valid              -- false for an empty cell (-1), a tileset that is not loaded or a tile past its end
 -- r.texture            -- tileset texture, ready for Draw.Region / Draw.SetTexture
 -- r.x, r.y, r.w, r.h   -- source rectangle in pixels
 -- r.width, r.height    -- full texture size in pixels
@@ -18055,6 +18309,192 @@ for ty = 0, size.height - 1 do
     end
 end
 ```
+
+### Tilesets made in code — `Tileset.*`
+
+> **Type:** Global `Tileset` table.
+
+`Tileset.Create` makes a tileset out of a texture while the game runs: a
+[script texture or render target](#texture--script-created-textures) drawn in code, or an image in Content. A tile game
+can then generate its tile art instead of shipping a `.ice_ts` asset. The tileset is registered under its name, and the
+name works everywhere a tileset path does — `SetPrimaryTilesetPath`, `AddAdditionalTileset`, `SetAdditionalTilesetPath`,
+`SetLayerTilesetPath` — so drawing, tile colliders, 2D shadows, the navigation grid, particle collisions, tile
+destruction and every tile function read it like a tileset asset.
+
+```lua
+-- Four 16 x 16 tiles drawn in code: dirt, grass, a one-way plank and water.
+local sheet = PixelBuffer.new(64, 16)
+sheet:FillRect(0, 0, 16, 16, 120, 80, 50)                                    -- 0: dirt
+sheet:FillRect(16, 0, 16, 16, 120, 80, 50)
+sheet:FillRect(16, 0, 16, 4, 70, 170, 60)                                    -- 1: grass on top (row 0 is the top)
+sheet:FillRect(32, 0, 16, 5, 150, 110, 60)                                   -- 2: a plank, the top 5 rows
+sheet:FillGradient(48, 0, 16, 16, 60, 120, 220, 200, 30, 70, 160, 200, true) -- 3: water
+Texture.Create("tiles", 64, 16, { filter = "nearest" })
+Texture.SetPixelBuffer("tiles", 0, 0, sheet)
+
+Tileset.Create("terrain", "tiles", 16, {
+    tiles = {
+        [0] = { hasCollider = true },
+        [1] = { hasCollider = true, dataName = "grass" },
+        [2] = { hasCollider = true, isOneWay = true, points = { 0, 0.6875, 1, 0.6875, 1, 1, 0, 1 } },
+        [3] = { hasCollider = true, isSensor = true, dataName = "water" },
+    },
+})
+
+-- In the script of the entity with the tilemap:
+SetPrimaryTilesetPath("terrain")
+FillRect(0, 0, 40, 1, 1)
+RebuildTilemapPhysics()
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Tileset.Create(name, texture, tileSize, options?)` | `bool` | A tileset of square `tileSize` tiles cut from `texture`: the name of a script texture or render target, or an image path in Content. |
+| `Tileset.SetTile(name, tileId, data)` | `bool` | Changes the data of one tile of a tileset made in code. |
+| `Tileset.Destroy(name)` | `bool` | Removes the tileset; `false` when there is none of that name. |
+| `Tileset.Exists(name)` | `bool` | Whether a tileset of that name was made in code. |
+
+Tiles are numbered from 0 at the top-left of the texture, left to right and then row by row down, as in a tileset
+asset; `GetTilesetColumns`, `GetTilesetRows` and `GetTilesetTileCount` report the grid. A cell whose number is past the
+last tile draws nothing, as with a tileset asset. `Create` returns `false` and writes a warning to the log when the name
+is empty, the tile size is below 1 or larger than the texture, the texture does not exist, or the tile data is invalid.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `material` | none | A `.ice_material` / `.ice_matinst` of the `Surface` domain to draw the tiles with. |
+| `shading` | `"Lit"` | `"Lit"` or `"Unlit"`. |
+| `blend` | `"Masked"` | `"Masked"`, `"Additive"`, `"Translucent"` or `"Opaque"`. |
+| `alphaClip` | 0.5 | With `"Masked"`, pixels with less alpha are not drawn, 0..1. |
+| `tiles` | none | Tile data keyed by tile id, as for `Tileset.SetTile`. |
+
+**Tile data** holds what the tileset editor sets for a tile, under the names `GetTileMeta` returns. A field that is
+left out keeps its value; a tile that has none yet starts from the defaults.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `hasCollider` | `false` | The tile has a collider. |
+| `points` | the whole tile | The collider outline: a flat list of at least three `x, y` points in the tile's own square, `(0, 0)` at its bottom-left and `(1, 1)` at its top-right, as in the tileset editor. |
+| `colliderMode` | 0 | 0 = polygon, 1 = chain (an open line). |
+| `isSensor` | `false` | Reports overlaps without pushing anything. |
+| `isOneWay`, `oneWayDirection` | `false`, 1 | A one-way platform, solid from one side: 1 = up, 2 = down, 3 = left, 4 = right. |
+| `density`, `friction`, `restitution` | 0, 0.6, 0 | The physics material. |
+| `collisionGroupIndex` | 0 | The collision group, by index or by name. |
+| `collisionEnabled` | 3 | 0 = no collision, 1 = queries only, 2 = physics only, 3 = queries and physics. |
+| `enableContactEvents`, `enableSensorEvents`, `enableHitEvents`, `enablePreSolveEvents` | `true` | Which physics events the collider sends. |
+| `dataName` | `""` | A name for game logic, read back with `GetTileDataName` / `GetTileDataNameGrid`. |
+| `isDestructible`, `fragment` | `false`, defaults | The tile breaks into fragments; `fragment` takes the fields of `SetTileFragmentSettings`. |
+| `castShadow`, `castShadowMode`, `shadowOrigin`, `shadowEdgeFade`, `shadowZOrder`, `shadowLightDepth`, `dontBlockShadows` | `false`, 0, 0, 0, 0, 1, `true` | The tile's 2D shadow, as set by `SetTileCastShadow` and the functions next to it. |
+
+- Creating a tileset again under a name that exists replaces it, and every tilemap that uses the name switches to it
+  the next time it is drawn. `Tileset.SetTile` changes one tile in place the same way. 2D shadows and particle
+  collisions follow at once, tile colliders at the next `RebuildTilemapPhysics`, a navigation grid at its next rebuild.
+- The texture is used directly: drawing into a script texture changes the tiles and their Contour shadows at once, and
+  `Texture.Create` under the same name moves the tileset to the new texture, its grid following the new size.
+  `Texture.Destroy` leaves the tiles undrawn; make the tileset again to give it a texture.
+- `Tileset.Destroy` removes the tileset: tilemaps that still name it draw nothing for those tiles, and lose their
+  colliders at the next `RebuildTilemapPhysics`.
+- The name is matched like a content path (a backslash counts as a slash) and is used before any tileset asset of the
+  same path, so give these tilesets plain names such as `"terrain"`.
+- A tileset made in code lives only in memory: the functions that store tile changes in the tileset asset
+  (`SetTileDestructible`, `SetTileFragmentSettings` and their `ById` forms) change it in memory only. It stays when
+  another level is loaded; in the editor it is destroyed when Play stops.
+- A Contour shadow (`castShadowMode = 1`) follows the opaque pixels of each tile, in a script texture as in an image
+  file. Only a render target cannot be read back, so there the shadow covers the whole tile.
+- The tilemap can be made in code as well: see [Tilemaps made in code](#tilemaps-made-in-code--tilemap).
+
+### Tilemaps made in code — `Tilemap.*`
+
+> **Type:** Global `Tilemap` table.
+
+`Tilemap.Create` makes a whole tilemap while the game runs — its size, tile size, projection, tilesets and layers, with
+the tiles of every layer when you have them — so a game can generate its levels instead of shipping `.ice_tm` assets.
+The map is registered under its name, and the name works wherever a tilemap path does: `SetTilemapAsset` in the script
+of an entity with a Tilemap component, `Tilemap.Assign` for any entity, and `Prewarm.Tilemap`. As with an `.ice_tm`
+file, every entity that takes the map gets its own copy: the tile functions change that copy, never the map made in
+code or the copies of other entities.
+
+```lua
+-- A 64 x 16 level: a dirt floor with grass on top, a pool of water and a one-way ledge,
+-- drawn with the "terrain" tileset from "Tilesets made in code".
+local W, H = 64, 16
+local tiles = {}
+for y = 0, H - 1 do
+    for x = 0, W - 1 do
+        local id = -1
+        if y == 0 then id = 0 end                                 -- dirt
+        if y == 1 then id = (x >= 30 and x < 36) and 3 or 1 end   -- grass, water from x = 30 to 35
+        if y == 5 and x >= 10 and x < 18 then id = 2 end          -- the ledge
+        tiles[y * W + x + 1] = id                                 -- row y = 0, the bottom row, comes first
+    end
+end
+Tilemap.Create("level1", W, H, 16, { tileset = "terrain", layers = { { name = "Ground", tiles = tiles } } })
+
+-- In the script of an entity with a Tilemap component:
+SetTilemapAsset("level1")
+RebuildTilemapPhysics()
+
+-- Or, from any script, for an entity without a script of its own (Assign builds the colliders too):
+local world = CreateEmptyEntity("World", 0, 0)
+AddEntityComponent(world, "Tilemap")
+Tilemap.Assign(world, "level1")
+
+-- Keep the map with everything the player changed in it in your save data, and bring it back later:
+local saved = Tilemap.GetData(world)
+Tilemap.CreateFromData("level1_saved", saved)
+Tilemap.Assign(world, "level1_saved")
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Tilemap.Create(name, width, height, tileSize, options?)` | `bool` | A map of `width` × `height` cells, each `tileSize` world units across. |
+| `Tilemap.CreateFromData(name, data)` | `bool` | A map from a string that `Tilemap.GetData` or `GetTilemapData` returned, or from the text of an `.ice_tm` file. |
+| `Tilemap.Destroy(name)` | `bool` | Removes the map made in code; `false` when there is none of that name. |
+| `Tilemap.Exists(name)` | `bool` | Whether a tilemap of that name was made in code. |
+| `Tilemap.Assign(entityId, name, instance?)` | `bool` | Gives a tilemap instance of any entity (instance 0 by default) a fresh copy of the map and builds its colliders. `false` when there is no map of that name or the entity has no such tilemap instance. |
+| `Tilemap.GetData(entityId, instance?)` | `string` | The map of a tilemap instance with all its changes, in the format of an `.ice_tm` file; `""` when the instance has no map. |
+| `GetTilemapData(instance?)` | `string` | The same for the entity of the script. |
+
+`Create` returns `false` and writes a warning to the log when the name is empty, the map is not 1 to 100000 cells on
+each side and 64000000 cells at most, the tile size is below 1, or an option is invalid. `CreateFromData` does the same
+when the string is not a tilemap: not JSON, a size out of range, or a layer whose `Grid` is not width × height whole
+numbers.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `tileset` | none | The primary tileset: a tileset path, or the name of a [tileset made in code](#tilesets-made-in-code--tileset). |
+| `additionalTilesets` | none | A list of more tilesets, tileset index 1, 2… of `EncodeTile`. 128 tilesets at most with the primary one. |
+| `projection` | `"orthogonal"` | `"orthogonal"`, `"isometric"` or `"hexagonal"`. |
+| `cellWidth`, `cellHeight` | from `tileSize` | The cell size in world units on isometric and hexagonal maps; 0 keeps the default. |
+| `hexSideLength`, `hexAxis`, `hexIndex` | from `tileSize`, `"y"`, `"odd"` | The side of a hexagon, the stagger axis (`"x"` or `"y"`) and which rows or columns are shifted (`"odd"` or `"even"`). |
+| `chunking`, `chunkSize` | on from 256 × 256 cells, 32 | Splits the map into chunks of `chunkSize` × `chunkSize` cells, so only the chunks in view are drawn. |
+| `layers` | one empty `"Base Layer"` | The layers in order of the layer index from 0: a layer name, or a table with the fields below. |
+
+| Layer field | Default | Meaning |
+| --- | --- | --- |
+| `name` | `"Layer N"` | The layer name, as `GetLayerName` returns it. |
+| `tiles` | all empty | Width × height tile values, row by row in the order the tile functions number rows — row `y = 0` first, which is the bottom row, or the top row on isometric maps — just as `BlitFromArray(0, 0, width, height, tiles)` takes them. A value is a tile id from 0, an `EncodeTile` value, or -1 for an empty cell; a value that is left out leaves the cell empty. |
+| `tileset` | the primary tileset | The tileset of this layer, as `SetLayerTilesetPath` sets it. |
+| `visible` | `true` | Whether the layer is drawn. |
+
+- An instance gets its copy when it takes the name with `SetTilemapAsset` or `Tilemap.Assign`, and keeps it until it
+  takes a map again. Every such call gives a fresh copy — which is also how a level restarts from the map made in code
+  — so call them once, not every frame. (With an `.ice_tm` path, `SetTilemapAsset` keeps the copy already loaded.)
+  Instances of one Tilemap component that take the same map share one copy, as they share a loaded `.ice_tm`.
+- `Tilemap.Assign` builds the colliders of the instance; after `SetTilemapAsset` call `RebuildTilemapPhysics`, as for a
+  new `.ice_tm`.
+- Creating the map again under a name that exists changes what instances get from then on, and `Tilemap.Destroy`
+  removes the map made in code; in both cases the copies that instances already have stay as they are.
+- `Tilemap.GetData` and `GetTilemapData` return the map of an instance with every change made to it — set and dug
+  tiles, broken tiles, layers, tilesets, animated tiles — in the format of an `.ice_tm` file. The string names the
+  tilesets but does not contain them: make the tilesets made in code again before the restored map is drawn. Both
+  functions and `CreateFromData` go through the whole map, tens of milliseconds for 512 × 512 cells, so use them when
+  saving and loading, not every frame.
+- The name is matched like a content path (a backslash counts as a slash) and is used before any `.ice_tm` file of the
+  same path, so give these maps plain names such as `"level1"`.
+- `Prewarm.Tilemap(name)` warms the tilesets and animated-tile flipbooks the map names; a tileset made in code counts
+  as warm straight away.
+- A tilemap made in code lives only in memory; it is never written to an `.ice_tm` file. It stays when another level
+  is loaded; in the editor it is destroyed when Play stops.
 
 ### Bulk tile editing
 
@@ -20856,8 +21296,9 @@ end
 ### Global navigation functions (`Nav.*`)
 
 ```lua
--- Build/rebuild navigation grid from current scene
+-- Build/rebuild the navigation grids from the current scene → bool
 Nav.RebuildGrid()
+Nav.RebuildGrid({ cellSize = 16, agentRadius = 6 })   -- with settings, in a level without navigation volumes
 
 -- Has grid?
 local has = Nav.HasGrid()
@@ -20895,6 +21336,38 @@ local dist = Nav.GetDistance(x1, y1, x2, y2)
 -- Returns 0 = Top-Down, 1 = Side-View, -1 = no grid there.
 local mode = Nav.GetMode(worldX, worldY)
 ```
+
+#### Building the grid
+
+`Nav.RebuildGrid(options?)` builds every navigation grid of the level from its tilemaps and colliders and returns `true`
+when at least one was built. A level with navigation volumes ([View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view))
+rebuilds the grid of each volume with that volume's settings. A level without them gets one grid, made by the first
+`RebuildGrid`: it covers the level's tilemaps, and its cells are as large as the smallest tile of those tilemaps (their
+scale included), or 64 units when the level has no orthogonal tilemap — with 32 x 32 tiles every tile is one cell. A
+cell counts as blocked when its centre lies inside an obstacle, so keep the cells no larger than the thinnest wall.
+
+The options set up that grid, so a game without any `.ice_view` asset has every setting a volume has. An option that is
+left out keeps its value, and the values stay for later rebuilds until `Nav.ClearGrid`. In a level with navigation
+volumes the options are ignored with a warning, because the volumes set their grids.
+
+```lua
+-- A platformer without assets: a side-view grid of 16-unit cells over a level of 4000 x 1200 units.
+Nav.RebuildGrid({ cellSize = 16, mode = "SideView", bounds = { x = 0, y = 0, width = 4000, height = 1200 },
+                  agentHeight = 3, maxJumpHeight = 4, maxJumpDistance = 5 })
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `cellSize` | the smallest tile of the tilemaps, or 64 | The side of a cell in world units. |
+| `bounds` | the area of the tilemaps | `{ x, y, width, height }`, `x, y` being the bottom-left corner. A level without tilemaps needs it. |
+| `agentRadius` | 0 | Cells closer than this to an obstacle are blocked too, so paths keep the agent clear of walls. |
+| `diagonal` | `true` | Paths may step diagonally. |
+| `mode` | `"TopView"` | `"TopView"`, or `"SideView"` for a platformer: walkable cells are the ones standing on something, linked by jumps and drops. |
+| `agentHeight`, `maxJumpHeight`, `maxFallHeight`, `maxJumpDistance` | 2, 3, 8, 4 | Side view: how tall the agent is, how high and how far it jumps and how deep it drops, in cells. |
+
+`RebuildGrid` returns `false` and writes a warning to the log when an option is out of range, when a grid would have more
+than 16 000 000 cells, or when there is nothing to build from (no tilemaps and no `bounds`); the grid and its settings
+then stay as they were.
 
 #### Script-defined grids
 
@@ -20980,7 +21453,8 @@ Nav.ClearCosts()                                -- back to uniform cost
 - Values are clamped to a small positive minimum, so a cell can be cheap but never free or negative.
 - Costs below 1.0 are fully supported: the A* heuristic is scaled by the cheapest cell in the grid, so paths stay
   optimal even with discounted roads.
-- `Nav.SetGrid` and `Nav.ClearGrid` drop the costs along with the grid they belonged to.
+- `Nav.SetGrid` and `Nav.ClearGrid` drop the costs along with the grid they belonged to. `Nav.RebuildGrid` keeps them
+  while the grid keeps its size, cell size and origin, and drops them when the rebuilt grid has another one.
 
 ```lua
 -- Roads are fast, swamp is slow; the same call sites keep working.
@@ -30381,7 +30855,8 @@ Draw.GetMaxTexts()
 ```
 
 - `font` is the font asset's full content path — the `.ttf` / `.otf` itself or its `.ice_font`
-  sidecar. Without `font`, `Draw.Text`, `Draw.MeasureText`, `Draw.MeasureTextXY` and `Draw.WrapText` use the font
+  sidecar — or the name of a [font made in code](#font--fonts-made-in-code). Without `font`, `Draw.Text`,
+  `Draw.MeasureText`, `Draw.MeasureTextXY` and `Draw.WrapText` use the font
   set by `Draw.SetFont(path)`; `Draw.SetFont(nil)` resets it. An empty path or a font that cannot be loaded uses the
   [system font](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text) — the
   operating-system UI font, or the font asset assigned with `SystemFont.Set` (the only option on Web).
@@ -30451,6 +30926,112 @@ in one call and returns the number of strings accepted. `size` defaults to 24; t
 fields as `Draw.Text` and are read once. Reuse the array between frames. Non-string texts or non-numeric positions
 are skipped; an incomplete final triple is ignored. Strings remain in array order and use the existing consecutive
 glyph batches. Text is never moved across intervening quads: it has no depth test, so Z alone cannot preserve that order.
+
+### Font — fonts made in code
+
+`Font` makes a font out of a [`PixelBuffer`](#pixelbuffer--native-rgba8-canvas), so a game can draw all of its text
+without a `.ttf` file: a pixel font drawn in code, or glyphs cut from any image the game builds while it runs. The font
+is registered under its name, and the name works everywhere a font path does: `Draw.Text`, `Draw.MeasureText`,
+`Draw.WrapText` and `Draw.SetFont`, the text, tooltips and dropdowns of widgets (`SetWidgetElementFont`, or
+`SetElementFont` in a widget script), and [`SystemFont.Set`](#66-systemfont--font-for-the-console-debug-overlays-and-font-less-text).
+
+```lua
+-- A 3 x 5 pixel font for a score counter, drawn from text: no image file and no .ttf.
+local CHARS = "0123456789"
+local ART = {
+    "### .#. ### ### #.# ### ### ### ### ###",
+    "#.# ##. ..# ..# #.# #.. #.. ..# #.# #.#",
+    "#.# .#. ### ### ### ### ### ..# ### ###",
+    "#.# .#. #.. ..# ..# ..# #.# ..# #.# ..#",
+    "### ### ### ### ..# ### ### ..# ### ###",
+}
+local sheet = PixelBuffer.new(#CHARS * 3, 5)
+for row, line in ipairs(ART) do
+    for i = 0, #CHARS - 1 do
+        for column = 0, 2 do
+            local at = i * 4 + column + 1
+            if line:sub(at, at) == "#" then sheet:SetPixel(i * 3 + column, row - 1, 255, 255, 255) end
+        end
+    end
+end
+Font.CreateGrid("digits", sheet, CHARS, 3, 5, { spacing = 1 })
+
+function OnUpdate(dt)
+    Draw.SetSpace("screen")
+    Draw.Text(tostring(score), 20, 20, 20, { font = "digits", r = 1, g = 0.9, b = 0.3 })   -- 4x: crisp 4 x 4 blocks
+end
+```
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Font.CreateGrid(name, image, chars, cellWidth, cellHeight, options?)` | `bool` | A font from a sheet of equal cells: the characters of `chars` (UTF-8) take the cells one by one. |
+| `Font.Create(name, image, glyphs, options?)` | `bool` | A font from glyph rectangles anywhere in the image. |
+| `Font.Destroy(name)` | `bool` | Removes the font; `false` when there is none of that name. |
+| `Font.Exists(name)` | `bool` | Whether a font of that name was made in code. |
+
+**The image.** Only its alpha channel is used: that is the shape of the glyphs, from 0 (empty) to 255 (solid). The
+colour channels are ignored, because text takes its colour from `Draw.Text` or the widget, as with any font. Cells and
+glyph rectangles are given in the image's own coordinates, as everywhere in `PixelBuffer`: `x` to the right, `y`
+downward from row `0` at the top. The pixels are copied into the font's glyph atlas, so the buffer can be changed or
+dropped afterwards.
+
+**`Font.CreateGrid`** cuts the image into `cellWidth x cellHeight` cells, starting at `x, y` and running `columns`
+cells to a row. The first character of `chars` takes the first cell, the second the next one, and so on, a whole row
+before the next row down. Its options, besides the common ones below:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `proportional` | `false` | `false`: every character is a whole cell and advances `cellWidth + spacing`, a monospace font for text grids. `true`: each cell is trimmed to its inked columns, so `i` is narrower than `m`. |
+| `spacing` | 0, or 1 with `proportional` | Empty pixels from one character to the next. |
+| `space` | `cellWidth + spacing`, or `cellWidth / 2` with `proportional` | Advance of the space when `chars` has none; in a proportional font also of every empty cell. |
+| `x`, `y` | 0, 0 | Top-left corner of the first cell. |
+| `columns` | as many as fit | Cells in one row of the sheet. |
+
+**`Font.Create`** takes `glyphs`, a table keyed by the character (a one-character string, or its code point), whose
+values give the glyph's rectangle `x, y, w, h` in the image and, if needed:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `advance` | `w + spacing` | How far the pen moves on after this glyph. |
+| `offsetX` | 0 | Shift to the right from the pen. |
+| `offsetY` | 0 | How far below the top of the line the glyph's top row sits, like `yoffset` in the BMFont format. |
+
+A glyph with `w` or `h` of 0 draws nothing and only advances. Its options, besides the common ones, are `spacing`
+(default 1) and `space`, the advance of the space when `glyphs` has none (default `size / 2`).
+
+```lua
+Font.Create("runes", sheet, {
+    A = { x = 0, y = 0, w = 5, h = 7 },
+    g = { x = 6, y = 0, w = 4, h = 7, offsetY = 2 },          -- 2 pixels lower: a descender
+    [0x263A] = { x = 11, y = 0, w = 7, h = 7, advance = 9 },  -- a smiley, by code point
+}, { size = 7, ascent = 7, lineHeight = 10 })
+```
+
+**Common options**
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `size` | `cellHeight`, or the tallest glyph (`offsetY + h`) | The font's own pixel size. Text of this size shows the glyphs 1:1; text of another size scales them by `textSize / size`, so a whole multiple keeps every glyph pixel a crisp square. |
+| `lineHeight` | `size + max(1, (size + 4) // 8)` | The step from one line to the next: for `\n`, `wrapWidth` and `lineHeight` in `Draw.MeasureText`. |
+| `ascent` | `size` | From the top of the line down to the baseline; glyph rows below it hang under the baseline. For a grid whose last two rows hold the tails of `g`, `p` and `y`, pass `cellHeight - 2`. |
+| `smooth` | `false` | `false` samples the glyphs nearest-neighbour and grows outlines in whole glyph pixels: right for pixel fonts. The outline `width` is in pixels of the drawn text, so at 4x a width of 4 gives a border one glyph pixel wide and a width below 2 gives none. `true` samples them linearly and grows soft outlines, for a detailed font drawn at many sizes. |
+
+Both functions return `false` and write a warning to the log when the name or the image is empty, a cell is smaller
+than 1 x 1, a cell or a rectangle lies outside the image, a character is given twice (`"A"` and `65` are the same
+one), a `Font.Create` key is neither one character nor a code point or its value is not a table, or there are no
+characters at all.
+
+- Creating a font again under a name that exists replaces it, and text that uses the name switches to the new glyphs.
+  Making a font uploads a glyph atlas to the GPU, so do it at load or when the font changes, not every frame.
+- `Font.Destroy` frees the atlas. Text that still names the font falls back to the system font, and a
+  `SystemFont.Set` assignment of it is cleared.
+- A font made in code stays when another level is loaded; in the editor it is destroyed when Play stops.
+- The name is matched exactly. While a font made in code exists, its name is used before any font file of the same
+  path, so give these fonts plain names such as `"digits"` rather than content paths.
+- A character the font does not have is drawn as its `?`, and is left out when there is no `?` either.
+- Text in these fonts is laid out glyph after glyph by `advance`, without kerning or ligatures. `align`, `wrapWidth`,
+  `rtl`, `outline`, `lit` and every other `Draw.Text` option work as with any font.
+- The player's dyslexia-friendly font replaces these fonts too, like every font in the game.
 
 ### Drawing primitives
 
@@ -30828,8 +31409,11 @@ The list is cleared automatically at the start of every frame, and whenever the 
 ### Texture — script-created textures
 
 Textures created here are registered under their name, and the name works wherever a raw texture path is accepted:
-`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, every `Draw` call that takes a texture, and the
-texture variants of a `.ice_decal` asset. (Widgets and flipbooks display sprite assets, not raw textures.)
+`SetSpriteTexture`, `Material.SetTexture`, `PP.SetCustomMaterialTexture`, every `Draw` call that takes a texture, the
+texture variants of a `.ice_decal` asset, the particles of an FX effect
+([`SetFXTexture`](#particle-textures-from-code--setfxtexture--getfxtexture)) and the tiles of a
+[tileset made in code](#tilesets-made-in-code--tileset). (Widgets and flipbooks display sprite assets, not raw
+textures.)
 
 ```lua
 Texture.Create("minimap", 256, 256, {
@@ -30859,11 +31443,21 @@ This is the classic software-renderer path: build a pixel buffer in Lua, upload 
 
 **Replacing and destroying.** Calling `Texture.Create` or `RenderTarget.Create` again with a name that already exists
 replaces that texture, and everything that was showing the old one — sprites set with `SetSpriteTexture`, material and
-post-process parameters set with `Material.SetTexture` / `PP.SetCustomMaterialTexture`, decals — switches to the new one
-by itself, so recreating a render target at a new resolution needs no bookkeeping. `Destroy` detaches the texture from
-all of them instead: those sprites become empty, those material parameters fall back to the material's own texture, and
-anything already submitted to `Draw` this frame that samples or targets it is dropped. Both are real GPU allocations, so
+post-process parameters set with `Material.SetTexture` / `PP.SetCustomMaterialTexture`, decals, FX particles, tilesets
+made in code — switches to the new one by itself, so recreating a render target at a new resolution needs no
+bookkeeping. `Destroy` detaches the texture from all of them instead: those sprites become empty, those material
+parameters fall back to the material's own texture, those particles are drawn without a texture, those tiles are not
+drawn, and anything already submitted to `Draw` this frame that samples or targets it is dropped. Both are real GPU allocations, so
 do them when something changes, not every frame.
+
+**Lifetime.** A script texture or render target stays until `Destroy`, also when another level is loaded. In the editor
+every one of them is destroyed when Play stops, the same way `Destroy` does it, so the next Play starts like a fresh game.
+
+**Shape for shadows and destruction.** Besides the GPU texture, every script texture keeps its alpha channel in system
+memory, one byte per pixel, updated by `Texture.Create`, `Texture.Fill` and the `Texture.SetPixel*` functions. Contour
+shadows of sprites and tiles and the trimming of destruction pieces to the opaque pixels read it, as they read an image
+file. A render target keeps no such copy, because what is drawn into it stays on the GPU: its Contour shadow covers the
+whole rectangle, and its destruction pieces are not trimmed.
 
 **Video textures.** Every video channel that is playing owns a texture named `video:<channel>`
 (`Video.GetTexture(channel)`), and that name works in all the places listed above — this is how a video is put on a TV
@@ -30905,6 +31499,17 @@ buf:Clear()                                    -- all zeros
 buf:Blit(otherBuffer, dstX, dstY)              -- copy another buffer in (clipped)
 buf:CopyFrom(otherBuffer)                      -- exact copy; sizes must match
 
+-- Drawing: blended over what is already there; a defaults to 255
+buf:BlendPixel(x, y, r, g, b, a)               -- one pixel
+buf:DrawLine(x0, y0, x1, y1, r, g, b, a)       -- 1-pixel line, both ends included
+buf:DrawRect(x, y, w, h, r, g, b, a)           -- 1-pixel outline of a w x h rectangle
+buf:FillCircle(cx, cy, radius, r, g, b, a)     -- disc, 2 * radius + 1 pixels across
+buf:DrawCircle(cx, cy, radius, r, g, b, a)     -- the 1-pixel rim of that disc
+buf:FillPolygon({ x1, y1, x2, y2, x3, y3 }, r, g, b, a)                -- any polygon; false on bad points
+buf:FillGradient(x, y, w, h, r1, g1, b1, a1, r2, g2, b2, a2, vertical)  -- left to right, or top to bottom
+buf:BlitBlend(otherBuffer, dstX, dstY, opacity)  -- composite another buffer over this one
+buf:FromNoise(noiseBuffer, palette)            -- colour a NoiseBuffer through a palette
+
 local blob = buf:ToString()                    -- raw bytes, ready for WriteFile
 buf:FromString(blob)                           -- restore (needs at least as many bytes)
 
@@ -30912,6 +31517,75 @@ Texture.SetPixelBuffer("canvas", 0, 0, buf)    -- upload; then draw "canvas" as 
 ```
 
 Out-of-range coordinates are ignored on write and read as zero, so a simulation can walk past the edges safely.
+
+**Drawing.** The drawing methods give a game its art without image files: sprites, tiles, icons, a font atlas or a
+cursor drawn in code, then uploaded with `Texture.SetPixelBuffer` or handed to [`Font.Create`](#font--fonts-made-in-code),
+[`SetCursorPixels`](#mouse) or [`Screen.SetWindowIcon`](#65-screen--window-size-and-device-orientation). They use the
+same coordinates as `SetPixel` — `x` to the right, `y` downward from row `0` at the top of the image — and clip at the
+edges. Every pixel they touch is blended over the one already there (straight-alpha "over" compositing): alpha 255
+replaces it, a lower alpha mixes with it, alpha 0 leaves it untouched, and a fully transparent pixel simply takes the
+new colour. `SetPixel`, `Fill`, `FillRect` and `Blit` keep writing pixels as they are, without blending.
+
+Shapes are crisp, without antialiasing, which is what pixel art wants:
+
+- `DrawLine` steps one pixel at a time from end to end and draws both ends.
+- `DrawRect` draws the outline of exactly the pixels `FillRect(x, y, w, h)` fills.
+- `FillCircle` covers the pixels whose centres are closer than `radius + 0.5` to the centre pixel: radius 0 is one
+  pixel, radius 3 is 7 pixels across. `DrawCircle` draws exactly the pixels `FillCircle(radius)` covers and
+  `FillCircle(radius - 1)` does not, so a rim drawn over its disc closes without gaps.
+- `FillPolygon` takes a flat list of at least three `x, y` points (fractions allowed) and fills every pixel whose
+  centre `(x + 0.5, y + 0.5)` lies inside, with the even-odd rule where the outline crosses itself. The rectangle
+  `{ 0, 0, 4, 0, 4, 3, 0, 3 }` fills exactly the pixels of `FillRect(0, 0, 4, 3)`. It returns `false` and draws
+  nothing when the list has fewer than three points, an odd count or anything but finite numbers.
+- `FillGradient` blends from the first colour (components 0..255) in the first column to the second in the last, or
+  in the first and last row with `vertical = true`, from the top down.
+- `BlitBlend` composites another buffer over this one with the same blending, its alpha scaled by `opacity` (0..1,
+  default 1). A buffer can be blended onto itself.
+
+For soft, antialiased shapes and text, draw with `Draw.*` into a [render target](#rendertarget--offscreen-rendering)
+instead.
+
+```lua
+-- A coin, drawn once at load: no image file needed.
+local coin = PixelBuffer.new(15, 15)
+coin:FillCircle(7, 7, 7, 120, 80, 0)            -- dark rim
+coin:FillCircle(7, 7, 6, 250, 200, 40)          -- body
+coin:FillCircle(5, 5, 2, 255, 245, 180, 160)    -- highlight, blended over the body
+coin:DrawLine(7, 4, 7, 10, 170, 120, 10)        -- the mark
+Texture.Create("coin", 15, 15, { filter = "nearest" })
+Texture.SetPixelBuffer("coin", 0, 0, coin)
+
+function OnUpdate(dt)
+    Draw.SetSpace("screen")
+    Draw.Sprite("coin", 40, 40, 60, 60)         -- four screen pixels per coin pixel
+end
+```
+
+**`FromNoise(noise, palette)`** colours a [`NoiseBuffer`](#25-math--math-and-noise) through a palette (terrain, clouds,
+marble, fire) and writes the pixels without blending. The palette is a list of colour stops `{ at, r, g, b, a }` with
+components 0..255; `a` defaults to 255, and `at` defaults to stops spread evenly from 0 to 1, so a plain list of colours
+fits a buffer after `Normalize()`. A value between two stops mixes their colours, and a value below the first stop or
+above the last takes the colour of that stop. The noise is read like every grid in the engine, from the bottom-left:
+noise row `y = 0` becomes the bottom row of the image, so a map coloured from the same noise that lays out the level
+shows it the right way up, the same rule as `MapBuffer:FromNoise`. When the sizes differ, only the area both cover is
+written, aligned at the bottom-left corner. It returns `false` for an empty palette or an entry that is not a table.
+
+```lua
+local noise = NoiseBuffer.new(128, 128)
+noise:Fill(24.0)
+noise:Normalize()
+
+local terrain = PixelBuffer.new(128, 128)
+terrain:FromNoise(noise, {
+    { at = 0.00, r = 20,  g = 40,  b = 120 },   -- deep water
+    { at = 0.45, r = 60,  g = 110, b = 200 },   -- shallows
+    { at = 0.50, r = 220, g = 200, b = 140 },   -- sand
+    { at = 0.70, r = 60,  g = 140, b = 60 },    -- grass
+    { at = 1.00, r = 250, g = 250, b = 250 },   -- snow
+})
+Texture.Create("terrain", 128, 128)
+Texture.SetPixelBuffer("terrain", 0, 0, terrain)
+```
 
 `SetValue` / `GetValue` are the fast path for grid simulations: one number per cell carries both the material id and its
 colour, and `Swap` is the whole move step of a falling-sand cell.
@@ -32247,8 +32921,8 @@ end
 > **Type:** Global functions. `Screen` table.
 >
 > The pixel size of what the game is being drawn into, the part of it that notches and
-> rounded corners leave free, and — on Android — control over which way the device is
-> allowed to turn.
+> rounded corners leave free, the window icon, and — on Android — control over which way
+> the device is allowed to turn.
 >
 > Use it to lay a game out for both a wide screen and a tall one, and to let the
 > player choose landscape or portrait from an options menu instead of being locked
@@ -32365,6 +33039,26 @@ function OnUpdate(dt)
 end
 ```
 
+### Window icon
+
+```lua
+local icon = PixelBuffer.new(32, 32)
+icon:FillCircle(15, 15, 15, 40, 60, 160)
+icon:FillCircle(15, 15, 9, 250, 210, 60)
+Screen.SetWindowIcon(icon)
+```
+
+`Screen.SetWindowIcon(buffer)` gives the window an icon drawn in code, a
+[`PixelBuffer`](#pixelbuffer--native-rgba8-canvas) read like the image it is (row `0` at the top), so a game needs no
+icon file. It replaces the icon from the project settings until the game ends or the next call, and the pixels are
+copied, so the buffer can be reused. A square image from 32 x 32 to 256 x 256 looks right everywhere; the operating
+system scales it.
+
+It returns `true` when the window took the icon. Windows and Linux show it in the title bar and the taskbar (on
+Wayland only where the compositor supports window icons), macOS shows it in the Dock. Android, iOS, Web and consoles
+have no window icon, and there it returns `false`, as it does for an empty buffer. In the editor, stopping Play
+puts the editor's own icon back.
+
 ### Reference
 
 | Function | Returns | Notes |
@@ -32379,6 +33073,7 @@ end
 | `Screen.SetOrientation(mode)` | `bool` | `landscape`, `portrait`, `sensorLandscape`, `sensorPortrait`, `fullSensor`, `unspecified`. `true` only if the platform acted. |
 | `Screen.GetOrientation()` | `string` | The last mode requested, `unspecified` if never set. |
 | `Screen.CanSetOrientation()` | `bool` | Whether this platform rotates on request. True on Android and iOS. |
+| `Screen.SetWindowIcon(buffer)` | `bool` | Sets the window icon from a `PixelBuffer`. Desktop only; `false` where the platform has no window icon or the buffer is empty. |
 
 > **See also:** `Settings.IsMobile()` and `Settings.GetPlatform()` for deciding
 > whether an orientation control belongs in the menu at all.
@@ -32435,6 +33130,20 @@ stored as forward slashes. Moving or renaming the font through the Content Brows
 rewrites the full path in your scripts like any other asset reference, and an old path
 that still reaches the engine is followed through its redirector.
 
+The name of a font made in code with [`Font.Create` or `Font.CreateGrid`](#font--fonts-made-in-code)
+works too, so a game without a single font file can still give the console and the debug
+overlays its own pixel font:
+
+```lua
+Font.CreateGrid("console", sheet, CHARS, 6, 8)
+SystemFont.Set("console")
+```
+
+`GetSource()` then reports `"script"`, and `Get()` and `GetFile()` return the font's name.
+Creating the font again under the same name keeps it assigned, and the text switches to the
+new glyphs. `Font.Destroy` of that font clears the assignment, and the systems go back
+down the list below.
+
 ### It either works or changes nothing
 
 `Set` loads the font right away (at the 24 px base size the console uses), so its return
@@ -32463,7 +33172,7 @@ works:
    (`Settings.SetAccessibilityEnabled(true)` + `Settings.SetDyslexiaFriendlyFont(true)` +
    a font path). It replaces every font in the game, this one included — it is the
    player's choice.
-2. The **font asset** assigned with `SystemFont.Set`.
+2. The **font asset**, or the **font made in code**, assigned with `SystemFont.Set`.
 3. In the editor: the **editor font** ([Preferences → Editor](Editor-EN-DOC.md#104-editor)
    → *Font*).
 4. The **operating-system UI font** — Segoe UI (then Arial, Tahoma, Verdana, Calibri) on
@@ -32484,6 +33193,7 @@ Print("system font: " .. SystemFont.GetSource() .. " -> " .. SystemFont.GetFile(
 | `GetSource()` | Meaning |
 | --- | --- |
 | `"asset"` | The font asset from `SystemFont.Set`. |
+| `"script"` | The font made in code (`Font.Create` / `Font.CreateGrid`) that `SystemFont.Set` named. |
 | `"dyslexia"` | The player's dyslexia-friendly font overrides it. |
 | `"editor"` | Play mode in the editor with no asset assigned — the editor font. |
 | `"os"` | No asset assigned — the operating-system font. |

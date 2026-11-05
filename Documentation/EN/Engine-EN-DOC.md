@@ -1357,8 +1357,26 @@ for when all of them are busy), pick one of several files for every play (**Vari
 random, random without repeat, sequence or shuffle) and ignore plays that come too quickly
 (**Retrigger Cooldown**). A project-wide **voice limit** keeps the number of playing sounds under
 control: the least important voice by **Priority** — then the oldest — makes room for a new one.
-A single play can be delayed, faded in, started at a given time, placed in the world, looped or
-given its own volume, pitch and pan. Every copy of a streamed sound gets its own stream.
+A single play can be delayed, scheduled on the audio clock to the exact sample, faded in, started
+at a given time, placed in the world, looped or given its own volume, pitch and pan. Every copy of
+a streamed sound gets its own stream.
+
+**Sounds made in code.** A sound does not need a file: a script can hand the engine raw samples —
+from the native `SoundBuffer` synthesizer, a `NumericArray`, a byte string or a table — and gets a
+regular named sound with every feature on this page. The samples are converted to the output rate
+once, when the sound is created, and stay in memory like any resident sound; when the output
+device or the audio quality changes, the sound is rebuilt from the original samples. A **stream**
+is a sound with a ring buffer instead of a clip: scripts push samples into it while it plays, the
+audio thread reads them without ever waiting, and it plays silence when the buffer runs dry. Both
+work the same in the editor and in built games, because nothing is cooked or read from disk. See
+[Sounds made in code](LuaAPI-EN-DOC.md#sounds-made-in-code).
+
+**The audio clock.** `Audio.GetTime()` counts output samples, so it is the time the listener
+actually hears. A play scheduled with the `at` option starts exactly on that sample: the start time
+is set on the voice itself, so the frame rate, a frame hitch or the moment in the frame when the
+script asked do not move it. `delay`, by contrast, counts game frames. Pausing a waiting play keeps
+the samples it still has to wait, and the music queue uses the same mechanism for its gapless
+transitions.
 
 **Game pause & time scale.** Each group can pause while the game is paused (`PauseGame()`, a
 time scale of 0 or the editor's Pause button) and can follow the game time scale with its pitch,
@@ -1522,7 +1540,7 @@ underneath.
 | **Scene state snapshots** | Capture and restore the whole scene as data — the mechanism behind checkpoints, save-states and rollback's save/load callbacks. |
 | **Replay system** | Samples tracked entities (transform, velocity, visibility) at a fixed rate into frames, plus arbitrary named numbers and strings you record per frame. It runs in two modes: **recording** to a growing buffer you save to disk, and a **circular buffer** of the last N seconds that can be captured on demand — which is how killcams work. Playback applies samples back onto entities with optional interpolation, looping and speed control. |
 | **Destruction** | Fractures sprites, flipbooks, skeletons and tiles into real physics debris — rectangles, triangles, shards or splinters — on impact, on damage or from script, and lets debris break into smaller debris for several generations; the fragment settings are in [Graphics → 13.7](Graphics-EN-DOC.md#137-joints-queries--destruction). The engine ages, fades and reaps debris in the `Update.Debris` stage and enforces the debris cap. |
-| **Navigation** | Nav grids are built from **view volumes** ([Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view)): each volume owns its own grid with its own cell size, agent radius, diagonal flag and mode (top-view or side-view, the latter with jump/fall limits). Several grids can coexist; a path query picks the grid that contains the endpoints, runs A\* and can smooth the result. |
+| **Navigation** | Nav grids are built from **view volumes** ([Assets → View](Assets-EN-DOC.md#414-view--post-process-volume-ice_view)): each volume owns its own grid with its own cell size, agent radius, diagonal flag and mode (top-view or side-view, the latter with jump/fall limits). Several grids can coexist; a path query picks the grid that contains the endpoints, runs A\* and can smooth the result. A level without volumes gets one grid from `Nav.RebuildGrid`, with cells as large as the level's tiles and every volume setting available as an option ([Lua API → Navigation](LuaAPI-EN-DOC.md#33-navigation--navigation-and-pathfinding)). |
 | **Behavior trees** | AI assets are ticked per entity in the `Update.BehaviorTree` stage, with blackboards, services and EQS queries; the node reference is in [Assets → AI](Assets-EN-DOC.md#416-ai--behavior-tree-ice_ai). |
 | **Command system & CVars** | Named commands and console variables — the engine's own plus those your scripts register from Lua — executed by the [developer console](Profiling-And-Building-EN-DOC.md#52-developer-console) or from script. |
 | **Crash reporter** | Installed by every IceBoxEngine application; it records the active renderer, GPU and driver at startup so a crash report always names them. Reporting options are set per build in [Profiling & Building → Crash Reporter](Profiling-And-Building-EN-DOC.md#73-crash-reporter). |
